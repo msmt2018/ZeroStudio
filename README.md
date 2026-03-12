@@ -126,11 +126,11 @@ English：python3 ./generate_structured_scm.py -c "Your parser.c path" -o "Outpu
 ## Installation
 [<img src="https://github.com/Kunzisoft/Github-badge/raw/main/get-it-on-github.svg"
     alt="Get it on F-Droid"
-    height="80">](https://github.com/android_zeros/ZeroStudio/releases)
+    height="80">](https://github.com/msmt2018/ZeroStudio/releases)
 
 > _Please install ZeroStudio from trusted sources only i.e._
-> - [_GitHub Releases_](https://github.com/android_zeros/ZeroStudio/releases)
-> - [_GitHub Actions_](https://github.com/android_zeros/ZeroStudio/actions?query=branch%3Adev+event%3Apush)
+> - [_GitHub Releases_](https://github.com/msmt2018/ZeroStudio/releases)
+> - [_GitHub Actions_](https://github.com/msmt2018/ZeroStudio/actions?query=branch%3Adev+event%3Apush)
 <!-- > - [_F-Droid_](https://f-droid.org/packages/com.itsaky.ZeroStudio/) -->
 
 - Download the ZeroStudio APK from the mentioned trusted sources.
@@ -175,8 +175,8 @@ Thanks to all the developers who have contributed to this project.
 - [Tencent QQ group](https://qm.qq.com/q/FjC6t6XSsU)
 
 <p align="center">
-  <a href="https://github.com/android_zeros/ZeroStudio/issues/new?labels=bug&template=BUG.yml&title=%5BBug%5D%3A+">Report a bug</a> &nbsp; &#8226; &nbsp;
-  <a href="https://github.com/android_zeros/ZeroStudio/issues/new?labels=feature&template=FEATURE.yml&title=%5BFeature%5D%3A+">Request a feature</a> &nbsp; &#8226; &nbsp;
+  <a href="https://github.com/msmt2018/ZeroStudio/issues/new?labels=bug&template=BUG.yml&title=%5BBug%5D%3A+">Report a bug</a> &nbsp; &#8226; &nbsp;
+  <a href="https://github.com/msmt2018/ZeroStudio/issues/new?labels=feature&template=FEATURE.yml&title=%5BFeature%5D%3A+">Request a feature</a> &nbsp; &#8226; &nbsp;
   <!-- <a href="https://qm.qq.com/q/FjC6t6XSsU">Join the QQ group</a> -->
   <!-- <a href="https://t.me/android_zero_studio">Join us on Telegram</a> -->
 </p>
@@ -206,10 +206,10 @@ Thanks to all the developers who have contributed to this project.
 #### 3. Legal Compliance & Indemnification (法律合规与赔偿)
 *   **CN:** 用户必须承诺在**遵守当地国家/地区法律法规**（包括但不限于《中华人民共和国网络安全法》、《计算机信息系统安全保护条例》等）的前提下使用本工具。
     *   **独担责任**：因用户使用本 IDE 开发的软件导致任何第三方损失、法律纠纷或行政处罚，**全部法律责任与赔偿责任由用户独立承担**。
-    *   **无关联声明**：项目作者 `github/android_zeros` 及所有贡献者不对用户的任何违法行为背书，亦不承担任何法律责任。
+    *   **无关联声明**：项目作者 `github/msmt2018(android_zero）` 及所有贡献者不对用户的任何违法行为背书，亦不承担任何法律责任。
 *   **EN:** Users must commit to using this tool in full **compliance with local/national laws and regulations** (e.g., Cybersecurity Laws, Computer Fraud and Abuse Acts).
     *   **Sole Liability**: The user assumes **full legal and indemnification liability** for any third-party losses, legal disputes, or administrative penalties caused by software developed using this IDE.
-    *   **Non-Affiliation**: The project author `github/android_zeros` and all contributors do not endorse any illegal acts by users and assume no legal liability whatsoever.
+    *   **Non-Affiliation**: The project author `github/msmt2018(android_zero）` and all contributors do not endorse any illegal acts by users and assume no legal liability whatsoever.
 
 > [!NOTE]
 > **Transparency Statement / 透明化声明**
