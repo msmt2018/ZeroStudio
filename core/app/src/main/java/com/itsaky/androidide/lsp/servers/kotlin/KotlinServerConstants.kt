@@ -7,7 +7,7 @@ package com.itsaky.androidide.lsp.servers.kotlin
  * @author android_zero
  */
 object KotlinServerConstants {
-    const val DOWNLOAD_URL = "https://github.com/android-zeros/ZeroStudio/releases/download/kt-lsp-165/kotlinLanguageServices.zip"
+    const val DOWNLOAD_URL = "https://github.com/msmt2018/SDK-tool-for-Android-platform/releases/download/kotlin-lsp/kotlinLanguageServices.zip"
     
     // 启动脚本名称
     const val LAUNCHER_SCRIPT_NAME = "kotlin-language-server"
