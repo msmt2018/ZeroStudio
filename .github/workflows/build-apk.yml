@@ -23,10 +23,9 @@ jobs:
         with:
           submodules: recursive
 
-      # 【防崩溃核心 1】清理磁盘并创建 10GB 交换空间 (Swap) 当作内存使用
       - name: Create Swap Space to prevent OOM
         run: |
-          sudo fallocate -l 10G /swapfile
+          sudo fallocate -l 8G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
