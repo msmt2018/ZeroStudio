@@ -1020,13 +1020,46 @@ open class IDEEditor @JvmOverloads constructor(
      * Helper to jump to a specific line and column, ensuring it's visible and selected.
      */
     fun jumpToLine(line: Int, column: Int = 0, selectLine: Boolean = false) {
-        if(selectLine) {
-            // Select whole line
-            setSelectionAround(line, column)
-        } else {
-            // Just cursor placement
-            setSelection(line, column)
-        }
-        ensurePositionVisible(line, column)
+    if (selectLine) {
+        // Select whole line
+        setSelectionAround(line, column)
+    } else {
+        // Just cursor placement
+        setSelection(line, column)
     }
+    ensurePositionVisible(line, column)
+}
+
+// Check if opened file is layout XML
+fun isLayoutFile(): Boolean {
+    val f = file ?: return false
+    return f.extension == "xml" && f.absolutePath.contains("layout")
+}
+
+// Open layout preview
+fun openLayoutPreview() {
+
+    if (!isLayoutFile()) {
+        Toast.makeText(context, "Not a layout XML", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val xmlContent = text.toString()
+
+    try {
+        val intent = android.content.Intent().apply {
+            setClassName(
+                context,
+                "com.itsaky.androidide.preview.LayoutPreviewActivity"
+            )
+            putExtra("layout_xml", xmlContent)
+        }
+
+        context.startActivity(intent)
+
+    } catch (e: Exception) {
+        Toast.makeText(context, "Preview failed", Toast.LENGTH_SHORT).show()
+        e.printStackTrace()
+    }
+}
 }
