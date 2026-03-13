@@ -1020,13 +1020,13 @@ open class IDEEditor @JvmOverloads constructor(
      * Helper to jump to a specific line and column, ensuring it's visible and selected.
      */
     // Check if opened file is layout XML
-fun isLayoutFile(): Boolean {
+   fun isLayoutFile(): Boolean {
     val f = this.file ?: return false
     return f.extension.equals("xml", true) && f.absolutePath.contains("layout")
-}
+  }
 
-// Open layout preview
-fun openLayoutPreview() {
+  // Open layout preview
+  fun openLayoutPreview() {
 
     if (!isLayoutFile()) {
         Toast.makeText(context, "Not a layout XML file", Toast.LENGTH_SHORT).show()
@@ -1049,4 +1049,5 @@ fun openLayoutPreview() {
         Toast.makeText(context, "Preview failed", Toast.LENGTH_SHORT).show()
         e.printStackTrace()
     }
+  }
 }
