@@ -13,6 +13,23 @@ Thanks to all these people, AndroidIDE has been translated into multiple languag
         <br />
         <sub><b>74666 words</b></sub>
       </td>
+    <tr>
+    <tr>
+      <td align="center" valign="top">
+        <a href="https://crowdin.com/profile/android_zero"><img alt="logo" style="width: 64px" src="https://avatars.githubusercontent.com/u/31156953?v=4" />
+          <br />
+          <sub><b>msmt2018 (android_zero)</b></sub></a>
+        <br />
+        <sub><b>74666 words</b></sub>
+      </td>
+    <tr>
+      <td align="center" valign="top">
+        <a href="https://github.com/aditaya720"><img alt="logo" style="width: 64px" src="https://avatars.githubusercontent.com/u/204631136?v=4" />
+          <br />
+          <sub><b>aditaya720 (R Aditaya)</b></sub></a>
+        <br />
+        <sub><b>74666 words</b></sub>
+      </td>
       <td align="center" valign="top">
         <a href="https://crowdin.com/profile/liziq"><img alt="logo" style="width: 64px" src="https://crowdin-static.downloads.crowdin.com/avatar/15757161/medium/f3903c160404f095de68760f81609430.jpeg" />
           <br />
