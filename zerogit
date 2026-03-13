@@ -12,9 +12,9 @@
 
 # --- 脚本配置区 ---
 # 1. 仓库信息
-SSH_REMOTE_URL="git@github.com:android-zero0/ZeroStudio.git"
-HTTP_REMOTE_URL="https://github.com/android-zero0/ZeroStudio.git"
-DEFAULT_MAIN_BRANCH="ZeroStudio-devs"
+SSH_REMOTE_URL="git@github.com:msmt2018/ZeroStudio.git"
+HTTP_REMOTE_URL="https://github.com/msmt2018/ZeroStudio.git"
+DEFAULT_MAIN_BRANCH="main"
 DEFAULT_REMOTE_NAME="origin"
 
 # 2. 默认语言设置 (zh: 中文, en: English)
