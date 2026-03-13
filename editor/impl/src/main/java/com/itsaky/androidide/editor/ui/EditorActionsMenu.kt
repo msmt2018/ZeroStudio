@@ -317,7 +317,7 @@ open class EditorActionsMenu(val editor: IDEEditor) :
     }
   }
 
-  protected open fun fillMenu() {
+protected open fun fillMenu() {
     getMenu().clear()
 
     val data = onCreateActionData()
@@ -326,8 +326,16 @@ open class EditorActionsMenu(val editor: IDEEditor) :
     registry.registerActionExecListener(this)
     onFillMenu(registry, data)
 
+    // 🔹 Preview Button
+    val previewItem = getMenu().add("Preview")
+    previewItem.setIcon(android.R.drawable.ic_menu_view)
+    previewItem.setOnMenuItemClickListener {
+        editor.openLayoutPreview()
+        true
+    }
+
     this.list.adapter = ActionsListAdapter(getMenu())
-  }
+}
 
   protected open fun onFillMenu(registry: ActionsRegistry, data: ActionData) {
     registry.fillMenu(FillMenuParams(data, onGetActionLocation(), getMenu()))
@@ -535,3 +543,4 @@ open class EditorActionsMenu(val editor: IDEEditor) :
 
   override fun onMenuModeChange(menu: MenuBuilder) {}
 }
+
