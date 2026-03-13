@@ -20,7 +20,7 @@ package com.itsaky.androidide.templates.impl.bottomNavActivity
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
 internal fun AndroidModuleTemplateBuilder.bottomNavFragmentNotificationsSrcKt() =
-  """
+    """
 package ${data.packageName}.ui.notifications
 
 import android.os.Bundle
@@ -63,10 +63,11 @@ class NotificationsFragment : Fragment() {
         _binding = null
     }
 }
-""".trim()
+"""
+        .trim()
 
 internal fun AndroidModuleTemplateBuilder.bottomNavFragmentNotificationsSrcJava() =
-  """
+    """
 package ${data.packageName}.ui.notifications;
 
 import android.os.Bundle;
@@ -104,4 +105,5 @@ public class NotificationsFragment extends Fragment {
         binding = null;
     }
 }
-""".trim()
+"""
+        .trim()

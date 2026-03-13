@@ -1746,8 +1746,7 @@ fun HomeScreen(
                 try {
                     //有时候明明设置过了还会显示欢迎弹窗，做些额外判断看看好不好用
                     if(showWelcomeToNewUser.value) {
-                        val newSettings = SettingsUtil.getSettingsSnapshot()
-                        if(PrefMan.isFirstUse(activityContext) && newSettings.globalGitConfig.username.isEmpty() && newSettings.globalGitConfig.email.isEmpty()) {
+                        if(PrefMan.isFirstUse(activityContext) && PrefMan.get(AppModel.realAppContext, PrefMan.Key.globalGitConfigUser, "").isEmpty() && PrefMan.get(AppModel.realAppContext, PrefMan.Key.globalGitConfigEmail, "").isEmpty()) {
                             showSetGlobalGitUsernameAndEmailDialog.value = true
                         }else {
                             closeWelcome()

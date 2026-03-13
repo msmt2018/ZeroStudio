@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.navDrawerActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.navDrawerActivitySrcJava() = """
+internal fun AndroidModuleTemplateBuilder.navDrawerActivitySrcJava() =
+    """
 package ${data.packageName};
 
 import android.os.Bundle;
@@ -88,9 +89,11 @@ public class MainActivity extends AppCompatActivity {
                 || super.onSupportNavigateUp();
     }
 }
-""".trim()
+"""
+        .trim()
 
-internal fun AndroidModuleTemplateBuilder.navDrawerActivitySrcKt() = """
+internal fun AndroidModuleTemplateBuilder.navDrawerActivitySrcKt() =
+    """
 package ${data.packageName}
 
 import android.os.Bundle
@@ -150,4 +153,5 @@ class MainActivity : AppCompatActivity() {
         return navController.navigateUp(appBarConfiguration) || super.onSupportNavigateUp()
     }
 }
-""".trim()
+"""
+        .trim()

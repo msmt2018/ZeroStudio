@@ -51,11 +51,6 @@ import io.ktor.util.collections.ConcurrentMap
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.time.ZoneOffset
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-
 
 private const val TAG ="AppModel"
 
@@ -70,7 +65,7 @@ object AppModel {
 //    private val inited_2 = mutableStateOf(false)
 //        private val inited_3 = mutableStateOf(false)
 
-    const val appPackageName = BuildConfig.LIBRARY_PACKAGE_NAME
+    const val appPackageName = BuildConfig.APPLICATION_ID
 
     /**
      * 加密凭据用到的主密码，若为空且设置项中的主密码hash不为空，将弹窗请求用户输入主密码，若用户拒绝，将无法使用凭据
@@ -200,13 +195,7 @@ object AppModel {
     private lateinit var logDir: File
     private lateinit var submoduleDotGitBackupDir: File
 
-/**
- * Helper function to get the current date in YYYYMMDD format.
- */
- fun getCurrentDateVersion(): String {
-    val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-    return LocalDate.now().format(dateFormatter)
-}
+
 
     //外部不应该直接获取此文件，此文件应通过DebugModeManager的setOn/Off方法维护
 //    private lateinit var debugModeFlagFile:File
@@ -620,11 +609,13 @@ object AppModel {
 
         //根据App版本号执行迁移代码
         AppVersionMan.init migrate@{ oldVer ->
-            //如果文件不存在或解析失败或不是当前最新版本，显示更新日志弹窗并返回true
-            if(oldVer == AppVersionMan.err_fileNonExists || oldVer == AppVersionMan.err_parseVersionFailed
-                || oldVer != AppVersionMan.currentVersion
-            ) {
+            // 如果不是最新版本，说明刚从旧版安装了新版，显示更新日志弹窗，然后继续执行迁移
+            if(oldVer != AppVersionMan.currentVersion) {
                 showChangelogDialog.value = true
+            }
+
+            //如果文件不存在或解析失败，可能是新安装app的用户，直接返回true
+            if(oldVer == AppVersionMan.err_fileNonExists || oldVer == AppVersionMan.err_parseVersionFailed) {
                 return@migrate true
             }
 
@@ -637,6 +628,13 @@ object AppModel {
 
             if(oldVer < 48 && AppVersionMan.currentVersion >= 48) {
                 val success = AppMigrator.sinceVer48()
+                if(!success) {
+                    return@migrate false
+                }
+            }
+
+            if(oldVer < 122 && AppVersionMan.currentVersion >= 122) {
+                val success = AppMigrator.sinceVer122()
                 if(!success) {
                     return@migrate false
                 }
@@ -708,11 +706,11 @@ object AppModel {
     }
 
     fun getAppVersionCode():Int {
-        return getCurrentDateVersion().toInt()
+        return BuildConfig.VERSION_CODE
     }
 
     fun getAppVersionName():String {
-        return getCurrentDateVersion()
+        return BuildConfig.VERSION_NAME
     }
 
     fun getAppVersionNameAndCode():String {

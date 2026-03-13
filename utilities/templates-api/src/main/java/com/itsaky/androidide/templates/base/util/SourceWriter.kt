@@ -38,15 +38,11 @@ class SourceWriter {
    */
   interface SourceType {
 
-    /**
-     * Create the [TypeSpec.Builder] for building this type of Java source file.
-     */
+    /** Create the [TypeSpec.Builder] for building this type of Java source file. */
     fun builder(klass: ClassName): TypeSpec.Builder
   }
 
-  /**
-   * A class type.
-   */
+  /** A class type. */
   class ClassType : SourceType {
 
     override fun builder(klass: ClassName): TypeSpec.Builder {
@@ -54,9 +50,7 @@ class SourceWriter {
     }
   }
 
-  /**
-   * An interface type.
-   */
+  /** An interface type. */
   class InterfaceType : SourceType {
 
     override fun builder(klass: ClassName): TypeSpec.Builder {
@@ -64,9 +58,7 @@ class SourceWriter {
     }
   }
 
-  /**
-   * An enum type.
-   */
+  /** An enum type. */
   class EnumType : SourceType {
 
     override fun builder(klass: ClassName): TypeSpec.Builder {
@@ -74,9 +66,7 @@ class SourceWriter {
     }
   }
 
-  /**
-   * An annotation interface type.
-   */
+  /** An annotation interface type. */
   class AnnotationType : SourceType {
 
     override fun builder(klass: ClassName): TypeSpec.Builder {
@@ -91,8 +81,10 @@ class SourceWriter {
    * @param className The name of the class.
    * @param configure Function to configure the [TypeSpec.Builder].
    */
-  inline fun ModuleTemplateBuilder.createClass(packageName: String, className: String,
-                                        crossinline configure: TypeSpec.Builder.() -> Unit
+  inline fun ModuleTemplateBuilder.createClass(
+      packageName: String,
+      className: String,
+      crossinline configure: TypeSpec.Builder.() -> Unit,
   ) {
     return createJavaFile(packageName, className, ClassType(), configure)
   }
@@ -104,8 +96,10 @@ class SourceWriter {
    * @param className The name of the class.
    * @param configure Function to configure the [TypeSpec.Builder].
    */
-  inline fun ModuleTemplateBuilder.createEnum(packageName: String, className: String,
-                                       crossinline configure: TypeSpec.Builder.() -> Unit
+  inline fun ModuleTemplateBuilder.createEnum(
+      packageName: String,
+      className: String,
+      crossinline configure: TypeSpec.Builder.() -> Unit,
   ) {
     return createJavaFile(packageName, className, EnumType(), configure)
   }
@@ -117,8 +111,10 @@ class SourceWriter {
    * @param className The name of the interface.
    * @param configure Function to configure the [TypeSpec.Builder].
    */
-  inline fun ModuleTemplateBuilder.createInterface(packageName: String, className: String,
-                                            crossinline configure: TypeSpec.Builder.() -> Unit
+  inline fun ModuleTemplateBuilder.createInterface(
+      packageName: String,
+      className: String,
+      crossinline configure: TypeSpec.Builder.() -> Unit,
   ) {
     return createJavaFile(packageName, className, InterfaceType(), configure)
   }
@@ -130,8 +126,10 @@ class SourceWriter {
    * @param className The name of the interface.
    * @param configure Function to configure the [TypeSpec.Builder].
    */
-  inline fun ModuleTemplateBuilder.createAnnotation(packageName: String, className: String,
-                                             crossinline configure: TypeSpec.Builder.() -> Unit
+  inline fun ModuleTemplateBuilder.createAnnotation(
+      packageName: String,
+      className: String,
+      crossinline configure: TypeSpec.Builder.() -> Unit,
   ) {
     return createJavaFile(packageName, className, AnnotationType(), configure)
   }
@@ -144,15 +142,19 @@ class SourceWriter {
    * @param type The type of the class.
    * @param configure Function to configure the [TypeSpec.Builder].
    */
-  inline fun ModuleTemplateBuilder.createJavaFile(packageName: String, className: String, type: SourceType,
-                                           crossinline configure: TypeSpec.Builder.() -> Unit
+  inline fun ModuleTemplateBuilder.createJavaFile(
+      packageName: String,
+      className: String,
+      type: SourceType,
+      crossinline configure: TypeSpec.Builder.() -> Unit,
   ) {
     val klass = ClassName.get(packageName, className)
-    val builder = type.builder(klass).apply(configure).also {
-      if (!it.modifiers.contains(Modifier.PUBLIC)) {
-        it.addModifiers(Modifier.PUBLIC)
-      }
-    }
+    val builder =
+        type.builder(klass).apply(configure).also {
+          if (!it.modifiers.contains(Modifier.PUBLIC)) {
+            it.addModifiers(Modifier.PUBLIC)
+          }
+        }
     val file = JavaFile.builder(packageName, builder.build())
     file.skipJavaLangImports(true)
     write(file.build())
@@ -165,8 +167,11 @@ class SourceWriter {
    * @param className The name of the class.
    * @param source The source code for the file.
    */
-  fun ModuleTemplateBuilder.writeJavaSrc(packageName: String, className: String,
-                                         srcSet: SrcSet = SrcSet.Main, source: String
+  fun ModuleTemplateBuilder.writeJavaSrc(
+      packageName: String,
+      className: String,
+      srcSet: SrcSet = SrcSet.Main,
+      source: String,
   ) {
     executor.save(source, srcFilePath(srcSet, packageName, className, Language.Java))
   }
@@ -178,8 +183,11 @@ class SourceWriter {
    * @param className The name of the class.
    * @param source The source code for the file.
    */
-  fun ModuleTemplateBuilder.writeKtSrc(packageName: String, className: String,
-                                       srcSet: SrcSet = SrcSet.Main, source: String
+  fun ModuleTemplateBuilder.writeKtSrc(
+      packageName: String,
+      className: String,
+      srcSet: SrcSet = SrcSet.Main,
+      source: String,
   ) {
     executor.save(source, srcFilePath(srcSet, packageName, className, Language.Kotlin))
   }
@@ -191,8 +199,11 @@ class SourceWriter {
    * @param className The name of the class.
    * @param source A function which returns the source code for the file.
    */
-  inline fun ModuleTemplateBuilder.writeJavaSrc(packageName: String, className: String,
-                                         srcSet: SrcSet = SrcSet.Main, crossinline source: () -> String
+  inline fun ModuleTemplateBuilder.writeJavaSrc(
+      packageName: String,
+      className: String,
+      srcSet: SrcSet = SrcSet.Main,
+      crossinline source: () -> String,
   ) {
     writeJavaSrc(packageName, className, srcSet, source())
   }
@@ -204,8 +215,11 @@ class SourceWriter {
    * @param className The name of the class.
    * @param source A function which returns the source code for the file.
    */
-  inline fun ModuleTemplateBuilder.writeKtSrc(packageName: String, className: String,
-                                       srcSet: SrcSet = SrcSet.Main, crossinline source: () -> String
+  inline fun ModuleTemplateBuilder.writeKtSrc(
+      packageName: String,
+      className: String,
+      srcSet: SrcSet = SrcSet.Main,
+      crossinline source: () -> String,
   ) {
     writeKtSrc(packageName, className, srcSet, source())
   }

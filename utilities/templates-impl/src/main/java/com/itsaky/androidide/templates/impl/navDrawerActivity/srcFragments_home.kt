@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.navDrawerActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.homeFragmentSrcJava() = """
+internal fun AndroidModuleTemplateBuilder.homeFragmentSrcJava() =
+    """
 package ${data.packageName}.ui.home;
 
 import android.os.Bundle;
@@ -57,9 +58,11 @@ public class HomeFragment extends Fragment {
         binding = null;
     }
 }
-""".trim()
+"""
+        .trim()
 
-internal fun AndroidModuleTemplateBuilder.homeFragmentSrcKt() = """
+internal fun AndroidModuleTemplateBuilder.homeFragmentSrcKt() =
+    """
 package ${data.packageName}.ui.home
 
 import android.os.Bundle
@@ -103,4 +106,5 @@ class HomeFragment : Fragment() {
         _binding = null
     }
 }
-""".trim()
+"""
+        .trim()

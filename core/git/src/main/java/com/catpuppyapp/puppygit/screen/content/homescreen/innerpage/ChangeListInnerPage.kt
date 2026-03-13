@@ -137,6 +137,7 @@ import com.catpuppyapp.puppygit.utils.getRequestDataByState
 import com.catpuppyapp.puppygit.utils.getSecFromTime
 import com.catpuppyapp.puppygit.utils.getShortUUID
 import com.catpuppyapp.puppygit.utils.isRepoReadyAndPathExist
+import com.catpuppyapp.puppygit.utils.pref.PrefUtil
 import com.catpuppyapp.puppygit.utils.replaceStringResList
 import com.catpuppyapp.puppygit.utils.showErrAndSaveLog
 import com.catpuppyapp.puppygit.utils.showToast
@@ -1532,7 +1533,7 @@ fun ChangeListInnerPage(
                                         loadingOn = loadingOn,
                                         loadingOff = loadingOff,
                                         requireCloseBottomBar = true,
-                                        trueMergeFalseRebase = !SettingsUtil.pullWithRebase(),
+                                        trueMergeFalseRebase = !PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext),
                                         curRepoFromParentPage = curRepo,
                                         requireShowToast = requireShowToast,
                                         activityContext = activityContext,
@@ -2864,7 +2865,7 @@ fun ChangeListInnerPage(
                                                                 loadingOn = loadingOn,
                                                                 loadingOff = loadingOff,
                                                                 requireCloseBottomBar = true,
-                                                                trueMergeFalseRebase = !SettingsUtil.pullWithRebase(),
+                                                                trueMergeFalseRebase = !PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext),
                                                                 curRepoFromParentPage = curRepo,
                                                                 requireShowToast = requireShowToast,
                                                                 activityContext = activityContext,
@@ -2960,7 +2961,7 @@ fun ChangeListInnerPage(
                                                                 loadingText = loadingText,
                                                                 bottomBarActDoneCallback = bottomBarActDoneCallback,
                                                                 changeListRequireRefreshFromParentPage = changeListRequireRefreshFromParentPage,
-                                                                trueMergeFalseRebase = !SettingsUtil.pullWithRebase(),
+                                                                trueMergeFalseRebase = !PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext),
                                                                 requireCloseBottomBar = true
                                                             )
                                                         }

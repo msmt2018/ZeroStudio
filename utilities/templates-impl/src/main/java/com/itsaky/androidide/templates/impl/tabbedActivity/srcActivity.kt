@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.tabbedActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.tabbedActivitySrcKt() = """
+internal fun AndroidModuleTemplateBuilder.tabbedActivitySrcKt() =
+    """
 package ${data.packageName}
 
 import android.os.Bundle
@@ -43,7 +44,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        supportActionBar = binding.toolbar
+        setSupportActionBar(binding.toolbar)
 
         val sectionsPagerAdapter = SectionsPagerAdapter(this, supportFragmentManager)
         val viewPager: ViewPager = binding.viewPager
@@ -58,9 +59,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-""".trim()
+"""
+        .trim()
 
-internal fun AndroidModuleTemplateBuilder.tabbedActivitySrcJava() = """
+internal fun AndroidModuleTemplateBuilder.tabbedActivitySrcJava() =
+    """
 package ${data.packageName};
 
 import android.os.Bundle;
@@ -103,4 +106,5 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 }
-""".trim()
+"""
+        .trim()

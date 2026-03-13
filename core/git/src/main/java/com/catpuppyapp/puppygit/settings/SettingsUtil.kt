@@ -316,6 +316,6 @@ object SettingsUtil {
     fun obtainEditorFileAssociationList() = appSettings.editor.fileAssociationList
     fun sshAllowUnknownHosts() = appSettings.sshSetting.allowUnknownHosts
     fun httpSslVerify() = appSettings.httpSetting.sslVerify
-    fun pullWithRebase() = appSettings.globalGitConfig.pullWithRebase
+//    fun pullWithRebase() = appSettings.globalGitConfig.pullWithRebase
 
 }

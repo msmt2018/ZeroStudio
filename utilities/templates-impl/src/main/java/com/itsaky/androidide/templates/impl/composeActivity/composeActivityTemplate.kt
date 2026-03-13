@@ -29,7 +29,7 @@ import com.itsaky.androidide.templates.impl.base.writeMainActivity
 import com.itsaky.androidide.templates.impl.baseProjectImpl
 import com.itsaky.androidide.templates.projectLanguageParameter
 
-private const val composeKotlinVersion = "1.7.20"
+private const val composeKotlinVersion = "2.0.21"
 
 private fun composeLanguageParameter() = projectLanguageParameter {
   default = Kotlin
@@ -38,38 +38,29 @@ private fun composeLanguageParameter() = projectLanguageParameter {
 
 // Compose template is available only in Kotlin
 fun composeActivityProject() =
-  baseProjectImpl(language = composeLanguageParameter(),
-    projectVersionData = ProjectVersionData(kotlin = composeKotlinVersion)) {
+    baseProjectImpl(
+        language = composeLanguageParameter(),
+        projectVersionData = ProjectVersionData(kotlin = composeKotlinVersion),
+    ) {
+      templateName = R.string.template_compose
+      thumb = R.drawable.compose_empty_activity
 
-    templateName = R.string.template_compose
-    thumb = R.drawable.template_compose_empty_activity
-    description = string.test_test
+      defaultAppModule(addAndroidX = false) {
+        isComposeModule = true
 
-    defaultAppModule(addAndroidX = false) {
+        recipe = createRecipe {
+          require(data.language == Kotlin) { "Compose activity requires Kotlin language" }
 
-      isComposeModule = true
+          composeDependencies()
 
-      recipe = createRecipe {
+          res { writeXmlResource("themes", VALUES, source = ::composeThemesXml) }
 
-        require(
-          data.language == Kotlin) { "Compose activity requires Kotlin language" }
-
-        composeDependencies()
-
-        res {
-          writeXmlResource("themes", VALUES, source = ::composeThemesXml)
-        }
-
-        sources {
-          writeMainActivity(this, ktSrc = ::composeActivitySrc,
-            javaSrc = { "" })
-          writeKtSrc("${data.packageName}.ui.theme", "Color",
-            source = ::themeColorSrc)
-          writeKtSrc("${data.packageName}.ui.theme", "Theme",
-            source = ::themeThemeSrc)
-          writeKtSrc("${data.packageName}.ui.theme", "Type",
-            source = ::themeTypeSrc)
+          sources {
+            writeMainActivity(this, ktSrc = ::composeActivitySrc, javaSrc = { "" })
+            writeKtSrc("${data.packageName}.ui.theme", "Color", source = ::themeColorSrc)
+            writeKtSrc("${data.packageName}.ui.theme", "Theme", source = ::themeThemeSrc)
+            writeKtSrc("${data.packageName}.ui.theme", "Type", source = ::themeTypeSrc)
+          }
         }
       }
     }
-  }

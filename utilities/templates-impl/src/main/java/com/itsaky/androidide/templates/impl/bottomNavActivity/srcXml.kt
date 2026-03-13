@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.bottomNavActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.bottomNavNavigationXmlSrc() = """
+internal fun AndroidModuleTemplateBuilder.bottomNavNavigationXmlSrc() =
+    """
 <?xml version="1.0" encoding="utf-8"?>
 <navigation xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -45,4 +46,5 @@ internal fun AndroidModuleTemplateBuilder.bottomNavNavigationXmlSrc() = """
         android:label="@string/title_notifications"
         tools:layout="@layout/fragment_notifications" />
 </navigation>
-""".trim()
+"""
+        .trim()

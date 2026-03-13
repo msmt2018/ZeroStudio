@@ -19,6 +19,7 @@ import com.catpuppyapp.puppygit.utils.doJobThenOffLoading
 import com.catpuppyapp.puppygit.utils.forEachBetter
 import com.catpuppyapp.puppygit.utils.genHttpHostPortStr
 import com.catpuppyapp.puppygit.utils.generateRandomString
+import com.catpuppyapp.puppygit.utils.pref.PrefUtil
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
 import io.ktor.server.engine.EmbeddedServer
@@ -158,7 +159,7 @@ internal class HttpServer(
                             val gitUsernameFromUrl = call.request.queryParameters.get("gitUsername") ?:""
                             val gitEmailFromUrl = call.request.queryParameters.get("gitEmail") ?:""
 
-                            val pullWithRebase = call.request.queryParameters.get("pullWithRebase")?.let { it == "1" } ?: SettingsUtil.pullWithRebase()
+                            val pullWithRebase = call.request.queryParameters.get("pullWithRebase")?.let { it == "1" } ?: PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext)
 
 
                             //从数据库查询仓库列表
@@ -371,7 +372,7 @@ internal class HttpServer(
                             val gitUsernameFromUrl = call.request.queryParameters.get("gitUsername") ?:""
                             val gitEmailFromUrl = call.request.queryParameters.get("gitEmail") ?:""
 
-                            val pullWithRebase = call.request.queryParameters.get("pullWithRebase")?.let { it == "1" } ?: SettingsUtil.pullWithRebase()
+                            val pullWithRebase = call.request.queryParameters.get("pullWithRebase")?.let { it == "1" } ?: PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext)
 
                             // 查询仓库是否存在
                             // 尝试获取仓库锁，若获取失败，返回仓库正在执行其他操作
@@ -469,7 +470,7 @@ internal class HttpServer(
                             val gitUsernameFromUrl = call.request.queryParameters.get("gitUsername") ?:""
                             val gitEmailFromUrl = call.request.queryParameters.get("gitEmail") ?:""
 
-                            val pullWithRebase = call.request.queryParameters.get("pullWithRebase")?.let { it == "1" } ?: SettingsUtil.pullWithRebase()
+                            val pullWithRebase = call.request.queryParameters.get("pullWithRebase")?.let { it == "1" } ?: PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext)
 
 
                             //执行请求，可能时间很长，所以开个协程，直接返回响应即可
@@ -621,7 +622,7 @@ internal class HttpServer(
                             val gitUsernameFromUrl = call.request.queryParameters.get("gitUsername") ?:""
                             val gitEmailFromUrl = call.request.queryParameters.get("gitEmail") ?:""
 
-                            val pullWithRebase = call.request.queryParameters.get("pullWithRebase")?.let { it == "1" } ?: SettingsUtil.pullWithRebase()
+                            val pullWithRebase = call.request.queryParameters.get("pullWithRebase")?.let { it == "1" } ?: PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext)
 
                             // 查询仓库是否存在
                             // 尝试获取仓库锁，若获取失败，返回仓库正在执行其他操作

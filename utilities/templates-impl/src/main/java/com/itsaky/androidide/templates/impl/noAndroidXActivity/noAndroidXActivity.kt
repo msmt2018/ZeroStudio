@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.noAndroidXActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.noAndroidXActivitySrcJava() = """
+internal fun AndroidModuleTemplateBuilder.noAndroidXActivitySrcJava() =
+    """
 package ${data.packageName};
 
 import android.app.Activity;
@@ -27,9 +28,9 @@ import android.os.Bundle;
 import ${data.packageName}.databinding.ActivityMainBinding;
 
 public class MainActivity extends Activity {
-	
+
 	  private ActivityMainBinding binding;
-	
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -43,9 +44,11 @@ public class MainActivity extends Activity {
         this.binding = null;
     }
 }
-""".trim()
+"""
+        .trim()
 
-internal fun AndroidModuleTemplateBuilder.noAndroidXActivitySrcKt() = """
+internal fun AndroidModuleTemplateBuilder.noAndroidXActivitySrcKt() =
+    """
 package ${data.packageName}
 
 import android.app.Activity
@@ -70,4 +73,5 @@ public class MainActivity : Activity() {
         _binding = null
     }
 }
-  """.trim()
+  """
+        .trim()

@@ -13,7 +13,7 @@ android {
         
         externalNativeBuild {
             cmake {
-                arguments("-DCMAKE_CXX_FLAGS=-std=c++17")
+                arguments("-DCMAKE_CXX_FLAGS=-std=c++17", "-j2")
             }
         }
         

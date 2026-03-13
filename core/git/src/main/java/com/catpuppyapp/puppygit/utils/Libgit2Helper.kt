@@ -46,6 +46,7 @@ import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.syntaxhighlight.base.PLScope
 import com.catpuppyapp.puppygit.template.CommitMsgTemplateUtil
 import com.catpuppyapp.puppygit.utils.cache.CommitCache
+import com.catpuppyapp.puppygit.utils.pref.PrefMan
 import com.catpuppyapp.puppygit.utils.state.CustomBoxSaveable
 import com.github.git24j.core.AnnotatedCommit
 import com.github.git24j.core.Apply
@@ -2135,11 +2136,14 @@ object Libgit2Helper {
         email: String
     ): Boolean {
         try {
-            SettingsUtil.update {
-                val globalGitConfig = it.globalGitConfig
-                globalGitConfig.username = username
-                globalGitConfig.email = email
-            }
+//            SettingsUtil.update {
+//                val globalGitConfig = it.globalGitConfig
+//                globalGitConfig.username = username
+//                globalGitConfig.email = email
+//            }
+
+            PrefMan.set(AppModel.realAppContext, PrefMan.Key.globalGitConfigUser, username)
+            PrefMan.set(AppModel.realAppContext, PrefMan.Key.globalGitConfigEmail, email)
 
             return true
         }catch (e:Exception) {
@@ -2186,8 +2190,10 @@ object Libgit2Helper {
 
     //查询公用的git配置文件
     fun getGitUsernameAndEmailFromGlobalConfig():Pair<String,String> {
-        val globalGitConfig = SettingsUtil.getSettingsSnapshot().globalGitConfig
-        return Pair(globalGitConfig.username, globalGitConfig.email)
+        return Pair(
+            PrefMan.get(AppModel.realAppContext, PrefMan.Key.globalGitConfigUser, ""),
+            PrefMan.get(AppModel.realAppContext, PrefMan.Key.globalGitConfigEmail, "")
+        )
     }
 
     fun repoUsernameAndEmailAreVaild(repo: Repository):Boolean {

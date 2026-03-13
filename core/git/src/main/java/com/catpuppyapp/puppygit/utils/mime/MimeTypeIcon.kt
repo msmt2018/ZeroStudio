@@ -17,9 +17,9 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContactPage
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.FontDownload
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.LocalPolice
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.TableView
 import androidx.compose.material.icons.outlined.VideoFile
@@ -35,7 +35,7 @@ enum class MimeTypeIcon(val icon: ImageVector) {
     ARCHIVE(outLinedIcons.Archive),
     AUDIO(outLinedIcons.AudioFile),
     CALENDAR(outLinedIcons.CalendarMonth),
-    CERTIFICATE(outLinedIcons.LocalPolice),
+    CERTIFICATE(outLinedIcons.Fingerprint),
     CODE(outLinedIcons.Code),
     CONTACT(outLinedIcons.ContactPage),
     DIRECTORY(filledIcons.Folder),

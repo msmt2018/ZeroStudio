@@ -223,6 +223,9 @@ inline fun baseProject(
             cmakeVersion.isVisible = isNativeEnabled
         }
 
+          // Save the selected location for future use
+          saveLastSaveLocation(context, saveLocation.value)
+ 
         // Setup the required properties before executing the recipe
         preRecipe = {
             this@apply._executor = this

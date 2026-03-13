@@ -120,6 +120,7 @@ import com.catpuppyapp.puppygit.utils.genHttpHostPortStr
 import com.catpuppyapp.puppygit.utils.getSecFromTime
 import com.catpuppyapp.puppygit.utils.isLocked
 import com.catpuppyapp.puppygit.utils.isRepoReadyAndPathExist
+import com.catpuppyapp.puppygit.utils.pref.PrefUtil
 import com.catpuppyapp.puppygit.utils.replaceStringResList
 import com.catpuppyapp.puppygit.utils.showErrAndSaveLog
 import com.catpuppyapp.puppygit.utils.state.CustomStateListSaveable
@@ -209,7 +210,7 @@ fun RepoInnerPage(
 
     val clipboardManager = LocalClipboardManager.current
 
-    val cloningText = stringResource(R.string.cloning) //R.string.cloning这个字符串是正在克隆，位于列表中
+    val cloningText = stringResource(R.string.cloning)
     val unknownErrWhenCloning = stringResource(R.string.unknown_err_when_cloning)
 
     val dbContainer = AppModel.dbContainer;
@@ -572,7 +573,7 @@ fun RepoInnerPage(
     }
 
     suspend fun doMerge(upstreamParam: Upstream?, curRepo:RepoEntity):Unit {
-        val trueMergeFalseRebase = !SettingsUtil.pullWithRebase()
+        val trueMergeFalseRebase = !PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext)
 
         //这的repo不能共享，不然一释放就要完蛋了，这repo不是rc是box单指针
         Repository.open(curRepo.fullSavePath).use { repo ->

@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.navDrawerActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.galleryModelSrcJava() = """
+internal fun AndroidModuleTemplateBuilder.galleryModelSrcJava() =
+    """
 package ${data.packageName}.ui.gallery;
 
 import androidx.lifecycle.LiveData;
@@ -39,9 +40,11 @@ public class GalleryViewModel extends ViewModel {
         return mText;
     }
 }
-""".trim()
+"""
+        .trim()
 
-internal fun AndroidModuleTemplateBuilder.galleryModelSrcKt() = """
+internal fun AndroidModuleTemplateBuilder.galleryModelSrcKt() =
+    """
 package ${data.packageName}.ui.gallery
 
 import androidx.lifecycle.LiveData
@@ -55,4 +58,5 @@ class GalleryViewModel : ViewModel() {
     }
     val text: LiveData<String> = _text
 }
-""".trim()
+"""
+        .trim()

@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.navDrawerActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.navDrawerNavigationXmlSrc() = """
+internal fun AndroidModuleTemplateBuilder.navDrawerNavigationXmlSrc() =
+    """
 <?xml version="1.0" encoding="utf-8"?>
 <navigation xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -45,4 +46,5 @@ internal fun AndroidModuleTemplateBuilder.navDrawerNavigationXmlSrc() = """
         android:label="@string/menu_slideshow"
         tools:layout="@layout/fragment_slideshow" />
 </navigation>
-""".trim()
+"""
+        .trim()

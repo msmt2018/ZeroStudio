@@ -44,10 +44,17 @@ class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
    * added to the `build.gradle[.kts]` file.
    */
   var isComposeModule = false
-    
- 
-  // var context: Context? = null
-  
+    set(value) {
+      field = value
+      // Automatically enable Compose support in the project builder if available
+      if (value && projectBuilder != null) {
+        projectBuilder?.enableComposeSupport()
+      }
+    }
+
+  var context: Context? = null
+  var projectBuilder: ProjectTemplateBuilder? = null
+
   val manifest = AndroidManifestBuilder()
   val res = AndroidModuleResManager()
 
@@ -55,8 +62,7 @@ class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
    * Return the file path to `AndroidManifest.xml`.
    */
   fun manifestFile(): File {
-    return File(srcFolder(SrcSet.Main),
-      ANDROID_MANIFEST_XML).also { it.parentFile!!.mkdirs() }
+    return File(srcFolder(SrcSet.Main), ANDROID_MANIFEST_XML).also { it.parentFile!!.mkdirs() }
   }
 
   /**
@@ -105,12 +111,11 @@ class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
    *
    * @param name The name of the class.
    */
-  inline fun RecipeExecutor.createActivity(name: String = "MainActivity",
-                                    crossinline configure: TypeSpec.Builder.() -> Unit
+  inline fun RecipeExecutor.createActivity(
+      name: String = "MainActivity",
+      crossinline configure: TypeSpec.Builder.() -> Unit,
   ) {
-    sources {
-      createClass(data.packageName, name, configure)
-    }
+    sources { createClass(data.packageName, name, configure) }
   }
 
   override fun baseAsset(path: String): String {
@@ -132,9 +137,7 @@ class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
     // Write .gitignore
     gitignore()
 
-    manifest.apply {
-      generate(manifestFile())
-    }
+    manifest.apply { generate(manifestFile()) }
 
     res {
       data.appName?.let { putStringRes(manifest.appLabelRes, it) }
@@ -152,7 +155,18 @@ class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
   }
 
   override fun RecipeExecutor.buildGradle() {
-    save(buildGradleSrc(isComposeModule), buildGradleFile())
+    // Ensure project builder knows about compose usage
+    if (isComposeModule && projectBuilder != null) {
+      projectBuilder?.enableComposeSupport()
+    }
+
+    save(buildGradleSrc(isComposeModule, context), buildGradleFile())
+
+    // Create marker file if this is a compose module
+    if (isComposeModule) {
+      val markerFile = File(data.projectDir.parentFile, ".compose_enabled")
+      markerFile.createNewFile()
+    }
   }
 
   /**

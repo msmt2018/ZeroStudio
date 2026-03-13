@@ -35,13 +35,9 @@ fun emptyActivityProject(): ProjectTemplate = baseProjectImpl {
   description = string.test_test
   defaultAppModule {
     recipe = createRecipe {
-      sources {
-        writeEmptyActivity(this)
-      }
+      sources { writeEmptyActivity(this) }
 
-      res {
-        writeEmptyActivity()
-      }
+      res { writeEmptyActivity() }
     }
   }
 }
@@ -54,8 +50,6 @@ internal fun AndroidModuleTemplateBuilder.writeEmptyActivity() {
   }
 }
 
-internal fun AndroidModuleTemplateBuilder.writeEmptyActivity(
-  writer: SourceWriter
-) {
+internal fun AndroidModuleTemplateBuilder.writeEmptyActivity(writer: SourceWriter) {
   writeMainActivity(writer, ::emptyActivitySrcKt, ::emptyActivitySrcJava)
 }

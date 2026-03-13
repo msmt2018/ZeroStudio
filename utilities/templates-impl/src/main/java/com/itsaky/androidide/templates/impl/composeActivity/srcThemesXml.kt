@@ -19,10 +19,11 @@ package com.itsaky.androidide.templates.impl.composeActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-fun AndroidModuleTemplateBuilder.composeThemesXml()
-= """
+fun AndroidModuleTemplateBuilder.composeThemesXml() =
+    """
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <style name="${manifest.themeRes}" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
-""".trimIndent()
+"""
+        .trimIndent()

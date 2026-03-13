@@ -40,5 +40,6 @@ dependencyResolutionManagement {
 rootProject.name = "${data.name}"
 
 ${modules.joinToString(separator = ", ") { "include(\"${it.name}\")" }}    
-  """.trim()
+  """
+      .trim()
 }

@@ -71,6 +71,9 @@ object PrefMan {
          */
         const val dynamicColorsScheme = "dynamicColorsScheme"
 
+        const val globalGitConfigUser = "globalGitConfigUser"
+        const val globalGitConfigEmail = "globalGitConfigEmail"
+        const val globalGitConfigPullWithRebase = "globalGitConfigPullWithRebase"
     }
 
     private fun getPrefs(appContext: Context) = appContext.getSharedPreferences(fileName, MODE_PRIVATE)

@@ -1,0 +1,13 @@
+1773382928.701 10520 11888 18494 E StreamMessageProducer: Missing header Content-Length in input "Downloading https://services.gradle.org/distributions/gradle-8.13.0-bin.zip
+1773382928.701 10520 11888 18494 E StreamMessageProducer: "
+1773382928.701 10520 11888 18494 E StreamMessageProducer: java.lang.IllegalStateException: Missing header Content-Length in input "Downloading https://services.gradle.org/distributions/gradle-8.13.0-bin.zip
+1773382928.701 10520 11888 18494 E StreamMessageProducer: "
+1773382928.701 10520 11888 18494 E StreamMessageProducer: 	at org.eclipse.lsp4j.jsonrpc.json.StreamMessageProducer.listen(StreamMessageProducer.java:94)
+1773382928.701 10520 11888 18494 E StreamMessageProducer: 	at org.eclipse.lsp4j.jsonrpc.json.ConcurrentMessageProcessor.run(ConcurrentMessageProcessor.java:114)
+1773382928.701 10520 11888 18494 E StreamMessageProducer: 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)
+1773382928.701 10520 11888 18494 E StreamMessageProducer: 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+1773382928.701 10520 11888 18494 E StreamMessageProducer: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1251)
+1773382928.701 10520 11888 18494 E StreamMessageProducer: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:668)
+1773382928.701 10520 11888 18494 E StreamMessageProducer: 	at java.lang.Thread.run(Thread.java:1012)
+1773382928.701 10520 11888 18494 E com.itsaky.androidide.*: 13-03 14:22:08.701 ERROR [pool-14-thread-1] ToolingApiServerImpl: Failed to initialize project
+1773382928.702 10520 11888 16748 E com.itsaky.androidide.*: 13-03 14:22:08.702 ERROR [ForkJoinPool.commonPool-worker-1] BaseEditorActivity: An error occurred initializing the project with Tooling API

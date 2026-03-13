@@ -156,7 +156,7 @@ fun SettingsInnerPage(
     val enableSnapshot_File = rememberSaveable { mutableStateOf(settingsState.value.editor.enableFileSnapshot) }
     val enableSnapshot_Content = rememberSaveable { mutableStateOf(settingsState.value.editor.enableContentSnapshot) }
     val diff_CreateSnapShotForOriginFileBeforeSave = rememberSaveable { mutableStateOf(settingsState.value.diff.createSnapShotForOriginFileBeforeSave) }
-    val pullWithRebase = rememberSaveable { mutableStateOf(settingsState.value.globalGitConfig.pullWithRebase) }
+    val pullWithRebase = rememberSaveable { mutableStateOf(PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext)) }
 
 
     val fileAssociationList = mutableCustomStateListOf(stateKeyTag, "fileAssociationList") { settingsState.value.editor.fileAssociationList }
@@ -1322,9 +1322,7 @@ fun SettingsInnerPage(
 
                 //save
                 pullWithRebase.value = newValue
-                SettingsUtil.update {
-                    it.globalGitConfig.pullWithRebase = newValue
-                }
+                PrefUtil.setGlobalGitConfigPullWithRebase(AppModel.realAppContext, newValue)
             }
         )
 

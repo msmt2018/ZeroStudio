@@ -30,10 +30,12 @@ internal fun materialAppBar(): String {
         android:layout_height="?attr/actionBarSize"/>
 
 </com.google.android.material.appbar.AppBarLayout>
-""".trim()
+"""
+      .trim()
 }
 
-internal fun materialFab() = """
+internal fun materialFab() =
+    """
 <com.google.android.material.floatingactionbutton.FloatingActionButton
     android:id="@+id/fab"
     android:layout_width="wrap_content"
@@ -41,4 +43,5 @@ internal fun materialFab() = """
     android:layout_gravity="bottom|end"
     android:layout_margin="16dp"
     app:srcCompat="@android:drawable/ic_dialog_email" />
-""".trim()
+"""
+        .trim()

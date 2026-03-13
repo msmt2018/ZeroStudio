@@ -1,9 +1,12 @@
 package com.catpuppyapp.puppygit.utils.app.upgrade.migrator
 
 import androidx.room.withTransaction
+import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.utils.AppModel
 import com.catpuppyapp.puppygit.utils.MyLog
 import com.catpuppyapp.puppygit.utils.fileopenhistory.FileOpenHistoryMan
+import com.catpuppyapp.puppygit.utils.pref.PrefMan
+import com.catpuppyapp.puppygit.utils.pref.PrefUtil
 
 private const val TAG = "AppMigrator"
 
@@ -49,6 +52,21 @@ object AppMigrator {
             MyLog.w(TAG, "#$funName migrate `DataBase` success")
         }catch (e:Exception) {
             MyLog.e(TAG, "#$funName migrate `DataBase` failed: ${e.stackTraceToString()}")
+        }
+
+        return true
+    }
+
+    suspend fun sinceVer122():Boolean {
+        val funName = "sinceVer122"
+
+        try {
+            val settings = SettingsUtil.getSettingsSnapshot();
+            PrefMan.set(AppModel.realAppContext, PrefMan.Key.globalGitConfigUser, settings.globalGitConfig.username)
+            PrefMan.set(AppModel.realAppContext, PrefMan.Key.globalGitConfigEmail, settings.globalGitConfig.email)
+            PrefUtil.setGlobalGitConfigPullWithRebase(AppModel.realAppContext, settings.globalGitConfig.pullWithRebase)
+        }catch (e:Exception) {
+            MyLog.e(TAG, "#$funName migrate git global config from settings.json to preference failed: ${e.stackTraceToString()}")
         }
 
         return true

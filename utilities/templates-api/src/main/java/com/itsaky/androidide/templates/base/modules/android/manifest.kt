@@ -29,10 +29,12 @@ import org.eclipse.lemminx.dom.builder.IndentedXmlConfigurator
  * @param configureInside Function for configuring additional elements inside this activity tag.
  * @author Akash Yadav
  */
-data class ManifestActivity(val name: String, val isExported: Boolean,
-                            val isLauncher: Boolean = false,
-                            val configureAttrs: IndentedXmlConfigurator? = null,
-                            val configureInside: IndentedXmlConfigurator? = null
+data class ManifestActivity(
+    val name: String,
+    val isExported: Boolean,
+    val isLauncher: Boolean = false,
+    val configureAttrs: IndentedXmlConfigurator? = null,
+    val configureInside: IndentedXmlConfigurator? = null,
 )
 
 /**

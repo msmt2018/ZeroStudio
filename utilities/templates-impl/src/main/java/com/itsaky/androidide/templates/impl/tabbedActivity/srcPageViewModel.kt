@@ -19,19 +19,19 @@ package com.itsaky.androidide.templates.impl.tabbedActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.tabbedPageViewModelSrcKt() = """
+internal fun AndroidModuleTemplateBuilder.tabbedPageViewModelSrcKt() =
+    """
 package ${data.packageName}.ui.main
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.Transformations
+import androidx.lifecycle.map
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 
 class PageViewModel : ViewModel() {
 
     private val _index = MutableLiveData<Int>()
-    val text: LiveData<String> = Transformations.map(_index) {
+    val text: LiveData<String> = _index.map {
         "Hello world from section: ${'$'}it"
     }
 
@@ -39,26 +39,30 @@ class PageViewModel : ViewModel() {
         _index.value = index
     }
 }
-""".trim()
+"""
+        .trim()
 
-internal fun AndroidModuleTemplateBuilder.tabbedPageViewModelSrcJava() = """
+internal fun AndroidModuleTemplateBuilder.tabbedPageViewModelSrcJava() =
+    """
 package ${data.packageName}.ui.main;
 
-import androidx.arch.core.util.Function;
 import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MediatorLiveData;
 import androidx.lifecycle.MutableLiveData;
-import androidx.lifecycle.Transformations;
 import androidx.lifecycle.ViewModel;
 
 public class PageViewModel extends ViewModel {
 
     private MutableLiveData<Integer> mIndex = new MutableLiveData<>();
-    private LiveData<String> mText = Transformations.map(mIndex, new Function<Integer, String>() {
-        @Override
-        public String apply(Integer input) {
-            return "Hello world from section: " + input;
-        }
-    });
+    private MediatorLiveData<String> mText = new MediatorLiveData<>();
+
+    public PageViewModel() {
+        mText.addSource(mIndex, index -> {
+            if (index != null) {
+                mText.setValue("Hello world from section: " + index);
+            }
+        });
+    }
 
     public void setIndex(int index) {
         mIndex.setValue(index);
@@ -68,4 +72,5 @@ public class PageViewModel extends ViewModel {
         return mText;
     }
 }
-""".trim()
+"""
+        .trim()

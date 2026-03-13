@@ -32,9 +32,10 @@ internal fun ProjectTemplateBuilder.gradleWrapperPropsSrc(): String {
   return """
     distributionBase=GRADLE_USER_HOME
     distributionPath=wrapper/dists
-    distributionUrl=https\://services.gradle.org/distributions/gradle-${data.version.gradle}-bin.zip
+    distributionUrl=https\://services.gradle.org/distributions/gradle-${com.itsaky.androidide.templates.GRADLE_WRAPPER_DISTRIBUTION_VERSION}-bin.zip
     networkTimeout=10000
     zipStoreBase=GRADLE_USER_HOME
     zipStorePath=wrapper/dists
-  """.trimIndent()
+  """
+      .trimIndent()
 }

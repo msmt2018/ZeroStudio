@@ -62,6 +62,8 @@ jobs:
           # 限制 Gradle JVM 最大使用 5GB 内存，不开启守护进程以免内存驻留
           GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' -Dorg.gradle.daemon=false"
           # 限制 CMake 底层的 Ninja 并发数为 2，防止 C++ 编译器吃光内存
+
+          # export CMAKE_BUILD_PARALLEL_LEVEL=2
           CMAKE_BUILD_PARALLEL_LEVEL: "2"
         run: |
           # 使用 --max-workers=2 限制模块并发

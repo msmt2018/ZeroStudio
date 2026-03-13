@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.tabbedActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.tabbedPagerAdapterSrcKt() = """
+internal fun AndroidModuleTemplateBuilder.tabbedPagerAdapterSrcKt() =
+    """
 package ${data.packageName}.ui.main
 
 import android.content.Context
@@ -56,9 +57,11 @@ class SectionsPagerAdapter(private val context: Context, fm: FragmentManager) :
         return 3
     }
 }
-""".trim()
+"""
+        .trim()
 
-internal fun AndroidModuleTemplateBuilder.tabbedPagerAdapterSrcJava() = """
+internal fun AndroidModuleTemplateBuilder.tabbedPagerAdapterSrcJava() =
+    """
 package ${data.packageName}.ui.main;
 
 import android.content.Context;
@@ -105,4 +108,5 @@ public class SectionsPagerAdapter extends FragmentPagerAdapter {
         return 3;
     }
 }
-""".trim()
+"""
+        .trim()

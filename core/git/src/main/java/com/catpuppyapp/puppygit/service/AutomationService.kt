@@ -24,6 +24,7 @@ import com.catpuppyapp.puppygit.utils.cache.NotifySenderMap
 import com.catpuppyapp.puppygit.utils.doJobThenOffLoading
 import com.catpuppyapp.puppygit.utils.forEachBetter
 import com.catpuppyapp.puppygit.utils.generateRandomString
+import com.catpuppyapp.puppygit.utils.pref.PrefUtil
 import io.ktor.util.collections.ConcurrentMap
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -107,7 +108,7 @@ class AutomationService: BaseAccessibilityService() {
                 routeName = "'auto pull service'",
                 gitUsernameFromUrl="",
                 gitEmailFromUrl="",
-                pullWithRebase = SettingsUtil.pullWithRebase(),
+                pullWithRebase = PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext),
             )
         }
 
@@ -212,7 +213,7 @@ class AutomationService: BaseAccessibilityService() {
 
         if(event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             //必须在外部获取，放到协程里会null
-            val packageName = event.packageName.toString()
+            val packageName = event.packageName?.toString() ?: return
 
             if(AppModel.devModeOn) {
                 MyLog.v(TAG, "TYPE_WINDOW_STATE_CHANGED: $packageName")

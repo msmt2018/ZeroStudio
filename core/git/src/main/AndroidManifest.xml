@@ -4,6 +4,24 @@
 
 <!-- 注意：所有权限都已经迁移到：core：resources 模块AndroidManifest.xml -->
 
+<!--     use to start http service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
+        android:minSdkVersion="34"
+    />
+
+<!--    use to start http service on system startup-->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- https://developer.android.com/about/versions/11/privacy/package-visibility -->
+    <!-- for select app to enter pull/leave push -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission"
+    />
+
+
         <!-- android:icon="@mipmap/ic_launcher" -->
         <!-- android:label="@string/app_name" -->
         <!-- android:roundIcon="@mipmap/ic_launcher_round" -->

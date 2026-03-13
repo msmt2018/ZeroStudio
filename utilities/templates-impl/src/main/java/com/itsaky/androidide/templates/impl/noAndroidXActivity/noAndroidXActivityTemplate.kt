@@ -49,18 +49,18 @@ fun noAndroidXActivityProject() = baseProjectImpl {
         writeXmlResource("themes", VALUES, source = emptyValuesFile())
 
         // values-night
-        writeXmlResource("colors", VALUES, config = configNight,
-          source = emptyValuesFile())
-        writeXmlResource("themes", VALUES, config = configNight,
-          source = emptyValuesFile())
+        writeXmlResource("colors", VALUES, config = configNight, source = emptyValuesFile())
+        writeXmlResource("themes", VALUES, config = configNight, source = emptyValuesFile())
 
-        writeXmlResource("activity_main", LAYOUT,
-          source = noAndroidXActivityLayout())
+        writeXmlResource("activity_main", LAYOUT, source = noAndroidXActivityLayout())
       }
 
       sources {
-        writeMainActivity(this, ktSrc = ::noAndroidXActivitySrcKt,
-          javaSrc = ::noAndroidXActivitySrcJava)
+        writeMainActivity(
+            this,
+            ktSrc = ::noAndroidXActivitySrcKt,
+            javaSrc = ::noAndroidXActivitySrcJava,
+        )
       }
     }
   }

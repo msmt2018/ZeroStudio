@@ -20,7 +20,7 @@ package com.itsaky.androidide.templates.impl.bottomNavActivity
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
 internal fun AndroidModuleTemplateBuilder.bottomNavModelNotificationsSrcKt() =
-  """
+    """
 package ${data.packageName}.ui.notifications
 
 import androidx.lifecycle.LiveData
@@ -34,10 +34,11 @@ class NotificationsViewModel : ViewModel() {
     }
     val text: LiveData<String> = _text
 }
-""".trim()
+"""
+        .trim()
 
 internal fun AndroidModuleTemplateBuilder.bottomNavModelNotificationsSrcJava() =
-  """
+    """
 package ${data.packageName}.ui.notifications;
 
 import androidx.lifecycle.LiveData;
@@ -57,4 +58,5 @@ public class NotificationsViewModel extends ViewModel {
         return mText;
     }
 }
-""".trim()
+"""
+        .trim()

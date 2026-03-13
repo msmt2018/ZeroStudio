@@ -55,4 +55,12 @@ object PrefUtil {
         return getBoolean(context, PrefMan.Key.dynamicColorsScheme, Theme.defaultDynamicColorsValue)
     }
 
+    fun setGlobalGitConfigPullWithRebase(context: Context, enable:Boolean) {
+        setBoolean(context, PrefMan.Key.globalGitConfigPullWithRebase, enable)
+    }
+
+    fun getGlobalGitConfigPullWithRebase(context: Context): Boolean {
+        return getBoolean(context, PrefMan.Key.globalGitConfigPullWithRebase, false)
+    }
+
 }

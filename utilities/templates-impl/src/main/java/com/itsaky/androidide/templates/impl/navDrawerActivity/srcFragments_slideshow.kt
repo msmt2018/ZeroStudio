@@ -19,7 +19,8 @@ package com.itsaky.androidide.templates.impl.navDrawerActivity
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun AndroidModuleTemplateBuilder.slideshowFragmentSrcJava() = """
+internal fun AndroidModuleTemplateBuilder.slideshowFragmentSrcJava() =
+    """
 package ${data.packageName}.ui.slideshow;
 
 import android.os.Bundle;
@@ -57,9 +58,11 @@ public class SlideshowFragment extends Fragment {
         binding = null;
     }
 }
-""".trim()
+"""
+        .trim()
 
-internal fun AndroidModuleTemplateBuilder.slideshowFragmentSrcKt() = """
+internal fun AndroidModuleTemplateBuilder.slideshowFragmentSrcKt() =
+    """
 package ${data.packageName}.ui.slideshow
 
 import android.os.Bundle
@@ -103,4 +106,5 @@ class SlideshowFragment : Fragment() {
         _binding = null
     }
 }
-""".trim()
+"""
+        .trim()

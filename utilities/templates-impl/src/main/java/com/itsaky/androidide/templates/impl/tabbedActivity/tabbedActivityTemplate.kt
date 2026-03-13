@@ -37,8 +37,7 @@ fun tabbedActivityProject() = baseProjectImpl {
   defaultAppModule {
     recipe = createRecipe {
       sources {
-        writeMainActivity(this, ktSrc = ::tabbedActivitySrcKt,
-          javaSrc = ::tabbedActivitySrcJava)
+        writeMainActivity(this, ktSrc = ::tabbedActivitySrcKt, javaSrc = ::tabbedActivitySrcJava)
       }
 
       res {
@@ -66,12 +65,21 @@ fun AndroidModuleTemplateBuilder.tabbedActivityProjectKt() {
     addDependency(Dependency.AndroidX.LifeCycle_ViewModel_Ktx)
 
     sources {
-      writeKtSrc("${data.packageName}.ui.main", "SectionsPagerAdapter",
-        source = ::tabbedPagerAdapterSrcKt)
-      writeKtSrc("${data.packageName}.ui.main", "PageViewModel",
-        source = ::tabbedPageViewModelSrcKt)
-      writeKtSrc("${data.packageName}.ui.main", "PlaceholderFragment",
-        source = ::tabbedPlaceholderFragmentSrcKt)
+      writeKtSrc(
+          "${data.packageName}.ui.main",
+          "SectionsPagerAdapter",
+          source = ::tabbedPagerAdapterSrcKt,
+      )
+      writeKtSrc(
+          "${data.packageName}.ui.main",
+          "PageViewModel",
+          source = ::tabbedPageViewModelSrcKt,
+      )
+      writeKtSrc(
+          "${data.packageName}.ui.main",
+          "PlaceholderFragment",
+          source = ::tabbedPlaceholderFragmentSrcKt,
+      )
     }
   }
 }
@@ -82,12 +90,21 @@ fun AndroidModuleTemplateBuilder.tabbedActivityProjectJava() {
     addDependency(Dependency.AndroidX.LifeCycle_ViewModel)
 
     sources {
-      writeJavaSrc("${data.packageName}.ui.main", "SectionsPagerAdapter",
-        source = ::tabbedPagerAdapterSrcJava)
-      writeJavaSrc("${data.packageName}.ui.main", "PageViewModel",
-        source = ::tabbedPageViewModelSrcJava)
-      writeJavaSrc("${data.packageName}.ui.main", "PlaceholderFragment",
-        source = ::tabbedPlaceholderFragmentSrcJava)
+      writeJavaSrc(
+          "${data.packageName}.ui.main",
+          "SectionsPagerAdapter",
+          source = ::tabbedPagerAdapterSrcJava,
+      )
+      writeJavaSrc(
+          "${data.packageName}.ui.main",
+          "PageViewModel",
+          source = ::tabbedPageViewModelSrcJava,
+      )
+      writeJavaSrc(
+          "${data.packageName}.ui.main",
+          "PlaceholderFragment",
+          source = ::tabbedPlaceholderFragmentSrcJava,
+      )
     }
   }
 }

@@ -21,9 +21,7 @@ import com.itsaky.androidide.templates.BaseTemplateData
 import com.itsaky.androidide.templates.ProjectTemplateData
 import java.io.File
 
-/**
- * Get the asset path for base template.
- */
+/** Get the asset path for base template. */
 internal fun baseAsset(type: String, path: String): String {
   return "templates/base/${type}/${path}"
 }
@@ -62,14 +60,16 @@ fun moduleNameToDirName(name: String): String {
 
     if (
 
-    // the first character must be a letter
-      (i == 0 && !c.isLetter())
+        // the first character must be a letter
+        (i == 0 && !c.isLetter())
 
-      // chars at other indices must be a letter, digit, hyphen or an underscore
-      || !(c.isDigit() || c.isLetter() || c == '-' || c =='_')
+        // chars at other indices must be a letter, digit, hyphen or an underscore
+        ||
+            !(c.isDigit() || c.isLetter() || c == '-' || c == '_')
 
-      // must not include consecutive '-'
-      || (prev == '-' && c == '-')
+            // must not include consecutive '-'
+            ||
+            (prev == '-' && c == '-')
     ) {
 
       prev = c
@@ -84,13 +84,13 @@ fun moduleNameToDirName(name: String): String {
 }
 
 /**
- * Get the name of a new project. This checks for existence of existent files/directories
- * until a non-existent project name is found.
+ * Get the name of a new project. This checks for existence of existent files/directories until a
+ * non-existent project name is found.
  *
  * @param baseDir The base project directory.
  * @param name The current project name.
  */
-fun getNewProjectName(baseDir: String, name: String) : String {
+fun getNewProjectName(baseDir: String, name: String): String {
   var i = 1
   var projectDir = File(baseDir, name)
   while (projectDir.exists()) {
