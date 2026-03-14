@@ -86,8 +86,8 @@ class HunkSyntaxHighlighter(
 
         try {
             //闭包的receiver和给函数传参的是同一个实例
-            TextMateUtil.setReceiverThenDoAct(lang, MyHunkStyleReceiver(this)) { receiver ->
-                lang.analyzeManager.reset(ContentReference(Content(text)), Bundle(), receiver)
+            TextMateUtil.setReceiverThenDoAct(lang, MyHunkStyleReceiver(this)) { /**receiver*/ _ ->
+                lang.analyzeManager.reset(ContentReference(Content(text)), Bundle(), /**receiver*/)
             }
         }catch (e: Exception) {
             // maybe will got NPE, if language changed to null by a new analyze

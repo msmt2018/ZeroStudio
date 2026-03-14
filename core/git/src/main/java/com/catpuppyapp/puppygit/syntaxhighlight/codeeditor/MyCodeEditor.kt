@@ -383,7 +383,7 @@ class MyCodeEditor(
             stylesUpdateRequest = StylesUpdateRequest(
                 ignoreThis = false,
                 targetEditorState = editorState,
-                act = { styleReceiver -> lang.analyzeManager.reset(ContentReference(Content(text)), Bundle(), styleReceiver) }
+                act = { _ -> lang.analyzeManager.reset(ContentReference(Content(text)), Bundle()) }
             ),
             language = lang
         )
@@ -580,14 +580,14 @@ data class StylesResult(
     val applied: AtomicBoolean = AtomicBoolean(false)
 ) {
     fun copyForEditorState(newFieldsId: String) = copy(
-        styles = styles.copy(),
+        styles = styles,
         from = StylesResultFrom.TEXT_EDITOR_STATE,
         uniqueId = getRandomUUID(),
         fieldsId = newFieldsId,
         applied = AtomicBoolean(false)
     )
 
-    fun copyWithDeepCopyStyles() = copy(styles = this.styles.copy())
+    fun copyWithDeepCopyStyles() = copy(styles = this.styles)
 }
 
 enum class StylesResultFrom {
