@@ -25,6 +25,32 @@ description = "Android Java bindings for Tree Sitter."
 
 android {
   namespace = "com.itsaky.androidide.treesitter"
+
+  defaultConfig {
+    // 将 consumer-rules.pro 合并到消费者（TinaIDE app）的 R8 规则中。
+    // 缺少此声明会导致 R8 删除/重命名 JNI 依赖的类（如 TreeSitter.loadLibrary()），
+    // 引发运行时 UnsatisfiedLinkError。
+    consumerProguardFiles("consumer-rules.pro")
+  }
+
+  // 关键：确保生成并打包 `libandroid-tree-sitter.so`。
+  // 上层（TinaIDE）会在运行时调用 `System.loadLibrary("android-tree-sitter")`，
+  // 若未配置 externalNativeBuild，则只会编译 Java/Kotlin 代码，APK 中不会包含 JNI so。
+  externalNativeBuild {
+    cmake {
+      path = file("src/main/cpp/CMakeLists.txt")
+      version = "3.22.1"
+    }
+  }
+
+  defaultConfig {
+    externalNativeBuild {
+      cmake {
+        // 额外参数由 `android-tree-sitter.ts` 插件注入（AUTOGEN_HEADERS）。
+        // 此处仅声明存在，避免在某些 AGP 版本/配置下被视为“未启用 native build”。
+      }
+    }
+  }
 }
 
 dependencies {

@@ -22,6 +22,7 @@ import com.itsaky.androidide.templates.SrcSet.Main
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 import com.itsaky.androidide.templates.base.util.AndroidModuleJniManager.JniFileType.*
 import java.io.File
+
 class AndroidModuleJniManager {
 
   enum class JniFileType(val extension: String) {
@@ -29,9 +30,9 @@ class AndroidModuleJniManager {
     CFILE(".c"),
     HEADERFILE(".h"),
     HPPFILE(".hpp"),
-    HPPFILE(".hxx"),
-    HPPFILE(".cxx"),
-    HPPFILE(".in"),
+    HXXFILE(".hxx"),
+    CXXFILE(".cxx"),
+    INFILE(".in"),
   }
 
   /**

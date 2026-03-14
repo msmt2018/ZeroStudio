@@ -229,6 +229,10 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
       return;
     }
 
+    if (predicateHandlers.isEmpty()) {
+      return;
+    }
+
     final var predicates = execQuery.getPredicatesForPattern(match.getPatternIndex());
     final var steps = new ArrayList<PredicateStep>(predicates.length);
 

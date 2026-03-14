@@ -1,3 +1,0 @@
-/root/android-tree-sitter/android-tree-sitter/src/main/cpp/host-build/CMakeFiles/android-tree-sitter.dir
-/root/android-tree-sitter/android-tree-sitter/src/main/cpp/host-build/CMakeFiles/edit_cache.dir
-/root/android-tree-sitter/android-tree-sitter/src/main/cpp/host-build/CMakeFiles/rebuild_cache.dir

@@ -23,6 +23,7 @@ import com.itsaky.androidide.templates.ModuleTemplateData
 import com.itsaky.androidide.templates.ProjectTemplate
 import com.itsaky.androidide.templates.ProjectTemplateData
 import com.itsaky.androidide.templates.ProjectTemplateRecipeResult
+import com.itsaky.androidide.templates.base.models.Dependency
 import com.itsaky.androidide.templates.base.root.buildGradleSrcGroovy
 import com.itsaky.androidide.templates.base.root.buildGradleSrcKts
 import com.itsaky.androidide.templates.base.root.gradleWrapperProps
@@ -211,55 +212,57 @@ class ProjectTemplateBuilder :
   }
 }
 
-fun ProjectTemplateBuilder.generateTomlFile() {
-    val tomlFile = File(data.projectDir, "gradle/libs.versions.toml")
-    tomlFile.parentFile.mkdirs()
-    
-    val tomlContent = """
-[versions]
-agp = "8.13.0"
-kotlin = "2.1.0"
-coreKtx = "1.17.0"
-appcompat = "1.7.1"
-material = "1.13.0"
-constraintlayout = "2.2.1"
-
-[libraries]
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
-androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }[plugins]
-android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-[plugins]
-android-application = { id = "com.android.application", version.ref = "agp" }
-android-library = { id = "com.android.library", version.ref = "agp" }
-android-test = { id = "com.android.test", version.ref = "agp" }
-
-    """.trimIndent()
-    
-    executor.save(tomlContent, tomlFile)
+private fun toTomlAlias(group: String, artifact: String): String {
+    return (group.replace("com.google.android", "google")
+                 .replace("androidx", "")
+                 .replace(".", "-")
+         + "-" + artifact)
+        .replace(Regex("-+"), "-")
+        .removePrefix("-")
 }
 
-fun AndroidModuleTemplateBuilder.dependenciesBlock(isKts: Boolean): String {
-    val sb = java.lang.StringBuilder()
-    sb.append("dependencies {\n")
+fun ProjectTemplateBuilder.generateTomlFile() {
+    if (!data.useToml) return
+
+    val allDependencies = modules.flatMap { (it as AndroidModuleTemplateBuilder).dependencies }.distinct()
+    val allPlatforms = modules.flatMap { (it as AndroidModuleTemplateBuilder).platforms }.distinct()
+
+    val versions = mutableMapOf<String, String>()
+    val libraries = mutableMapOf<String, String>()
     
-    if (data.useToml) {
-        // 如果开启了 TOML，使用 Version Catalog 语法
-        sb.append("    implementation(libs.androidx.core.ktx)\n")
-        sb.append("    implementation(libs.androidx.appcompat)\n")
-        sb.append("    implementation(libs.material)\n")
-        sb.append("    implementation(libs.androidx.constraintlayout)\n")
-    } else {
-        // 否则使用传统的硬编码字符串
-        val q = if (isKts) "\"" else "'"
-        sb.append("    implementation(${q}androidx.core:core-ktx:1.17.0${q})\n")
-        sb.append("    implementation(${q}androidx.appcompat:appcompat:1.7.1${q})\n")
-        sb.append("    implementation(${q}com.google.android.material:material:1.13.0${q})\n")
-        sb.append("    implementation(${q}androidx.constraintlayout:constraintlayout:2.2.1${q})\n")
+    // Add versions and libraries from all dependencies
+    (allDependencies + allPlatforms).forEach { dep ->
+        dep.version?.let {
+            val versionAlias = toTomlAlias(dep.group, dep.artifact).replace("-", "")
+            versions[versionAlias] = it
+            libraries[toTomlAlias(dep.group, dep.artifact)] = "{ group = \"${dep.group}\", name = \"${dep.artifact}\", version.ref = \"$versionAlias\" }"
+        }
     }
     
-    sb.append("}\n")
-    return sb.toString()
+    // Ensure essential versions are always present
+    versions.putIfAbsent("agp", data.version.gradlePlugin)
+    versions.putIfAbsent("kotlin", data.version.kotlin)
+
+    val tomlFile = File(data.projectDir, "gradle/libs.versions.toml")
+    tomlFile.parentFile.mkdirs()
+
+    val tomlContent = buildString {
+        appendLine("[versions]")
+        versions.toSortedMap().forEach { (alias, version) ->
+            appendLine("$alias = \"$version\"")
+        }
+        appendLine("\n[libraries]")
+        libraries.toSortedMap().forEach { (alias, definition) ->
+            appendLine("$alias = $definition")
+        }
+        appendLine("\n[plugins]")
+        appendLine("android-application = { id = \"com.android.application\", version.ref = \"agp\" }")
+        appendLine("android-library = { id = \"com.android.library\", version.ref = \"agp\" }")
+        appendLine("kotlin-android = { id = \"org.jetbrains.kotlin.android\", version.ref = \"kotlin\" }")
+        if (hasComposeModules) {
+            appendLine("kotlin-compose = { id = \"org.jetbrains.kotlin.plugin.compose\", version.ref = \"kotlin\" }")
+        }
+    }
+    
+    executor.save(tomlContent, tomlFile)
 }

@@ -17,7 +17,7 @@
 
 package com.itsaky.androidide.templates.base
 
-// import android.content.Context
+import android.content.Context
 import com.android.SdkConstants.ANDROID_MANIFEST_XML
 import com.itsaky.androidide.templates.ModuleType.AndroidLibrary
 import com.itsaky.androidide.templates.RecipeExecutor
@@ -33,7 +33,7 @@ import java.io.File
 
 /**
  * @author Akash Yadav
- // * @author android_zero
+ * @author android_zero
  */
 class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
 

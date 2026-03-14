@@ -23,7 +23,7 @@ import com.itsaky.androidide.templates.Language.Kotlin
 import com.itsaky.androidide.templates.ModuleType
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 import com.itsaky.androidide.templates.base.ModuleTemplateBuilder
-import com.itsaky.androidide.templates.base.modules.dependencies
+import com.itsaky.androidide.templates.base.models.Dependency
 import com.itsaky.androidide.utils.Environment
 import java.io.File
 
@@ -225,6 +225,46 @@ private fun AndroidModuleTemplateBuilder.showNdkNotInstalledDialog(context: Cont
       .show()
 }
 
+private fun toTomlAccessor(dep: Dependency): String {
+    val key = "${dep.group}:${dep.artifact}"
+    val alias = (dep.group.replace("com.google.android", "google")
+                         .replace("androidx", "")
+                         .replace(".", "-")
+                 + "-" + dep.artifact)
+                .replace(Regex("-+"), "-")
+                .removePrefix("-")
+    return "libs.$alias".replace("-", ".")
+}
+
+
+internal fun AndroidModuleTemplateBuilder.dependenciesBlock(isKts: Boolean): String {
+    val sb = StringBuilder()
+    sb.append("dependencies {\n")
+    val quote = if (isKts) "\"" else "'"
+    
+    // Write platform dependencies (BOMs)
+    for (dep in platforms) {
+        if (data.useToml) {
+            sb.append("    ${dep.configuration.configName}(platform(${toTomlAccessor(dep)}))\n")
+        } else {
+            sb.append("    ${dep.configuration.configName}(platform($quote${dep.group}:${dep.artifact}${dep.version?.let { ":$it" } ?: ""}$quote))\n")
+        }
+    }
+    
+    // Write standard dependencies
+    for (dep in dependencies) {
+        if (data.useToml) {
+            sb.append("    ${dep.configuration.configName}(${toTomlAccessor(dep)})\n")
+        } else {
+            val versionSuffix = if (dep.version != null) ":${dep.version}" else ""
+            sb.append("    ${dep.configuration.configName}($quote${dep.group}:${dep.artifact}$versionSuffix$quote)\n")
+        }
+    }
+    
+    sb.append("}\n")
+    return sb.toString()
+}
+
 private fun AndroidModuleTemplateBuilder.buildGradleSrcKts(isComposeModule: Boolean): String {
   val shouldUseNdk = data.useNdk
   val hasNative = hasNativeFiles() || shouldUseNdk
@@ -232,8 +272,23 @@ private fun AndroidModuleTemplateBuilder.buildGradleSrcKts(isComposeModule: Bool
 
   // Calculate compileSdk value first
   val compileSdkValue = if (isComposeModule) 36 else data.versions.compileSdk.api
-  composeExtraPluginKt = if (isComposeModule) "id(\"$compose_kotlinExtraPlugin\")" else ""
-  composeExtraPluginGr = if (isComposeModule) "id '$compose_kotlinExtraPlugin'" else ""
+  composeExtraPluginKt = if (isComposeModule) "\n    id(\"$compose_kotlinExtraPlugin\")" else ""
+
+  val ndkVersionBlock = if (hasNative && ndkInstalled) "\n    ndkVersion = \"28.2.13676358\"" else ""
+  val ndkConfigBlock = if (hasNative && ndkInstalled) """
+        externalNativeBuild {
+            ndkBuild {
+                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64", "x86"))
+            }
+        }
+""" else ""
+  val ndkPathBlock = if (hasNative && ndkInstalled) """
+    externalNativeBuild {
+        ndkBuild {
+            path = file("src/main/jni/Android.mk")
+        }
+    }
+""" else ""
 
   return """
 plugins {
@@ -243,9 +298,8 @@ plugins {
 
 android {
     namespace = "${data.packageName}"
-    compileSdk = ${compileSdkValue}
-    // ${ndkConfigStr().replace("\n", "\n    ")}
-    ${if (hasNative && ndkInstalled) """ndkVersion = "28.2.13676358"""" else ""}
+    compileSdk = $compileSdkValue
+    $ndkVersionBlock
 
     defaultConfig {
         applicationId = "${data.packageName}"
@@ -257,15 +311,8 @@ android {
         vectorDrawables { 
             useSupportLibrary = true
         }
-        // ${if (data.useNdk) "
-        ${if (hasNative && ndkInstalled) """
-        externalNativeBuild {
-            ndkBuild {
-                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64", "x86"))
-            }
-        }
-        """ else ""}
-    }
+    $ndkConfigBlock 
+   }
     
     compileOptions {
         sourceCompatibility = ${data.versions.javaSource()}
@@ -278,20 +325,14 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-    ${if (hasNative && ndkInstalled) """
-    externalNativeBuild {
-        ndkBuild {
-            path = file("src/main/jni/Android.mk")
-        }
-    }""" else ""}
+$ndkPathBlock
     buildFeatures {
-        ${if (!isComposeModule) "viewBinding = true" else ""}
-        ${if (isComposeModule) "compose = true" else ""}
+        ${if (!isComposeModule) "viewBinding = true" else "compose = true"}
     }
     ${if(isComposeModule) composeConfigKts() else ""}
 }
 ${ktJvmTarget()}
-${dependencies()}
+${dependenciesBlock(isKts = true)}
 """
 }
 
@@ -302,9 +343,23 @@ private fun AndroidModuleTemplateBuilder.buildGradleSrcGroovy(isComposeModule: B
 
   // Calculate compileSdk value first
   val compileSdkValue = if (isComposeModule) 36 else data.versions.compileSdk.api
-  // Ensure compose plugin application variables are set for Groovy, same as KTS path
-  composeExtraPluginKt = if (isComposeModule) "id(\"$compose_kotlinExtraPlugin\")" else ""
-  composeExtraPluginGr = if (isComposeModule) "id '$compose_kotlinExtraPlugin'" else ""
+  composeExtraPluginGr = if (isComposeModule) "\n    id '$compose_kotlinExtraPlugin'" else ""
+
+  val ndkVersionBlock = if (hasNative && ndkInstalled) "\n    ndkVersion '28.2.13676358'" else ""
+  val ndkConfigBlock = if (hasNative && ndkInstalled) """
+        externalNativeBuild {
+            ndkBuild {
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64', 'x86'
+            }
+        }
+""" else ""
+  val ndkPathBlock = if (hasNative && ndkInstalled) """
+    externalNativeBuild {
+        ndkBuild {
+            path file('src/main/jni/Android.mk')
+        }
+    }
+""" else ""
 
   return """
 plugins {
@@ -314,8 +369,7 @@ plugins {
 
 android {
     namespace '${data.packageName}'
-    compileSdk $compileSdkValue
-    ${if (hasNative && ndkInstalled) """ndkVersion '28.2.13676358'""" else ""}
+    compileSdk $compileSdkValue$ndkVersionBlock
     
     defaultConfig {
         applicationId "${data.packageName}"
@@ -327,15 +381,8 @@ android {
         vectorDrawables { 
             useSupportLibrary true
         }
-        // ${if (data.useNdk) "externalNativeBuild { cmake { cppFlags '' } }" else ""}
-            ${if (hasNative && ndkInstalled) """
-        externalNativeBuild {
-            ndkBuild {
-                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64', 'x86'
-            }
-        }
-        """ else ""}
-    }
+    $ndkConfigBlock
+   }
 
     compileOptions {
         sourceCompatibility ${data.versions.javaSource()}
@@ -348,21 +395,14 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
-    ${if (hasNative && ndkInstalled) """
-    externalNativeBuild {
-        ndkBuild {
-            path file('src/main/jni/Android.mk')
-        }
-    }""" else ""}
+    $ndkPathBlock
     buildFeatures {
-        ${if (!isComposeModule) "viewBinding true" else ""}
-        ${if (isComposeModule) "compose true" else ""}
+        ${if (!isComposeModule) "viewBinding true" else "compose true"}
     }
     ${if(isComposeModule) composeConfigGroovy() else ""}
 }
 ${ktJvmTarget()}
-${dependencies()}
+${dependenciesBlock(isKts = false)}
 """
 }
 
@@ -430,14 +470,10 @@ private fun AndroidModuleTemplateBuilder.ktPlugin(): String {
 
 private fun ktPluginKts(): String {
   return """
-  id("kotlin-android")
-  $composeExtraPluginKt
-  """
+    id("org.jetbrains.kotlin.android")$composeExtraPluginKt"""
 }
 
 private fun ktPluginGroovy(): String {
   return """
-  id 'kotlin-android'
-  $composeExtraPluginGr
-  """
+    id 'org.jetbrains.kotlin.android'$composeExtraPluginGr"""
 }
