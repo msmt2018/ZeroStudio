@@ -51,6 +51,11 @@ import io.ktor.util.collections.ConcurrentMap
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.time.ZoneOffset
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
 
 private const val TAG ="AppModel"
 
@@ -65,7 +70,7 @@ object AppModel {
 //    private val inited_2 = mutableStateOf(false)
 //        private val inited_3 = mutableStateOf(false)
 
-    const val appPackageName = BuildConfig.APPLICATION_ID
+    const val appPackageName = BuildConfig.LIBRARY_PACKAGE_NAME
 
     /**
      * 加密凭据用到的主密码，若为空且设置项中的主密码hash不为空，将弹窗请求用户输入主密码，若用户拒绝，将无法使用凭据
@@ -195,7 +200,13 @@ object AppModel {
     private lateinit var logDir: File
     private lateinit var submoduleDotGitBackupDir: File
 
-
+/**
+ * Helper function to get the current date in YYYYMMDD format.
+ */
+ fun getCurrentDateVersion(): String {
+    val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+    return LocalDate.now().format(dateFormatter)
+}
 
     //外部不应该直接获取此文件，此文件应通过DebugModeManager的setOn/Off方法维护
 //    private lateinit var debugModeFlagFile:File
@@ -706,11 +717,11 @@ object AppModel {
     }
 
     fun getAppVersionCode():Int {
-        return BuildConfig.VERSION_CODE
+        return getCurrentDateVersion().toInt()
     }
 
     fun getAppVersionName():String {
-        return BuildConfig.VERSION_NAME
+        return getCurrentDateVersion()
     }
 
     fun getAppVersionNameAndCode():String {

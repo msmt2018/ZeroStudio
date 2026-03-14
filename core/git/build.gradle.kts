@@ -145,7 +145,7 @@ dependencies {
     //启动屏幕
     implementation("androidx.core:core-splashscreen:1.0.1")
 
-    val composeBom = platform("androidx.compose:compose-bom:2025.11.00")
+    val composeBom = platform("androidx.compose:compose-bom:2025.07.00")
 
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")
@@ -153,9 +153,9 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3:1.3.1")
     implementation("androidx.compose.material:material-icons-extended")
- 
+    // implementation("androidx.compose.material:material-pull-refresh:1.6.1")
      implementation(projects.core.resources)
      implementation(libs.common.editor)
      implementation(projects.modules.soraLanguageMonarch)

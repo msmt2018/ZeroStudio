@@ -67,7 +67,7 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL: "2"
         run: |
           # 使用 --max-workers=2 限制模块并发
-          gradle ${{ github.event.inputs.build_type }} --stacktrace --build-cache --max-workers=2
+          gradle ${{ github.event.inputs.build_type }} --stacktrace --build-cache --max-workers=3
 
       - name: Upload app-arm64-v8a-release.apk
         if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
