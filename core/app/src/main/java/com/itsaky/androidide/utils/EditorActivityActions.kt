@@ -30,6 +30,7 @@ import com.itsaky.androidide.actions.editor.ExpandSelectionAction
 import com.itsaky.androidide.actions.editor.LongSelectAction
 import com.itsaky.androidide.actions.editor.PasteAction
 import com.itsaky.androidide.actions.editor.SelectAllAction
+import com.itsaky.androidide.actions.editor.SystemTextMenuAction
 import com.itsaky.androidide.actions.etc.DisconnectLogSendersAction
 import com.itsaky.androidide.actions.etc.FindActionMenu
 import com.itsaky.androidide.actions.etc.LaunchAppAction
@@ -99,6 +100,7 @@ class EditorActivityActions {
       registry.registerAction(LongSelectAction(context, order++))
       registry.registerAction(ExpandSelectionAction(context, order++))
       registry.registerAction(FormatCodeAction(context, order++))
+      registry.registerAction(SystemTextMenuAction(context, order++))
 
       // file tab actions
       registry.registerAction(CloseFileAction(context, order++))
