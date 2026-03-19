@@ -1,10 +1,10 @@
+// by android_zero
 package com.itsaky.androidide.actions.editor.text
 
 import android.graphics.drawable.Drawable
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem
 import com.itsaky.androidide.actions.EditorActionItem
-import com.itsaky.androidide.actions.requireEditor
 import io.github.rosemoe.sora.text.CharPosition
 import io.github.rosemoe.sora.widget.CodeEditor
 
@@ -14,23 +14,27 @@ import io.github.rosemoe.sora.widget.CodeEditor
  */
 abstract class MoveSelectionActionBase : EditorActionItem {
     override var label: String = ""
-    override var visible: Boolean = false
+    override var visible: Boolean = true
     override var enabled: Boolean = false
     override var icon: Drawable? = null
     override var requiresUIThread: Boolean = true
     override var location: ActionItem.Location = ActionItem.Location.EDITOR_TEXT_ACTIONS
 
+    private var currentEditor: CodeEditor? = null
+
     override fun prepare(data: ActionData) {
         super.prepare(data)
         val editor = data.get(CodeEditor::class.java)
-        // 仅在有文本选中的情况下显示并生效
-        val isSelected = editor?.cursor?.isSelected ?: false
-        visible = isSelected
-        enabled = isSelected
+        if (editor != null) {
+            currentEditor = editor
+            enabled = editor.cursor.isSelected
+        } else {
+            enabled = false
+        }
     }
 
     override suspend fun execAction(data: ActionData): Any {
-        val editor = data.requireEditor()
+        val editor = currentEditor ?: return false
         if (!editor.cursor.isSelected) return false
 
         val text = editor.text

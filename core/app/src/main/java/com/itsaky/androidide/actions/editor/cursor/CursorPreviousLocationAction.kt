@@ -10,7 +10,6 @@ import com.itsaky.androidide.resources.R
 import io.github.rosemoe.sora.widget.CodeEditor
 import com.itsaky.androidide.cursor.CursorHistoryManager
 
-
 /**
  * Navigate to the last cursor position Action
  * @author android_zero
@@ -24,6 +23,9 @@ class CursorPreviousLocationAction(context: Context, override val order: Int) : 
     override var requiresUIThread: Boolean = true
     override var location: ActionItem.Location = ActionItem.Location.EDITOR_TEXT_ACTIONS
 
+    // 缓存 Editor
+    private var currentEditor: CodeEditor? = null
+
     init {
         label = context.getString(R.string.title_menus_editor_cursor_prevLocation)
         icon = ContextCompat.getDrawable(context, R.drawable.ic_editor_cursor_prev_location)
@@ -32,11 +34,16 @@ class CursorPreviousLocationAction(context: Context, override val order: Int) : 
     override fun prepare(data: ActionData) {
         super.prepare(data)
         val editor = data.get(CodeEditor::class.java)
-        enabled = editor != null && CursorHistoryManager.getTracker(editor).canGoBack()
+        if (editor != null) {
+            currentEditor = editor
+            enabled = CursorHistoryManager.getTracker(editor).canGoBack()
+        } else {
+            enabled = false
+        }
     }
 
     override suspend fun execAction(data: ActionData): Any {
-        val editor = data.requireEditor()
+        val editor = currentEditor ?: return false
         CursorHistoryManager.getTracker(editor).goBack()
         return true
     }
