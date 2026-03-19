@@ -19,20 +19,12 @@ package com.itsaky.androidide.templates.impl.noActivity
 
 import com.itsaky.androidide.templates.base.modules.android.defaultAppModule
 import com.itsaky.androidide.templates.impl.R
-import com.itsaky.androidide.resources.R.string
 import com.itsaky.androidide.templates.impl.base.createRecipe
 import com.itsaky.androidide.templates.impl.base.emptyThemesAndColors
 import com.itsaky.androidide.templates.impl.baseProjectImpl
 
-fun noActivityProjectTemplate() = baseProjectImpl {
+fun noActivityProject() = baseProjectImpl {
   templateName = R.string.template_no_activity
   thumb = R.drawable.template_no_activity
-  description = string.test_test
-  defaultAppModule {
-    recipe = createRecipe {
-      res {
-        emptyThemesAndColors(actionBar = true)
-      }
-    }
-  }
+  defaultAppModule { recipe = createRecipe { res { emptyThemesAndColors(actionBar = true) } } }
 }

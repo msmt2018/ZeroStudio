@@ -470,7 +470,27 @@ inline fun useKtsParameter(crossinline configure: BooleanParameterBuilder.() -> 
     booleanParameter {
       name = string.msg_use_kts
       default = true
+      configure()
+    }
 
+inline fun useTomlParameter(crossinline configure: BooleanParameterBuilder.() -> Unit = {}) =
+    booleanParameter {
+      name = string.template_support_toml
+      default = true
+      configure()
+    }
+
+inline fun useCmakeParameter(crossinline configure: BooleanParameterBuilder.() -> Unit = {}) =
+    booleanParameter {
+      name = string.template_msg_use_cmake
+      default = false
+      configure()
+    }
+
+inline fun useNdkParameter(crossinline configure: BooleanParameterBuilder.() -> Unit = {}) =
+    booleanParameter {
+      name = string.template_msg_use_ndk
+      default = false
       configure()
     }
 
@@ -478,26 +498,21 @@ inline fun projectNdkVersionParameter(
     crossinline configure: EnumParameterBuilder<NdkVersion>.() -> Unit = {}
 ) =
     enumParameter<NdkVersion> {
-        name = R.string.wizard_ndk_version
-        default = NdkVersion.R29C
+      name = string.template_wizard_ndk_version
+      default = NdkVersion.R29C
       displayName = NdkVersion::displayName
       startIcon = { R.drawable.ic_min_sdk }
-
-      configure()
-    }
-    
-inline fun useNdkParameter(crossinline configure: BooleanParameterBuilder.() -> Unit = {}) =
-    booleanParameter {
-      name = R.string.msg_use_ndk
-      default = false
-
       configure()
     }
 
-inline fun projectCmakeVersionParameter(crossinline configure: EnumParameterBuilder<CmakeVersion>.() -> Unit = {}) =
-    enumParameter<CmakeVersion> {
-        name = R.string.wizard_cmake_version
+inline fun projectCmakeVersionParameter(
+     crossinline configure: EnumParameterBuilder<CmakeVersion>.() -> Unit = {}
+) =
+      enumParameter<CmakeVersion> {
+        name = string.template_wizard_cmake_version
         default = CmakeVersion.V3_22_1
         displayName = CmakeVersion::displayName
+        startIcon = { R.drawable.ic_min_sdk }
         configure()
     }
+

@@ -34,15 +34,13 @@ internal fun ModuleTemplateBuilder.dependencies(): String {
         append("dependencies {")
         append(System.lineSeparator())
         for (dep in platforms) {
+          append("    ${dep.platformValue(data.useToml, data.useKts)}")
           append(System.lineSeparator())
-          append("    ${dep.platformValue()}")
         }
-        append(System.lineSeparator())
         for (dep in dependencies) {
+          append("    ${dep.value(data.useToml, data.useKts)}")
           append(System.lineSeparator())
-          append("    ${dep.value()}")
         }
-        append(System.lineSeparator())
         append("}")
       }
       .toString()

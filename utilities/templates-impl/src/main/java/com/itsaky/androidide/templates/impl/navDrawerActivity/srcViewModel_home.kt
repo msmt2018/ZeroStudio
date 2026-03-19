@@ -33,7 +33,7 @@ public class HomeViewModel extends ViewModel {
 
     public HomeViewModel() {
         mText = new MutableLiveData<>();
-        mText.setValue("This is home fragment");
+        mText.setValue("This is Home fragment");
     }
 
     public LiveData<String> getText() {
@@ -54,7 +54,7 @@ import androidx.lifecycle.ViewModel
 class HomeViewModel : ViewModel() {
 
     private val _text = MutableLiveData<String>().apply {
-        value = "This is home Fragment"
+        value = "This is Home Fragment"
     }
     val text: LiveData<String> = _text
 }

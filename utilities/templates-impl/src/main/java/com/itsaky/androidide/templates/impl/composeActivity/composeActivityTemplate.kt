@@ -28,8 +28,9 @@ import com.itsaky.androidide.templates.impl.base.createRecipe
 import com.itsaky.androidide.templates.impl.base.writeMainActivity
 import com.itsaky.androidide.templates.impl.baseProjectImpl
 import com.itsaky.androidide.templates.projectLanguageParameter
+import java.io.File
 
-private const val composeKotlinVersion = "2.0.21"
+private const val composeKotlinVersion = "2.2.0"
 
 private fun composeLanguageParameter() = projectLanguageParameter {
   default = Kotlin
@@ -42,8 +43,8 @@ fun composeActivityProject() =
         language = composeLanguageParameter(),
         projectVersionData = ProjectVersionData(kotlin = composeKotlinVersion),
     ) {
-      templateName = R.string.template_compose
-      thumb = R.drawable.template_compose_empty_activity
+        templateName = R.string.template_compose
+        thumb = R.drawable.template_compose_empty_activity
 
       defaultAppModule(addAndroidX = false) {
         isComposeModule = true

@@ -18,6 +18,7 @@
 package com.itsaky.androidide.templates.base
 
 import com.itsaky.androidide.managers.ToolsManager
+import com.itsaky.androidide.templates.Language
 import com.itsaky.androidide.templates.ModuleTemplate
 import com.itsaky.androidide.templates.ModuleTemplateData
 import com.itsaky.androidide.templates.ProjectTemplate
@@ -37,15 +38,15 @@ import java.util.zip.ZipInputStream
 /**
  * Builder for building project templates.
  *
- * @author Akash Yadav
- * @author android_zero
+ * @author Akash Yadav (Historical contributors)
+ * @author android_zero (Added TOML Support & logic optimization)
  */
 class ProjectTemplateBuilder :
     ExecutorDataTemplateBuilder<ProjectTemplateRecipeResult, ProjectTemplateData>() {
 
   private var _defModule: ModuleTemplateData? = null
 
-  // Add flag to track if any modules use Compose
+  // Flag to track if any modules use Compose
   var hasComposeModules = false
     private set
 
@@ -60,8 +61,7 @@ class ProjectTemplateBuilder :
     get() = checkNotNull(_defModule) { "Module template data not set" }
 
   /**
-   * Set the template data that will be used to create the default application module in the
-   * project.
+   * Set the template data that will be used to create the default application module in the project.
    *
    * @param data The module template data to use.
    */
@@ -70,8 +70,7 @@ class ProjectTemplateBuilder :
   }
 
   /**
-   * Enable Compose support for the project. This will add the Compose Compiler plugin to the root
-   * build.gradle
+   * Enable Compose support for the project. This will add the Compose Compiler plugin to the root build.gradle
    */
   fun enableComposeSupport() {
     hasComposeModules = true
@@ -85,7 +84,7 @@ class ProjectTemplateBuilder :
    */
   fun baseAsset(path: String) = com.itsaky.androidide.templates.base.util.baseAsset("root", path)
 
-  /** Get the `build.gradle[.kts] file for the project. */
+  /** Get the `build.gradle[.kts]` file for the project. */
   fun buildGradleFile(): File {
     return data.buildGradleFile()
   }
@@ -96,15 +95,12 @@ class ProjectTemplateBuilder :
   }
 
   /** Get the source for `build.gradle[.kts]` files. */
-  // In ProjectTemplateBuilder.kt
-
-  /** Get the source for `build.gradle[.kts]` files. */
   fun buildGradleSrc(): String {
     // Check multiple signals to robustly detect if any module uses Compose
     val composeMarkerFile = File(data.projectDir, ".compose_enabled")
     val composeDetectedByScan = checkForComposeInProject()
-    val shouldIncludeCompose =
-        hasComposeModules || composeMarkerFile.exists() || composeDetectedByScan
+    val shouldIncludeCompose = hasComposeModules || composeMarkerFile.exists() || composeDetectedByScan
+    
     return if (data.useKts) buildGradleSrcKts(shouldIncludeCompose)
     else buildGradleSrcGroovy(shouldIncludeCompose)
   }
@@ -152,7 +148,6 @@ class ProjectTemplateBuilder :
 
   /** Writes/copies the Gradle Wrapper related files in the project directory. */
   fun gradleWrapper() {
-
     ZipInputStream(executor.openAsset(ToolsManager.getCommonAsset("gradle-wrapper.zip")).buffered())
         .use { zipIn ->
           val entriesToCopy = arrayOf("gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.jar")
@@ -168,7 +163,6 @@ class ProjectTemplateBuilder :
                 outStream.flush()
               }
             }
-
             zipEntry = zipIn.nextEntry
           }
 
@@ -189,6 +183,73 @@ class ProjectTemplateBuilder :
   fun gitignore() {
     val gitignore = File(data.projectDir, ".gitignore")
     executor.copyAsset(baseAsset("gitignore"), gitignore)
+  }
+
+  /**
+   * 动态生成 TOML 配置文件。
+   * 从已注册的所有模块（moduleBuilders）中提取它们使用到的 sdk 依赖项，动态构建 TOML 内容。
+   * 
+   * @author android_zero
+   * 功能：负责统一导出标准现代化的依赖版本集，解耦 build.gradle。
+   */
+  fun generateToml() {
+    if (!data.useToml) return
+
+    val versions = mutableMapOf<String, String>()
+    val libraries = mutableMapOf<String, String>()
+    val plugins = mutableMapOf<String, String>()
+
+    // 注入基础版本和插件
+    versions["agp"] = data.version.gradlePlugin
+    versions["kotlin"] = data.version.kotlin
+    plugins["android-application"] = "{ id = \"com.android.application\", version.ref = \"agp\" }"
+    plugins["android-library"] = "{ id = \"com.android.library\", version.ref = \"agp\" }"
+    
+    if (data.language == Language.Kotlin) {
+        plugins["kotlin-android"] = "{ id = \"org.jetbrains.kotlin.android\", version.ref = \"kotlin\" }"
+    }
+    if (hasComposeModules) {
+        plugins["kotlin-compose"] = "{ id = \"org.jetbrains.kotlin.plugin.compose\", version.ref = \"kotlin\" }"
+    }
+
+        // 收集子模块注册的所有依赖项并去重 (包括 defModule 中注册的，如果存在)
+        val allDeps = mutableSetOf<Dependency>()
+        moduleBuilders.forEach { builder ->
+            allDeps.addAll(builder.dependencies)
+            allDeps.addAll(builder.platforms)
+        }
+
+    // 将这些依赖项动态转化为 TOML 语法
+    allDeps.forEach { dep ->
+        val alias = dep.tomlAlias
+        if (alias != null) {
+            if (dep.version != null) {
+                // 提取 alias 中的连字符转为首字母大写作为 versionRef (例如 androidx-core -> androidxCore)
+                val versionRef = alias.split("-").mapIndexed { index, s ->
+                    if (index == 0) s else s.replaceFirstChar { it.uppercase() }
+                }.joinToString("")
+                
+                versions[versionRef] = dep.version
+                libraries[alias] = "{ group = \"${dep.group}\", name = \"${dep.artifact}\", version.ref = \"$versionRef\" }"
+            } else {
+                libraries[alias] = "{ group = \"${dep.group}\", name = \"${dep.artifact}\" }"
+            }
+        }
+    }
+
+    val tomlBuilder = StringBuilder()
+    tomlBuilder.append("[versions]\n")
+    versions.forEach { (k, v) -> tomlBuilder.append("$k = \"$v\"\n") }
+
+    tomlBuilder.append("\n[plugins]\n")
+    plugins.forEach { (k, v) -> tomlBuilder.append("$k = $v\n") }
+
+    tomlBuilder.append("\n[libraries]\n")
+    libraries.forEach { (k, v) -> tomlBuilder.append("$k = $v\n") }
+
+    val tomlFile = File(data.projectDir, "gradle/libs.versions.toml")
+    tomlFile.parentFile?.mkdirs()
+    executor.save(tomlBuilder.toString(), tomlFile)
   }
 
   override fun buildInternal(): ProjectTemplate {

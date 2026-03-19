@@ -32,7 +32,7 @@ import com.itsaky.androidide.templates.impl.baseProjectImpl
 fun emptyActivityProject(): ProjectTemplate = baseProjectImpl {
   templateName = R.string.template_empty
   thumb = R.drawable.template_empty_activity
-  description = string.test_test
+  description = string.title_test
   defaultAppModule {
     recipe = createRecipe {
       sources { writeEmptyActivity(this) }

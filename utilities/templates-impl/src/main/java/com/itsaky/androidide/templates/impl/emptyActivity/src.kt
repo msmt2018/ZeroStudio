@@ -26,30 +26,13 @@ internal fun AndroidModuleTemplateBuilder.emptyActivitySrcKt(): String {
   return """
 package ${data.packageName}
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import ${data.packageName}.databinding.ActivityMainBinding
+import androidx.appcompat.app.AppCompatActivity
 
-public class MainActivity : AppCompatActivity() {
-
-    private var _binding: ActivityMainBinding? = null
-    
-    private val binding: ActivityMainBinding
-      get() = checkNotNull(_binding) { "Activity has been destroyed" }
-    
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Inflate and get instance of binding
-        _binding = ActivityMainBinding.inflate(layoutInflater)
-
-        // set content view to binding's root
-        setContentView(binding.root)
-    }
-    
-    override fun onDestroy() {
-        super.onDestroy()
-        _binding = null
+        setContentView(R.layout.activity_main)
     }
 }
 """
@@ -59,28 +42,14 @@ internal fun AndroidModuleTemplateBuilder.emptyActivitySrcJava(): String {
   return """
 package ${data.packageName};
 
-import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
-import ${data.packageName}.databinding.ActivityMainBinding;
+import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
-    private ActivityMainBinding binding;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // Inflate and get instance of binding
-        binding = ActivityMainBinding.inflate(getLayoutInflater());
-
-        // set content view to binding's root
-        setContentView(binding.getRoot());
-    }
-    
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        this.binding = null;
+        setContentView(R.layout.activity_main);
     }
 }
 """

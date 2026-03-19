@@ -33,7 +33,7 @@ public class SlideshowViewModel extends ViewModel {
 
     public SlideshowViewModel() {
         mText = new MutableLiveData<>();
-        mText.setValue("This is slideshow fragment");
+        mText.setValue("This is Slideshow fragment");
     }
 
     public LiveData<String> getText() {
@@ -54,7 +54,7 @@ import androidx.lifecycle.ViewModel
 class SlideshowViewModel : ViewModel() {
 
     private val _text = MutableLiveData<String>().apply {
-        value = "This is slideshow Fragment"
+        value = "This is Slideshow Fragment"
     }
     val text: LiveData<String> = _text
 }

@@ -35,7 +35,7 @@ public class MainActivity : AppCompatActivity() {
 
     companion object {
         init {
-            System.loadLibrary("tomaslib")
+            System.loadLibrary("native-lib")
         }
     }
     
@@ -80,7 +80,7 @@ import ${data.packageName}.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity {
     static {
-        System.loadLibrary("tomaslib");
+        System.loadLibrary("native-lib");
     }
 
     private ActivityMainBinding binding;

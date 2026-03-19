@@ -30,6 +30,14 @@ android {
 }
 
 dependencies {
+
+  //Handle tar.xz compressed packages
+  implementation(libs.common.org.tukaani.tarxzip)
+  //Handle .tar archiving
+  implementation(libs.common.org.apache.commons.compress)
+  // Secondary IO Flow operations
+  implementation(libs.common.io)
+
   api(libs.composite.javapoet)
 
   api(projects.core.common)

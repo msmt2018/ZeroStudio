@@ -1,20 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools"
      tools:ignore="MissingTranslation">
-     <!-- values(English (Default)) -->
-     <!-- ar-rSA (阿拉伯语) -->
-     <!-- bn-rIN (孟加拉语) -->
-     <!-- de-rDE (德语) -->
-     <!-- es-rES (西班牙语) -->
-     <!-- fr-rFR (法语) -->
-     <!-- hi-rIN (印地语) -->
-     <!-- in-rID (印度尼西亚语) -->
-     <!-- pt-rBR (巴西葡萄牙语) -->
-     <!-- ro-rRO (罗马尼亚语) -->
-     <!-- ru-rRU (俄语) -->
-     <!-- tr-rTR (土耳其语) -->
-     <!-- tm-rTM (土库曼语) -->
+     <!-- values (English (Default)) -->
+     <!-- ar-rSA (Arabic) -->
+     <!-- bn-rIN (Bengali) -->
+     <!-- de-rDE (German) -->
+     <!-- es-rES (Spanish) -->
+     <!-- fa (Persian) -->
+     <!-- fil (Filipino) -->
+     <!-- fr-rFR (French) -->
+     <!-- hi-rIN (Hindi) -->
+     <!-- in-rID (Indonesian) -->
+     <!-- it (Italian) -->
+     <!-- ja (Japanese) -->
+     <!-- ko (Korean) -->
+     <!-- ml (Malayalam) -> universal -->
+     <!-- pl (Polish) -->
+     <!-- pt-rBR (Brazilian Portuguese) -->
+     <!-- ro-rRO (Romanian) -->
+     <!-- ru-rRU (Russian) -->
+     <!-- ta (Tamil) -->
+     <!-- th (Thai) -->
+     <!-- tm-rTM (Turkmen) -->
+     <!-- tr-rTR (Turkish) -->
+     <!-- uk (Ukrainian) -->
+     <!-- vi (Vietnamese) -->
      <!-- zh-rCN (简体中文) -->
+     <!-- zh-rTW (繁體中文) -->
 
 
 
@@ -172,10 +184,14 @@
      <!-- Templates -->
      <string name="msg_confirm_project_close">Are you sure you want to close this project? All started Gradle daemons will be stopped after this project is closed.</string>
      <string name="template_basic">Basic Project</string>
-     <string name="template_cpp" translatable="false">Basic Native C++</string>
+     <string
+          name="template_cpp"
+          translatable="false">Basic Native C++</string>
      <string name="template_empty">Empty project</string>
      <string name="template_navigation_drawer">Navigation drawer project</string>
-     <string name="template_compose" translatable="false">Jetpack Compose</string>
+     <string
+          name="template_compose"
+          translatable="false">Jetpack Compose</string>
      <string name="template_navigation_tabs">Bottom Navigation Activity</string>
      <string name="template_tabs">Tabbed Activity</string>
      <string name="template_no_activity">No Activity</string>

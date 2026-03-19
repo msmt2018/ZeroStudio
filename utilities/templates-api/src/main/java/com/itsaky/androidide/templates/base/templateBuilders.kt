@@ -27,10 +27,9 @@ import com.itsaky.androidide.templates.TemplateRecipeFinalizer
 import com.itsaky.androidide.templates.TemplateRecipeResult
 
 sealed class PrePostRecipeTemplateBuilder<R : TemplateRecipeResult> : TemplateBuilder<R>() {
+  var preRecipe: TemplateRecipeConfigurator = {}
 
-  @PublishedApi internal var preRecipe: TemplateRecipeConfigurator = {}
-
-  @PublishedApi internal var postRecipe: TemplateRecipeFinalizer = {}
+  var postRecipe: TemplateRecipeFinalizer = {}
 
   private var _recipe: TemplateRecipe<R>? = null
 

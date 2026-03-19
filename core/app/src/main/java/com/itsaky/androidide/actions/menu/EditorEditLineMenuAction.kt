@@ -9,6 +9,10 @@ import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.viewmodel.EditorViewModel
 import java.io.File
 import com.itsaky.androidide.actions.code.CodeActionsMenu
+
+import com.itsaky.androidide.actions.editor.cursor.*
+import com.itsaky.androidide.actions.editor.text.*
+
 /**
  * An [ActionMenu] that consolidates all "Edit" menu operations for the text editor.
  *
@@ -32,7 +36,7 @@ class EditorEditLineMenuAction(context: Context, override val order: Int) : Edit
      */
     init {
         label = context.getString(R.string.edit)
-        icon = ContextCompat.getDrawable(context, R.drawable.ic_edit)
+        icon = ContextCompat.getDrawable(context, R.drawable.ic_editor_text)
       var order = 0
 
         // Register all line and navigation operations as children of this ActionMenu
@@ -48,13 +52,18 @@ class EditorEditLineMenuAction(context: Context, override val order: Int) : Edit
         addAction(IncreaseIndentAction(context, order++))
         addAction(DecreaseIndentAction(context, order++))
         addAction(ToggleCommentAction(context, order++))
-        addAction(JumpToLineAction(context, order++))
         
-        addAction(FormatCodeAction(context, order++))
-        addAction(ToggleReadOnlyAction(context, order++))
-        addAction(ShowSnippetsAction(context, order++))
-        addAction(SwitchToIfElseAction(context, order++))
-        addAction(IfElseToSwitchAction(context, order++))
+        //光标上一个和下一个位置
+        addAction(CursorPreviousLocationAction(context, order++))
+        addAction(CursorNextLocationAction(context, order++))
+        //与上下行相互交换
+        addAction(SwapLineUpAction(context, order++))
+        addAction(SwapLineDownAction(context, order++))
+        //选中文本上下左右四个菜单功能
+        addAction(MoveSelectionUpAction(context, order++)) //上
+        addAction(MoveSelectionDownAction(context, order++)) //下
+        addAction(MoveSelectionLeftAction(context, order++)) //左
+        addAction(MoveSelectionRightAction(context, order++)) //右
 
     }
 

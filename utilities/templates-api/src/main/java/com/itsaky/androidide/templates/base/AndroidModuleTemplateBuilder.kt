@@ -35,7 +35,7 @@ import java.io.File
  * @author Akash Yadav
  * @author android_zero
  */
-class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
+open class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
 
   /**
    * Set whether this Android module is a Jetpack Compose module or not.
@@ -155,10 +155,10 @@ class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
     save(buildGradleSrc(isComposeModule, context), buildGradleFile())
 
     // Create marker file if this is a compose module
-    if (isComposeModule) {
-      val markerFile = File(data.projectDir.parentFile, ".compose_enabled")
-      markerFile.createNewFile()
-    }
+    // if (isComposeModule) {
+      // val markerFile = File(data.projectDir.parentFile, ".compose_enabled")
+      // markerFile.createNewFile()
+    // }
   }
 
   /** Writes the `.gitignore` file in the mdoule directory. */

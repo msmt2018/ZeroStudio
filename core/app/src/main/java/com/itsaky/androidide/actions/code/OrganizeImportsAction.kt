@@ -15,7 +15,7 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.itsaky.androidide.actions.editor
+package com.itsaky.androidide.actions.code
 
 import android.content.Context
 import androidx.core.content.ContextCompat

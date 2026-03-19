@@ -1,4 +1,4 @@
-package android.zero.studio
+package com.itsaky.androidide.file
 
 import android.graphics.BitmapFactory
 import android.media.MediaExtractor

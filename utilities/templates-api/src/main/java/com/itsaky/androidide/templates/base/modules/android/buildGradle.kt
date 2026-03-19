@@ -29,37 +29,35 @@ import java.io.File
 
 private const val compose_kotlinCompilerExtensionVersion = "1.5.11"
 private const val compose_kotlinExtraPlugin = "org.jetbrains.kotlin.plugin.compose"
-private const val NATIVE_LIB_NAME = "tomaslib"
+private const val NATIVE_LIB_NAME = "native-lib"
 
 public var composeExtraPluginKt: String = ""
 public var composeExtraPluginGr: String = ""
 public var isCompose = false
 
 private val AndroidModuleTemplateBuilder.androidPlugin: String
-  get() {
-    return if (data.type == ModuleType.AndroidLibrary) "com.android.library"
-    else "com.android.application"
-  }
+    get() {
+        return if (data.type == ModuleType.AndroidLibrary) "com.android.library"
+        else "com.android.application"
+    }
+
+private val AndroidModuleTemplateBuilder.androidTomlPlugin: String
+    get() {
+        return if (data.type == ModuleType.AndroidLibrary) "alias(libs.plugins.android.library)"
+        else "alias(libs.plugins.android.application)"
+    }
 
 fun AndroidModuleTemplateBuilder.buildGradleSrc(
     isComposeModule: Boolean,
     context: Context? = null,
 ): String {
-  val shouldUseNdk = data.useNdk
-  val hasNativeFiles = hasNativeFiles()
-  val ndkInstalled = isNdkInstalled()
+    // Generate JNI template files if useNdk is true and it's not a pre-packaged template like ImGui
+    if (data.useNdk && !data.useCmake && !File(data.projectDir, "src/main/jni/Android.mk").exists()) {
+        // Option to generate simple hello world jni if needed
+    }
 
-  // Generate JNI template files if useNdk is true
-  if (shouldUseNdk) {
-    generateJniTemplateFiles()
-  }
-
-  if ((shouldUseNdk || hasNativeFiles) && !ndkInstalled && context != null) {
-    showNdkNotInstalledDialog(context)
-  }
-
-  return if (data.useKts) buildGradleSrcKts(isComposeModule)
-  else buildGradleSrcGroovy(isComposeModule)
+    return if (data.useKts) buildGradleSrcKts(isComposeModule)
+    else buildGradleSrcGroovy(isComposeModule)
 }
 
 private fun AndroidModuleTemplateBuilder.generateJniTemplateFiles() {
@@ -72,11 +70,11 @@ private fun AndroidModuleTemplateBuilder.generateJniTemplateFiles() {
   // Generate Application.mk
   generateApplicationMk(jniDir)
 
-  // Generate tomaslib.cpp
-  generateTomaslibCpp(jniDir)
+  // Generate native-lib.cpp
+  generateNativeCppTemplateCpp(jniDir)
 
-  // Generate tomaslib.h
-  generateTomaslibHeader(jniDir)
+  // Generate native-lib.h
+  generateNativeCppTemplateHeader(jniDir)
 }
 
 private fun AndroidModuleTemplateBuilder.generateAndroidMk(jniDir: File) {
@@ -111,8 +109,8 @@ APP_CPPFLAGS += -std=c++17
   executor.save(content, applicationMk)
 }
 
-private fun AndroidModuleTemplateBuilder.generateTomaslibCpp(jniDir: File) {
-  val tomaslibCpp = File(jniDir, "$NATIVE_LIB_NAME.cpp")
+private fun AndroidModuleTemplateBuilder.generateNativeCppTemplateCpp(jniDir: File) {
+  val nativecpptemplateCpp = File(jniDir, "$NATIVE_LIB_NAME.cpp")
   val packagePath = data.packageName.replace('.', '_')
 
   val content =
@@ -125,7 +123,7 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_${packagePath}_MainActivity_stringFromJNI(
         JNIEnv* env,
         jobject /* this */) {
-    std::string hello = "Hello from TomasLib C++";
+    std::string hello = "Hello world, hello C++";
     return env->NewStringUTF(hello.c_str());
 }
 
@@ -139,25 +137,25 @@ Java_${packagePath}_MainActivity_addNumbers(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_${packagePath}_MainActivity_initTomasLib(
+Java_${packagePath}_MainActivity_initNativeCppTemplate(
         JNIEnv* env,
         jobject /* this */) {
-    // Initialize TomasLib native library
+    // Initialize native-lib native library
     // Add your initialization code here
 }
     """
           .trimIndent()
 
-  executor.save(content, tomaslibCpp)
+  executor.save(content, nativecpptemplateCpp)
 }
 
-private fun AndroidModuleTemplateBuilder.generateTomaslibHeader(jniDir: File) {
-  val tomaslibH = File(jniDir, "$NATIVE_LIB_NAME.h")
+private fun AndroidModuleTemplateBuilder.generateNativeCppTemplateHeader(jniDir: File) {
+  val nativecpptemplateH = File(jniDir, "$NATIVE_LIB_NAME.h")
   val packagePath = data.packageName.replace('.', '_')
   val content =
       """
-#ifndef TOMASLIB_H
-#define TOMASLIB_H
+#ifndef NATIVECPPTEMPLATE_H
+#define NATIVECPPTEMPLATE_H
 
 #include <jni.h>
 
@@ -166,7 +164,7 @@ extern "C" {
 #endif
 
 /**
- * Returns a greeting string from TomasLib C++
+ * Returns a greeting string from native-lib C++
  */
 JNIEXPORT jstring JNICALL
 Java_${packagePath}_MainActivity_stringFromJNI(JNIEnv* env, jobject thiz);
@@ -184,20 +182,20 @@ JNIEXPORT jstring JNICALL
 Java_${packagePath}_MainActivity_sayHello(JNIEnv* env, jobject thiz, jstring name);
 
 /**
- * Initialize the TomasLib native library
+ * Initialize the native-lib native library
  */
 JNIEXPORT void JNICALL
-Java_${packagePath}_MainActivity_initTomasLib(JNIEnv* env, jobject thiz);
+Java_${packagePath}_MainActivity_initNativeCppTemplate(JNIEnv* env, jobject thiz);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // TOMASLIB_H
+#endif // NATIVECPPTEMPLATE_H
     """
           .trimIndent()
 
-  executor.save(content, tomaslibH)
+  executor.save(content, nativecpptemplateH)
 }
 
 private fun AndroidModuleTemplateBuilder.hasNativeFiles(): Boolean {
@@ -226,25 +224,74 @@ private fun AndroidModuleTemplateBuilder.showNdkNotInstalledDialog(context: Cont
 }
 
 private fun AndroidModuleTemplateBuilder.buildGradleSrcKts(isComposeModule: Boolean): String {
-  val shouldUseNdk = data.useNdk
-  val hasNative = hasNativeFiles() || shouldUseNdk
-  val ndkInstalled = isNdkInstalled()
-
-  // Calculate compileSdk value first
-  val compileSdkValue = if (isComposeModule) 36 else data.versions.compileSdk.api
-  composeExtraPluginKt = if (isComposeModule) "id(\"$compose_kotlinExtraPlugin\")" else ""
-  composeExtraPluginGr = if (isComposeModule) "id '$compose_kotlinExtraPlugin'" else ""
-
-  return """
+    val compileSdkValue = if (isComposeModule) 36 else data.versions.compileSdk.api
+    
+    // 1. TOML or Standard Plugins
+    val pluginsBlock = if (data.useToml) {
+        """
+plugins {
+    $androidTomlPlugin
+    ${if (data.language == Kotlin) "alias(libs.plugins.kotlin.android)" else ""}
+    ${if (isComposeModule) "alias(libs.plugins.kotlin.compose)" else ""}
+}
+        """.trimIndent()
+    } else {
+        composeExtraPluginKt = if (isComposeModule) "id(\"$compose_kotlinExtraPlugin\")" else ""
+        """
 plugins {
     id("$androidPlugin")
-    ${ktPlugin()}
+    ${ktPluginKts()}
 }
+        """.trimIndent()
+    }
+
+    // Native Build Logic (Separated CMake and NDK)
+    val nativeBuildBlock = if (data.useCmake) {
+        """
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "${data.cmakeVersion}"
+        }
+    }
+        """.trimIndent()
+    } else if (data.useNdk) {
+        """
+    externalNativeBuild {
+        ndkBuild {
+            path = file("src/main/jni/Android.mk")
+        }
+    }
+        """.trimIndent()
+    } else ""
+
+    val ndkVersionStr = if (data.useNdk || data.useCmake) """ndkVersion = "${data.ndkVersion}"""" else ""
+
+    val nativeConfigBlock = if (data.useCmake) {
+        """
+        externalNativeBuild {
+            cmake {
+                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64", "x86"))
+            }
+        }
+        """.trimIndent()
+    } else if (data.useNdk) {
+        """
+        externalNativeBuild {
+            ndkBuild {
+                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64", "x86"))
+            }
+        }
+        """.trimIndent()
+    } else ""
+
+    return """
+$pluginsBlock
 
 android {
     namespace = "${data.packageName}"
     compileSdk = $compileSdkValue
-    ${if (hasNative && ndkInstalled) """ndkVersion = "28.2.13676358"""" else ""}
+    $ndkVersionStr
     
     defaultConfig {
         applicationId = "${data.packageName}"
@@ -253,21 +300,20 @@ android {
         versionCode = 1
         versionName = "1.0"
         
-        vectorDrawables { 
-            useSupportLibrary = true
-        }
-        ${if (hasNative && ndkInstalled) """
-        externalNativeBuild {
-            ndkBuild {
-                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64", "x86"))
-            }
-        }
-        """ else ""}
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+         $nativeConfigBlock
     }
-    
+
     compileOptions {
         sourceCompatibility = ${data.versions.javaSource()}
         targetCompatibility = ${data.versions.javaTarget()}
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     buildTypes {
@@ -276,44 +322,89 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-    ${if (hasNative && ndkInstalled) """
-    externalNativeBuild {
-        ndkBuild {
-            path = file("src/main/jni/Android.mk")
-        }
-    }""" else ""}
+
+   $nativeBuildBlock
+
     buildFeatures {
-        ${if (!isComposeModule) "viewBinding = true" else ""}
+        ${if (!isComposeModule && !data.useNdk && !data.useCmake) "viewBinding = true" else ""}
         ${if (isComposeModule) "compose = true" else ""}
     }
-    ${if(isComposeModule) composeConfigKts() else ""}
+    
 }
-${ktJvmTarget()}
+
 ${dependencies()}
 """
 }
 
 private fun AndroidModuleTemplateBuilder.buildGradleSrcGroovy(isComposeModule: Boolean): String {
-  val shouldUseNdk = data.useNdk
-  val hasNative = hasNativeFiles() || shouldUseNdk
-  val ndkInstalled = isNdkInstalled()
-
-  // Calculate compileSdk value first
-  val compileSdkValue = if (isComposeModule) 36 else data.versions.compileSdk.api
-  // Ensure compose plugin application variables are set for Groovy, same as KTS path
-  composeExtraPluginKt = if (isComposeModule) "id(\"$compose_kotlinExtraPlugin\")" else ""
-  composeExtraPluginGr = if (isComposeModule) "id '$compose_kotlinExtraPlugin'" else ""
-
-  return """
+    val compileSdkValue = if (isComposeModule) 36 else data.versions.compileSdk.api
+    
+    val tomlPluginGroovy = if (data.type == ModuleType.AndroidLibrary) "alias libs.plugins.android.library" else "alias libs.plugins.android.application"
+    
+    val pluginsBlock = if (data.useToml) {
+        """
+plugins {
+    $tomlPluginGroovy
+    ${if (data.language == Kotlin) "alias libs.plugins.kotlin.android" else ""}
+    ${if (isComposeModule) "alias libs.plugins.kotlin.compose" else ""}
+}
+        """.trimIndent()
+    } else {
+        composeExtraPluginGr = if (isComposeModule) "id '$compose_kotlinExtraPlugin'" else ""
+        """
 plugins {
     id '$androidPlugin'
-    ${ktPlugin()}
+    ${ktPluginGroovy()}
 }
+        """.trimIndent()
+    }
+
+    val nativeBuildBlock = if (data.useCmake) {
+        """
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '${data.cmakeVersion}'
+        }
+    }
+        """.trimIndent()
+    } else if (data.useNdk) {
+        """
+    externalNativeBuild {
+        ndkBuild {
+            path file('src/main/jni/Android.mk')
+        }
+    }
+        """.trimIndent()
+    } else ""
+
+    val ndkVersionStr = if (data.useNdk || data.useCmake) """ndkVersion '${data.ndkVersion}'""" else ""
+
+    val nativeConfigBlock = if (data.useCmake) {
+        """
+        externalNativeBuild {
+            cmake {
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64', 'x86'
+            }
+        }
+        """.trimIndent()
+    } else if (data.useNdk) {
+        """
+        externalNativeBuild {
+            ndkBuild {
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64', 'x86'
+            }
+        }
+        """.trimIndent()
+    } else ""
+
+    return """
+$pluginsBlock
 
 android {
     namespace '${data.packageName}'
     compileSdk $compileSdkValue
-    ${if (hasNative && ndkInstalled) """ndkVersion '28.2.13676358'""" else ""}
+    $ndkVersionStr
     
     defaultConfig {
         applicationId "${data.packageName}"
@@ -321,24 +412,22 @@ android {
         targetSdk ${data.versions.targetSdk.api}
         versionCode 1
         versionName "1.0"
-        
-        vectorDrawables { 
-            useSupportLibrary true
-        }
-        ${if (hasNative && ndkInstalled) """
-        externalNativeBuild {
-            ndkBuild {
-                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64', 'x86'
-            }
-        }
-        """ else ""}
+
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+
+        $nativeConfigBlock
     }
 
     compileOptions {
         sourceCompatibility ${data.versions.javaSource()}
         targetCompatibility ${data.versions.javaTarget()}
     }
-
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+    
     buildTypes {
         release {
             minifyEnabled true
@@ -346,23 +435,20 @@ android {
         }
     }
 
-    ${if (hasNative && ndkInstalled) """
-    externalNativeBuild {
-        ndkBuild {
-            path file('src/main/jni/Android.mk')
-        }
-    }""" else ""}
+    $nativeBuildBlock
+
     buildFeatures {
-        ${if (!isComposeModule) "viewBinding true" else ""}
+        ${if (!isComposeModule && !data.useNdk && !data.useCmake) "viewBinding true" else ""}
         ${if (isComposeModule) "compose true" else ""}
     }
-    ${if(isComposeModule) composeConfigGroovy() else ""}
+
 }
-${ktJvmTarget()}
+
 ${dependencies()}
 """
 }
 
+//    ${if(isComposeModule) composeConfigGroovy() else ""}
 fun composeConfigGroovy(): String =
     """
     composeOptions {
@@ -373,9 +459,9 @@ fun composeConfigGroovy(): String =
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
         }
     }
-"""
-        .trim()
+""".trim()
 
+//    ${if(isComposeModule) composeConfigKts() else ""}
 fun composeConfigKts(): String =
     """
     composeOptions {
@@ -386,55 +472,36 @@ fun composeConfigKts(): String =
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-"""
-        .trim()
+""".trim()
 
 private fun ModuleTemplateBuilder.ktJvmTarget(): String {
-  if (data.language != Kotlin) {
-    return ""
-  }
-
-  return if (data.useKts) ktJvmTargetKts() else ktJvmTargetGroovy()
+    if (data.language != Kotlin) return ""
+    return if (data.useKts) ktJvmTargetKts() else ktJvmTargetGroovy()
 }
 
-private fun ModuleTemplateBuilder.ktJvmTargetKts(): String {
-  return """
+//${ktJvmTarget()}
+private fun ModuleTemplateBuilder.ktJvmTargetKts(): String = """
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("${data.versions.javaTarget}"))
     }
 }
 """
-}
-
-private fun ModuleTemplateBuilder.ktJvmTargetGroovy(): String {
-  return """
+//${ktJvmTarget()}
+private fun ModuleTemplateBuilder.ktJvmTargetGroovy(): String = """
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("${data.versions.javaTarget}")
     }
 }
 """
-}
 
-private fun AndroidModuleTemplateBuilder.ktPlugin(): String {
-  if (data.language != Kotlin) {
-    return ""
-  }
-
-  return if (data.useKts) ktPluginKts() else ktPluginGroovy()
-}
-
-private fun ktPluginKts(): String {
-  return """
+private fun ktPluginKts(): String = """
   id("kotlin-android")
   $composeExtraPluginKt
   """
-}
 
-private fun ktPluginGroovy(): String {
-  return """
+private fun ktPluginGroovy(): String = """
   id 'kotlin-android'
   $composeExtraPluginGr
   """
-}

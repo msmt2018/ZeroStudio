@@ -32,7 +32,7 @@ import com.itsaky.androidide.templates.impl.baseProjectImpl
 fun noAndroidXActivityProject() = baseProjectImpl {
   templateName = R.string.template_no_AndroidX
   thumb = R.drawable.template_empty_noandroidx
-  description = string.test_test
+  description = string.title_test
   
   val configNight = ConfigDescription().apply {
     uiMode = ResTableConfig.UI_MODE.NIGHT_YES

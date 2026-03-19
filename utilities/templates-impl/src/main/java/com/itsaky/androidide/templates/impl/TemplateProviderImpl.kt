@@ -26,10 +26,11 @@ import com.itsaky.androidide.templates.impl.bottomNavActivity.bottomNavActivityP
 import com.itsaky.androidide.templates.impl.composeActivity.composeActivityProject
 import com.itsaky.androidide.templates.impl.emptyActivity.emptyActivityProject
 import com.itsaky.androidide.templates.impl.navDrawerActivity.navDrawerActivityProject
-import com.itsaky.androidide.templates.impl.noActivity.noActivityProjectTemplate
+import com.itsaky.androidide.templates.impl.noActivity.*
 import com.itsaky.androidide.templates.impl.noAndroidXActivity.noAndroidXActivityProject
 import com.itsaky.androidide.templates.impl.tabbedActivity.tabbedActivityProject
 import com.itsaky.androidide.templates.impl.basicCpp.basicCppProject
+import com.itsaky.androidide.templates.impl.nativeTemplate.imguiActivityProject.imguiActivityProject
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
@@ -88,10 +89,11 @@ class TemplateProviderImpl : ITemplateProvider {
     private fun initializeTemplates() {
         templatesByCategory.clear()
 
-        // Register all default templates under the Mobile category.
         // This is where you can add more templates to this or other categories.
+        
+         //This category is the original built-in templates for ZeroStudio
          registerTemplate(TemplateCategory.BasicZeroStudio, emptyActivityProject())
-         registerTemplate(TemplateCategory.BasicZeroStudio, noActivityProjectTemplate())
+         registerTemplate(TemplateCategory.BasicZeroStudio, noActivityProject())
          registerTemplate(TemplateCategory.BasicZeroStudio, composeActivityProject())
          registerTemplate(TemplateCategory.BasicZeroStudio, basicActivityProject())
          registerTemplate(TemplateCategory.BasicZeroStudio, bottomNavActivityProject())
@@ -99,6 +101,9 @@ class TemplateProviderImpl : ITemplateProvider {
          registerTemplate(TemplateCategory.BasicZeroStudio, tabbedActivityProject())
          registerTemplate(TemplateCategory.BasicZeroStudio, basicCppProject())
          registerTemplate(TemplateCategory.BasicZeroStudio, noAndroidXActivityProject())
+         
+         //Native build（C/C++/Cmake） template category
+         registerTemplate(TemplateCategory.Native, imguiActivityProject())
 
     }
 

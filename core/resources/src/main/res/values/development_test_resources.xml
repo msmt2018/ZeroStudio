@@ -5,319 +5,321 @@
      <!-- 在开发完成后迁移到对应文件内，这样就不会过于混乱 ，避免冗余-->
 
      <color name="test_tests">#FFBABAFF</color>
-     <string name="test_test">test</string>
+     <string name="title_test">test</string>
 
-     <!-- PermissionsFragment.kt所需的字符串 -->
-     <string name="permission_title_notifications">通知权限</string>
-     <string name="permission_desc_notifications">需要此权限以在后台任务（如终端会话）运行时显示持续的通知。</string>
-     <string name="permission_title_storage_all_files">所有文件访问权限</string>
-     <string name="permission_desc_storage_all_files">需要此权限以读取和写入项目文件、缓存以及其他IDE的文件操作等。</string>
-     <string name="grant_all_permissions">一键授权</string>
-     <string name="msg_cant_open_settings">无法打开设置页面。请手动授予权限。</string>
-
-     <!-- lsp4j相关 -->
-
-     <!-- 编辑器相关 -->
-     <!-- Cursor Actions -->
-     <string name="action_group_cursor_title">光标</string>
-     <string name="action_editor_line_cursor_go_to_end">全文末尾</string>
-     <string name="action_editor_line_cursor_move_up">向上移动</string>
-     <string name="action_editor_line_cursor_move_down">向下移动</string>
-     <string name="action_editor_line_cursor_move_left">向左移动</string>
-     <string name="action_editor_line_cursor_move_right">向右移动</string>
-     <string name="action_editor_line_cursor_home">移至行首</string>
-     <string name="action_editor_line_cursor_end">移至行尾</string>
-     <string name="action_editor_cursor_prev_word">上个单词</string>
-     <string name="action_editor_cursor_next_word">下个单词</string>
-     <string name="action_editor_cursor_page_up">上一页</string>
-     <string name="action_editor_cursor_page_down">下一页</string>
-     <string name="action_editor_cursor_doc_start">全文开头</string>
-     <string name="action_editor_cursor_go_to_symbol">跳转到符号...</string>
-     <string name="action_go_to_symbol_parsing">正在解析文件...</string>
-     <string name="action_editor_cursor_doc_end">作编辑器光标文档结束</string>
-
-
-     <!-- Generate Menu -->
-     <string name="action_group_generate_title">生成</string>
-     <string name="action_override_methods">重写/实现方法...</string>
-     <string name="action_override_parsing">正在解析类结构...</string>
-     <string name="action_override_select_methods">选择要重写或实现的方法</string>
-
-     <string name="action_editor_java_to_kotlin">Java2Kotlin</string>
-     <string name="action_editor_java_to_kotlin_converting">正在转换为 Kotlin...</string>
-     <string name="action_editor_java_to_kotlin_success">成功转换为 %1$s</string>
-     <string name="action_editor_java_to_kotlin_failed">转换为 Kotlin 失败。</string>
-     <string name="action_editor_java_to_kotlin_failed_write">无法写入文件: %1$s</string>
-     <string name="action_java_to_kotlin_success_with_backup">成功备份</string>
-     <string name="action_editor_java_to_kotlin_success_title">转换成功</string>
-     <string name="action_editor_java_to_kotlin_open_file">是否打开转换后的文件？</string>
-     <string name="msg_no_symbols_found">未知符号</string>
-     <string name="no_problems_found">未发现问题</string>
-     <string name="no_results_found">未找到结果</string>
-     <string name="diagnostic_location_format">诊断位置格式</string>
-
-     <!-- 设置页面重做的自动保存所需的字符串 -->
-     <string name="auto_save">自动保存</string>
-     <string name="enable_auto_save">启用自动保存</string>
-     <string name="enable_auto_save_summary">在编辑时自动保存文件</string>
-     <string name="auto_save_delay">自动保存延迟</string>
-     <string name="save_on_focus_loss">失去焦点时保存</string>
-     <string name="save_on_focus_loss_summary">当编辑器失去焦点或应用进入后台时保存</string>
-     <string name="save_before_build">构建前保存</string>
-     <string name="save_before_build_summary">在运行或构建项目前自动保存所有已修改的文件</string>
-     <string name="delay_value">延迟值</string>
-     <string name="unit_seconds">秒</string>
-     <string name="unit_minutes">分钟</string>
-     <string name="current_setting_value">当前: %s</string>
-
-     <!-- //Android平台sdk管理界面所需 -->
-     <string name="sdk_manager">SDK Manager</string>
-     <string name="sdk_manager_summary">管理Android SDK、NDK和其他构建工具</string>
-     <string name="sdk_platforms">SDK Platforms</string>
-     <string name="sdk_tools">SDK Tools</string>
-     <string name="sdk_update_sites">SDK Update Sites</string>
-     <string name="status_installed">已安装</string>
-     <string name="status_not_installed">未安装</string>
-     <string name="status_downloading">下载中</string>
-
-     <string name="pref_group_cursor_selection">光标与选择</string>
-     <string name="pref_smooth_cursor_movement_title">启用平滑光标移动</string>
-     <string name="pref_smooth_cursor_movement_summary">光标移动时带有平滑动画效果</string>
-     <string name="pref_cursor_style_title">光标样式</string>
-     <string name="pref_group_code_intelligence">代码智能</string>
-     <string name="pref_auto_complete_on_type_title">自动弹出代码补全</string>
-     <string name="pref_auto_complete_on_type_summary">在输入时自动显示代码补全建议</string>
-     <string name="pref_clear_logcat_before_run_title">运行前清空Logcat</string>
-     <string name="pref_clear_logcat_before_run_summary">在启动应用前自动清除日志输出</string>
+    <string name="title_template_description_tablayout_tabactivity">TabLayout+Activity：Multi-page management components</string>
+    <string name="title_template_description_basicactivity">Basic Activity Demonstration</string>
 
 
 
-     <!-- 位置：core/app/src/main/java/com/itsaky/androidide/actions/menu/ -->
-     <string name="jump_to_line_vertical_hint">Vertical Line [1-%1$d]</string>
-     <string name="jump_to_line_horizontal_hint">Horizontal Column [1-%1$d]</string>
-     <string name="jump_to_line_horizontal_hint_default">Horizontal Column</string>
-     <string name="value_out_of_range_error_with_max">Value out of range (max: %1$d)</string>
 
 
-     <!-- Actions -->
-     <string name="action_previous">上一步</string>
-     <string name="action_finish">完成</string>
-
-     <!-- Messages -->
-     <string name="msg_no_templates_found">未找到模板</string>
-     <string name="msg_no_templates_in_category">此类别中没有模板</string>
-
-     <!-- Validation Messages -->
-     <string name="msg_field_cannot_be_empty">此字段不能为空</string>
-     <string name="msg_invalid_class_name">无效的类名</string>
-     <string name="msg_path_is_not_a_directory">路径不是一个有效的目录</string>
-     <string name="msg_path_does_not_exist">路径不存在</string>
 
 
-     <!-- settings > projects > Templates settings -->
-     <string name="title_settings_projects">项目相关</string>
-     <string name="title_templates">模板</string>
-     <string name="pref_template_grid_style_title">列表布局样式</string>
-     <string name="pref_template_grid_style_summary">设置模板列表的列数</string>
-     <string name="layout_list">列表</string>
-     <string name="layout_grid">网格 (%d 列)</string>
 
 
-     <!-- 作用于CrashReportFragment和layout_crash_report文件 -->
-     <string name="action_restart_app">Restart</string>
-     <string name="action_copy_log">Copy Log</string>
-     <string name="action_exit_app">Exit App</string>
-     <string name="msg_report_issue_action">Report Issue</string>
-     <string name="msg_log_copied">Log copied to clipboard</string>
-     <string name="msg_log_copied_opening_browser">Log copied. Opening browser to report issue…</string>
-
-     <!-- Advanced Search Dialog -->
-     <string name="search_dialog_title">Find in Path</string>
-     <string name="menu_find_in_path">Find in Files</string>
-     <string name="menu_search_group">Search</string>
-     <!-- Scopes -->
-     <string name="search_scope_all">In Project</string>
-     <string name="search_scope_module">Module</string>
-     <string name="search_scope_directory">Directory</string>
-     <string name="search_scope_file">File</string>
-     <string name="search_scope_scope">Scope</string>
-     <string name="search_scope_current_file">Current File</string>
-
-     <!-- Input Hints -->
-     <string name="search_hint_find">Text to find</string>
-     <string name="search_hint_replace">Replace with</string>
-
-     <!-- Filters / Options -->
-     <string name="search_opt_match_case">Match case</string>
-     <string name="search_opt_words">Words</string>
-     <string name="search_opt_regex">Regex</string>
-     <string name="search_label_file_mask">File mask:</string>
-
-     <!-- Actions -->
-     <string name="search_action_find">Find</string>
-     <string name="search_action_replace">Replace</string>
-     <string name="search_action_exclude">Exclude...</string>
-     <string name="search_action_cancel">Cancel</string>
-     <string name="search_action_ok">OK</string>
-
-     <!-- Status Messages -->
-     <string name="search_status_ready">Ready</string>
-     <string name="search_status_searching">Searching...</string>
-     <string name="search_status_cancelled">Search cancelled</string>
-     <string name="search_status_no_matches">No matches found</string>
-     <string name="search_status_found_format">Found %1$d matches in %2$d files</string>
-     <string name="search_error_project_not_init">Project not initialized</string>
-
-     <!-- Dialog Titles -->
-     <string name="search_dialog_select_module">Select Module</string>
-     <string name="search_dialog_select_scope">Select Scope</string>
-     <string name="search_dialog_exclude_patterns">Exclude Patterns</string>
-
-     <!-- Exclude Dialog -->
-     <string name="search_exclude_hint">e.g. build, .git, *.tmp (One per line)</string>
-
-     <!-- Custom Scopes -->
-     <string name="scope_all_places">All Places</string>
-     <string name="scope_project_files">Project Files</string>
-     <string name="scope_project_and_libraries">Project and Libraries</string>
-     <string name="scope_project_source_files">Project Source Files</string>
-     <string name="scope_open_files">Open Files</string>
-
-     <string name="theme_custom">更多主题</string>
 
 
-     <string name="title_git">Git</string>
-
-     <string name="action_menu_edit_cursor_backspace">Backspace</string>
 
 
-     <string name="collab_tab_pr">Pull Requests</string>
-     <string name="collab_tab_pipelines">Pipelines</string>
-     <string name="collab_tab_conflicts">Conflicts</string>
-     <string name="collab_tab_review">Code Review</string>
 
-     <string name="pr_state_open">Open</string>
-     <string name="pr_state_merged">Merged</string>
-     <string name="pr_state_closed">Closed</string>
 
-     <string name="pipeline_status_running">Running</string>
-     <string name="pipeline_status_passed">Passed</string>
-     <string name="pipeline_status_failed">Failed</string>
-     <string name="git_collaboration">协作</string>
-     <string name="title_projects">项目</string>
-     <string name="filter_branches">Filter branches...</string>
 
-     <string name="err_no_activity_to_handle_action">No activity to handle action %1$s</string>
-     <string name="title_regular_preview">Regular Preview</string>
-     <string name="title_mcp_server">Mcp Server</string>
 
-     <string name="quick_fix">快速修复 %1$s</string>
-     <string name="format_selection">格式化选择</string>
-     <string name="format_document">格式化文档</string>
-     <string name="rename_symbol">重命名符号 %1$s</string>
-     <string name="find_references">查找doc</string>
-     <string name="go_to_definition">跳转到定义</string>
-     <!-- LSP 核心功能 -->
-     <string name="lsp_loading">正在加载语言服务器...</string>
-     <string name="lsp_error">LSP 错误</string>
-     <string name="lsp_failed">连接语言服务器失败</string>
-     <string name="manage_language_servers">管理语言服务器</string>
-     <string name="info_lsp">语言服务器 (LSP) 为编辑器提供代码补全、跳转定义和实时错误检查功能。</string>
-     <string name="experimental_lsp">警告：LSP 功能目前处于实验阶段。</string>
 
-     <!-- 设置与添加服务器 -->
-     <string name="external_lsp">添加外部服务器</string>
-     <string name="socket">Socket (网络)</string>
-     <string name="process">Process (本地进程)</string>
-     <string name="language_name">语言名称</string>
-     <string name="command">启动命令</string>
-     <string name="arguments">运行参数</string>
-     <string name="extensions_comma_separated">支持的后缀 (逗号分隔, 如 java,kt)</string>
-     <string name="no_language_server">未发现可用的语言服务器</string>
 
-     <!-- LSP 动作 -->
-     <string name="go_to_references">查找引用</string>
 
-     <!-- 诊断信息 -->
-     <string name="sora_editor_diagnostics_more_actions">更多修复建议...</string>
-     <string name="copy_diagnostic">复制错误信息</string>
 
-     <!-- 文件图标描述 -->
-     <string name="ic_folder">文件夹</string>
-     <string name="ic_file_default">文件</string>
-     <!-- 弹窗动画样式 -->
-     <style name="diagnostic_popup_animation">
-          <item name="android:windowEnterAnimation">@android:anim/fade_in</item>
-          <item name="android:windowExitAnimation">@android:anim/fade_out</item>
-     </style>
-     <style name="text_action_popup_animation">
-          <item name="android:windowEnterAnimation">@android:anim/slide_in_left</item>
-          <item name="android:windowExitAnimation">@android:anim/slide_out_right</item>
-     </style>
 
-     <!-- LSP Settings General -->
-     <string name="lsp_settings_title">Language Servers</string>
-     <string name="lsp_settings_desc">Manage built-in and external language servers, configure file associations.</string>
 
-     <!-- Groups -->
-     <string name="lsp_group_builtin">Built-in Servers</string>
-     <string name="lsp_group_external">External Servers</string>
-     <string name="lsp_group_community">Community / Plugins</string>
 
-     <!-- Actions -->
-     <string name="lsp_btn_add_external">Add External Server</string>
-     <string name="lsp_btn_edit">Edit</string>
-     <string name="lsp_btn_delete">Delete</string>
-     <string name="lsp_btn_save">Save</string>
-     <string name="lsp_btn_cancel">Cancel</string>
 
-     <!-- Dialog: External Server -->
-     <string name="lsp_ext_dialog_title">Add External Server</string>
-     <string name="lsp_ext_type_socket">Socket (TCP)</string>
-     <string name="lsp_ext_type_process">Process (Shell)</string>
 
-     <string name="lsp_field_name">Language/Server Name</string>
-     <string name="lsp_field_extensions">File Extensions (comma separated)</string>
-     <string name="lsp_field_extensions_hint">e.g. rs, rust</string>
 
-     <!-- Socket specific -->
-     <string name="lsp_field_host">Host</string>
-     <string name="lsp_field_port">Port</string>
 
-     <!-- Process specific -->
-     <string name="lsp_field_command">Command</string>
-     <string name="lsp_field_args">Arguments (space separated)</string>
 
-     <!-- Validation -->
-     <string name="lsp_err_name_required">Name is required</string>
-     <string name="lsp_err_ext_required">At least one extension is required</string>
-     <string name="lsp_err_invalid_port">Invalid port number</string>
-     <string name="lsp_err_cmd_required">Command is required</string>
 
-     <!-- Status -->
-     <string name="lsp_status_enabled">Enabled</string>
-     <string name="lsp_status_disabled">Disabled</string>
-     <string name="lsp_restart_required">Restart required to apply changes</string>
 
-     <string name="menu_organize_imports">Organize Imports</string>
 
-     <string name="title_jetpack_preview_compose">Jetpack Compose Previews</string>
 
-     <!-- Compose Preview -->
-     <string name="preview_error_title">Preview Error</string>
-     <string name="preview_empty_title">No @Preview composables found</string>
-     <string name="preview_empty_message">Add @Preview annotation to a @Composable function to see it here</string>
-     <string name="title_compose_preview">Compose Preview</string>
-     <string name="toggle_preview_mode">Toggle preview mode</string>
-     <string name="preview_build_required_title">Build Required</string>
-     <string name="preview_build_required_message">Build the project to enable multi-file preview support</string>
-     <string name="preview_build_project">Build Project</string>
-     <string name="preview_building_project">Building project…</string>
-     <string name="preview_initializing">Initializing Compose preview…</string>
 
-     <string name="wizard_ndk_version">NDK Version</string>
-     <string name="wizard_cmake_version">CMake Version</string>
-     <string name="msg_use_ndk">Include C/C++ Native Support</string>
-     <string name="msg_use_toml">Use Version Catalog (TOML)</string>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 </resources>

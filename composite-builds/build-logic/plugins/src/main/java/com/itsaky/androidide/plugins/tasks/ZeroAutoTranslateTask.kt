@@ -89,22 +89,36 @@ open class ZeroAutoTranslateTask : DefaultTask() {
      var originalFileBackupDirName = "StringTranslation"
 
     // 语言代码映射：Map<Google/通用Code, Android文件夹后缀>
-    private val targetLanguages = mapOf(
-        "ar" to "values-ar-rSA",
-        "bn" to "values-bn-rIN",
-        "de" to "values-de-rDE",
-        "es" to "values-es-rES",
-        "fr" to "values-fr-rFR",
-        "hi" to "values-hi-rIN",
-        "id" to "values-in-rID",
-        "pt" to "values-pt-rBR",
-        "ro" to "values-ro-rRO",
-        "ru" to "values-ru-rRU",
-        "tr" to "values-tr-rTR",
-        "tk" to "values-tm-rTM",
-        "zh-CN" to "values-zh-rCN",
-        "zh-TW" to "values-zh-rTW"
-    )
+     private val targetLanguages = mapOf(
+          // "en" to "values",
+          // "ar" to "values-ar-rSA",
+          // "bn" to "values-bn-rIN",
+          "de" to "values-de-rDE",
+          "es" to "values-es-rES",
+          "fa" to "values-fa",
+          "fil" to "values-fil",
+          "fr" to "values-fr-rFR",
+          "hi" to "values-hi-rIN",
+          "id" to "values-in-rID",
+          "it" to "values-it",
+          "ja" to "values-ja",
+          "ko" to "values-ko",
+          "ml" to "values-ml",
+          "pl" to "values-pl",
+          "pt" to "values-pt-rBR",
+          "ro" to "values-ro-rRO",
+          // "ru" to "values-ru-rRU",
+          "ta" to "values-ta",
+          "th" to "values-th",
+          // "tr" to "values-tr-rTR",
+          "tk" to "values-tm-rTM",
+          "vi" to "values-vi",
+          "uk" to "values-uk",
+          // "zh-CN" to "values-zh-rCN",
+          "zh-TW" to "values-zh-rTW"
+)
+
+
 
     init {
         group = "translate"
@@ -512,65 +526,99 @@ open class ZeroAutoTranslateTask : DefaultTask() {
     }
     
     // --- 5. Bing Web ---
-    class BingWebTranslator : ITranslator {
+        class BingWebTranslator : ITranslator {
         override val name = "Bing Web"
         private var ig: String? = null
         private var iid: String? = null
         private var key: String? = null
         private var token: String? = null
-        private val domain = "cn.bing.com" // 或者 www.bing.com
+        private val domain = "cn.bing.com"
 
         override fun init() {
-            val html = HttpUtils.get("https://$domain/translator").execute()
-            
-            ig = Regex("IG:\"([^\"]+)\"").find(html)?.groupValues?.get(1)
-            iid = Regex("data-iid=\"([^\"]+)\"").find(html)?.groupValues?.get(1)
-            
-            val paramsMatch = Regex("params_AbusePreventionHelper\\s*=\\s*([^;]+);").find(html)
-            if (paramsMatch != null) {
-                val jsonStr = paramsMatch.groupValues[1]
-                val arr = JsonSlurper().parseText(jsonStr) as ArrayList<*>
-                key = arr[0].toString()
-                token = arr[1].toString()
+            try {
+                val html = HttpUtils.get("https://$domain/translator").execute()
+                
+                // 1. 获取 IG 和 IID
+                ig = Regex("IG:\"([^\"]+)\"").find(html)?.groupValues?.get(1)
+                // 对应 Java 版的 <div id="rich_tta" data-iid="...">
+                iid = Regex("data-iid=\"([^\"]+)\"").find(html)?.groupValues?.get(1)
+                
+                // 2. 解析 AbusePreventionHelper 数组 [key, token, timeout]
+                val paramsMatch = Regex("params_AbusePreventionHelper\\s*=\\s*([^;]+);").find(html)
+                if (paramsMatch != null) {
+                    val jsonStr = paramsMatch.groupValues[1]
+                    // 使用 JsonSlurper 解析数组
+                    val arr = groovy.json.JsonSlurper().parseText(jsonStr) as List<*>
+                    token = arr[1].toString()
+                    key = arr[0].toString()
+                }
+                
+                if (ig == null || iid == null || key == null || token == null) {
+                    throw RuntimeException("Bing Init Failed: Missing parameters")
+                }
+            } catch (e: Exception) {
+                throw RuntimeException("Bing Init Error: ${e.message}", e)
             }
-            
-            if (ig == null || key == null || token == null) throw RuntimeException("Bing Init Failed")
         }
 
         override fun translate(text: String, from: String, to: String): String {
-            if (ig == null) init()
-            
-            val url = "https://$domain/ttranslatev3?IG=$ig&IID=${iid ?: "translator.5028"}"
-            val response = HttpUtils.post(url)
-                .formData("fromLang", if (from == "auto") "auto-detect" else from)
-                .formData("to", if (to == "zh-CN") "zh-Hans" else if (to == "zh-TW") "zh-Hant" else to)
-                .formData("text", text)
-                .formData("token", token!!)
-                .formData("key", key!!)
-                .execute()
+            // 尝试 2 次，处理 205 状态码重试逻辑
+            for (i in 0 until 2) {
+                if (ig == null) init()
+                
+                try {
+                    val fromCode = convertLangCode(from)
+                    val toCode = convertLangCode(to)
+                    
+                    val url = "https://$domain/ttranslatev3?IG=$ig&IID=${iid}.1"
+                    val response = HttpUtils.post(url)
+                        .formData("fromLang", fromCode)
+                        .formData("text", text)
+                        .formData("to", toCode)
+                        .formData("token", token!!)
+                        .formData("key", key!!)
+                        .execute()
 
-            val jsonArray = JsonSlurper().parseText(response) as ArrayList<*>
-            val sb = StringBuilder()
-            
-            for (item in jsonArray) {
-                val obj = item as Map<*, *>
-                val translations = obj["translations"] as? ArrayList<*>
-                translations?.forEach { 
-                    val t = it as Map<*, *>
-                    sb.append(t["text"])
+                    // 检查是否出现 205 错误 (需要刷新 IG)
+                    if (response.contains("\"statusCode\":205")) {
+                        ig = null // 触发重试时的重新初始化
+                        continue
+                    }
+
+                    // 解析结果
+                    val jsonArray = groovy.json.JsonSlurper().parseText(response) as List<*>
+                    val sb = StringBuilder()
+                    
+                    for (item in jsonArray) {
+                        val obj = item as Map<*, *>
+                        val translations = obj["translations"] as? List<*>
+                        translations?.forEach { 
+                            val t = it as Map<*, *>
+                            sb.append(t["text"])
+                        }
+                    }
+                    return fixFormat(sb.toString())
+                } catch (e: Exception) {
+                    if (i == 1) throw e // 第二次尝试失败则抛出
+                    ig = null // 否则清空参数尝试重新初始化
                 }
             }
-            return fixFormat(sb.toString())
+            throw RuntimeException("Translation failed after retries")
         }
         
         override fun convertLangCode(lang: String): String {
              return when(lang) {
+                "auto"  -> "auto-detect"
                 "zh-CN" -> "zh-Hans"
                 "zh-TW" -> "zh-Hant"
-                else -> lang
+                "iw"    -> "he"
+                "hmn"   -> "mww"
+                "tl"    -> "fil"
+                else    -> lang
             }
         }
     }
+
 
     // ==================================================================================
     // Helper Objects (Kotlin implementations of Java utils)

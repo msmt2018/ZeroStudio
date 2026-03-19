@@ -19,8 +19,10 @@ package com.itsaky.androidide.templates.impl
 
 import androidx.annotation.StringRes
 import com.itsaky.androidide.templates.BooleanParameter
+import com.itsaky.androidide.templates.CmakeVersion
 import com.itsaky.androidide.templates.EnumParameter
 import com.itsaky.androidide.templates.Language
+import com.itsaky.androidide.templates.NdkVersion
 import com.itsaky.androidide.templates.ProjectTemplate
 import com.itsaky.androidide.templates.ProjectVersionData
 import com.itsaky.androidide.templates.Sdk
@@ -31,9 +33,14 @@ import com.itsaky.androidide.templates.base.baseProject
 import com.itsaky.androidide.templates.impl.base.createRecipe
 import com.itsaky.androidide.templates.minSdkParameter
 import com.itsaky.androidide.templates.packageNameParameter
+import com.itsaky.androidide.templates.projectCmakeVersionParameter
 import com.itsaky.androidide.templates.projectLanguageParameter
 import com.itsaky.androidide.templates.projectNameParameter
+import com.itsaky.androidide.templates.projectNdkVersionParameter
+import com.itsaky.androidide.templates.useCmakeParameter
 import com.itsaky.androidide.templates.useKtsParameter
+import com.itsaky.androidide.templates.useNdkParameter
+import com.itsaky.androidide.templates.useTomlParameter
 
 /** Indents the given string for the given [indentation level][level]. */
 fun String.indentToLevel(level: Int): String {
@@ -57,8 +64,13 @@ internal inline fun baseProjectImpl(
     projectName: StringParameter = projectNameParameter(),
     packageName: StringParameter = packageNameParameter(),
     useKts: BooleanParameter = useKtsParameter(),
+    useToml: BooleanParameter = useTomlParameter(),
+    useNdk: BooleanParameter = useNdkParameter(),
+    useCmake: BooleanParameter = useCmakeParameter(),
     minSdk: EnumParameter<Sdk> = minSdkParameter(),
     language: EnumParameter<Language> = projectLanguageParameter(),
+    ndkVersion: EnumParameter<NdkVersion> = projectNdkVersionParameter(),
+    cmakeVersion: EnumParameter<CmakeVersion> = projectCmakeVersionParameter(),
     projectVersionData: ProjectVersionData = ProjectVersionData(),
     @StringRes description: Int? = null,
     crossinline block: ProjectTemplateBuilder.() -> Unit,
@@ -67,8 +79,13 @@ internal inline fun baseProjectImpl(
         projectName = projectName,
         packageName = packageName,
         useKts = useKts,
+        useToml = useToml,
+        useNdk = useNdk,
+        useCmake = useCmake,
         minSdk = minSdk,
         language = language,
+        ndkVersion = ndkVersion,
+        cmakeVersion = cmakeVersion,
         projectVersionData = projectVersionData,
         description = description
     ) {

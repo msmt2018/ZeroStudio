@@ -43,3 +43,6 @@ class CheckBoxWidget(p: BooleanParameter) : ParameterWidget<Boolean>(p)
 
 /** Widget for an [EnumParameter]. Creates a spinner for the parameter. */
 class SpinnerWidget<T : Enum<*>>(p: EnumParameter<T>) : ParameterWidget<T>(p)
+
+/** Widget for a [BooleanParameter]. Creates a switch view for the parameter. */
+class SwitchWidget(p: BooleanParameter) : ParameterWidget<Boolean>(p)

@@ -29,7 +29,7 @@ fun AndroidModuleTemplateBuilder.baseAndroidXDependencies() {
 }
 
 fun AndroidModuleTemplateBuilder.composeDependencies() {
-  addDependency(Dependency.AndroidX.Compose.Core_Ktx)
+  addDependency(Dependency.AndroidX.Core_Ktx)
   addDependency(Dependency.AndroidX.Compose.LifeCycle_Runtime_Ktx)
   addDependency(Dependency.AndroidX.Compose.Activity)
 

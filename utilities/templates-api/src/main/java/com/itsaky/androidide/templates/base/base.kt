@@ -148,7 +148,9 @@ inline fun baseProject(
     projectName: StringParameter = projectNameParameter(),
     packageName: StringParameter = packageNameParameter(),
     useKts: BooleanParameter = useKtsParameter(),
+    useToml: BooleanParameter = useTomlParameter(),
     useNdk: BooleanParameter = useNdkParameter(),
+    useCmake: BooleanParameter = useCmakeParameter(),
     minSdk: EnumParameter<Sdk> = minSdkParameter(),
     language: EnumParameter<Language> = projectLanguageParameter(),
     ndkVersion: EnumParameter<NdkVersion> = projectNdkVersionParameter(),
@@ -195,6 +197,12 @@ inline fun baseProject(
         projectName.doBeforeCreateView {
           it.setValue(getNewProjectName(saveLocation.value, projectName.value))
         }
+        
+        ndkVersion.isVisible = useNdk.default
+        cmakeVersion.isVisible = useCmake.default
+
+        useNdk.observe { ndkParam -> ndkVersion.isVisible = ndkParam.value }
+        useCmake.observe { cmakeParam -> cmakeVersion.isVisible = cmakeParam.value }
 
         widgets(
             TextFieldWidget(projectName),
@@ -202,9 +210,11 @@ inline fun baseProject(
             TextFieldWidget(saveLocation),
             SpinnerWidget(language),
             SpinnerWidget(minSdk),
-            CheckBoxWidget(useKts),
-            CheckBoxWidget(useNdk),
+            SwitchWidget(useKts),
+            SwitchWidget(useToml),
+            SwitchWidget(useNdk),
             SpinnerWidget(ndkVersion),
+            SwitchWidget(useCmake),
             SpinnerWidget(cmakeVersion),
         )
 
@@ -235,8 +245,10 @@ inline fun baseProject(
                   projectVersionData,
                   language = language.value,
                   useKts = useKts.value,
+                  useToml = useToml.value,
                   useNdk = useNdk.value,
                   ndkVersion = ndkVersion.value.version,
+                  useCmake = useCmake.value,
                   cmakeVersion = cmakeVersion.value.version,
             )
 
@@ -254,8 +266,10 @@ inline fun baseProject(
                   language = language.value,
                   minSdk = minSdk.value,
                   useKts = data.useKts,
+                  useToml = data.useToml,
                   useNdk = data.useNdk,
                   ndkVersion = data.ndkVersion,
+                  useCmake = data.useCmake,
                   cmakeVersion = data.cmakeVersion,
               )
           )
@@ -277,6 +291,9 @@ inline fun baseProject(
 
           // .gitignore
           gitignore()
+          
+          // Automatically generate TOML
+          generateToml() 
 
           // build.gradle[.kts] - Call this LAST after modules have been processed
           buildGradle()

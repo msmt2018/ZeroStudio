@@ -23,67 +23,26 @@ import com.itsaky.androidide.templates.impl.base.materialAppBar
 import com.itsaky.androidide.templates.impl.base.materialFab
 import com.itsaky.androidide.templates.impl.indentToLevel
 
-internal fun AndroidModuleTemplateBuilder.basicActivitySrcJava() =
-    """
-package ${data.packageName};
-
-import android.os.Bundle;
-import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
-import ${data.packageName}.databinding.ActivityMainBinding;
-
-public class MainActivity extends AppCompatActivity {
-
-	  private ActivityMainBinding binding;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-		    binding = ActivityMainBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
-        
-		    setSupportActionBar(binding.toolbar);
-
-		    binding.fab.setOnClickListener(v ->
-          Toast.makeText(MainActivity.this, "Replace with your action", Toast.LENGTH_SHORT).show()
-        );
-    }
-    
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        this.binding = null;
-    }
-}
-"""
-        .trim()
-
 internal fun AndroidModuleTemplateBuilder.basicActivitySrcKt() =
     """
 package ${data.packageName}
 
 import android.os.Bundle
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import ${data.packageName}.databinding.ActivityMainBinding
 
-public class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity() {
     
     private var _binding: ActivityMainBinding? = null
-    
     private val binding: ActivityMainBinding
-      get() = checkNotNull(_binding) { "Activity has been destroyed" }
+        get() = checkNotNull(_binding) { "Activity has been destroyed" }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         _binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        setSupportActionBar(binding.toolbar)
-        
-        binding.fab.setOnClickListener {
-            Toast.makeText(this@MainActivity, "Replace with your action", Toast.LENGTH_SHORT).show()
-        }
+        binding.textView.text = "Hello, Basic Activity!"
     }
     
     override fun onDestroy() {
@@ -91,28 +50,58 @@ public class MainActivity : AppCompatActivity() {
         _binding = null
     }
 }
-  """
-        .trim()
+  """.trim()
+
+internal fun AndroidModuleTemplateBuilder.basicActivitySrcJava() =
+    """
+package ${data.packageName};
+
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+import ${data.packageName}.databinding.ActivityMainBinding;
+
+public class MainActivity extends AppCompatActivity {
+    private ActivityMainBinding binding;
+    
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+        binding.textView.setText("Hello, Basic Activity!");
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        binding = null;
+    }
+}
+""".trim()
 
 internal fun basicActivityLayout() =
     """
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
     tools:context=".MainActivity">
-        
-    ${materialAppBar().indentToLevel(1)}
     
-    <include layout="@layout/content_main"/>
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hello World!"
+        android:textSize="24sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+        
+</androidx.constraintlayout.widget.ConstraintLayout>
+""".trim()
 
-    ${materialFab().indentToLevel(1)}
-
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
-"""
-        .trim()
-
-internal fun basicActivityContent() = baseLayoutContentMain()
+internal fun basicActivityContent() = ""

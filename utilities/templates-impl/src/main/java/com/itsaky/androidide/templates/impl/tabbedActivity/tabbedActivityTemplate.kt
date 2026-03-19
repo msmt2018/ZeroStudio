@@ -32,7 +32,7 @@ import com.itsaky.androidide.templates.impl.templateAsset
 fun tabbedActivityProject() = baseProjectImpl {
   templateName = R.string.template_tabs
   thumb = R.drawable.template_blank_activity_tabs
-  description = string.test_test
+  description = string.title_template_description_tablayout_tabactivity
   
   defaultAppModule {
     recipe = createRecipe {

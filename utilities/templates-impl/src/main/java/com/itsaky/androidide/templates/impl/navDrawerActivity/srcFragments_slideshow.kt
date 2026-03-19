@@ -39,6 +39,7 @@ public class SlideshowFragment extends Fragment {
 
     private FragmentSlideshowBinding binding;
 
+    @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
         SlideshowViewModel slideshowViewModel =
@@ -78,9 +79,6 @@ import ${data.packageName}.databinding.FragmentSlideshowBinding
 class SlideshowFragment : Fragment() {
 
     private var _binding: FragmentSlideshowBinding? = null
-
-    // This property is only valid between onCreateView and
-    // onDestroyView.
     private val binding get() = _binding!!
 
     override fun onCreateView(
