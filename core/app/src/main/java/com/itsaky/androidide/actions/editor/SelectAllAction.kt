@@ -98,9 +98,10 @@ class SelectAllAction(context: Context, override val order: Int) : BaseEditorAct
             if (optimizedEditors[editor] == true) return
             optimizedEditors[editor] = true
             
-            val props = editor.props
             // 关闭按字符吸附
-            props.stickyTextSelection = false
+            editor.isStickyTextSelection = false
+            
+            val props = editor.props
             // 允许长按后直接拖动进行选择扩展
             props.dragSelectAfterLongPress = true
             // 长按时重新精准选取，避免手柄乱飘

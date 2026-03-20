@@ -102,7 +102,7 @@ class SystemTextActionsPopup(
                 putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true) // 这里声明为只读(如翻译/搜索)
             }
             ProcessTextAction(label, icon, actionIntent)
-        }.distinctBy { it.label } // 去重
+        }.distinctBy { it.label }
     }
 
     @Composable
