@@ -24,6 +24,7 @@ import com.itsaky.androidide.templates.ModuleType
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 import com.itsaky.androidide.templates.base.ModuleTemplateBuilder
 import com.itsaky.androidide.templates.base.modules.dependencies
+import com.itsaky.androidide.templates.Language.Kotlin
 import com.itsaky.androidide.utils.Environment
 import java.io.File
 
