@@ -19,6 +19,7 @@ package com.itsaky.androidide.actions.filetree
 
 import android.app.Activity
 import android.content.ClipData
+import androidx.core.content.ContextCompat
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.drawable.Drawable
