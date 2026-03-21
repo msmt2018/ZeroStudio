@@ -14,6 +14,8 @@ yes='^[Yy][Ee]?[Ss]?$'
 arch=$(uname -m)
 install_dir=$HOME
 sdkver_org=35.0.2
+ndkver_org=29.0.14033849
+cmakever_org=4.1.2
 with_cmdline=true
 assume_yes=false
 manifest="https://github.com/msmt2018/SDK-tool-for-Android-platform/releases/download/IDESdkDownJson2.1/manifest.json"
@@ -221,6 +223,16 @@ while [ $# -gt 0 ]; do
     check_arg_value "--sdk" "${1:-}"
     sdkver_org="$1"
     ;;
+  -n | --ndk)
+    shift
+    check_arg_value "--ndk" "${1:-}"
+    ndkver_org="$1"
+    ;;
+  -k | --cmake)
+    shift
+    check_arg_value "--cmake" "${1:-}"
+    cmakever_org="$1"
+    ;;
   -j | --jdk)
     shift
     check_arg_value "--jdk" "${1:-}"
@@ -280,12 +292,16 @@ if [ "$jdk_version" != "17" ] && [ "$jdk_version" != "21" ]; then
 fi
 
 sdk_version="_${sdkver_org//'.'/'_'}"
+ndk_version="_${ndkver_org//'.'/'_'}"
+cmake_version="_${cmakever_org//'.'/'_'}"
 
 pkgs+=" $pkg_curl"
 
 echo "------------------------------------------"
 echo "Installation directory    : ${install_dir}"
 echo "SDK version               : ${sdkver_org}"
+echo "Ndk version               : ${ndkver_org}"
+echo "Cmake version               : ${cmakever_org}"
 echo "JDK version               : ${jdk_version}"
 echo "With command line tools   : ${with_cmdline}"
 echo "Extra packages            : ${pkgs}"

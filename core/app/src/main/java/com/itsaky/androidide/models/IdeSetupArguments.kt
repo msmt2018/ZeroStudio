@@ -31,5 +31,7 @@ enum class IdeSetupArgument(val argumentName: String, val requiresValue: Boolean
   WITH_OPENSSH("--with-openssh"),
   WITH_NDK("--with-ndk"),
   SDK_VERSION("--sdk", true),
+  NDK_VERSION("--ndk", true),
+  CMAKE_VERSION("--cmake", true),
   JDK_VERSION("--jdk", true)
 }

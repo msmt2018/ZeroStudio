@@ -88,9 +88,10 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
       backgroundDataRestricted.root.setText(R.string.msg_disable_background_data_restriction)
 
       autoInstallSwitch.setOnCheckedChangeListener { button, isChecked ->
-        button.setText(
-          if (isChecked) R.string.action_auto_install else R.string.action_manual_install)
+        button.setText(if (isChecked) R.string.action_auto_install else R.string.action_manual_install)
         sdkVersionLayout.isEnabled = isChecked
+        ndkVersionLayout.isEnabled = isChecked
+        cmakeVersionLayout.isEnabled = isChecked
         jdkVersionLayout.isEnabled = isChecked
         installGit.isEnabled = isChecked
         installOpenssh.isEnabled = isChecked
@@ -98,19 +99,23 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
 
       val sdkVersions = SdkVersion.entries.map { "SDK ${it.version}" }.reversed()
       sdkVersion.setText(sdkVersions[0])
-      sdkVersion.setAdapter(ArrayAdapter(
-        requireContext(),
-        com.google.android.material.R.layout.m3_auto_complete_simple_item,
-        sdkVersions)
-      )
+      sdkVersion.setAdapter(ArrayAdapter(requireContext(), 
+      com.google.android.material.R.layout.m3_auto_complete_simple_item, sdkVersions))
+      
+      val ndkVersions = NdkVersion.entries.map { "NDK ${it.version}" }.reversed()
+      ndkVersion.setText(ndkVersions[0])
+      ndkVersion.setAdapter(ArrayAdapter(requireContext(), 
+      com.google.android.material.R.layout.m3_auto_complete_simple_item, ndkVersions))
+      
+      val cmakeVersions = CmakeVersion.entries.map { "CMake ${it.version}" }.reversed()
+      cmakeVersion.setText(cmakeVersions[0])
+      cmakeVersion.setAdapter(ArrayAdapter(requireContext(),
+      com.google.android.material.R.layout.m3_auto_complete_simple_item, cmakeVersions))
 
       val jdkVersions = JdkVersion.entries.map { "JDK ${it.version}" }
       jdkVersion.setText(jdkVersions[0])
-      jdkVersion.setAdapter(ArrayAdapter(
-        requireContext(),
-        com.google.android.material.R.layout.m3_auto_complete_simple_item,
-        jdkVersions)
-      )
+      jdkVersion.setAdapter(ArrayAdapter(requireContext(), 
+      com.google.android.material.R.layout.m3_auto_complete_simple_item, jdkVersions))
     }
 
     updateConnectionStatus()
@@ -121,10 +126,12 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
   fun buildIdeSetupArguments(): Array<String> {
     val args = mutableListOf<String>()
     args.setArgument(IdeSetupArgument.INSTALL_DIR, Environment.HOME.absolutePath)
-    args.setArgument(IdeSetupArgument.SDK_VERSION,
-      SdkVersion.fromDisplayName(content.sdkVersion.text).version)
-    args.setArgument(IdeSetupArgument.JDK_VERSION,
-      JdkVersion.fromDisplayName(content.jdkVersion.text).version)
+    
+    args.setArgument(IdeSetupArgument.SDK_VERSION, SdkVersion.fromDisplayName(content.sdkVersion.text.toString()).version)
+    args.setArgument(IdeSetupArgument.NDK_VERSION, NdkVersion.fromDisplayName(content.ndkVersion.text.toString()).version)
+    args.setArgument(IdeSetupArgument.CMAKE_VERSION, CmakeVersion.fromDisplayName(content.cmakeVersion.text.toString()).version)
+    args.setArgument(IdeSetupArgument.JDK_VERSION, JdkVersion.fromDisplayName(content.jdkVersion.text.toString()).version)
+    
     args.setArgument(IdeSetupArgument.ASSUME_YES)
     if (content.installGit.isChecked) {
       args.setArgument(IdeSetupArgument.WITH_GIT)

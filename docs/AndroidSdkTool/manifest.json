@@ -239,36 +239,34 @@
      "android_ndk": {
           "aarch64": {
                "_29_0_14033849": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r29/android-ndk-r29-aarch64-linux-android.tar.xz",
-               "_29.0.13113456": "https://github.com/ZeroAicy/AIDE-Ndk-Install/releases/download/v2.7.8/android-ndk-r29-beta1-aarch64.zip",
-               "_29.0.14206865": "https://github.com/lzhiyong/termux-ndk/releases/download/android-ndk/android-ndk-r29-aarch64.7z",
-               "_28_2_13676358": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r28/android-ndk-r28c-aarch64-linux-android.tar.xz",
-               "_28_2_13676358_r2": "https://github.com/codehasan/dex2c/releases/download/ollvm-termux/android-ndk-r28c.tar.xz",
+               "_29_0_13113456": "https://github.com/ZeroAicy/AIDE-Ndk-Install/releases/download/v2.7.8/android-ndk-r29-beta1-aarch64.zip",
+               "_29_0_14206865": "https://github.com/lzhiyong/termux-ndk/releases/download/android-ndk/android-ndk-r29-aarch64.7z",
+               "_28_2_13676358_A1": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r28/android-ndk-r28c-aarch64-linux-android.tar.xz",
+               "_28_2_13676358_A2": "https://github.com/codehasan/dex2c/releases/download/ollvm-termux/android-ndk-r28c.tar.xz",
                "_27_3_13750724": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r27/android-ndk-r27d-aarch64-linux-android.tar.xz",
-               "27.1.12297006": "https://github.com/ZeroAicy/AIDE-Ndk-Install/releases/download/v2.7.8/android-ndk-r27b-aarch64.zip",
+               "_27_1_12297006": "https://github.com/ZeroAicy/AIDE-Ndk-Install/releases/download/v2.7.8/android-ndk-r27b-aarch64.zip",
                "_26_3_11579264": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r26/android-ndk-r26d-aarch64-linux-android.tar.xz",
                "_25_2_9519653": "https://github.com/codehasan/dex2c/releases/download/ollvm-termux/android-ndk-r25c-ollvm-aarch64.tar.xz",
-               "_24.0.8215888": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r24-aarch64.zip",
-               "_23.2.8568313": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r23b-aarch64.zip",
-               "_22.1.7171670": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r22b-aarch64.zip",
-               "_21.4.7075529": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r21e-aarch64.zip",
-               "_20.1.5948944": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r20b-aarch64.zip",
-               "_19.2.5345600": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r19c-aarch64.zip",
-               "_18.1.5063045": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r18b-aarch64.zip",
-               "_17.2.4988734": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r17c-aarch64.zip"
+               "_24_0_8215888": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r24-aarch64.zip",
+               "_23_2_8568313": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r23b-aarch64.zip",
+               "_22_1_7171670": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r22b-aarch64.zip",
+               "_21_4_7075529": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r21e-aarch64.zip",
+               "_20_1_5948944": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r20b-aarch64.zip",
+               "_19_2_5345600": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r19c-aarch64.zip",
+               "_18_1_5063045": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r18b-aarch64.zip",
+               "_17_2_4988734": "https://github.com/jzinferno2/termux-ndk/releases/download/v1/android-ndk-r17c-aarch64.zip"
           },
           "x86_64": {
                "_29_0_14033849": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r29/android-ndk-r29-x86_64-linux-android.tar.xz",
                "_28_2_13676358": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r28/android-ndk-r28c-x86_64-linux-android.tar.xz",
                "_27_3_13750724": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r27/android-ndk-r27d-x86_64-linux-android.tar.xz",
-               "_26_3_11579264": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r26/android-ndk-r26d-x86_64-linux-android.tar.xz",
-               "_28_0_0": "x"
+               "_26_3_11579264": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r26/android-ndk-r26d-x86_64-linux-android.tar.xz"
           },
           "arm": {
                "_29_0_14033849_beta4": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r29/android-ndk-r29-armv7a-linux-androideabi.tar.xz",
                "_28_2_13676358": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r28/android-ndk-r28c-armv7a-linux-androideabi.tar.xz",
                "_27_3_13750724": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r27/android-ndk-r27d-armv7a-linux-androideabi.tar.xz",
-               "_26_3_11579264": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r26/android-ndk-r26d-armv7a-linux-androideabi.tar.xz",
-               "_28_0_0": "x"
+               "_26_3_11579264": "https://github.com/HomuHomu833/android-ndk-custom/releases/download/r26/android-ndk-r26d-armv7a-linux-androideabi.tar.xz"
           }
      },
      "android_cmake": {
@@ -289,8 +287,7 @@
                "-3_25_1": "https://github.com/msmt2018/SDK-tool-for-Android-platform/releases/download/cmake3.251/cmake-3_25_1-android-aarch64.tar.xz",
                "_3_22_1": "https://github.com/msmt2018/SDK-tool-for-Android-platform/releases/download/cmake3.22/cmake-3.22.1-android8-aarch64.tar.xz",
                "_3_18_1": "https://github.com/msmt2018/SDK-tool-for-Android-platform/releases/download/cmake3.18/cmake-3.18.1-android-aarch64.tar.xz",
-               "_3_10_2": "https://github.com/msmt2018/SDK-tool-for-Android-platform/releases/download/cmake3.10/cmake-3.10.2-android-aarch64.tar.xz",
-               "_28_0_0": "x"
+               "_3_10_2": "https://github.com/msmt2018/SDK-tool-for-Android-platform/releases/download/cmake3.10/cmake-3.10.2-android-aarch64.tar.xz"
           },
           "arm": {
                "_4_1_2": "https://github.com/HomuHomu833/cmake-custom/releases/download/4.1.2/cmake-arm-linux-musleabi.tar.xz",
@@ -309,8 +306,7 @@
                "_3_25_1": "x",
                "_3_22_1": "x",
                "_3_18_1": "x",
-               "_3_10_2": "x",
-               "_28_0_0": "x"
+               "_3_10_2": "x"
           },
           "x86_64": {
                "_4_1_2": "x",
@@ -329,8 +325,7 @@
                "_3_25_1": "x",
                "_3_22_1": "x",
                "_3_18_1": "x",
-               "_3_10_2": "x",
-               "_28_0_0": "x"
+               "_3_10_2": "x"
           }
      },
      "jdk_26": {

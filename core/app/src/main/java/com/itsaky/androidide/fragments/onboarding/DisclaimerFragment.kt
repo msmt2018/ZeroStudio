@@ -22,10 +22,6 @@ import java.io.InputStreamReader
 
 /**
  * 引导页：免责与隐私协议声明
- * 
- * 使用 [Markwon] 从 Assets 渲染 Markdown，
- * 采用 [SlidePolicy] 拦截用户未同意协议时的翻页动作。
- * 
  * @author android_zero
  */
 class DisclaimerFragment : FragmentWithBinding<FragmentOnboardingDisclaimerBinding>(FragmentOnboardingDisclaimerBinding::inflate), SlidePolicy {
@@ -41,29 +37,26 @@ class DisclaimerFragment : FragmentWithBinding<FragmentOnboardingDisclaimerBindi
         }
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+      super.onViewCreated(view, savedInstanceState)
 
-        // 初始化 Markwon 渲染器
-        val markwon = Markwon.create(requireContext())
-        
-        // 从 assets/docs 读取并渲染 md
-        val markdownContent = try {
-            requireContext().assets.open("docs/Disclaimer-Agreement.md").use { inputStream ->
-                InputStreamReader(inputStream).readText()
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to load Disclaimer-Agreement.md", e)
-            "Failed to load Disclaimer & Privacy Policy. Please ensure the file exists at assets/docs/Disclaimer-Agreement.md."
-        }
-
-        markwon.setMarkdown(binding.markdownTextView, markdownContent)
-
-        // 监听同意勾选状态
-        binding.agreeCheckbox.setOnCheckedChangeListener { _, isChecked ->
-            isAgreed = isChecked
-        }
+      val context = requireContext()
+      val markwon = Markwon.create(context)
+    
+     val markdownContent = try {
+        context.assets.open("docs/Disclaimer-Agreement.md").bufferedReader().use { it.readText() }
+    } catch (e: Exception) {
+        logger.error("Document read failed", e)
+        "**Error:** Unable to load protocol files. Please check if 'assets/docs/Disclaimer-Agreement.md' exists."
     }
+
+    markwon.setMarkdown(binding.markdownTextView, markdownContent)
+
+    binding.agreeCheckbox.setOnCheckedChangeListener { _, isChecked ->
+        isAgreed = isChecked
+    }
+}
+
 
     /**
      * 判断是否满足进入下一页条件

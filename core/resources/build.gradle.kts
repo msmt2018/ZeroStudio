@@ -42,7 +42,7 @@ dependencies {
 // @author android_zero  github：android-zeros
 tasks.register<ZeroAutoTranslateTask>("translateStrings") {
     // 设置翻译源文件路径
-    sourceXmlPath = "core/resources/src/main/res/values/dev_test_res.xml"
+    sourceXmlPath = "core/resources/src/main/res/values/strings.xml"
 
      //注意：目前谷歌翻译并非常用官方API，所以可能会存在封ip/无响应等问题导致翻译失败
     // 设置翻译引擎 (可选: GOOGLE_GTX, GOOGLE_WEB, BAIDU_WEB, YOUDAO_WEB, BING_WEB)

@@ -49,48 +49,7 @@
     <color name="gradient_cyan_start">#FFBAFFE9</color>
     <color name="gradient_cyan_end">#FFBAE1FF</color>
     
-    <!-- Common Actions -->
-    <string name="action_more">更多</string>
-    <string name="action_change_theme">切换主题</string>
-    <string name="title_select_theme">选择终端主题</string>
-
-    <!-- Context Menu Actions -->
-    <string name="context_menu_select_url_id">选择 URL</string>
-    <string name="context_menu_share_transcript_id">分享文字记录</string>
-    <string name="context_menu_reset_terminal_id">重置终端</string>
-    <string name="context_menu_kill_process_id">终止进程 %0</string>
-    <string name="context_menu_toggle_keep_screen_on">保持屏幕常亮</string>
-    <string name="context_menu_help_id">打开帮助</string>
-    <string name="context_menu_report_id">反馈问题</string>
-
-    <!-- Tab Management Actions -->
-    <string name="action_close_tab">关闭</string>
-    <string name="action_close_other_sessions">关闭其他会话</string>
-    <string name="action_close_other_tabs">关闭其他</string>
-    <string name="action_close_all_sessions">关闭所有会话</string>
-    <string name="action_close_all_tabs">关闭所有</string>
-    <string name="action_rename_session">重命名会话</string>
-    <string name="action_close_session">关闭会话</string>
-
-
-    <!-- 终端会话相关 -->
-    <string name="dialog_title_run_command">执行终端命令</string>
-    <string name="dialog_hint_run_command">输入要在当前终端会话中执行的命令</string>
-    <string name="hint_enter_command">例如：apt update、adb install</string>
-    <string name="action_execute">执行</string>
-    <string name="error_empty_command">命令不能为空，请输入有效命令</string>
-    
-    <string name="action_drag">Drag</string>
    
-    <!-- 会话状态提示 -->
-    <string name="session_status_finished">已结束（退出码：%d）</string>
-    <string name="session_status_running">运行中</string>
-
-    <!-- Accessibility / Content Descriptions -->
-    <string name="action_menu">操作菜单</string>
-    <string name="terminal_icon">终端图标</string>
-    <string name="close_tab">关闭标签</string>
-
     <!-- Labels -->
     <string name="tab_label_active">terminal @%1$d</string>
     <string name="tab_label_terminal">terminal #%1$d</string>
