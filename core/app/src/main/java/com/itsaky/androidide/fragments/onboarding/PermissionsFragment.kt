@@ -21,10 +21,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationManagerCompat
@@ -104,7 +109,7 @@ class PermissionsFragment : FragmentWithBinding<FragmentOnboardingPermissionsBin
         permissionsList.clear()
         val context = requireContext()
 
-        // 1. 通知权限
+        // 通知权限
         permissionsList.add(
             OnboardingPermissionItem(
                 permission = POST_NOTIFICATIONS,
@@ -114,7 +119,7 @@ class PermissionsFragment : FragmentWithBinding<FragmentOnboardingPermissionsBin
             )
         )
 
-        // 2. 基础存储权限 (READ/WRITE) - 所有版本都显示
+        // 基础存储权限 (READ/WRITE) - 所有版本都显示
         permissionsList.add(
             OnboardingPermissionItem(
                 permission = PERMISSION_KEY_BASIC_STORAGE,
@@ -124,7 +129,7 @@ class PermissionsFragment : FragmentWithBinding<FragmentOnboardingPermissionsBin
             )
         )
 
-        // 3. 所有文件访问权限 (仅 Android 11+)
+        //所有文件访问权限 (仅 Android 11+)
         if (isAtLeastR()) {
             permissionsList.add(
                 OnboardingPermissionItem(
@@ -136,7 +141,7 @@ class PermissionsFragment : FragmentWithBinding<FragmentOnboardingPermissionsBin
             )
         }
 
-        // 4. 安装未知应用权限 (Android 8+)
+        // 安装未知应用权限 (Android 8+)
         if (isAtLeastO()) {
             permissionsList.add(
                 OnboardingPermissionItem(
@@ -150,17 +155,50 @@ class PermissionsFragment : FragmentWithBinding<FragmentOnboardingPermissionsBin
     }
 
     private fun requestPermission(key: String) {
+        val context = requireContext()
         when (key) {
-            // 通知权限
-            Manifest.permission.POST_NOTIFICATIONS -> {
-                requestSettingsTogglePermission(
-                    Settings.ACTION_APP_NOTIFICATION_SETTINGS,
-                    setData = false
-                )
+           POST_NOTIFICATIONS -> {
+            val intent = Intent()
+            when {
+                // Android 8.0 (API 26) 及以上：直接进入「通知开关」页面
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
+                    intent.action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                    intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+                
+                // Android 5.0 - 7.1 兼容方法
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP -> {
+                    intent.action = "android.settings.APP_NOTIFICATION_SETTINGS"
+                    intent.putExtra("app_package", context.packageName)
+                    intent.putExtra("app_uid", context.applicationInfo.uid)
+                }
+
+                // 兜底：跳转到应用详情页
+                else -> {
+                    intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                    intent.data = Uri.fromParts("package", context.packageName, null)
+                }
             }
-            
-            // 基础存储权限：申请运行时权限
-            PERMISSION_KEY_BASIC_STORAGE -> {
+
+            try {
+                settingsTogglePermissionRequestLauncher.launch(intent)
+            } catch (e: Exception) {
+                // 如果特定页面崩溃（部分定制 ROM），则尝试进入应用详情页
+                val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+                settingsTogglePermissionRequestLauncher.launch(fallback)
+            }
+        }
+
+        PERMISSION_KEY_BASIC_STORAGE -> {
+            if (isAtLeastR()) {
+                if (Environment.isExternalStorageManager()) {
+                    onPermissionsUpdated()
+                    return
+                }
+                requestPermission(PERMISSION_KEY_ALL_FILES)
+            } else {
                 runtimePermissionLauncher.launch(
                     arrayOf(
                         Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -168,22 +206,23 @@ class PermissionsFragment : FragmentWithBinding<FragmentOnboardingPermissionsBin
                     )
                 )
             }
+        }
 
-            // 所有文件访问权限 (Android 11+)
-            PERMISSION_KEY_ALL_FILES -> {
-                if (isAtLeastR()) {
-                    requestSettingsTogglePermission(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                }
+        PERMISSION_KEY_ALL_FILES -> {
+            if (isAtLeastR()) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:${context.packageName}")
+                settingsTogglePermissionRequestLauncher.launch(intent)
             }
+        }
 
-            // 安装应用权限
-            PERMISSION_KEY_INSTALL_PACKAGES -> {
-                if (isAtLeastO()) {
-                    requestSettingsTogglePermission(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                }
+        PERMISSION_KEY_INSTALL_PACKAGES -> {
+            if (isAtLeastO()) {
+                requestSettingsTogglePermission(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
             }
         }
     }
+}
 
     /**
      * 核心 Intent 构建方法
@@ -228,26 +267,36 @@ class PermissionsFragment : FragmentWithBinding<FragmentOnboardingPermissionsBin
         }
     }
 
-    private fun processNextUngrantedPermission() {
-        val nextItem = permissionsList.firstOrNull { !it.isGranted }
-        if (nextItem != null) {
-            requestPermission(nextItem.permission)
+private fun processNextUngrantedPermission() {
+    val nextItem = permissionsList.firstOrNull { !it.isGranted }
+    
+    if (nextItem != null) {
+        val key = if (isAtLeastR() && nextItem.permission == PERMISSION_KEY_BASIC_STORAGE) {
+            PERMISSION_KEY_ALL_FILES
         } else {
-            isAutoRequesting = false
+            nextItem.permission
         }
+        requestPermission(key)
+    } else {
+        isAutoRequesting = false
+        flashSuccess("All permissions are ready")
     }
-
-    // --- 检查 Helper ---
+}
 
     private fun isNotificationGranted(context: Context): Boolean {
         return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 
     private fun isBasicStorageGranted(context: Context): Boolean {
+        if (isAtLeastR() && Environment.isExternalStorageManager()) {
+            return true
+    }
+    
         val read = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
         val write = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        return read == PackageManager.PERMISSION_GRANTED && write == PackageManager.PERMISSION_GRANTED
-    }
+          return read == PackageManager.PERMISSION_GRANTED && write == PackageManager.PERMISSION_GRANTED
+   }
+
 
     // --- SlidePolicy ---
 
