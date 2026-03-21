@@ -125,7 +125,7 @@ class OnboardingActivity : AppIntro2() {
     isIndicatorEnabled = true
     isWizardMode = true
 
-    addSlide(GreetingFragment())
+    // addSlide(GreetingFragment())
 
     if (!PackageUtils.isCurrentUserThePrimaryUser(this)) {
       val errorMessage = getString(string.bootstrap_error_not_primary_user_message,

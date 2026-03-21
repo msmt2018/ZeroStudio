@@ -97,23 +97,23 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
         installOpenssh.isEnabled = isChecked
       }
 
-      val sdkVersions = SdkVersion.entries.map { "SDK ${it.version}" }.reversed()
-      sdkVersion.setText(sdkVersions[0])
+      val sdkVersions = SdkVersion.entries.map { it.displayName }.reversed()
+      sdkVersion.setText(sdkVersions[0], false)
       sdkVersion.setAdapter(ArrayAdapter(requireContext(), 
       com.google.android.material.R.layout.m3_auto_complete_simple_item, sdkVersions))
       
-      val ndkVersions = NdkVersion.entries.map { "NDK ${it.version}" }.reversed()
-      ndkVersion.setText(ndkVersions[0])
+      val ndkVersions = NdkVersion.entries.map { it.displayName }.reversed()
+      ndkVersion.setText(ndkVersions[0], false)
       ndkVersion.setAdapter(ArrayAdapter(requireContext(), 
       com.google.android.material.R.layout.m3_auto_complete_simple_item, ndkVersions))
       
-      val cmakeVersions = CmakeVersion.entries.map { "CMake ${it.version}" }.reversed()
-      cmakeVersion.setText(cmakeVersions[0])
+      val cmakeVersions = CmakeVersion.entries.map { it.displayName }.reversed()
+      cmakeVersion.setText(cmakeVersions[0], false)
       cmakeVersion.setAdapter(ArrayAdapter(requireContext(),
       com.google.android.material.R.layout.m3_auto_complete_simple_item, cmakeVersions))
 
-      val jdkVersions = JdkVersion.entries.map { "JDK ${it.version}" }
-      jdkVersion.setText(jdkVersions[0])
+      val jdkVersions = JdkVersion.entries.map { it.displayName }
+      jdkVersion.setText(jdkVersions[0], false)
       jdkVersion.setAdapter(ArrayAdapter(requireContext(), 
       com.google.android.material.R.layout.m3_auto_complete_simple_item, jdkVersions))
     }

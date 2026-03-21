@@ -62,25 +62,25 @@ enum class SdkVersion(val version: String, val supportedArchs: Array<CpuArch>) {
  * @author android_zero
  */
 enum class NdkVersion(val version: String, val supportedArchs: Array<CpuArch>) {
-    R29C("29.0.14206865",ARM_AARCH64),
-    R29B("29.0.14033849", ALL),
-    R29A("29.0.13113456",ARM_AARCH64),
-    R28A1("28.2.13676358.A1", ALL),
-    R28A2("28.2.13676358.A2",ARM_AARCH64),
-    R27B("27.3.13750724", ALL),
-    R27A("27.1.12297006",ARM_AARCH64),
-    R26("26.3.11579264", ALL),
-    R25("25.2.9519653",ARM_AARCH64),
-    R24("24.0.8215888",ARM_AARCH64),
-    R23("23.2.8568313",ARM_AARCH64),
-    R22("22.1.7171670",ARM_AARCH64),
-    R21("21.4.7075529",ARM_AARCH64),
-    R20("20.1.5948944",ARM_AARCH64),
-    R19("19.2.5345600",ARM_AARCH64),
+    R17("17.2.4988734",ARM_AARCH64),
     R18("18.1.5063045",ARM_AARCH64),
-    R17("17.2.4988734",ARM_AARCH64);
+    R19("19.2.5345600",ARM_AARCH64),
+    R20("20.1.5948944",ARM_AARCH64),
+    R21("21.4.7075529",ARM_AARCH64),
+    R22("22.1.7171670",ARM_AARCH64),
+    R23("23.2.8568313",ARM_AARCH64),
+    R24("24.0.8215888",ARM_AARCH64),
+    R25("25.2.9519653",ARM_AARCH64),
+    R26("26.3.11579264", ALL),
+    R27A("27.1.12297006",ARM_AARCH64),
+    R27B("27.3.13750724", ALL),
+    R28A2("28.2.13676358.A2",ARM_AARCH64),
+    R28A1("28.2.13676358.A1", ALL),
+    R29A("29.0.13113456",ARM_AARCH64),
+    R29B("29.0.14033849", ALL),
+    R29C("29.0.14206865",ARM_AARCH64);
 
-    val displayName = "Ndk $version"
+    val displayName = "NDK $version"
 
   companion object {
 
@@ -99,25 +99,25 @@ enum class NdkVersion(val version: String, val supportedArchs: Array<CpuArch>) {
  * @author android_zero
  */
 enum class CmakeVersion(val version: String, val supportedArchs: Array<CpuArch>) {
-    V4_1_2("4.1.2",ALL), 
-    V4_1_1("4.1.1",ALL), 
-    V4_1_0("4.1.0",ALL), 
-    V4_0_3("4.0.3",ALL), 
-    V4_0_2("4.0.2",ALL), 
-    V3_31_6("3.31.6",ALL), 
-    V3_31_5("3.31.5",ALL), 
-    V3_31_4("3.31.4",ALL), 
-    V3_31_1("3.31.1",ALL), 
-    V3_31_0("3.31.0",ALL), 
-    V3_30_5("3.30.5",ALL), 
-    V3_30_4("3.30.4",ALL), 
-    V3_30_3("3.30.3",ALL), 
-    V3_25_1("3.25.1",ARM_AARCH64), 
-    V3_22_1("3.22.1",ARM_AARCH64), 
+    V3_10_2("3.10.2",ARM_AARCH64),
     V3_18_1("3.18.1",ARM_AARCH64), 
-    V3_10_2("3.10.2",ARM_AARCH64);
-    
-    val displayName = "Cmake $version"
+    V3_22_1("3.22.1",ARM_AARCH64), 
+    V3_25_1("3.25.1",ARM_AARCH64), 
+    V3_30_3("3.30.3",ALL), 
+    V3_30_4("3.30.4",ALL), 
+    V3_30_5("3.30.5",ALL), 
+    V3_31_0("3.31.0",ALL), 
+    V3_31_1("3.31.1",ALL), 
+    V3_31_4("3.31.4",ALL), 
+    V3_31_5("3.31.5",ALL),
+    V3_31_6("3.31.6",ALL),
+    V4_0_2("4.0.2",ALL),
+    V4_0_3("4.0.3",ALL),
+    V4_1_0("4.1.0",ALL), 
+    V4_1_1("4.1.1",ALL), 
+    V4_1_2("4.1.2",ALL);
+
+    val displayName = "CMake $version"
 
     companion object {
 
