@@ -1,6 +1,6 @@
 package com.itsaky.androidide.fragments.git.tree
 
-import android.zero.studio.treeview.view.AndroidTreeView
+import com.rk.filetree.view.AndroidTreeView
 import java.util.Stack
 
 class TreeStateManager {

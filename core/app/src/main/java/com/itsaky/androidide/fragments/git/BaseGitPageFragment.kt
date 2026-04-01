@@ -25,7 +25,7 @@ import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.Toast
-import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.ViewModelProvider
 import androidx.fragment.app.Fragment
 import com.itsaky.androidide.R
 
@@ -37,7 +37,9 @@ import com.itsaky.androidide.R
 abstract class BaseGitPageFragment : Fragment() {
 
   protected var toolbarContainer: LinearLayout? = null
-  private val uiEventViewModel by activityViewModels<GitUiEventViewModel>()
+  private val uiEventViewModel: GitUiEventViewModel by lazy {
+    ViewModelProvider(requireActivity())[GitUiEventViewModel::class.java]
+  }
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)

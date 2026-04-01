@@ -35,7 +35,7 @@ import com.itsaky.androidide.models.SheetOption
 import com.itsaky.androidide.utils.ApkInstaller
 import com.itsaky.androidide.utils.InstallationResultHandler
 import com.itsaky.androidide.utils.flashError
-import com.unnamed.b.atv.model.TreeNode as LegacyTreeNode
+import com.rk.filetree.model.TreeNode as LegacyTreeNode
 import java.io.File
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
@@ -102,7 +102,7 @@ class FileTreeActionHandler : BaseEventHandler() {
 
     this.lastHeld =
         event[LegacyTreeNode::class.java]
-            ?: event[android.zero.studio.treeview.model.TreeNode::class.java]
+            ?: event[com.rk.filetree.model.TreeNode::class.java]
     val context = event[Context::class.java]!! as EditorHandlerActivity
     createFileOptionsFragment(context, event.file)
         .show(context.supportFragmentManager, TAG_FILE_OPTIONS_FRAGMENT)
@@ -122,8 +122,8 @@ class FileTreeActionHandler : BaseEventHandler() {
       val held = lastHeld
       if (held is LegacyTreeNode) {
         put(LegacyTreeNode::class.java, held)
-      } else if (held is android.zero.studio.treeview.model.TreeNode) {
-        put(android.zero.studio.treeview.model.TreeNode::class.java, held)
+      } else if (held is com.rk.filetree.model.TreeNode) {
+        put(com.rk.filetree.model.TreeNode::class.java, held)
       }
     }
 
@@ -174,7 +174,7 @@ class FileTreeActionHandler : BaseEventHandler() {
   private fun requestExpandNode(node: Any) {
     when (node) {
       is LegacyTreeNode -> EventBus.getDefault().post(ExpandTreeNodeRequestEvent(node))
-      is android.zero.studio.treeview.model.TreeNode ->
+      is com.rk.filetree.model.TreeNode ->
           EventBus.getDefault().post(com.itsaky.androidide.fragments.git.tree.ExpandTreeNodeRequestEvent(node))
     }
   }

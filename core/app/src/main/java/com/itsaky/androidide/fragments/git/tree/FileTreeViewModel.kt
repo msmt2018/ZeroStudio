@@ -17,7 +17,7 @@
 
 package com.itsaky.androidide.fragments.git.tree
 
-import android.zero.studio.treeview.view.AndroidTreeView
+import com.rk.filetree.view.AndroidTreeView
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.itsaky.androidide.tasks.executeAsync

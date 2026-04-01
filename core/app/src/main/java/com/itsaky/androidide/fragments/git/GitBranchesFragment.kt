@@ -114,7 +114,6 @@ class GitBranchesFragment : BaseGitPageFragment() {
                   val name = Branch.name(ref).orEmpty()
                   val isHead = Branch.isHead(ref)
                   list.add(BranchItem(name = name, type = entry.value.name, isHead = isHead))
-                  ref.close()
                 }
                 list.sortedBy { it.name.lowercase() }
               }

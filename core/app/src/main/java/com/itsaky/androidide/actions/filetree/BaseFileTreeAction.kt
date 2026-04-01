@@ -29,7 +29,7 @@ import com.itsaky.androidide.actions.markInvisible
 import com.itsaky.androidide.eventbus.events.Event
 import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
 import com.itsaky.androidide.events.ListProjectFilesRequestEvent
-import com.unnamed.b.atv.model.TreeNode
+import com.rk.filetree.model.TreeNode
 import java.io.File
 import org.greenrobot.eventbus.EventBus
 

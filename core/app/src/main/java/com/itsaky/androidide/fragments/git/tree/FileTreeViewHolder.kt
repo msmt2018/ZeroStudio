@@ -10,7 +10,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.zero.studio.treeview.model.TreeNode
+import com.rk.filetree.model.TreeNode
 import androidx.annotation.ColorInt
 import androidx.core.widget.ImageViewCompat
 import com.blankj.utilcode.util.SizeUtils

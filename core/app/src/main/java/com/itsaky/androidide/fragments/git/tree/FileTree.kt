@@ -17,7 +17,7 @@
 
 package com.itsaky.androidide.fragments.git.tree
 
-import android.zero.studio.treeview.model.TreeNode
+import com.rk.filetree.model.TreeNode
 import com.itsaky.androidide.eventbus.events.Event
 import com.itsaky.androidide.models.SheetOption
 

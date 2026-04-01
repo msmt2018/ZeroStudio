@@ -19,7 +19,7 @@ package com.itsaky.androidide.events
 
 import com.itsaky.androidide.eventbus.events.Event
 import com.itsaky.androidide.models.SheetOption
-import com.unnamed.b.atv.model.TreeNode
+import com.rk.filetree.model.TreeNode
 
 internal data class FileContextMenuItemClickEvent(val option: SheetOption) : Event()
 

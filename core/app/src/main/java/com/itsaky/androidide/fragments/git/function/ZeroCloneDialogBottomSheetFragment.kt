@@ -914,7 +914,7 @@ private fun CloneScreenContent(
               if (isCloning.value) return@IconButton
               if (!isReadyForClone.value) {
                 Msg.requireShowLongDuration(
-                    activityContext.getString(R.string.please_check_your_input)
+                    "Please check your input"
                 )
                 return@IconButton
               }
