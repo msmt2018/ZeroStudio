@@ -20,28 +20,42 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import com.itsaky.androidide.R
 
 /** 代码审查页面。 可能用于展示特定的 Diff 视图或待审查的补丁列表。 */
 class GitCodeReviewFragment : BaseGitPageFragment() {
+
+  private var links: GitHostLinks? = null
 
   override fun onCreateView(
       inflater: LayoutInflater,
       container: ViewGroup?,
       savedInstanceState: Bundle?,
   ): View {
+    links = GitHostWebLinks.resolveForCurrentProject()
     return inflater.inflate(R.layout.fragment_git_branches, container, false)
   }
 
   override fun setupToolbar() {
-    // 批准 (Approve)
-    addToolbarAction(R.drawable.ic_check_24, "Approve") {
-      // TODO
+    addToolbarAction(R.drawable.ic_check_24, "Open Review Page") {
+      emitGitOperation("code_review", "open_review_page")
+      val url = links?.pullRequestsUrl ?: links?.mergeRequestsUrl
+      if (url == null) {
+        Toast.makeText(context, "No remote repository detected", Toast.LENGTH_SHORT).show()
+      } else {
+        openExternalLink(url)
+      }
     }
 
-    // 请求更改 (Request Changes)
-    addToolbarAction(R.drawable.ic_warning_24, "Request Changes") {
-      // TODO
+    addToolbarAction(R.drawable.ic_info_24, "Open Diffs") {
+      emitGitOperation("code_review", "open_diffs_page")
+      val url = links?.baseHttpUrl
+      if (url == null) {
+        Toast.makeText(context, "No remote repository detected", Toast.LENGTH_SHORT).show()
+      } else {
+        openExternalLink("$url/pulls")
+      }
     }
   }
 }

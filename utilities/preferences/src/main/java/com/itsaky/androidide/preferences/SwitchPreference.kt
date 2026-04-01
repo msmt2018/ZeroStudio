@@ -48,13 +48,19 @@ constructor(val setValue: ((Boolean) -> Unit)? = null, val getValue: (() -> Bool
 
   override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
     val isChecked = newValue as? Boolean ?: false
-    
+
     setValue?.invoke(isChecked)
-    
+
     if (preference is TwoStatePreference) {
-        preference.isChecked = isChecked
+      preference.isChecked = isChecked
     }
-    
+
     return true
+  }
+
+  override fun onPreferenceClick(preference: Preference): Boolean {
+    if (preference !is TwoStatePreference) return false
+    val nextValue = !preference.isChecked
+    return onPreferenceChanged(preference, nextValue)
   }
 }
