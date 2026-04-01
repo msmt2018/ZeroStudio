@@ -631,7 +631,8 @@ private fun CloneScreenContent(
   }
 
   val doSave: () -> Unit = {
-    doJobThenOffLoading launch@{
+    scope.launch(Dispatchers.IO) launch@{
+      try {
       // Do NOT set showLoadingDialog = true here, we use the custom "Loading..." text and dialog
       // showLoadingDialog.value=true
 
@@ -659,6 +660,7 @@ private fun CloneScreenContent(
           }
 
       if (isRepoNameExist || isPathExists(null, fullSavePath)) {
+        Msg.requireShowLongDuration(activityContext.getString(R.string.repo_name_exists_err))
         focusRepoName()
         showRepoNameAlreadyExistsErr.value = true
         // showLoadingDialog.value=false
@@ -672,6 +674,9 @@ private fun CloneScreenContent(
         val credentialNameText = credentialName.value.text
         val isCredentialNameExist = credentialDb.isCredentialNameExist(credentialNameText)
         if (isCredentialNameExist) {
+          Msg.requireShowLongDuration(
+              activityContext.getString(R.string.credential_name_exists_err)
+          )
           setCredentialNameExistAndFocus()
           // showLoadingDialog.value=false
           return@launch
@@ -734,15 +739,27 @@ private fun CloneScreenContent(
         repoDb.insert(repoForSave)
       }
 
-      // showLoadingDialog.value=false
-      isCloning.value = true // Show "Loading..." text above TextField
+      withContext(Dispatchers.Main) {
+        // showLoadingDialog.value=false
+        isCloning.value = true // Show "Loading..." text above TextField
 
-      // Start Cloning Process
-      performClone(repoForSave)
+        // Start Cloning Process (must be called on Main because it mutates Compose states)
+        performClone(repoForSave)
+      }
 
       // withMainContext {
       // onDismiss()
       // }
+      } catch (e: Exception) {
+        withContext(Dispatchers.Main) {
+          isCloning.value = false
+          showCloneProgressDialog.value = false
+          isCloneError.value = true
+          cloneStatus.value = "Error: ${e.localizedMessage ?: "Unknown error"}"
+          Msg.requireShowLongDuration(cloneStatus.value)
+        }
+        MyLog.e(TAG, "Failed before clone started: ${e.stackTraceToString()}")
+      }
     }
   }
 
@@ -893,9 +910,19 @@ private fun CloneScreenContent(
 
         // 保存/确认按钮
         IconButton(
-            onClick = { doSave() },
-            // Disable button while cloning to prevent double clicks
-            enabled = isReadyForClone.value && !isCloning.value,
+            onClick = {
+              if (isCloning.value) return@IconButton
+              if (!isReadyForClone.value) {
+                Msg.requireShowLongDuration(
+                    activityContext.getString(R.string.please_check_your_input)
+                )
+                return@IconButton
+              }
+              cloneStatus.value = activityContext.getString(R.string.cloning)
+              doSave()
+            },
+            // Keep clickable even when not ready so user gets explicit feedback.
+            enabled = !isCloning.value,
         ) {
           if (isCloning.value) {
             CircularProgressIndicator(
