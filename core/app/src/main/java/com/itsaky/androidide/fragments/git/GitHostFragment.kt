@@ -20,12 +20,17 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.google.android.material.tabs.TabLayoutMediator
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitHostBinding
 import com.itsaky.androidide.fragments.git.menu.GitPopupManager
+import kotlinx.coroutines.launch
 
 /**
  * Git 功能模块的主宿主 Fragment，主要聚合全部fragment。
@@ -39,6 +44,7 @@ class GitHostFragment : Fragment() {
     get() = _binding!!
 
   private lateinit var popupManager: GitPopupManager
+  private val gitUiEventViewModel by activityViewModels<GitUiEventViewModel>()
 
   override fun onCreateView(
       inflater: LayoutInflater,
@@ -54,6 +60,27 @@ class GitHostFragment : Fragment() {
 
     setupViewPager()
     setupPopupMenu()
+    observeGitEvents()
+  }
+
+  private fun observeGitEvents() {
+    viewLifecycleOwner.lifecycleScope.launch {
+      viewLifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+        gitUiEventViewModel.events.collect { event ->
+          when (event) {
+            is GitUiEvent.Operation ->
+                Toast.makeText(
+                        requireContext(),
+                        "Git ${event.section}: ${event.action}",
+                        Toast.LENGTH_SHORT,
+                    )
+                    .show()
+            is GitUiEvent.Error ->
+                Toast.makeText(requireContext(), event.message, Toast.LENGTH_SHORT).show()
+          }
+        }
+      }
+    }
   }
 
   private fun setupViewPager() {

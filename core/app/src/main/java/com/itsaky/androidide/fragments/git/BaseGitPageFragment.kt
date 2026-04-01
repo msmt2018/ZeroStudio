@@ -16,11 +16,16 @@
  */
 package com.itsaky.androidide.fragments.git
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.Toast
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.Fragment
 import com.itsaky.androidide.R
 
@@ -32,6 +37,7 @@ import com.itsaky.androidide.R
 abstract class BaseGitPageFragment : Fragment() {
 
   protected var toolbarContainer: LinearLayout? = null
+  private val uiEventViewModel by activityViewModels<GitUiEventViewModel>()
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
@@ -97,5 +103,18 @@ abstract class BaseGitPageFragment : Fragment() {
 
   protected fun addToolbarCustomView(view: View) {
     toolbarContainer?.addView(view)
+  }
+
+  protected fun openExternalLink(url: String, errorTip: String = "No browser available") {
+    try {
+      startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: ActivityNotFoundException) {
+      Toast.makeText(requireContext(), errorTip, Toast.LENGTH_SHORT).show()
+      uiEventViewModel.emit(GitUiEvent.Error(errorTip))
+    }
+  }
+
+  protected fun emitGitOperation(section: String, action: String) {
+    uiEventViewModel.emit(GitUiEvent.Operation(section, action))
   }
 }
