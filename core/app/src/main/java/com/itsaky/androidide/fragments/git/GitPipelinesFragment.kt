@@ -20,28 +20,48 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import com.itsaky.androidide.R
 
 /** CD/CI 流水线状态页面。 */
 class GitPipelinesFragment : BaseGitPageFragment() {
+
+  private var links: GitHostLinks? = null
 
   override fun onCreateView(
       inflater: LayoutInflater,
       container: ViewGroup?,
       savedInstanceState: Bundle?,
   ): View {
+    links = GitHostWebLinks.resolveForCurrentProject()
     return inflater.inflate(R.layout.fragment_git_branches, container, false)
   }
 
   override fun setupToolbar() {
-    // 刷新流水线状态
     addToolbarAction(R.drawable.ic_refresh_24, "Refresh Pipelines") {
-      // TODO: Refresh CI status
+      links = GitHostWebLinks.resolveForCurrentProject()
+      emitGitOperation("pipelines", "refresh_remote_links")
+      Toast.makeText(context, "Pipeline links refreshed", Toast.LENGTH_SHORT).show()
     }
 
-    // 查看配置 (比如 .gitlab-ci.yml 或 workflows)
-    addToolbarAction(R.drawable.ic_info_24, "View Config") {
-      // TODO: Open config file
+    addToolbarAction(R.drawable.ic_info_24, "Open Pipelines") {
+      emitGitOperation("pipelines", "open_pipelines")
+      val url = links?.pipelinesUrl
+      if (url == null) {
+        Toast.makeText(context, "No remote repository detected", Toast.LENGTH_SHORT).show()
+      } else {
+        openExternalLink(url)
+      }
+    }
+
+    addToolbarAction(R.drawable.ic_check_24, "Open Actions") {
+      emitGitOperation("pipelines", "open_actions")
+      val url = links?.actionsUrl
+      if (url == null) {
+        Toast.makeText(context, "No workflow URL detected", Toast.LENGTH_SHORT).show()
+      } else {
+        openExternalLink(url)
+      }
     }
   }
 }
