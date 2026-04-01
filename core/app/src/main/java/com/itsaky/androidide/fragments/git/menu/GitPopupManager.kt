@@ -57,7 +57,7 @@ class GitPopupManager(private val context: Context) {
         title = context.getString(R.string.credentials),
         subtitle = "Manage HTTPS credentials",
     ) {
-      // TODO: Open Credentials Manager
+      Msg.requireShowLongDuration("Credentials manager is under construction")
       dismiss()
     }
 
@@ -66,14 +66,14 @@ class GitPopupManager(private val context: Context) {
         title = context.getString(R.string.ssh_credential),
         subtitle = "Manage SSH keys",
     ) {
-      // TODO: Open SSH Manager
+      Msg.requireShowLongDuration("SSH manager is under construction")
       dismiss()
     }
 
     addDivider()
 
     addMenuItem(iconRes = R.drawable.ic_settings_24, title = context.getString(R.string.settings)) {
-      // TODO: Open Settings
+      Msg.requireShowLongDuration("Git settings page is under construction")
       dismiss()
     }
 

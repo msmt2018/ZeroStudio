@@ -48,13 +48,19 @@ constructor(val setValue: ((Boolean) -> Unit)? = null, val getValue: (() -> Bool
 
   override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
     val isChecked = newValue as? Boolean ?: false
-    
+
     setValue?.invoke(isChecked)
-    
+
     if (preference is TwoStatePreference) {
-        preference.isChecked = isChecked
+      preference.isChecked = isChecked
     }
-    
+
     return true
+  }
+
+  override fun onPreferenceClick(preference: Preference): Boolean {
+    // Let AndroidX TwoStatePreference handle checked-state toggling itself.
+    // We only persist the new value in onPreferenceChanged to avoid double-toggle bugs.
+    return false
   }
 }

@@ -21,24 +21,31 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.catpuppyapp.puppygit.git.StatusTypeEntrySaver
+import com.catpuppyapp.puppygit.settings.SettingsUtil
+import com.catpuppyapp.puppygit.utils.Libgit2Helper
+import com.github.git24j.core.Repository
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitChangesBinding
+import com.itsaky.androidide.projects.IProjectManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-/**
- * 变更与提交页面。
- *
- * @author android_zero 功能说明：
- * 1. 展示工作区(Unstaged)和暂存区(Staged)的文件差异。
- * 2. 提供提交(Commit)功能。
- * 3. 工具栏提供：提交、刷新、全部暂存、全部取消暂存等操作。
- */
+/** 变更与提交页面。 */
 class GitChangesFragment : BaseGitPageFragment() {
 
   private var _binding: FragmentGitChangesBinding? = null
   private val binding
     get() = _binding!!
+
+  private val rows = mutableListOf<ChangeRow>()
+  private val adapter = ChangeAdapter(rows)
 
   override fun onCreateView(
       inflater: LayoutInflater,
@@ -50,45 +57,228 @@ class GitChangesFragment : BaseGitPageFragment() {
   }
 
   override fun setupToolbar() {
-    // --- Changes 页面工具栏 ---
-
-    // 1. 提交 (Commit) - 最重要的按钮
     addToolbarAction(R.drawable.ic_check_24, getString(R.string.commit)) {
-      val msg = binding.etCommitMessage.text.toString()
-      if (msg.isBlank()) {
-        Toast.makeText(context, getString(R.string.please_input_commit_msg), Toast.LENGTH_SHORT)
-            .show()
-      } else {
-        // TODO: Perform Commit
-        Toast.makeText(context, "Committing...", Toast.LENGTH_SHORT).show()
-      }
+      emitGitOperation("changes", "commit")
+      commitChanges()
     }
 
-    // 2. 刷新状态 (Refresh)
     addToolbarAction(R.drawable.ic_refresh_24, getString(R.string.refresh)) {
-      // TODO: Refresh status
+      emitGitOperation("changes", "refresh")
+      loadChanges()
     }
 
-    // 3. 全部暂存 (Stage All)
     addToolbarAction(R.drawable.ic_select_all_24, getString(R.string.stage_all)) {
-      // TODO: Git Add .
+      emitGitOperation("changes", "stage_all")
+      stageAll()
     }
 
-    // 4. 全部取消暂存 (Unstage All)
     addToolbarAction(R.drawable.ic_remove_circle_outline_24, getString(R.string.unstage)) {
-      // TODO: Git Reset
+      emitGitOperation("changes", "unstage_all")
+      unstageAll()
     }
 
-    // 5. 丢弃更改 (Discard) - 危险操作
     addToolbarAction(R.drawable.ic_delete_sweep_24, getString(R.string.revert)) {
-      // TODO: Checkout . (Discard changes)
+      emitGitOperation("changes", "discard_all")
+      discardAll()
     }
   }
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
     binding.rvChanges.layoutManager = LinearLayoutManager(context)
-    // TODO: Setup Adapter (SectionedRecyclerViewAdapter recommended for Staged/Unstaged headers)
+    binding.rvChanges.adapter = adapter
+    loadChanges()
+  }
+
+  private fun loadChanges() {
+    val projectDir = IProjectManager.getInstance().projectDirPath
+    if (projectDir.isNullOrBlank()) {
+      Toast.makeText(context, "No opened project", Toast.LENGTH_SHORT).show()
+      return
+    }
+
+    viewLifecycleOwner.lifecycleScope.launch {
+      val ret =
+          withContext(Dispatchers.IO) {
+            runCatching {
+              Repository.open(projectDir).use { repo ->
+                val statusList = Libgit2Helper.getWorkdirStatusList(repo)
+                val unstaged = Libgit2Helper.getWorktreeChangeList(repo, statusList, repoId = "")
+                val (_, staged) =
+                    Libgit2Helper.checkIndexIsEmptyAndGetIndexList(
+                        repo = repo,
+                        repoId = "",
+                        onlyCheckEmpty = false,
+                    )
+
+                buildRows(staged.orEmpty(), unstaged)
+              }
+            }
+          }
+
+      ret.onSuccess {
+        rows.clear()
+        rows.addAll(it)
+        adapter.notifyDataSetChanged()
+      }
+      ret.onFailure {
+        Toast.makeText(context, it.localizedMessage ?: "Failed to load changes", Toast.LENGTH_LONG)
+            .show()
+      }
+    }
+  }
+
+  private fun stageAll() {
+    withRepo { repo ->
+      val ret = Libgit2Helper.stageAll(repo, repoId = "")
+      if (ret.hasError()) {
+        throw RuntimeException(ret.msg)
+      }
+    }
+  }
+
+  private fun unstageAll() {
+    withRepo { repo ->
+      val (_, staged) =
+          Libgit2Helper.checkIndexIsEmptyAndGetIndexList(repo = repo, repoId = "", onlyCheckEmpty = false)
+      val paths = staged.orEmpty().map { it.relativePathUnderRepo }
+      if (paths.isEmpty()) {
+        throw RuntimeException("No staged file")
+      }
+      Libgit2Helper.unStageItems(repo, paths)
+    }
+  }
+
+  private fun discardAll() {
+    withRepo { repo ->
+      val ret = Libgit2Helper.resetHardToHead(repo)
+      if (ret.hasError()) {
+        throw RuntimeException(ret.msg)
+      }
+    }
+  }
+
+  private fun commitChanges() {
+    val msg = binding.etCommitMessage.text.toString().trim()
+    if (msg.isBlank()) {
+      Toast.makeText(context, getString(R.string.please_input_commit_msg), Toast.LENGTH_SHORT).show()
+      return
+    }
+
+    withRepo { repo ->
+      val (username, email) = Libgit2Helper.getGitUsernameAndEmail(repo)
+      if (username.isBlank() || email.isBlank()) {
+        throw RuntimeException("Please set git username and email first")
+      }
+
+      val settings = SettingsUtil.getSettingsSnapshot()
+      val ret =
+          Libgit2Helper.createCommit(
+              repo = repo,
+              msg = msg,
+              username = username,
+              email = email,
+              amend = binding.cbAmend.isChecked,
+              cleanRepoStateIfSuccess = true,
+              settings = settings,
+          )
+      if (ret.hasError()) {
+        throw RuntimeException(ret.msg)
+      }
+    }
+  }
+
+  private fun withRepo(action: (Repository) -> Unit) {
+    val projectDir = IProjectManager.getInstance().projectDirPath
+    if (projectDir.isNullOrBlank()) {
+      Toast.makeText(context, "No opened project", Toast.LENGTH_SHORT).show()
+      return
+    }
+
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val ret = runCatching { Repository.open(projectDir).use(action) }
+      withContext(Dispatchers.Main) {
+        ret.onSuccess {
+          loadChanges()
+          Toast.makeText(context, "Git operation completed", Toast.LENGTH_SHORT).show()
+        }
+        ret.onFailure {
+          Toast.makeText(context, it.localizedMessage ?: "Git operation failed", Toast.LENGTH_LONG)
+              .show()
+        }
+      }
+    }
+  }
+
+  private fun buildRows(
+      staged: List<StatusTypeEntrySaver>,
+      unstaged: List<StatusTypeEntrySaver>,
+  ): List<ChangeRow> {
+    val list = mutableListOf<ChangeRow>()
+    list.add(ChangeRow.Header("Staged (${staged.size})"))
+    list.addAll(staged.map { ChangeRow.Entry(it, true) })
+    list.add(ChangeRow.Header("Unstaged (${unstaged.size})"))
+    list.addAll(unstaged.map { ChangeRow.Entry(it, false) })
+    return list
+  }
+
+  private sealed class ChangeRow {
+    data class Header(val title: String) : ChangeRow()
+
+    data class Entry(val item: StatusTypeEntrySaver, val staged: Boolean) : ChangeRow()
+  }
+
+  private inner class ChangeAdapter(private val data: List<ChangeRow>) :
+      RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    override fun getItemViewType(position: Int): Int = if (data[position] is ChangeRow.Header) 0 else 1
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+      return if (viewType == 0) {
+        val view =
+            LayoutInflater.from(parent.context)
+                .inflate(android.R.layout.simple_list_item_1, parent, false)
+        HeaderVH(view)
+      } else {
+        val view =
+            LayoutInflater.from(parent.context)
+                .inflate(android.R.layout.simple_list_item_2, parent, false)
+        ItemVH(view)
+      }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+      when (val row = data[position]) {
+        is ChangeRow.Header -> (holder as HeaderVH).title.text = row.title
+        is ChangeRow.Entry -> (holder as ItemVH).bind(row)
+      }
+    }
+
+    override fun getItemCount(): Int = data.size
+
+    private inner class HeaderVH(view: View) : RecyclerView.ViewHolder(view) {
+      val title: TextView = view.findViewById(android.R.id.text1)
+    }
+
+    private inner class ItemVH(view: View) : RecyclerView.ViewHolder(view) {
+      private val title: TextView = view.findViewById(android.R.id.text1)
+      private val subtitle: TextView = view.findViewById(android.R.id.text2)
+
+      fun bind(row: ChangeRow.Entry) {
+        val item = row.item
+        title.text = item.relativePathUnderRepo
+        val state = if (row.staged) "Staged" else "Unstaged"
+        subtitle.text = "$state · ${item.changeType.orEmpty()}"
+
+        itemView.setOnClickListener {
+          if (row.staged) {
+            withRepo { repo -> Libgit2Helper.unStageItems(repo, listOf(item.relativePathUnderRepo)) }
+          } else {
+            withRepo { repo -> Libgit2Helper.stageStatusEntryAndWriteToDisk(repo, listOf(item)) }
+          }
+        }
+      }
+    }
   }
 
   override fun onDestroyView() {

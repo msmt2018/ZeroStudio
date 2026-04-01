@@ -29,6 +29,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.PopupWindow
 import android.widget.TextView
+import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.color.MaterialColors
@@ -87,7 +88,7 @@ class GitBranchPopupManager(
     )
 
     btnNew.setOnClickListener {
-      // TODO: 新建分支逻辑
+      Toast.makeText(context, "Use Branches page to create branch", Toast.LENGTH_SHORT).show()
       popupWindow?.dismiss()
     }
 

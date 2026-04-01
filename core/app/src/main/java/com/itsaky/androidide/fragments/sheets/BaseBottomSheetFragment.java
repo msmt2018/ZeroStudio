@@ -19,10 +19,13 @@ package com.itsaky.androidide.fragments.sheets;
 
 import android.app.Dialog;
 import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+import com.google.android.material.R;
 
 public abstract class BaseBottomSheetFragment extends BottomSheetDialogFragment {
 
@@ -35,8 +38,26 @@ public abstract class BaseBottomSheetFragment extends BottomSheetDialogFragment 
 
     var behavior = ((BottomSheetDialog) mDialog).getBehavior();
     behavior.setPeekHeight(BottomSheetBehavior.PEEK_HEIGHT_AUTO);
+    behavior.setFitToContents(true);
+    behavior.setSkipCollapsed(false);
     behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
     return mDialog;
+  }
+
+  @Override
+  public void onStart() {
+    super.onStart();
+    if (!(mDialog instanceof BottomSheetDialog)) {
+      return;
+    }
+    final View bottomSheet =
+        ((BottomSheetDialog) mDialog).findViewById(R.id.design_bottom_sheet);
+    if (bottomSheet == null) {
+      return;
+    }
+    final ViewGroup.LayoutParams lp = bottomSheet.getLayoutParams();
+    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+    bottomSheet.setLayoutParams(lp);
   }
 
   public boolean isShowing() {

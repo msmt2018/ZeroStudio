@@ -1,18 +1,5 @@
 /*
  *  This file is part of AndroidIDE.
- *
- *  AndroidIDE is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  AndroidIDE is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 package com.itsaky.androidide.fragments.git
 
@@ -22,24 +9,32 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.catpuppyapp.puppygit.constants.Cons
+import com.catpuppyapp.puppygit.git.StatusTypeEntrySaver
+import com.catpuppyapp.puppygit.utils.Libgit2Helper
+import com.github.git24j.core.Repository
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitDiffBinding
+import com.itsaky.androidide.projects.IProjectManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-/**
- * Diff 查看器页面。
- *
- * @author android_zero 功能：
- * 1. 展示单个文件的 Diff (Unified Diff 模式)。
- * 2. 支持根据行类型 (Add/Remove/Context) 改变背景色。
- * 3. 工具栏支持：暂存当前文件(Stage File)、还原文件(Revert)等。
- */
+/** Diff 查看器页面。 */
 class GitDiffFragment : BaseGitPageFragment() {
 
   private var _binding: FragmentGitDiffBinding? = null
   private val binding
     get() = _binding!!
+
+  private val changedFiles = mutableListOf<StatusTypeEntrySaver>()
+  private var currentIndex = 0
+  private val lines = mutableListOf<DiffLine>()
+  private val adapter = DiffAdapter(lines)
 
   override fun onCreateView(
       inflater: LayoutInflater,
@@ -51,51 +46,127 @@ class GitDiffFragment : BaseGitPageFragment() {
   }
 
   override fun setupToolbar() {
-    // 暂存文件 (Stage)
     addToolbarAction(R.drawable.ic_add_24, getString(R.string.stage)) {
-      // TODO: Git add <file>
+      stageCurrentFile()
     }
 
-    // 还原文件 (Revert)
     addToolbarAction(R.drawable.ic_undo_24, getString(R.string.revert)) {
-      // TODO: Checkout file
+      revertCurrentFile()
     }
 
-    // 上一个文件
     addToolbarAction(R.drawable.ic_chevron_left_24, getString(R.string.previous_page)) {
-      // TODO: Load prev file
+      navigateDiff(-1)
     }
 
-    // 下一个文件
     addToolbarAction(R.drawable.ic_chevron_right_24, getString(R.string.next_page)) {
-      // TODO: Load next file
+      navigateDiff(1)
     }
   }
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
-
     binding.rvDiffLines.layoutManager = LinearLayoutManager(context)
-
-    // 模拟数据
-    val dummyLines =
-        listOf(
-            DiffLine(10, 10, "class MainActivity : AppCompatActivity() {", DiffType.CONTEXT),
-            DiffLine(11, -1, "- private val TAG = \"Main\"", DiffType.DELETE),
-            DiffLine(-1, 11, "+ private const val TAG = \"MainActivity\"", DiffType.ADD),
-            DiffLine(-1, 12, "+ // Fixed tag naming convention", DiffType.ADD),
-            DiffLine(
-                12,
-                13,
-                "    override fun onCreate(savedInstanceState...) {",
-                DiffType.CONTEXT,
-            ),
-        )
-
-    binding.rvDiffLines.adapter = DiffAdapter(dummyLines)
+    binding.rvDiffLines.adapter = adapter
+    reloadChangedFilesAndDiff()
   }
 
-  // --- 数据模型 ---
+  private fun reloadChangedFilesAndDiff() {
+    withRepo { repo ->
+      val statusList = Libgit2Helper.getWorkdirStatusList(repo)
+      val loaded = Libgit2Helper.getWorktreeChangeList(repo, statusList, repoId = "")
+      changedFiles.clear()
+      changedFiles.addAll(loaded)
+      currentIndex = currentIndex.coerceIn(0, (changedFiles.size - 1).coerceAtLeast(0))
+      loadCurrentDiff(repo)
+    }
+  }
+
+  private fun loadCurrentDiff(repo: Repository) {
+    if (changedFiles.isEmpty()) {
+      lines.clear()
+      lines.add(DiffLine(-1, -1, "No changed files", DiffType.HUNK_HEADER))
+      return
+    }
+
+    val file = changedFiles[currentIndex]
+    val diffItem =
+        Libgit2Helper.getSingleDiffItem(
+            repo = repo,
+            relativePathUnderRepo = file.relativePathUnderRepo,
+            fromTo = Cons.gitDiffFromIndexToWorktree,
+            loadChannel = null,
+            checkChannelLinesLimit = 200,
+            checkChannelSizeLimit = 1024 * 64,
+        )
+
+    val rendered = mutableListOf<DiffLine>()
+    rendered.add(DiffLine(-1, -1, "File: ${file.relativePathUnderRepo}", DiffType.HUNK_HEADER))
+    diffItem.hunks.forEach { hunk ->
+      rendered.add(DiffLine(-1, -1, hunk.hunk.cachedNoLineBreakHeader(), DiffType.HUNK_HEADER))
+      hunk.lines.forEach { ln ->
+        val type =
+            when {
+              ln.originType.contains("ADD", ignoreCase = true) -> DiffType.ADD
+              ln.originType.contains("DEL", ignoreCase = true) -> DiffType.DELETE
+              else -> DiffType.CONTEXT
+            }
+        rendered.add(
+            DiffLine(
+                oldLine = ln.oldLineNum,
+                newLine = ln.newLineNum,
+                content = ln.getContentNoLineBreak(),
+                type = type,
+            ))
+      }
+    }
+
+    lines.clear()
+    lines.addAll(rendered)
+  }
+
+  private fun stageCurrentFile() {
+    val target = changedFiles.getOrNull(currentIndex) ?: return
+    withRepo { repo -> Libgit2Helper.stageStatusEntryAndWriteToDisk(repo, listOf(target)) }
+  }
+
+  private fun revertCurrentFile() {
+    val target = changedFiles.getOrNull(currentIndex) ?: return
+    withRepo { repo ->
+      Libgit2Helper.revertFilesToIndexVersion(repo, listOf(target.relativePathUnderRepo), force = true)
+      if (target.changeType == Cons.gitStatusUntracked) {
+        Libgit2Helper.rmUntrackedFiles(listOf(target.canonicalPath))
+      }
+    }
+  }
+
+  private fun navigateDiff(delta: Int) {
+    if (changedFiles.isEmpty()) {
+      Toast.makeText(context, "No changed files", Toast.LENGTH_SHORT).show()
+      return
+    }
+    currentIndex = (currentIndex + delta).coerceIn(0, changedFiles.lastIndex)
+    withRepo { repo -> loadCurrentDiff(repo) }
+  }
+
+  private fun withRepo(action: (Repository) -> Unit) {
+    val projectDir = IProjectManager.getInstance().projectDirPath
+    if (projectDir.isNullOrBlank()) {
+      Toast.makeText(context, "No opened project", Toast.LENGTH_SHORT).show()
+      return
+    }
+
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val ret = runCatching { Repository.open(projectDir).use(action) }
+      withContext(Dispatchers.Main) {
+        ret.onSuccess { adapter.notifyDataSetChanged() }
+        ret.onFailure {
+          Toast.makeText(context, it.localizedMessage ?: "Diff operation failed", Toast.LENGTH_LONG)
+              .show()
+        }
+      }
+    }
+  }
+
   enum class DiffType {
     ADD,
     DELETE,
@@ -105,34 +176,28 @@ class GitDiffFragment : BaseGitPageFragment() {
 
   data class DiffLine(val oldLine: Int, val newLine: Int, val content: String, val type: DiffType)
 
-  // --- 适配器 ---
-  inner class DiffAdapter(private val lines: List<DiffLine>) :
+  inner class DiffAdapter(private val data: List<DiffLine>) :
       RecyclerView.Adapter<DiffAdapter.ViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-      val v =
-          LayoutInflater.from(parent.context).inflate(R.layout.item_git_diff_line, parent, false)
+      val v = LayoutInflater.from(parent.context).inflate(R.layout.item_git_diff_line, parent, false)
       return ViewHolder(v)
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-      val item = lines[position]
+      val item = data[position]
       holder.tvContent.text = item.content
-
-      // 行号显示逻辑
       holder.tvLineOld.text = if (item.oldLine > 0) item.oldLine.toString() else ""
       holder.tvLineNew.text = if (item.newLine > 0) item.newLine.toString() else ""
 
-      // 颜色逻辑 (使用 Color 资源)
-      val context = holder.itemView.context
       when (item.type) {
         DiffType.ADD -> {
-          holder.itemView.setBackgroundColor(Color.parseColor("#1A4CAF50")) // git_diff_added_dim
-          holder.tvContent.setTextColor(Color.parseColor("#A5D6A7")) // 亮绿色文字
+          holder.itemView.setBackgroundColor(Color.parseColor("#1A4CAF50"))
+          holder.tvContent.setTextColor(Color.parseColor("#A5D6A7"))
         }
         DiffType.DELETE -> {
-          holder.itemView.setBackgroundColor(Color.parseColor("#1AF44336")) // git_diff_removed_dim
-          holder.tvContent.setTextColor(Color.parseColor("#EF9A9A")) // 亮红色文字
+          holder.itemView.setBackgroundColor(Color.parseColor("#1AF44336"))
+          holder.tvContent.setTextColor(Color.parseColor("#EF9A9A"))
         }
         DiffType.HUNK_HEADER -> {
           holder.itemView.setBackgroundColor(Color.parseColor("#2C2C2C"))
@@ -145,12 +210,17 @@ class GitDiffFragment : BaseGitPageFragment() {
       }
     }
 
-    override fun getItemCount() = lines.size
+    override fun getItemCount() = data.size
 
     inner class ViewHolder(v: View) : RecyclerView.ViewHolder(v) {
       val tvLineOld: TextView = v.findViewById(R.id.tv_line_old)
       val tvLineNew: TextView = v.findViewById(R.id.tv_line_new)
       val tvContent: TextView = v.findViewById(R.id.tv_content)
     }
+  }
+
+  override fun onDestroyView() {
+    super.onDestroyView()
+    _binding = null
   }
 }

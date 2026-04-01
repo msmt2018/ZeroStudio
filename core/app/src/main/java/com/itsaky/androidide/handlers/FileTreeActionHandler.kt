@@ -35,7 +35,7 @@ import com.itsaky.androidide.models.SheetOption
 import com.itsaky.androidide.utils.ApkInstaller
 import com.itsaky.androidide.utils.InstallationResultHandler
 import com.itsaky.androidide.utils.flashError
-import com.unnamed.b.atv.model.TreeNode
+import com.unnamed.b.atv.model.TreeNode as LegacyTreeNode
 import java.io.File
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
@@ -49,7 +49,7 @@ import org.greenrobot.eventbus.ThreadMode.MAIN
 @Suppress("unused")
 class FileTreeActionHandler : BaseEventHandler() {
 
-  private var lastHeld: TreeNode? = null
+  private var lastHeld: Any? = null
 
   companion object {
 
@@ -100,7 +100,9 @@ class FileTreeActionHandler : BaseEventHandler() {
       return
     }
 
-    this.lastHeld = event[TreeNode::class.java]
+    this.lastHeld =
+        event[LegacyTreeNode::class.java]
+            ?: event[android.zero.studio.treeview.model.TreeNode::class.java]
     val context = event[Context::class.java]!! as EditorHandlerActivity
     createFileOptionsFragment(context, event.file)
         .show(context.supportFragmentManager, TAG_FILE_OPTIONS_FRAGMENT)
@@ -117,7 +119,12 @@ class FileTreeActionHandler : BaseEventHandler() {
     data.apply {
       put(Context::class.java, context)
       put(File::class.java, file)
-      put(TreeNode::class.java, lastHeld)
+      val held = lastHeld
+      if (held is LegacyTreeNode) {
+        put(LegacyTreeNode::class.java, held)
+      } else if (held is android.zero.studio.treeview.model.TreeNode) {
+        put(android.zero.studio.treeview.model.TreeNode::class.java, held)
+      }
     }
 
     for (action in actions.values) {
@@ -157,13 +164,18 @@ class FileTreeActionHandler : BaseEventHandler() {
 
   private fun requestFileListing() {
     EventBus.getDefault().post(ListProjectFilesRequestEvent())
+    EventBus.getDefault().post(com.itsaky.androidide.fragments.git.tree.ListProjectFilesRequestEvent())
   }
 
   private fun requestExpandHeldNode() {
     requestExpandNode(lastHeld!!)
   }
 
-  private fun requestExpandNode(node: TreeNode) {
-    EventBus.getDefault().post(ExpandTreeNodeRequestEvent(node))
+  private fun requestExpandNode(node: Any) {
+    when (node) {
+      is LegacyTreeNode -> EventBus.getDefault().post(ExpandTreeNodeRequestEvent(node))
+      is android.zero.studio.treeview.model.TreeNode ->
+          EventBus.getDefault().post(com.itsaky.androidide.fragments.git.tree.ExpandTreeNodeRequestEvent(node))
+    }
   }
 }

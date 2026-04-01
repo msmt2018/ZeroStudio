@@ -69,6 +69,15 @@ class GradleProjectAnalyzerImpl : ProjectAnalyzer {
             )
         )
 
+        repos.add(
+            ScopedRepositoryInfo(
+                "mavenCentral",
+                "https://repo1.maven.org/maven2/",
+                RepositoryType.MAVEN_CENTRAL,
+                File(projectDir, "build.gradle"),
+            )
+        )
+
         return@withContext repos.distinctBy { it.url }
       }
 
@@ -123,13 +132,20 @@ class GradleProjectAnalyzerImpl : ProjectAnalyzer {
             for (repo in repositories) {
               val metadata = MavenMetadataFetcher.fetchMetadata(gavPath, repo.url)
               if (metadata != null) {
-                allVersions.addAll(metadata.versions)
-                if (
-                    metadata.bestLatest != null &&
-                        isNewerSemanticVersion(metadata.bestLatest!!, dep.version)
-                ) {
-                  bestLatest = metadata.bestLatest
-                  break
+                val stableVersions = metadata.versions.filter(::isStableVersion)
+                allVersions.addAll(stableVersions)
+
+                val remoteLatest =
+                    stableVersions.maxWithOrNull(SemanticVersionComparator)
+                        ?: metadata.bestLatest?.takeIf(::isStableVersion)
+                        ?: metadata.release?.takeIf(::isStableVersion)
+                        ?: metadata.latest?.takeIf(::isStableVersion)
+
+                if (remoteLatest != null && isNewerSemanticVersion(remoteLatest, dep.version)) {
+                  bestLatest =
+                      listOfNotNull(bestLatest, remoteLatest).maxWithOrNull(
+                          SemanticVersionComparator
+                      )
                 }
               }
             }
@@ -161,6 +177,14 @@ class GradleProjectAnalyzerImpl : ProjectAnalyzer {
       }
       return 0
     }
+  }
+
+  private fun isStableVersion(version: String): Boolean {
+    val value = version.lowercase()
+    return !value.contains("alpha") &&
+        !value.contains("beta") &&
+        !value.contains("rc") &&
+        !value.contains("snapshot")
   }
 
   private fun isNewerSemanticVersion(latest: String, current: String): Boolean {

@@ -239,6 +239,7 @@ dependencies {
   implementation(projects.utilities.templatesApi)
   implementation(projects.utilities.templatesImpl)
   implementation(projects.utilities.treeview)
+  implementation(projects.utilities.fileTree)
   implementation(projects.utilities.xmlInflater)
   implementation(projects.event.eventbusAndroid)
   implementation(projects.event.eventbusEvents)

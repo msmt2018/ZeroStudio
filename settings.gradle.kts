@@ -231,6 +231,7 @@ include(
     ":utilities:templates-api",
     ":utilities:templates-impl",
     ":utilities:treeview",
+    ":utilities:FileTree",
     // ":utilities:uidesigner",  //已经完全归档
     ":utilities:xml-inflater",
     ":xml:aaptcompiler",
