@@ -97,7 +97,7 @@ class GitHostFragment : Fragment() {
                 3 -> getString(R.string.git_collaboration) // collaboration
                 4 -> getString(R.string.branches) // Branches
                 5 -> getString(R.string.stash) // Stash
-                6 -> getString("Diff") // GitDiffFragment
+                6 -> "Diff" // GitDiffFragment
                 else -> getString(R.string.other)
               }
         }
@@ -116,8 +116,8 @@ class GitHostFragment : Fragment() {
   }
 
   private inner class GitPagerAdapter(fragment: Fragment) : FragmentStateAdapter(fragment) {
-    // 页面数量为 6 (0-5)
-    override fun getItemCount(): Int = 6
+    // 页面数量为 7 (0-6)
+    override fun getItemCount(): Int = 7
 
     override fun createFragment(position: Int): Fragment {
       return when (position) {

@@ -24,7 +24,7 @@ import com.itsaky.androidide.R
 import com.itsaky.androidide.repository.sdkmanager.models.SdkTreeNode
 import com.itsaky.androidide.repository.sdkmanager.tree.SdkTreeView
 import com.itsaky.androidide.repository.sdkmanager.services.SdkInstallerManager
-import com.itsaky.androidide.viewmodel.SdkManagerViewModel
+import com.itsaky.androidide.repository.sdkmanager.viewmodel.SdkManagerViewModel
 import kotlinx.coroutines.launch
 
 /**

@@ -119,7 +119,7 @@ class SdkTreeAdapter(
         // 复选框状态 (支持三态)
         holder.cbNode.checkedState = when (node.checkedState) {
             androidx.compose.ui.state.ToggleableState.On -> MaterialCheckBox.STATE_CHECKED
-            androidx.compose.ui.state.ToggleableState.Indeterminate -> MaterialCheckBox.STATE_HALF_CHECKED
+            androidx.compose.ui.state.ToggleableState.Indeterminate -> MaterialCheckBox.STATE_INDETERMINATE
             androidx.compose.ui.state.ToggleableState.Off -> MaterialCheckBox.STATE_UNCHECKED
         }
 
