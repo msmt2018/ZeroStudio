@@ -20,6 +20,7 @@ import com.itsaky.androidide.viewmodel.FileTreeViewModel
 import com.itsaky.androidide.provider.IDEFileIconProvider
 import com.itsaky.androidide.fragments.git.tree.TreeStateManager
 import com.itsaky.androidide.projects.IProjectManager
+import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import android.zero.studio.view.filetree.interfaces.FileClickListener
 import android.zero.studio.view.filetree.interfaces.FileLongClickListener
 import android.zero.studio.view.filetree.interfaces.FileObject
@@ -52,7 +53,7 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
   private var branchPopupManager: GitBranchPopupManager? = null
 
   private val viewModel: FileTreeViewModel by viewModels({ requireActivity() })
-  private val stateManager = TreeStateManager()
+  private var stateManager = TreeStateManager()
 
   override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
     _binding = FragmentGitProjectsBinding.inflate(inflater, container, false)
@@ -60,7 +61,7 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
   }
 
   override fun onStart() {
-    super.onStart()-
+    super.onStart()
     if (!EventBus.getDefault().isRegistered(this)) EventBus.getDefault().register(this)
   }
 
@@ -107,7 +108,11 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
       fileTreeView?.let { stateManager.pushState(it); it.collapseAll() }
     }
     btnCollapse.setOnLongClickListener {
-      fileTreeView?.let { stateManager.clear(); it.collapseAll(); viewModel.treeState.value = "" }
+      fileTreeView?.let {
+        stateManager = TreeStateManager()
+        it.collapseAll()
+        viewModel.treeState.value = ""
+      }
       Toast.makeText(context, "Cleared memory and collapsed all", Toast.LENGTH_SHORT).show()
       true
     }
@@ -129,11 +134,36 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
       ZeroCloneDialogBottomSheetFragment.newInstance(repoId = "")
           .show(childFragmentManager, "GitProjectsCloneBottomSheet")
     }
-    addToolbarAction(R.drawable.ic_arrow_downward_24, getString(R.string.pull)) {
-      Toast.makeText(context, R.string.pull, Toast.LENGTH_SHORT).show()
+    addToolbarAction(R.drawable.ic_initialize_target_24dp, "Init Repo") {
+      initRepositoryIfNeeded()
     }
-    addToolbarAction(R.drawable.ic_arrow_upward_24, getString(R.string.push)) {
-      Toast.makeText(context, R.string.push, Toast.LENGTH_SHORT).show()
+    addToolbarAction(R.drawable.ic_check_24, "Quick Commit") {
+      emitGitOperation("project", "open_commit_page")
+      Toast.makeText(context, "Please use Changes page for commit/push actions", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  private fun initRepositoryIfNeeded() {
+    val projectDir = IProjectManager.getInstance().projectDirPath
+    if (projectDir.isNullOrBlank()) {
+      Toast.makeText(context, "No opened project", Toast.LENGTH_SHORT).show()
+      return
+    }
+
+    CoroutineScope(Dispatchers.IO).launch {
+      val ret =
+          runCatching {
+            if (java.io.File(projectDir, ".git").exists()) {
+              "Repository already initialized"
+            } else {
+              Libgit2Helper.initGitRepo(projectDir)
+              "Repository initialized"
+            }
+          }
+      withContext(Dispatchers.Main) {
+        Toast.makeText(context, ret.getOrElse { it.localizedMessage ?: "init failed" }, Toast.LENGTH_LONG)
+            .show()
+      }
     }
   }
 

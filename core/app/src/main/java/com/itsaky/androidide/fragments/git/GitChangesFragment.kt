@@ -45,6 +45,7 @@ class GitChangesFragment : BaseGitPageFragment() {
     get() = _binding!!
 
   private val rows = mutableListOf<ChangeRow>()
+  private val selectedPaths = mutableSetOf<String>()
   private val adapter = ChangeAdapter(rows)
 
   override fun onCreateView(
@@ -60,6 +61,21 @@ class GitChangesFragment : BaseGitPageFragment() {
     addToolbarAction(R.drawable.ic_check_24, getString(R.string.commit)) {
       emitGitOperation("changes", "commit")
       commitChanges()
+    }
+
+    addToolbarAction(R.drawable.ic_arrow_upward_24, getString(R.string.push)) {
+      emitGitOperation("changes", "push")
+      pushCurrentBranch(force = false)
+    }
+
+    addToolbarAction(R.drawable.ic_warning_24, "Force Push") {
+      emitGitOperation("changes", "force_push")
+      pushCurrentBranch(force = true)
+    }
+
+    addToolbarAction(R.drawable.ic_cloud_download_24, "Commit && Push") {
+      emitGitOperation("changes", "commit_and_push")
+      commitThenPush()
     }
 
     addToolbarAction(R.drawable.ic_refresh_24, getString(R.string.refresh)) {
@@ -117,6 +133,7 @@ class GitChangesFragment : BaseGitPageFragment() {
           }
 
       ret.onSuccess {
+        selectedPaths.clear()
         rows.clear()
         rows.addAll(it)
         adapter.notifyDataSetChanged()
@@ -162,7 +179,7 @@ class GitChangesFragment : BaseGitPageFragment() {
     }
   }
 
-  private fun commitChanges() {
+  private fun commitChanges(onSuccess: (() -> Unit)? = null) {
     val msg = binding.etCommitMessage.text.toString().trim()
     if (msg.isBlank()) {
       Toast.makeText(context, getString(R.string.please_input_commit_msg), Toast.LENGTH_SHORT)
@@ -170,30 +187,47 @@ class GitChangesFragment : BaseGitPageFragment() {
       return
     }
 
-    withRepo { repo ->
-      val (username, email) = Libgit2Helper.getGitUsernameAndEmail(repo)
-      if (username.isBlank() || email.isBlank()) {
-        throw RuntimeException("Please set git username and email first")
-      }
+    val ctx = context ?: return
+    GitAuthConfig.ensureConfigured(ctx) { cfg ->
+      withRepo(
+          action = { repo ->
+            val settings = SettingsUtil.getSettingsSnapshot()
+            val ret =
+                Libgit2Helper.createCommit(
+                    repo = repo,
+                    msg = msg,
+                    username = cfg.username,
+                    email = cfg.email,
+                    amend = binding.cbAmend.isChecked,
+                    cleanRepoStateIfSuccess = true,
+                    settings = settings,
+                )
+            if (ret.hasError()) {
+              throw RuntimeException(ret.msg)
+            }
+          },
+          onSuccess = onSuccess,
+      )
+    }
+  }
 
-      val settings = SettingsUtil.getSettingsSnapshot()
-      val ret =
-          Libgit2Helper.createCommit(
-              repo = repo,
-              msg = msg,
-              username = username,
-              email = email,
-              amend = binding.cbAmend.isChecked,
-              cleanRepoStateIfSuccess = true,
-              settings = settings,
-          )
-      if (ret.hasError()) {
-        throw RuntimeException(ret.msg)
+  private fun commitThenPush() {
+    commitChanges(onSuccess = { pushCurrentBranch(force = false) })
+  }
+
+  private fun pushCurrentBranch(force: Boolean) {
+    val context = context ?: return
+    GitAuthConfig.ensureConfigured(context) { cfg ->
+      withRepo { repo ->
+        val branch = repo.head()?.shorthand()?.removePrefix("refs/heads/")?.ifBlank { "main" } ?: "main"
+        val refspec = "refs/heads/$branch:refs/heads/$branch"
+        val credential = GitAuthConfig.toHttpCredential(cfg)
+        Libgit2Helper.push(repo, "origin", listOf(refspec), credential, force)
       }
     }
   }
 
-  private fun withRepo(action: (Repository) -> Unit) {
+  private fun withRepo(action: (Repository) -> Unit, onSuccess: (() -> Unit)? = null) {
     val projectDir = IProjectManager.getInstance().projectDirPath
     if (projectDir.isNullOrBlank()) {
       Toast.makeText(context, "No opened project", Toast.LENGTH_SHORT).show()
@@ -205,6 +239,7 @@ class GitChangesFragment : BaseGitPageFragment() {
       withContext(Dispatchers.Main) {
         ret.onSuccess {
           loadChanges()
+          onSuccess?.invoke()
           Toast.makeText(context, "Git operation completed", Toast.LENGTH_SHORT).show()
         }
         ret.onFailure {
@@ -272,11 +307,20 @@ class GitChangesFragment : BaseGitPageFragment() {
 
       fun bind(row: ChangeRow.Entry) {
         val item = row.item
-        title.text = item.relativePathUnderRepo
+        val selected = selectedPaths.contains(item.relativePathUnderRepo)
+        title.text = (if (selected) "☑ " else "☐ ") + item.relativePathUnderRepo
         val state = if (row.staged) "Staged" else "Unstaged"
         subtitle.text = "$state · ${item.changeType.orEmpty()}"
 
         itemView.setOnClickListener {
+          if (!selectedPaths.add(item.relativePathUnderRepo)) {
+            selectedPaths.remove(item.relativePathUnderRepo)
+          }
+          notifyItemChanged(bindingAdapterPosition)
+          Toast.makeText(context, "Selected ${selectedPaths.size} file(s)", Toast.LENGTH_SHORT).show()
+        }
+
+        itemView.setOnLongClickListener {
           if (row.staged) {
             withRepo { repo ->
               Libgit2Helper.unStageItems(repo, listOf(item.relativePathUnderRepo))
@@ -284,6 +328,7 @@ class GitChangesFragment : BaseGitPageFragment() {
           } else {
             withRepo { repo -> Libgit2Helper.stageStatusEntryAndWriteToDisk(repo, listOf(item)) }
           }
+          true
         }
       }
     }

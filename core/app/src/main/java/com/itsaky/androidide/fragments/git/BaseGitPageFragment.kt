@@ -44,6 +44,8 @@ abstract class BaseGitPageFragment : Fragment() {
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
 
+    runCatching { GitRuntimeBootstrap.ensureLoaded() }
+
     val scrollView = view.findViewById<HorizontalScrollView>(R.id.git_mini_toolbar_scroll)
     toolbarContainer = scrollView?.findViewById(R.id.git_mini_toolbar_container)
 
