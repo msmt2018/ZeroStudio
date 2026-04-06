@@ -1,15 +1,16 @@
 /*
  * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Modifications Copyright 2026 Cosmic-IDE
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 package org.jetbrains.kotlin.cli.jvm.compiler.jarfs
 
-import com.intellij.openapi.util.Couple
-import com.intellij.openapi.vfs.DeprecatedVirtualFileSystem
-import com.intellij.openapi.vfs.StandardFileSystems
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.util.containers.ConcurrentFactoryMap
-import com.intellij.util.io.FileAccessorCache
+import org.jetbrains.kotlin.com.intellij.openapi.util.Couple
+import org.jetbrains.kotlin.com.intellij.openapi.vfs.DeprecatedVirtualFileSystem
+import org.jetbrains.kotlin.com.intellij.openapi.vfs.StandardFileSystems
+import org.jetbrains.kotlin.com.intellij.openapi.vfs.VirtualFile
+import org.jetbrains.kotlin.com.intellij.util.containers.ConcurrentFactoryMap
+import org.jetbrains.kotlin.com.intellij.util.io.FileAccessorCache
 import org.jetbrains.kotlin.reflection.android.AndroidSupport.isDalvik
 import java.io.File
 import java.io.IOException
@@ -93,7 +94,6 @@ private val IS_PRIOR_9_JRE = System.getProperty("java.specification.version", ""
 
 private fun prepareCleanerCallback(): ((ByteBuffer) -> Unit)? {
     return try {
-        // deenu modify: android check
         if (isDalvik()) {
             val directByteBuffer = Class.forName("java.nio.DirectByteBuffer")
             if (directByteBuffer.declaredMethods.any { it.name == "cleaner" }.not()) {
@@ -104,7 +104,6 @@ private fun prepareCleanerCallback(): ((ByteBuffer) -> Unit)? {
 
             val clean = Class.forName("sun.misc.Cleaner").getMethod("clean")
             clean.isAccessible = true
-            // deenu modify: fix format
             { buffer: ByteBuffer -> clean.invoke(cleaner.invoke(buffer)) }
         } else {
             if (IS_PRIOR_9_JRE) {
@@ -113,7 +112,6 @@ private fun prepareCleanerCallback(): ((ByteBuffer) -> Unit)? {
 
                 val clean = Class.forName("sun.misc.Cleaner").getMethod("clean")
                 clean.isAccessible = true
-                // deenu modify: fix format
                 { buffer: ByteBuffer -> cleaner.invoke(buffer)?.let { clean.invoke(it) } }
             } else {
                 val unsafeClass =
@@ -132,7 +130,6 @@ private fun prepareCleanerCallback(): ((ByteBuffer) -> Unit)? {
                 theUnsafeField.isAccessible = true
 
                 val theUnsafe = theUnsafeField.get(null);
-                // deenu modify: fix format
                 { buffer: ByteBuffer -> clean.invoke(theUnsafe, buffer) }
             }
         }

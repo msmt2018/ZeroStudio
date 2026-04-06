@@ -2,6 +2,15 @@
  * Copyright 2010-2022 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
+/*
+* Modifications Copyright 2026 KodTik-Innovations
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+* http://www.apache.org/licenses/LICENSE-2.0
+*/
 
 package org.jetbrains.kotlin.util
 
@@ -46,8 +55,6 @@ object ServiceLoaderLite {
                     throw IllegalArgumentException("Only local URLs are supported, got ${url.protocol}")
                 }
             }
-
-        // deenu modify: android check
         if (isDalvik()) {
             val classpath =
                 classLoader.urLs.joinToString(separator = File.pathSeparator) {
@@ -67,7 +74,6 @@ object ServiceLoaderLite {
         classLoader: ClassLoader,
     ): MutableList<Service> {
         val implementations = mutableListOf<Service>()
-        // deenu modify: add try catch
         for (className in findImplementations(service, files)) {
             try {
                 val instance =

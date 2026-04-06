@@ -1,6 +1,6 @@
 /*
  * Copyright 2010-2017 JetBrains s.r.o.
- *
+ * Modifications Copyright 2026 KodTik-Innovations
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,8 +16,8 @@
 
 package org.jetbrains.kotlin.utils
 
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.PathManager
+import org.jetbrains.kotlin.com.intellij.openapi.application.ApplicationManager
+import org.jetbrains.kotlin.com.intellij.openapi.application.PathManager
 import org.jetbrains.kotlin.reflection.android.AndroidSupport.isDalvik
 import java.io.File
 import java.nio.file.Paths
@@ -172,7 +172,6 @@ object PathUtil {
 
     @JvmStatic
     fun getResourcePathForClass(aClass: Class<*>): File {
-        // deenu modify: android check
         val path =
             "/" + aClass.name.replace('.', '/') +
                 if (isDalvik()) ".clazz" else ".class"

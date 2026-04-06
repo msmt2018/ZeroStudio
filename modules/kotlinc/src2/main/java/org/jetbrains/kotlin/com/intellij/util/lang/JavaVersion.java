@@ -1,10 +1,20 @@
 // Copyright 2000-2023 JetBrains s.r.o. and contributors. Use of this source code is governed by the
 // Apache 2.0 license.
-package com.intellij.util.lang;
+/*
+ * Modifications Copyright 2026 KodTik-Innovations
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+package org.jetbrains.kotlin.com.intellij.util.lang;
 
 import static org.jetbrains.kotlin.reflection.android.AndroidSupport.isDalvik;
 
-// import com.intellij.ReviseWhenPortedToJDK;
+// import org.jetbrains.kotlin.com.intellij.ReviseWhenPortedToJDK;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -199,8 +209,6 @@ public final class JavaVersion implements Comparable<JavaVersion> {
   }
 
   /** Attempts to use Runtime.version() method available since Java 9. */
-  // deenu modify: remove
-  // @ReviseWhenPortedToJDK("9")
   private static @Nullable JavaVersion rtVersion() {
     try {
       Object version = Runtime.class.getMethod("version").invoke(null);
@@ -236,13 +244,12 @@ public final class JavaVersion implements Comparable<JavaVersion> {
    * - output of "{@code java --full-version}" ("java $VERSION")<br>
    * - a line of "release" file ("JAVA_VERSION=\"$VERSION\"")
    *
-   * <p>See com.intellij.util.lang.JavaVersionTest for examples.
+   * <p>See org.jetbrains.kotlin.com.intellij.util.lang.JavaVersionTest for examples.
    *
    * @throws IllegalArgumentException if failed to recognize the number.
    */
   public static @NotNull JavaVersion parse(@NotNull String versionString)
       throws IllegalArgumentException {
-    // deenu modify: return java version 1.8
     if (isDalvik()) {
       return new JavaVersion(8, 0, 0, 69, false);
     }

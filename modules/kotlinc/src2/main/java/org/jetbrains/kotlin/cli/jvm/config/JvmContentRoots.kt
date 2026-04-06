@@ -1,5 +1,6 @@
 /*
  * Copyright 2010-2015 JetBrains s.r.o.
+ * Modifications Copyright 2026 KodTik-Innovations
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +23,7 @@ import org.jetbrains.kotlin.cli.common.config.KotlinSourceRoot
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.jvm.compiler.report
 import org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem
-import com.intellij.openapi.vfs.VirtualFile
+import org.jetbrains.kotlin.com.intellij.openapi.vfs.VirtualFile
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.JVMConfigurationKeys
 import org.jetbrains.kotlin.reflection.android.AndroidSupport.isDalvik
@@ -102,7 +103,6 @@ fun CompilerConfiguration.configureJdkClasspathRoots() {
     val javaRoot = get(JVMConfigurationKeys.JDK_HOME) ?: File(System.getProperty("java.home"))
     val classesRoots = PathUtil.getJdkClassesRootsFromJdkOrJre(javaRoot)
 
-    // deenu modify: android check
     if (isDalvik()) return
 
     if (!CoreJrtFileSystem.isModularJdk(javaRoot)) {

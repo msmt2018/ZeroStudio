@@ -4,9 +4,9 @@
  */
 package org.jetbrains.kotlin.cli.jvm.compiler.jarfs
 
-import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.util.text.StringUtil
-import com.intellij.openapi.vfs.VirtualFile
+import org.jetbrains.kotlin.com.intellij.openapi.diagnostic.Logger
+import org.jetbrains.kotlin.com.intellij.openapi.util.text.StringUtil
+import org.jetbrains.kotlin.com.intellij.openapi.vfs.VirtualFile
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.RandomAccessFile
