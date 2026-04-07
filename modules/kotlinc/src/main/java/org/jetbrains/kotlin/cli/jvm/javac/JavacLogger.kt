@@ -18,8 +18,11 @@ class JavacLogger(
     errorWriter: PrintWriter,
     warningWriter: PrintWriter,
     infoWriter: PrintWriter
-) : Log(context, errorWriter, warningWriter, infoWriter) {
+) : Log(context) {
     init {
+        setWriter(WriterKind.ERROR, errorWriter)
+        setWriter(WriterKind.WARNING, warningWriter)
+        setWriter(WriterKind.NOTICE, infoWriter)
         context.put(Log.outKey, infoWriter)
     }
 
