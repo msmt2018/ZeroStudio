@@ -225,7 +225,7 @@ dependencies {
   implementation(projects.java.javacServices)
   implementation(projects.java.lsp)
   implementation(projects.lsp.kotlin.lsp)
-  implementation(projects.lsp.kotlin)
+  // implementation(projects.lsp.kotlin)
   implementation(projects.lsp.toml)
   // implementation(projects.lsp.clangd)
   implementation(projects.logging.idestats)
