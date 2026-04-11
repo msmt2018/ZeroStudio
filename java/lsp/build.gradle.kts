@@ -21,6 +21,7 @@ plugins {
   id("com.android.library")
   id("kotlin-android")
   id("kotlin-kapt")
+  id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -29,6 +30,10 @@ android {
   sourceSets {
     getByName("androidTest") { assets.srcDirs(rootProject.file("utilities/framework-stubs/libs")) }
   }
+
+  composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
+
+  buildFeatures { compose = true }
 }
 
 kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.LspJavaEventsIndex") } }
@@ -66,6 +71,7 @@ dependencies {
   implementation(libs.composite.jdt)
   implementation(libs.composite.googleJavaFormat)
 
+  implementation(libs.bundles.compose) // androidx compose
   implementation(libs.androidx.core.ktx)
   implementation(libs.common.kotlin)
 
