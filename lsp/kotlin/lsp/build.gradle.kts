@@ -90,7 +90,7 @@ dependencies {
   implementation(libs.common.kotlin)
 
   // implementation(libs.org.jetbrains.kotlin.compiler.embeddable)
-。 implementation(projects.modules.kotlinc)
+  implementation(projects.modules.kotlinc)
   // implementation(libs.org.jetbrains.kotlin.scripting.compiler.embeddable)
   implementation(libs.common.asm)
 
