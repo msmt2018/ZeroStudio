@@ -49,7 +49,9 @@ import com.itsaky.androidide.lsp.IDELanguageClientImpl
 import com.itsaky.androidide.lsp.api.ILanguageServer
 import com.itsaky.androidide.lsp.api.ILanguageServerRegistry
 import com.itsaky.androidide.lsp.java.JavaLanguageServer
-import com.itsaky.androidide.lsp.kotlin.KotlinLanguageServer
+// import com.itsaky.androidide.lsp.kotlin.KotlinLanguageServer
+import com.itsaky.androidide.lsp.kotlin.lsp.KotlinLspServer
+
 import com.itsaky.androidide.lsp.models.DiagnosticResult
 import com.itsaky.androidide.lsp.servers.toml.TomlServer
 import com.itsaky.androidide.lsp.xml.XMLLanguageServer
@@ -496,7 +498,7 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
     return when (file.extension.lowercase()) {
       "java" -> registry.getServer(JavaLanguageServer.SERVER_ID)
       "xml" -> registry.getServer(XMLLanguageServer.SERVER_ID)
-      "kt", "kts" -> registry.getServer(KotlinLanguageServer.SERVER_ID)
+      "kt", "kts" -> registry.getServer(KotlinLspServer.SERVER_ID)
       "toml" -> registry.getServer(TomlServer.SERVER_ID)
       else -> null
     }
