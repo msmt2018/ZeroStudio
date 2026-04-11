@@ -81,6 +81,7 @@ android {
           "THIRD-PARTY",
           "META-INF/DEPENDENCIES",
           "META-INF/kotlin-stdlib.kotlin_module",
+          "META-INF/native-image/org.jline/jline-terminal-jni/native-image.properties",
           "META-INF/NOTICE.md",
           "META-INF/plugin.xml",
           "META-INF/services/reactor.blockhound.integration.BlockHoundIntegration",
