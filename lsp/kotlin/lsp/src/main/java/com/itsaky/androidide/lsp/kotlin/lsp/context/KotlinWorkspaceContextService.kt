@@ -24,7 +24,7 @@ class KotlinWorkspaceContextService {
 
   fun build(workspace: IWorkspace): WorkspaceContext {
     val modules = workspace.getSubProjects().map { project ->
-      val moduleDir = project.path
+      val moduleDir = project.projectDir.toPath()
       val gradleFiles = listOf(
           moduleDir.resolve("build.gradle").toFile(),
           moduleDir.resolve("build.gradle.kts").toFile(),
@@ -40,7 +40,7 @@ class KotlinWorkspaceContextService {
       ModuleDescriptor(project.name, moduleDir, sourceRoots, dependencies)
     }
 
-    return WorkspaceContext(workspace.projectDir.toPath(), modules)
+    return WorkspaceContext(workspace.getProjectDir().toPath(), modules)
   }
 
   private fun parseDependencies(file: File): List<String> {

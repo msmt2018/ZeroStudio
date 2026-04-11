@@ -98,13 +98,13 @@ class KotlinLspServer(
   override fun setupWorkspace(workspace: IWorkspace) {
     LSPEditorActions.ensureActionsMenuRegistered(KotlinCodeActionsMenu)
     workspaceFolders =
-        workspace.getSubProjects().map { WorkspaceFolder(it.path.toUri().toString(), it.name) }
+        workspace.getSubProjects().map { WorkspaceFolder(it.projectDir.toURI().toString(), it.name) }
     workspaceContext = workspaceContextService.build(workspace)
     libraryIndex = classpathService.resolve(workspaceContext?.modules.orEmpty().map { it.modulePath })
 
     val params =
         InitializeParams().apply {
-          rootUri = workspace.projectDir.toPath().toUri().toString()
+          rootUri = workspace.getProjectDir().toURI().toString()
           this.workspaceFolders = this@KotlinLspServer.workspaceFolders
         }
 
@@ -191,7 +191,7 @@ class KotlinLspServer(
 
   override suspend fun analyze(file: Path): DiagnosticResult {
     if (!Files.exists(file)) return DiagnosticResult.NO_UPDATE
-    val text = runCatching { Files.readString(file) }.getOrDefault("")
+    val text = runCatching { file.toFile().readText() }.getOrDefault("")
     val diagnostics = mutableListOf<com.itsaky.androidide.lsp.models.DiagnosticItem>()
     if (text.contains("TODO(", ignoreCase = true)) {
       diagnostics +=
@@ -265,7 +265,7 @@ class KotlinLspServer(
 
   override suspend fun documentLinks(file: Path): List<DocumentLink> {
     if (!Files.exists(file)) return emptyList()
-    val text = runCatching { Files.readString(file) }.getOrDefault("")
+    val text = runCatching { file.toFile().readText() }.getOrDefault("")
     val links = mutableListOf<DocumentLink>()
     Regex("""https?://[^\s"']+""").findAll(text).forEach {
       links += DocumentLink(Range.NONE, it.value, "URL")

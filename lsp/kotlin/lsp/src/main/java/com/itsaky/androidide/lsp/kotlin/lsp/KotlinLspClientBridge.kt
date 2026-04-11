@@ -68,7 +68,6 @@ internal class KotlinLspClientBridge(
         org.eclipse.lsp4j.MessageType.Warning -> MessageType.Warning
         org.eclipse.lsp4j.MessageType.Info -> MessageType.Info
         org.eclipse.lsp4j.MessageType.Log -> MessageType.Log
-        org.eclipse.lsp4j.MessageType.Debug -> MessageType.Debug
         else -> MessageType.Info
       }
 }

@@ -17,7 +17,7 @@ class KotlinClasspathLibraryService {
   fun resolve(workspaceRoots: Collection<Path>): LibraryIndex {
     val resolver = defaultClassPathResolver(workspaceRoots)
     val classpath = resolver.classpathOrEmpty
-    val classNames = classpath.flatMap { scanClasses(it.classPath) }.toSet()
+    val classNames = classpath.flatMap { scanClasses(it.compiledJar) }.toSet()
     return LibraryIndex(classpath, classNames)
   }
 
