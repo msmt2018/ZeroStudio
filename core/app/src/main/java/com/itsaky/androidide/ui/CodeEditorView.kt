@@ -383,7 +383,7 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
       val editor = _binding?.editor ?: return@launch
       val languageServer = editor.languageServer
 
-      if (languageServer is KotlinLanguageServer && (file.extension == "kt" || file.extension == "kts")) {
+      if (languageServer is KotlinLspServer && (file.extension == "kt" || file.extension == "kts")) {
         try {
           val result = languageServer.analyze(file.toPath())
 
