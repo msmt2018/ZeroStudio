@@ -1,10 +1,11 @@
 package com.itsaky.androidide.editor.ui
 
 import androidx.appcompat.app.AlertDialog
-import com.itsaky.androidide.lsp.kotlin.KotlinLanguageServer
+import com.itsaky.androidide.lsp.api.ILanguageServer
 import com.itsaky.androidide.lsp.models.DiagnosticItem
 import com.itsaky.androidide.models.Position
 import com.itsaky.androidide.models.Range
+import java.nio.file.Path
 import org.slf4j.LoggerFactory
 
 /** Diagnostic handling extensions for IDEEditor - Simplified Version */
@@ -70,7 +71,7 @@ fun IDEEditor.applyImportFixAtCursor(): Boolean {
   val file = this.file ?: return false
   val languageServer = this.languageServer
 
-  if (languageServer !is KotlinLanguageServer) {
+  if (languageServer == null) {
     return false
   }
 
@@ -87,7 +88,7 @@ fun IDEEditor.applyImportFixAtCursor(): Boolean {
   val range = Range(start = Position(line, column), end = Position(line, column))
 
   try {
-    val options = languageServer.getImportOptions(file.toPath(), range)
+    val options = languageServer.getImportOptionsCompat(file.toPath(), range)
 
     return when {
       options.isEmpty() -> {
@@ -96,7 +97,7 @@ fun IDEEditor.applyImportFixAtCursor(): Boolean {
       }
       options.size == 1 -> {
         // Single option - apply directly
-        languageServer.handleDiagnosticClick(file.toPath(), range).also { success ->
+        languageServer.handleDiagnosticClickCompat(file.toPath(), range).also { success ->
           if (success) {
             log.info("Auto-imported: {}", options[0])
           }
@@ -117,15 +118,15 @@ fun IDEEditor.applyImportFixAtCursor(): Boolean {
 /** Show dialog to select import */
 private fun IDEEditor.showImportSelectionDialog(
     options: List<String>,
-    filePath: java.nio.file.Path,
+    filePath: Path,
     range: Range,
-    languageServer: KotlinLanguageServer,
+    languageServer: ILanguageServer,
 ) {
   AlertDialog.Builder(context)
       .setTitle("Choose Import")
       .setItems(options.toTypedArray()) { dialog, which ->
         try {
-          languageServer.handleDiagnosticClick(filePath, range)
+          languageServer.handleDiagnosticClickCompat(filePath, range)
           log.info("User selected import: {}", options[which])
         } catch (e: Exception) {
           log.error("Failed to apply import", e)
@@ -139,4 +140,25 @@ private fun IDEEditor.showImportSelectionDialog(
 /** Clear all diagnostics */
 fun IDEEditor.clearDiagnostics() {
   getDiagnosticHandler().clear()
+}
+
+private fun ILanguageServer.getImportOptionsCompat(file: Path, range: Range): List<String> {
+  val method =
+      javaClass.methods.firstOrNull { method ->
+        method.name == "getImportOptions" &&
+            method.parameterTypes.contentEquals(arrayOf(Path::class.java, Range::class.java))
+      } ?: return emptyList()
+
+  val result = runCatching { method.invoke(this, file, range) }.getOrNull()
+  @Suppress("UNCHECKED_CAST")
+  return (result as? List<*>)?.filterIsInstance<String>().orEmpty()
+}
+
+private fun ILanguageServer.handleDiagnosticClickCompat(file: Path, range: Range): Boolean {
+  val method =
+      javaClass.methods.firstOrNull { method ->
+        method.name == "handleDiagnosticClick" &&
+            method.parameterTypes.contentEquals(arrayOf(Path::class.java, Range::class.java))
+      } ?: return false
+  return (runCatching { method.invoke(this, file, range) }.getOrNull() as? Boolean) == true
 }
