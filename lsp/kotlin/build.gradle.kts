@@ -32,7 +32,8 @@ android {
   }
   composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
 
-  buildFeatures { compose = true }
+  buildFeatures { compose = true
+           buildConfig = false }
 }
 
 kapt {
