@@ -43,5 +43,5 @@ shadowJar {
 }
 	
 dependencies { 
-    api files('libs/kotlinc-embeddable.jar')
+    api files('libs/kotlinc.jar')
 }
