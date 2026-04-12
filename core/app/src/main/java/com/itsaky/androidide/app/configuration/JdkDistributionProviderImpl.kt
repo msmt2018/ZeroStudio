@@ -68,8 +68,8 @@ class JdkDistributionProviderImpl : IJdkDistributionProvider {
         BuildPreferences.javaHome = defaultDist.javaHome
       }
 
-      val home = File(BuildPreferences.javaHome)
-      val java = File(home, "bin/java")
+      var home = File(BuildPreferences.javaHome)
+      var java = File(home, "bin/java")
 
       // the previously selected JDK distribution does not exist
       // check if we have other distributions installed
@@ -79,6 +79,11 @@ class JdkDistributionProviderImpl : IJdkDistributionProvider {
               "Previously selected java.home does not exists! Falling back to ${distributions[0]}..."
           )
           BuildPreferences.javaHome = distributions[0].javaHome
+          home = File(BuildPreferences.javaHome)
+          java = File(home, "bin/java")
+        } else {
+          log.warn("No JDK distribution is available. Skipping JAVA_HOME update.")
+          return@also
         }
       }
 
@@ -86,10 +91,10 @@ class JdkDistributionProviderImpl : IJdkDistributionProvider {
         java.setExecutable(true)
       }
 
-      log.debug("Setting Environment.JAVA_HOME to {}", BuildPreferences.javaHome)
+      log.debug("Setting Environment.JAVA_HOME to {}", home.absolutePath)
 
-      Environment.JAVA_HOME = File(BuildPreferences.javaHome)
-      Environment.JAVA = Environment.JAVA_HOME.resolve("bin/java")
+      Environment.JAVA_HOME = home
+      Environment.JAVA = java
 
       // Critical: Inject the selected JDK into the Native OS Environment
       // This ensures that ProcessBuilder, Terminal, and Shell sessions use THIS specific JDK
