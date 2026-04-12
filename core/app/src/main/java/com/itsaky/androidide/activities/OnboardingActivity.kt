@@ -55,6 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class OnboardingActivity : AppIntro2() {
 
@@ -229,12 +230,25 @@ class OnboardingActivity : AppIntro2() {
   }
 
   private fun checkToolsIsInstalled(): Boolean {
-    return IJdkDistributionProvider.getInstance().installedDistributions.isNotEmpty() &&
-        Environment.ANDROID_HOME.exists()
+    val distributions = IJdkDistributionProvider.getInstance().installedDistributions
+    return distributions.any(::isJdkDistributionUsable)
+  }
+
+  private fun isJdkDistributionUsable(distribution: JdkDistribution): Boolean {
+    val javaBinary = File(distribution.javaHome, "bin/java")
+    if (!javaBinary.exists() || !javaBinary.isFile) {
+      return false
+    }
+
+    if (!javaBinary.canExecute()) {
+      javaBinary.setExecutable(true)
+    }
+
+    return javaBinary.canExecute()
   }
 
   private fun isSetupCompleted(): Boolean {
-    return checkToolsIsInstalled() && checkAllPermissionsGranted()
+    return checkToolsIsInstalled()
   }
 
   private fun tryNavigateToMainIfSetupIsCompleted(): Boolean {
