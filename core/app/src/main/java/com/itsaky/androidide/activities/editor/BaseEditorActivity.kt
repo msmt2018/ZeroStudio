@@ -543,19 +543,7 @@ abstract class BaseEditorActivity :
 
   override fun onDiagnosticClick(file: File, diagnostic: DiagnosticItem) {
     if (isDestroying || _binding == null) return
-    doOpenFile(
-        file,
-        Range(
-            com.itsaky.androidide.models.Position(
-                diagnostic.range.start.line,
-                diagnostic.range.start.character,
-            ),
-            com.itsaky.androidide.models.Position(
-                diagnostic.range.end.line,
-                diagnostic.range.end.character,
-            ),
-        ),
-    )
+    doOpenFile(file, null)
     hideBottomSheet()
   }
 
