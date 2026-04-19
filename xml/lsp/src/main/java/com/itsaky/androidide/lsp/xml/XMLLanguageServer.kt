@@ -35,6 +35,7 @@ import com.itsaky.androidide.lsp.models.ReferenceParams
 import com.itsaky.androidide.lsp.models.ReferenceResult
 import com.itsaky.androidide.lsp.models.SignatureHelp
 import com.itsaky.androidide.lsp.models.SignatureHelpParams
+import com.itsaky.androidide.lsp.models.SignatureInformation
 import com.itsaky.androidide.lsp.util.NoCompletionsProvider
 import com.itsaky.androidide.lsp.xml.models.XMLServerSettings
 import com.itsaky.androidide.lsp.xml.providers.AdvancedEditProvider.onContentChange
@@ -113,7 +114,7 @@ class XMLLanguageServer : ILanguageServer {
   }
 
   override suspend fun signatureHelp(params: SignatureHelpParams): SignatureHelp {
-    return SignatureHelp(emptyList(), -1, -1)
+    return SignatureHelp(mutableListOf<SignatureInformation>(), -1, -1)
   }
 
   override suspend fun analyze(file: Path): DiagnosticResult {

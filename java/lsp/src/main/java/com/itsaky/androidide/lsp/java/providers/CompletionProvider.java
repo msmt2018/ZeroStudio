@@ -22,7 +22,7 @@ import static com.itsaky.androidide.progress.ProgressManager.abortIfCancelled;
 
 import androidx.annotation.NonNull;
 import com.blankj.utilcode.util.ReflectUtils;
-import com.itsaky.androidide.lsp.api.AbstractServiceProvider;
+import com.itsaky.androidide.lsp.api.ConfigurableServiceProvider;
 import com.itsaky.androidide.lsp.api.ICompletionProvider;
 import com.itsaky.androidide.lsp.api.IServerSettings;
 import com.itsaky.androidide.lsp.internal.model.CachedCompletion;
@@ -46,6 +46,7 @@ import com.itsaky.androidide.lsp.java.utils.CancelChecker;
 import com.itsaky.androidide.lsp.java.visitors.FindCompletionsAt;
 import com.itsaky.androidide.lsp.models.CompletionParams;
 import com.itsaky.androidide.lsp.models.CompletionResult;
+import com.itsaky.androidide.lsp.util.DefaultServerSettings;
 import com.itsaky.androidide.utils.DocumentUtils;
 import io.github.rosemoe.sora.lang.completion.snippet.CodeSnippet;
 import java.nio.file.Path;
@@ -59,7 +60,7 @@ import openjdk.source.util.TreePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CompletionProvider extends AbstractServiceProvider implements ICompletionProvider {
+public class CompletionProvider implements ICompletionProvider, ConfigurableServiceProvider {
 
   public static final int MAX_COMPLETION_ITEMS = CompletionResult.MAX_ITEMS;
   private static final Logger LOG = LoggerFactory.getLogger(CompletionProvider.class);
@@ -67,10 +68,9 @@ public class CompletionProvider extends AbstractServiceProvider implements IComp
   private JavaCompilerService compiler;
   private CachedCompletion cache;
   private Consumer<CachedCompletion> nextCacheConsumer;
+  private IServerSettings settings = new DefaultServerSettings();
 
-  public CompletionProvider() {
-    super();
-  }
+  public CompletionProvider() {}
 
   public synchronized CompletionProvider reset(JavaCompilerService compiler,
       IServerSettings settings, CachedCompletion cache,
@@ -80,8 +80,17 @@ public class CompletionProvider extends AbstractServiceProvider implements IComp
     this.cache = cache;
     this.nextCacheConsumer = nextCacheConsumer;
 
-    super.applySettings(settings);
+    applySettings(settings);
     return this;
+  }
+
+  @Override
+  public void applySettings(IServerSettings settings) {
+    this.settings = settings != null ? settings : new DefaultServerSettings();
+  }
+
+  private IServerSettings getSettings() {
+    return this.settings;
   }
 
   @Override

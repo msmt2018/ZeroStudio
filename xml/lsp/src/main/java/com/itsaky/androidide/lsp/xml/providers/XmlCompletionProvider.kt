@@ -26,7 +26,7 @@ import com.android.aaptcompiler.AaptResourceType.MENU
 import com.android.aaptcompiler.AaptResourceType.TRANSITION
 import com.android.aaptcompiler.ResourcePathData
 import com.android.aaptcompiler.extractPathData
-import com.itsaky.androidide.lsp.api.AbstractServiceProvider
+import com.itsaky.androidide.lsp.api.ConfigurableServiceProvider
 import com.itsaky.androidide.lsp.api.ICompletionProvider
 import com.itsaky.androidide.lsp.api.IServerSettings
 import com.itsaky.androidide.lsp.models.CompletionParams
@@ -71,7 +71,7 @@ import org.slf4j.LoggerFactory
  * @author Akash Yadav
  */
 class XmlCompletionProvider(settings: IServerSettings) :
-    AbstractServiceProvider(), ICompletionProvider {
+    ICompletionProvider, ConfigurableServiceProvider {
 
   companion object {
 
@@ -79,8 +79,10 @@ class XmlCompletionProvider(settings: IServerSettings) :
   }
 
   init {
-    super.applySettings(settings)
+    applySettings(settings)
   }
+
+  override fun applySettings(settings: IServerSettings) = Unit
 
   override fun complete(params: CompletionParams): CompletionResult {
     return try {

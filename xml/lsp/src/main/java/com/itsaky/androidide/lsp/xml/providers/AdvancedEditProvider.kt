@@ -21,10 +21,9 @@ import com.itsaky.androidide.eventbus.events.editor.ChangeType
 import com.itsaky.androidide.eventbus.events.editor.DocumentChangeEvent
 import com.itsaky.androidide.lsp.api.ILanguageServerRegistry
 import com.itsaky.androidide.lsp.models.CodeActionItem
-import com.itsaky.androidide.lsp.models.CodeActionKind
-import com.itsaky.androidide.lsp.models.DocumentChange
 import com.itsaky.androidide.lsp.models.PerformCodeActionParams
 import com.itsaky.androidide.lsp.models.TextEdit
+import com.itsaky.androidide.lsp.models.WorkspaceEdit
 import com.itsaky.androidide.lsp.xml.XMLLanguageServer
 import com.itsaky.androidide.models.Range
 import com.itsaky.androidide.projects.FileManager
@@ -102,10 +101,11 @@ object AdvancedEditProvider {
       return
     }
 
-    val action = CodeActionItem()
-    action.title = "Advanced XML Edit"
-    action.kind = CodeActionKind.QuickFix
-    action.changes = listOf(DocumentChange(event.changedFile, edits))
+    val action =
+        CodeActionItem(
+            title = "Advanced XML Edit",
+            edit = WorkspaceEdit(changes = mapOf(event.changedFile.toUri().toString() to edits)),
+        )
 
     client.performCodeAction(PerformCodeActionParams(async = false, action = action))
   }
