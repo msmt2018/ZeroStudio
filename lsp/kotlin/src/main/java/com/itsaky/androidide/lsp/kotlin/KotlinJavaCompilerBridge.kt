@@ -17,8 +17,6 @@
 
 package com.itsaky.androidide.lsp.kotlin
 
-import com.itsaky.androidide.lsp.java.compiler.KotlinCompilerProvider
-import com.itsaky.androidide.lsp.java.compiler.JavaCompilerService
 import com.itsaky.androidide.projects.IWorkspace
 import com.itsaky.androidide.projects.android.AndroidModule
 import org.slf4j.LoggerFactory
@@ -35,8 +33,6 @@ class KotlinJavaCompilerBridge(private val workspace: IWorkspace) {
     private val log = LoggerFactory.getLogger(KotlinJavaCompilerBridge::class.java)
   }
 
-  private var javaCompiler: JavaCompilerService? = null
-  
   // 缓存工作区类字典 (Group: SimpleName -> ClassInfo) 以提高查询速度
   private val classDictionary = ConcurrentHashMap<String, ClassInfo>()
 
@@ -53,7 +49,7 @@ class KotlinJavaCompilerBridge(private val workspace: IWorkspace) {
           } ?: workspace.getSubProjects().filterIsInstance<AndroidModule>().firstOrNull()
 
       if (mainModule != null) {
-        javaCompiler = null
+        // bridge currently indexes from workspace class metadata.
       }
     } catch (e: Exception) {
       log.error("Failed to initialize Java compiler bridge", e)
