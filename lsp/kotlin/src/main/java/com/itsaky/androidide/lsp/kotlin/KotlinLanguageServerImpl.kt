@@ -129,8 +129,9 @@ class KotlinLanguageServerImpl(
   }
 
   private fun createInitializeParams(workspace: IWorkspace): JsonObject {
-    val rootUri = workspace.projectDir.toURI().toString()
-    val cacheDir = Environment.getProjectCacheDir(workspace.projectDir)
+    val projectDir = workspace.getProjectDir()
+    val rootUri = projectDir.toURI().toString()
+    val cacheDir = Environment.getProjectCacheDir(projectDir)
 
     val initOptions =
         JsonObject().apply {
@@ -143,11 +144,11 @@ class KotlinLanguageServerImpl(
     return JsonObject().apply {
       addProperty("processId", android.os.Process.myPid())
       addProperty("rootUri", rootUri)
-      addProperty("rootPath", workspace.projectDir.absolutePath)
+      addProperty("rootPath", projectDir.absolutePath)
       add(
           "workspaceFolders",
           gson.toJsonTree(
-              listOf(mapOf("uri" to rootUri, "name" to workspace.projectDir.name)),
+              listOf(mapOf("uri" to rootUri, "name" to projectDir.name)),
           ),
       )
       add("initializationOptions", initOptions)
@@ -285,14 +286,14 @@ class KotlinLanguageServerImpl(
     }
   }
 
-  override fun initialize(params: InitializeParams): CompletableFuture<InitializeResult> {
+  fun initialize(params: InitializeParams): CompletableFuture<InitializeResult> {
     return scope.future {
         val resultElement = rpcClient.sendRequest("initialize", params)
         gson.fromJson(resultElement, InitializeResult::class.java)
     }
   }
 
-  override fun initialized(params: InitializedParams) {
+  fun initialized(params: InitializedParams) {
     rpcClient.sendNotification("initialized", params)
   }
 
@@ -311,27 +312,29 @@ class KotlinLanguageServerImpl(
     }
   }
 
-  override fun exit() {
+  fun exit() {
     rpcClient.sendNotification("exit", Any())
     rpcClient.stop()
     try { process.destroy() } catch (_: Exception) {}
   }
 
   override fun didOpen(params: DidOpenTextDocumentParams) {
+    val textDocument = params.textDocument ?: return
     val payload =
         mapOf(
             "textDocument" to
                 mapOf(
-                    "uri" to params.textDocument.uri,
-                    "languageId" to params.textDocument.languageId,
-                    "version" to params.textDocument.version,
-                    "text" to params.textDocument.text,
+                    "uri" to textDocument.uri,
+                    "languageId" to textDocument.languageId,
+                    "version" to textDocument.version,
+                    "text" to textDocument.text,
                 )
         )
     rpcClient.sendNotification("textDocument/didOpen", payload)
   }
 
   override fun didChange(params: DidChangeTextDocumentParams) {
+    val textDocument = params.textDocument ?: return
     val changes = params.contentChanges.map { 
         if (it.range != null) mapOf("range" to it.range, "text" to it.text) 
         else mapOf("text" to it.text) 
@@ -339,24 +342,26 @@ class KotlinLanguageServerImpl(
     val payload =
         mapOf(
             "textDocument" to
-                mapOf("uri" to params.textDocument.uri, "version" to params.textDocument.version),
+                mapOf("uri" to textDocument.uri, "version" to textDocument.version),
             "contentChanges" to changes,
         )
     rpcClient.sendNotification("textDocument/didChange", payload)
   }
 
   override fun didClose(params: DidCloseTextDocumentParams) {
+    val textDocument = params.textDocument ?: return
     rpcClient.sendNotification(
         "textDocument/didClose",
-        mapOf("textDocument" to mapOf("uri" to params.textDocument.uri)),
+        mapOf("textDocument" to mapOf("uri" to textDocument.uri)),
     )
   }
 
   override fun didSave(params: DidSaveTextDocumentParams) {
+    val textDocument = params.textDocument ?: return
     rpcClient.sendNotification(
         "textDocument/didSave",
         mapOf(
-            "textDocument" to mapOf("uri" to params.textDocument.uri),
+            "textDocument" to mapOf("uri" to textDocument.uri),
             "text" to params.text,
         ),
     )
@@ -369,8 +374,8 @@ class KotlinLanguageServerImpl(
     return runBlocking(Dispatchers.IO) {
       val req =
           mapOf(
-              "textDocument" to mapOf("uri" to params.textDocument.uri),
-              "position" to params.lspPosition,
+              "textDocument" to mapOf("uri" to com.itsaky.androidide.lsp.rpc.UriConverter.pathToUri(params.file)),
+              "position" to mapOf("line" to params.position.line, "character" to params.position.column),
           )
       try {
         val response =
@@ -419,8 +424,8 @@ class KotlinLanguageServerImpl(
       withContext(Dispatchers.IO) {
         val req =
             mapOf(
-                "textDocument" to mapOf("uri" to params.textDocument.uri),
-                "position" to params.lspPosition,
+                "textDocument" to mapOf("uri" to com.itsaky.androidide.lsp.rpc.UriConverter.pathToUri(params.file)),
+                "position" to mapOf("line" to params.position.line, "character" to params.position.column),
                 "context" to mapOf("includeDeclaration" to params.includeDeclaration),
             )
         val res = rpcClient.sendRequest("textDocument/references", req)
@@ -434,18 +439,18 @@ class KotlinLanguageServerImpl(
       withContext(Dispatchers.IO) {
         val req =
             mapOf(
-                "textDocument" to mapOf("uri" to params.textDocument.uri),
-                "position" to params.lspPosition,
+                "textDocument" to mapOf("uri" to com.itsaky.androidide.lsp.rpc.UriConverter.pathToUri(params.file)),
+                "position" to mapOf("line" to params.position.line, "character" to params.position.column),
             )
         val res = rpcClient.sendRequest("textDocument/definition", req)
-        
-        val type = object : TypeToken<Either<Location, List<LocationLink>>>() {}.type
-        val result: Either<Location, List<LocationLink>>? = gson.fromJson(res, type)
-        
-        val locations = result?.map(
-            { loc -> listOf(loc) },
-            { links -> links.map { Location(com.itsaky.androidide.lsp.rpc.UriConverter.uriToPath(it.targetUri), it.targetRange) } }
-        ) ?: emptyList()
+        val locations =
+            if (res == null || res.isJsonNull) {
+              emptyList()
+            } else if (res.isJsonArray) {
+              gson.fromJson<List<Location>>(res, object : TypeToken<List<Location>>() {}.type) ?: emptyList()
+            } else {
+              listOfNotNull(gson.fromJson(res, Location::class.java))
+            }
 
         DefinitionResult(locations)
       }
@@ -465,10 +470,11 @@ class KotlinLanguageServerImpl(
 
   override suspend fun signatureHelp(params: SignatureHelpParams): SignatureHelp =
       withContext(Dispatchers.IO) {
+        val file = params.file ?: return@withContext SignatureHelp()
         val req =
             mapOf(
-                "textDocument" to mapOf("uri" to params.textDocument.uri),
-                "position" to params.lspPosition,
+                "textDocument" to mapOf("uri" to com.itsaky.androidide.lsp.rpc.UriConverter.pathToUri(file)),
+                "position" to mapOf("line" to params.position.line, "character" to params.position.column),
                 "context" to params.context
             )
         val res = rpcClient.sendRequest("textDocument/signatureHelp", req)
@@ -479,8 +485,8 @@ class KotlinLanguageServerImpl(
       withContext(Dispatchers.IO) {
         val req =
             mapOf(
-                "textDocument" to mapOf("uri" to params.textDocument.uri),
-                "position" to params.lspPosition,
+                "textDocument" to mapOf("uri" to com.itsaky.androidide.lsp.rpc.UriConverter.pathToUri(params.file)),
+                "position" to mapOf("line" to params.position.line, "character" to params.position.column),
             )
         val res = rpcClient.sendRequest("textDocument/hover", req)
         val hover = gson.fromJson(res, Hover::class.java)
@@ -566,8 +572,17 @@ class KotlinLanguageServerImpl(
 
   override fun executeCommand(command: Command) {
       scope.launch {
-          val params = mapOf("command" to command.command, "arguments" to command.arguments)
+          val params = mapOf("command" to command.command, "arguments" to emptyList<Any>())
           rpcClient.sendRequest("workspace/executeCommand", params)
       }
+  }
+
+  fun executeWorkspaceCommand(command: String, arguments: List<Any?> = emptyList()): JsonElement? {
+    return runBlocking(Dispatchers.IO) {
+      rpcClient.sendRequest(
+          "workspace/executeCommand",
+          mapOf("command" to command, "arguments" to arguments),
+      )
+    }
   }
 }

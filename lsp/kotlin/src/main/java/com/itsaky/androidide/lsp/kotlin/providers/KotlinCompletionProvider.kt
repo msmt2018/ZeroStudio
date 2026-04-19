@@ -17,26 +17,34 @@
 
 package com.itsaky.androidide.lsp.kotlin.providers
 
-import com.itsaky.androidide.lsp.api.AbstractServiceProvider
+import com.itsaky.androidide.lsp.api.ConfigurableServiceProvider
 import com.itsaky.androidide.lsp.api.ICompletionProvider
 import com.itsaky.androidide.lsp.api.ILanguageServerRegistry
+import com.itsaky.androidide.lsp.api.IServerSettings
 import com.itsaky.androidide.lsp.kotlin.KotlinLanguageServerImpl
 import com.itsaky.androidide.lsp.models.CompletionParams
 import com.itsaky.androidide.lsp.models.CompletionResult
 import com.itsaky.androidide.lsp.models.MatchLevel
+import com.itsaky.androidide.lsp.util.DefaultServerSettings
 import com.itsaky.androidide.utils.Logger
 
 /** @author android_zero */
-class KotlinCompletionProvider : AbstractServiceProvider(), ICompletionProvider {
+class KotlinCompletionProvider : ICompletionProvider, ConfigurableServiceProvider {
 
   companion object {
     private val log = Logger.instance("KotlinCompletionProvider")
   }
 
+  private var settings: IServerSettings = DefaultServerSettings()
+
+  override fun applySettings(settings: IServerSettings) {
+    this.settings = settings
+  }
+
   override fun canComplete(file: java.nio.file.Path?): Boolean {
     if (file == null) return false
     val pathStr = file.toString()
-    return super.canComplete(file) &&
+    return super<ICompletionProvider>.canComplete(file) &&
         (pathStr.endsWith(".kt", true) || pathStr.endsWith(".kts", true))
   }
 

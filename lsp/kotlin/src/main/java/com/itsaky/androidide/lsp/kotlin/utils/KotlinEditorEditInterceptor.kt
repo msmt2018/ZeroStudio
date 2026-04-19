@@ -36,8 +36,8 @@ object KotlinEditorEditInterceptor {
   ): Boolean {
     var success = true
     try {
-      for (change in edit.documentChanges) {
-        val targetUriStr = change.file?.toString() ?: continue
+      val changes = edit.changes ?: emptyMap()
+      for ((targetUriStr, edits) in changes) {
         val targetFile = File(URI(targetUriStr).path)
 
         if (
@@ -45,9 +45,9 @@ object KotlinEditorEditInterceptor {
                 currentFilePath != null &&
                 targetFile.absolutePath == currentFilePath
         ) {
-          applyToEditor(currentEditor, change.edits)
+          applyToEditor(currentEditor, edits)
         } else {
-          success = applyToDisk(targetFile, change.edits) && success
+          success = applyToDisk(targetFile, edits) && success
         }
       }
     } catch (e: Exception) {

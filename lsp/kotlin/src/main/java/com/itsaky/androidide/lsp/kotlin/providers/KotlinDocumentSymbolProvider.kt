@@ -20,6 +20,7 @@ package com.itsaky.androidide.lsp.kotlin.providers
 import com.itsaky.androidide.lsp.api.ILanguageServerRegistry
 import com.itsaky.androidide.lsp.kotlin.KotlinLanguageServerImpl
 import com.itsaky.androidide.lsp.models.DocumentSymbol
+import com.itsaky.androidide.lsp.models.LspRange
 import com.itsaky.androidide.utils.Logger
 import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
@@ -57,9 +58,9 @@ class KotlinDocumentSymbolProvider {
             result.flatSymbols.map {
               DocumentSymbol(
                   name = it.name,
-                  kind = it.kind,
-                  range = com.itsaky.androidide.models.Range.pointRange(it.location.range.start),
-                  selectionRange = it.location.range,
+                  kindValue = it.kindValue,
+                  lspRange = LspRange.fromIdeRange(it.location.range),
+                  lspSelectionRange = LspRange.fromIdeRange(it.location.range),
               )
             }
           }

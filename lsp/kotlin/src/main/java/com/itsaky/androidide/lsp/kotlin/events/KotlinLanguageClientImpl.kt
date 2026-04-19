@@ -26,6 +26,8 @@ import com.itsaky.androidide.lsp.kotlin.utils.KlsUriDecoder
 import com.itsaky.androidide.lsp.kotlin.utils.KotlinEditorEditInterceptor
 import com.itsaky.androidide.lsp.models.*
 import com.itsaky.androidide.models.Location
+import com.itsaky.androidide.models.Position
+import com.itsaky.androidide.models.Range
 import com.itsaky.androidide.utils.Logger
 import java.io.File
 import java.net.URI
@@ -87,19 +89,28 @@ class KotlinLanguageClientImpl : ILanguageClient {
   override fun getDiagnosticAt(file: File, line: Int, column: Int): DiagnosticItem? {
     val items = diagnosticsCache[file.absolutePath] ?: return null
     return items
-        .filter { it.range.containsLine(line) && it.range.containsColumn(column) }
-        .minByOrNull { it.severity.ordinal }
+        .filter { contains(it.range, line, column) }
+        .minByOrNull { it.severityValue }
   }
 
   override fun performCodeAction(params: PerformCodeActionParams) {
     val action = params.action
-    if (action.changes.isNotEmpty()) {
-      applyWorkspaceEdit(WorkspaceEdit(action.changes))
+    if (action.edit != null) {
+      applyWorkspaceEdit(action.edit!!)
+      return
+    }
+    val changes = action.changes
+    if (!changes.isNullOrEmpty()) {
+      val mapped =
+          changes.associate { change ->
+            (change.file?.toUri()?.toString() ?: "") to change.edits
+          }
+      applyWorkspaceEdit(WorkspaceEdit(changes = mapped))
     }
   }
 
   override fun showDocument(params: ShowDocumentParams): ShowDocumentResult {
-    val uriStr = params.file.toString()
+    val uriStr = params.uri
 
     val targetFile =
         if (KlsUriDecoder.isKlsUri(uriStr)) {
@@ -111,7 +122,7 @@ class KotlinLanguageClientImpl : ILanguageClient {
     if (targetFile != null && targetFile.exists()) {
       com.blankj.utilcode.util.ThreadUtils.runOnUiThread {
         val handler = ActivityUtils.getTopActivity() as? IEditorHandler
-        handler?.openFileAndSelect(targetFile, params.selection)
+        handler?.openFileAndSelect(targetFile, params.selection?.let(::toIdeRange))
       }
       return ShowDocumentResult(true)
     }
@@ -158,5 +169,24 @@ class KotlinLanguageClientImpl : ILanguageClient {
       MessageType.Info -> log.info(params.message)
       else -> log.debug(params.message)
     }
+  }
+
+  private fun contains(
+      range: com.itsaky.androidide.lsp.rpc.Range,
+      line: Int,
+      column: Int,
+  ): Boolean {
+    val startBefore =
+        line > range.start.line || (line == range.start.line && column >= range.start.character)
+    val endAfter =
+        line < range.end.line || (line == range.end.line && column <= range.end.character)
+    return startBefore && endAfter
+  }
+
+  private fun toIdeRange(range: com.itsaky.androidide.lsp.rpc.Range): Range {
+    return Range(
+        Position(range.start.line, range.start.character),
+        Position(range.end.line, range.end.character),
+    )
   }
 }

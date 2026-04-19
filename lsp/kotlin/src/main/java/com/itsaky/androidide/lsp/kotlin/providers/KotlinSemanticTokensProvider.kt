@@ -22,9 +22,9 @@ import com.itsaky.androidide.lsp.kotlin.KotlinLanguageServerImpl
 import com.itsaky.androidide.lsp.models.HighlightToken
 import com.itsaky.androidide.lsp.models.HighlightTokenKind
 import com.itsaky.androidide.lsp.models.SemanticTokensParams
+import com.itsaky.androidide.lsp.models.TextDocumentIdentifier
 import com.itsaky.androidide.models.Position
 import com.itsaky.androidide.models.Range
-import com.itsaky.androidide.progress.ICancelChecker
 import com.itsaky.androidide.utils.Logger
 import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +70,10 @@ class KotlinSemanticTokensProvider {
 
     return runBlocking {
       try {
-        val params = SemanticTokensParams(file, null, ICancelChecker.NOOP)
+        val params =
+            SemanticTokensParams(
+                TextDocumentIdentifier(com.itsaky.androidide.lsp.rpc.UriConverter.pathToUri(file))
+            )
 
         withContext(Dispatchers.IO) {
           val semanticTokens = server.semanticTokensFull(params)
