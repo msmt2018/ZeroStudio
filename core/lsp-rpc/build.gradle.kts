@@ -50,7 +50,6 @@ protobuf {
             it.builtins {
                 id("java")
                 id("kotlin")
-                id("java")
             }
         }
     }
