@@ -56,6 +56,4 @@ data class ResourceOperation(val kind: String, val uri: String)
 data class DocumentChange(
     var file: Path? = null,
     var edits: List<TextEdit> = emptyList(),
-) {
-  constructor(file: Path, edits: List<TextEdit>) : this(file = file, edits = edits)
-}
+)
