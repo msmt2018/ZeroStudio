@@ -146,7 +146,30 @@ object EditorLineOperations {
 
   @Suppress("UNUSED_PARAMETER")
   fun cutLine(editor: CodeEditor, context: Context): Boolean {
-    editor.cutLine()
+    val cursor = editor.cursor
+    if (!cursor.isSelected) {
+      editor.cutLine()
+      return true
+    }
+
+    val startLine = cursor.leftLine
+    var endLine = cursor.rightLine
+    if (cursor.rightColumn == 0 && endLine > startLine) {
+      endLine -= 1
+    }
+
+    val endSelectionLine: Int
+    val endSelectionColumn: Int
+    if (endLine + 1 < editor.lineCount) {
+      endSelectionLine = endLine + 1
+      endSelectionColumn = 0
+    } else {
+      endSelectionLine = endLine
+      endSelectionColumn = editor.text.getColumnCount(endLine)
+    }
+
+    editor.setSelectionRegion(startLine, 0, endSelectionLine, endSelectionColumn)
+    editor.cutText()
     return true
   }
 

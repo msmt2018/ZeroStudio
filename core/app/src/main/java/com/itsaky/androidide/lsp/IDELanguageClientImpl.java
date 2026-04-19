@@ -59,6 +59,8 @@ import com.itsaky.androidide.utils.LSPUtils;
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer;
 import io.github.rosemoe.sora.text.Content;
 import java.io.File;
+import java.net.URI;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -282,36 +284,36 @@ public void publishDiagnostics(DiagnosticResult result) {
   @Override
   public ShowDocumentResult showDocument(ShowDocumentParams params) {
     boolean success = false;
-    final var result = new ShowDocumentResult(false);
-    if (!canUseActivity()) {
-      return result;
+    if (!canUseActivity() || params == null) {
+      return new ShowDocumentResult(false);
     }
 
-    if (params != null) {
-      File file = params.getFile().toFile();
-      if (file.exists() && file.isFile() && FileUtils.isUtf8(file)) {
-        final var range = params.getSelection();
-        var frag =
-            activity.getEditorAtIndex(activity.getContent().tabs.getSelectedTabPosition());
-        if (frag != null
-            && frag.getFile() != null
-            && frag.getEditor() != null
-            && frag.getFile().getAbsolutePath().equals(file.getAbsolutePath())) {
-          if (LSPUtils.isEqual(range.getStart(), range.getEnd())) {
-            frag.getEditor().setSelection(range.getStart().getLine(), range.getStart().getColumn());
-          } else {
-            frag.getEditor().setSelection(range);
-          }
-        } else {
-          activity.openFileAndSelect(file, range);
-        }
-        success = true;
+    final File file;
+    try {
+      file = Paths.get(URI.create(params.getUri())).toFile();
+    } catch (Exception err) {
+      LOG.warn("Invalid URI in showDocument request: {}", params.getUri(), err);
+      return new ShowDocumentResult(false);
+    }
+
+    if (file.exists() && file.isFile() && FileUtils.isUtf8(file)) {
+      var frag = activity.getEditorAtIndex(activity.getContent().tabs.getSelectedTabPosition());
+      if (frag != null
+          && frag.getFile() != null
+          && frag.getEditor() != null
+          && frag.getFile().getAbsolutePath().equals(file.getAbsolutePath())) {
+        // Selection is currently represented by rpc.Range (protobuf-backed), while editor APIs
+        // use com.itsaky.androidide.models.Range. Open the current file without changing
+        // selection until a shared range adapter is introduced.
+      } else {
+        activity.openFile(file);
       }
+      success = true;
     }
 
-    result.setSuccess(success);
-    return result;
+    return new ShowDocumentResult(success);
   }
+
 
   public DiagnosticsAdapter newDiagnosticsAdapter() {
     return new DiagnosticsAdapter(mapAsGroup(this.diagnostics), activity);
@@ -474,15 +476,56 @@ public void publishDiagnostics(DiagnosticResult result) {
   }
   @Override
   public boolean applyWorkspaceEdit(WorkspaceEdit edit) {
-    if (edit == null || edit.getDocumentChanges() == null || edit.getDocumentChanges().isEmpty()) {
+    if (edit == null) {
       return false;
     }
+
     final var action = new CodeActionItem();
     action.setTitle("workspace-edit");
-    action.setChanges(edit.getDocumentChanges());
+
+    final var mappedChanges = new ArrayList<com.itsaky.androidide.lsp.models.DocumentChange>();
+
+    if (edit.getChanges() != null && !edit.getChanges().isEmpty()) {
+      for (var entry : edit.getChanges().entrySet()) {
+        try {
+          final var file = Paths.get(URI.create(entry.getKey()));
+          mappedChanges.add(new com.itsaky.androidide.lsp.models.DocumentChange(file, entry.getValue()));
+        } catch (Exception err) {
+          LOG.warn("Skipping workspace edit change with invalid URI: {}", entry.getKey(), err);
+        }
+      }
+    }
+
+    if (edit.getDocumentChanges() != null && !edit.getDocumentChanges().isEmpty()) {
+      for (var either : edit.getDocumentChanges()) {
+        if (either == null || either.getLeft() == null) {
+          continue;
+        }
+        final var docEdit = either.getLeft();
+        try {
+          final var file = Paths.get(URI.create(docEdit.getTextDocument().getUri()));
+          final var textEdits = new ArrayList<TextEdit>();
+          for (var textEditEither : docEdit.getEdits()) {
+            if (textEditEither != null && textEditEither.getLeft() != null) {
+              textEdits.add(textEditEither.getLeft());
+            }
+          }
+          mappedChanges.add(new com.itsaky.androidide.lsp.models.DocumentChange(file, textEdits));
+        } catch (Exception err) {
+          LOG.warn("Skipping workspace documentChange with invalid URI", err);
+        }
+      }
+    }
+
+    if (mappedChanges.isEmpty()) {
+      return false;
+    }
+
+    action.setChanges(mappedChanges);
     performCodeAction(new PerformCodeActionParams(false, action));
     return true;
   }
+
 
   @Override
   public void showMessage(ShowMessageParams params) {

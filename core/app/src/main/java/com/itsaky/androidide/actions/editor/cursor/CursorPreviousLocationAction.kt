@@ -6,8 +6,8 @@ import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem
 import com.itsaky.androidide.actions.EditorActionItem
 import com.itsaky.androidide.cursor.CursorHistoryManager
+import com.itsaky.androidide.editor.ui.IDEEditor
 import com.itsaky.androidide.resources.R
-import io.github.rosemoe.sora.widget.CodeEditor
 
 /**
  * Navigate to the last cursor position Action
@@ -31,14 +31,13 @@ class CursorPreviousLocationAction(context: Context, override val order: Int) : 
 
   override fun prepare(data: ActionData) {
     super.prepare(data)
-    // 动态从数据总线中获取，绝不在类层级保留缓存
-    val editor = data.get(CodeEditor::class.java)
+    val editor = data.get(IDEEditor::class.java)
     // 动态切换可点击状态
     enabled = editor != null && CursorHistoryManager.getTracker(editor).canGoBack()
   }
 
   override suspend fun execAction(data: ActionData): Any {
-    val editor = data.get(CodeEditor::class.java) ?: return false
+    val editor = data.get(IDEEditor::class.java) ?: return false
     CursorHistoryManager.getTracker(editor).goBack()
     return true
   }
