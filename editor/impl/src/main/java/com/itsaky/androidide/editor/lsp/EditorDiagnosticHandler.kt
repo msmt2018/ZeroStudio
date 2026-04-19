@@ -30,7 +30,9 @@ class EditorDiagnosticHandler(private val editor: CodeEditor) {
   fun getDiagnosticAt(line: Int, column: Int): DiagnosticItem? {
     return diagnosticsByLine[line]?.firstOrNull { diagnostic ->
       val range = diagnostic.range
-      line == range.start.line && column >= range.start.column && column <= range.end.column
+      line == range.start.line &&
+          column >= range.start.character &&
+          column <= range.end.character
     }
   }
 

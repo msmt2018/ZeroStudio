@@ -30,7 +30,7 @@ class LspSignatureHelpManager(
             )
         )
 
-        server.signatureHelp(params).thenAccept { help ->
+        server.signatureHelpAsync(params).thenAccept { help ->
             if (help == null || help.signatures.isEmpty()) {
                 editor.post { editor.signatureHelpWindow.dismiss() }
                 return@thenAccept

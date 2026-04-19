@@ -9,8 +9,6 @@ package com.itsaky.androidide.editor.lsp
 import com.itsaky.androidide.editor.ui.IDEEditor
 import com.itsaky.androidide.lsp.models.PublishDiagnosticsParams
 import com.itsaky.androidide.lsp.rpc.UriConverter
-import com.itsaky.androidide.lsp.util.LspKindMapper
-import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
@@ -29,29 +27,8 @@ class LspDiagnosticHandler(private val editor: IDEEditor) {
         val text = editor.text
         
         params.diagnostics.forEach { diagnostic ->
-            val range = diagnostic.range
             try {
-                val startLine = range.start.line.coerceIn(0, text.lineCount - 1)
-                val endLine = range.end.line.coerceIn(0, text.lineCount - 1)
-                val startCol = range.start.character.coerceIn(0, text.getColumnCount(startLine))
-                val endCol = range.end.character.coerceIn(0, text.getColumnCount(endLine))
-                
-                val startIndex = text.getCharIndex(startLine, startCol)
-                val endIndex = text.getCharIndex(endLine, endCol)
-                
-                val region = DiagnosticRegion(
-                    startIndex,
-                    endIndex,
-                    LspKindMapper.mapDiagnosticSeverity(diagnostic.severity)
-                )
-                
-                region.detail = io.github.rosemoe.sora.lang.diagnostic.DiagnosticDetail(
-                    diagnostic.message, 
-                    diagnostic.message, 
-                    null, 
-                    diagnostic
-                )
-                container.addDiagnostic(region)
+                container.addDiagnostic(diagnostic.asDiagnosticRegion(text))
             } catch (e: Exception) {
                 log.warn("Invalid diagnostic range", e)
             }

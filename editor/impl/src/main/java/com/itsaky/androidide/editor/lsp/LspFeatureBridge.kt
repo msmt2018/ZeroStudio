@@ -2,6 +2,7 @@ package com.itsaky.androidide.editor.lsp
 
 import com.itsaky.androidide.lsp.models.DocumentSymbol
 import com.itsaky.androidide.lsp.models.DocumentSymbolsResult
+import com.itsaky.androidide.lsp.models.LspRange
 import com.itsaky.androidide.lsp.models.SemanticTokens
 import com.itsaky.androidide.models.Range
 import io.github.rosemoe.sora.lang.styling.Span
@@ -16,9 +17,9 @@ object LspFeatureBridge {
       return result.flatSymbols.map {
         DocumentSymbol(
             name = it.name,
-            kind = it.kind,
-            range = it.location.range,
-            selectionRange = it.location.range,
+            kindValue = it.kindValue,
+            lspRange = LspRange.fromIdeRange(it.location.range),
+            lspSelectionRange = LspRange.fromIdeRange(it.location.range),
         )
       }
     }

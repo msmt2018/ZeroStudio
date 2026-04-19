@@ -914,7 +914,23 @@ constructor(
           return@withContext
         }
 
-        client.showDocument(ShowDocumentParams(file1, range))
+        client.showDocument(
+            ShowDocumentParams(
+                uri = com.itsaky.androidide.lsp.rpc.UriConverter.pathToUri(file1),
+                selection =
+                    com.itsaky.androidide.lsp.rpc.Range.newBuilder()
+                        .setStart(
+                            com.itsaky.androidide.lsp.rpc.Position.newBuilder()
+                                .setLine(range.start.line)
+                                .setCharacter(range.start.column)
+                                .build())
+                        .setEnd(
+                            com.itsaky.androidide.lsp.rpc.Position.newBuilder()
+                                .setLine(range.end.line)
+                                .setCharacter(range.end.column)
+                                .build())
+                        .build(),
+            ))
       }
 
   protected open suspend fun onFindReferencesResult(result: ReferenceResult?) =
@@ -986,7 +1002,7 @@ constructor(
     }
 
     // 转发 LSP 编辑操作
-    lspFeatureRegistry?.bridge?.onContentChanged(event)
+    lspFeatureRegistry?.bridge?.onContentChanged(event, type, changeDelta)
 
     val start = event.changeStart
     val end = event.changeEnd

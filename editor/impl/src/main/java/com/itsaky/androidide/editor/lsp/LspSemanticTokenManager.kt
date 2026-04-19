@@ -33,7 +33,7 @@ class LspSemanticTokenManager(
         
         val params = SemanticTokensParams(TextDocumentIdentifier(fileUri))
 
-        server.semanticTokensFull(params).thenAccept { result ->
+        server.semanticTokensFullAsync(params).thenAccept { result ->
             if (result == null) return@thenAccept
 
             val decodedTokens = SemanticTokenDecoder.decode(result)

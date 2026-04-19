@@ -9,9 +9,10 @@ package com.itsaky.androidide.editor.lsp
 import com.itsaky.androidide.editor.ui.IDEEditor
 import com.itsaky.androidide.lsp.api.ILanguageServer
 import com.itsaky.androidide.lsp.models.*
-import com.itsaky.androidide.lsp.rpc.UriConverter
 import org.slf4j.LoggerFactory
 import com.itsaky.androidide.lsp.api.AbstractLanguageServer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class LspSymbolManager(
     private val editor: IDEEditor,
@@ -22,7 +23,7 @@ class LspSymbolManager(
     fun fetchDocumentSymbols(callback: (List<DocumentSymbol>) -> Unit) {
         if (server !is AbstractLanguageServer) return
         
-        editor.editorScope.kotlinx.coroutines.launch(kotlinx.coroutines.Dispatchers.IO) {
+        editor.editorScope.launch(Dispatchers.IO) {
             try {
                 val filePath = editor.file?.toPath() ?: return@launch
                 val result = server.documentSymbols(filePath)
@@ -39,7 +40,7 @@ class LspSymbolManager(
     fun searchWorkspaceSymbols(query: String, callback: (List<WorkspaceSymbol>) -> Unit) {
         if (server !is AbstractLanguageServer) return
         
-        editor.editorScope.kotlinx.coroutines.launch(kotlinx.coroutines.Dispatchers.IO) {
+        editor.editorScope.launch(Dispatchers.IO) {
             try {
                 val result = server.workspaceSymbols(query)
                 editor.post {

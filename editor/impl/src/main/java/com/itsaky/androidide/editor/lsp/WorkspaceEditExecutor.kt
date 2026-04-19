@@ -37,7 +37,8 @@ object WorkspaceEditExecutor {
         }
 
         allEdits.forEach { (uri, textEdits) ->
-            val sortedEdits = textEdits.sortedWith(compareBy({ -it.range.start.line }, { -it.range.start.character }))
+            val sortedEdits =
+                textEdits.sortedWith(compareBy({ -it.range.start.line }, { -it.range.start.column }))
             applyTextEditsToUri(uri, sortedEdits, currentEditor)
         }
     }
@@ -56,8 +57,8 @@ object WorkspaceEditExecutor {
                     edits.forEach { edit ->
                         val start = edit.range.start
                         val end = edit.range.end
-                        val startIdx = text.getCharIndex(start.line, start.character)
-                        val endIdx = text.getCharIndex(end.line, end.character)
+                        val startIdx = text.getCharIndex(start.line, start.column)
+                        val endIdx = text.getCharIndex(end.line, end.column)
                         val startPos = text.indexer.getCharPosition(startIdx)
                         val endPos = text.indexer.getCharPosition(endIdx)
                         text.replace(startPos.line, startPos.column, endPos.line, endPos.column, edit.newText)
@@ -78,8 +79,8 @@ object WorkspaceEditExecutor {
                 
                 var newContent = content
                 edits.forEach { edit ->
-                    val startOffset = getOffsetFromPosition(newContent, edit.range.start.line, edit.range.start.character)
-                    val endOffset = getOffsetFromPosition(newContent, edit.range.end.line, edit.range.end.character)
+                    val startOffset = getOffsetFromPosition(newContent, edit.range.start.line, edit.range.start.column)
+                    val endOffset = getOffsetFromPosition(newContent, edit.range.end.line, edit.range.end.column)
                     newContent = newContent.replaceRange(startOffset, endOffset, edit.newText)
                 }
                 

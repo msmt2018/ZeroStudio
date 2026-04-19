@@ -11,7 +11,7 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 object LspThemeBridge {
     fun getStyleIdForType(typeName: String): Int {
         return when (typeName) {
-            "type", "class", "interface", "enum", "struct" -> EditorColorScheme.TYPE_NAME
+            "type", "class", "interface", "enum", "struct" -> EditorColorScheme.IDENTIFIER_NAME
             "parameter" -> EditorColorScheme.IDENTIFIER_VAR
             "variable" -> EditorColorScheme.IDENTIFIER_VAR
             "property", "enumMember" -> EditorColorScheme.IDENTIFIER_NAME
