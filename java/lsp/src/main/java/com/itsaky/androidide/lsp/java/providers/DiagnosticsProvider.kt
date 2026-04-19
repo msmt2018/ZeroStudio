@@ -281,8 +281,6 @@ object DiagnosticsProvider {
             message = diagnostic.getMessage(Locale.getDefault()),
             source = "",
         )
-    result.range.start.index = diagnostic.startPosition.toInt()
-    result.range.end.index = diagnostic.endPosition.toInt()
     result.extra = diagnostic
     return result
   }

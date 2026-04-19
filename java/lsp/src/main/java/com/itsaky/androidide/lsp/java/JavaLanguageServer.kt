@@ -56,6 +56,7 @@ import com.itsaky.androidide.lsp.models.ReferenceParams
 import com.itsaky.androidide.lsp.models.ReferenceResult
 import com.itsaky.androidide.lsp.models.SignatureHelp
 import com.itsaky.androidide.lsp.models.SignatureHelpParams
+import com.itsaky.androidide.lsp.models.SignatureInformation
 import com.itsaky.androidide.lsp.util.LSPEditorActions
 import com.itsaky.androidide.models.Range
 import com.itsaky.androidide.projects.FileManager.getActiveDocumentCount
@@ -206,7 +207,7 @@ class JavaLanguageServer : ILanguageServer {
   override suspend fun signatureHelp(params: SignatureHelpParams): SignatureHelp {
     val compiler = getCompiler(params.file)
     return if (!settings.signatureHelpEnabled()) {
-      SignatureHelp(emptyList(), -1, -1)
+      SignatureHelp(mutableListOf<SignatureInformation>(), -1, -1)
     } else SignatureProvider(compiler, params.cancelChecker).signatureHelp(params)
   }
 

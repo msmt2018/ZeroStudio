@@ -19,6 +19,8 @@
  */
 package com.itsaky.androidide.lsp.models
 
+import java.nio.file.Path
+
 /**
  * 代表整个工作区的修改集合 (LSP 3.17)
  */
@@ -46,3 +48,14 @@ data class ChangeAnnotation(
 )
 
 data class ResourceOperation(val kind: String, val uri: String)
+
+/**
+ * Legacy single-document change model retained for compatibility with existing code-action
+ * producers.
+ */
+data class DocumentChange(
+    var file: Path? = null,
+    var edits: List<TextEdit> = emptyList(),
+) {
+  constructor(file: Path, edits: List<TextEdit>) : this(file = file, edits = edits)
+}

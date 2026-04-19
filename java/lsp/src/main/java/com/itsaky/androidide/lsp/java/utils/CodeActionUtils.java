@@ -96,6 +96,11 @@ public class CodeActionUtils {
     return (int) lines.getPosition(position.getLine() + 1, position.getColumn() + 1);
   }
 
+  public static int findPosition(
+      @NonNull CompileTask task, @NonNull com.itsaky.androidide.lsp.rpc.Position position) {
+    return findPosition(task, new Position(position.getLine(), position.getCharacter()));
+  }
+
   @Nullable
   public static String findClassNeedingConstructor(CompileTask task, Range range) {
     final ClassTree type = findClassTree(task, range);
@@ -103,6 +108,12 @@ public class CodeActionUtils {
       return null;
     }
     return qualifiedName(task, type);
+  }
+
+  @Nullable
+  public static String findClassNeedingConstructor(
+      CompileTask task, com.itsaky.androidide.lsp.rpc.Range range) {
+    return findClassNeedingConstructor(task, toIdeRange(range));
   }
 
   public static ClassTree findClassTree(@NonNull CompileTask task, @NonNull Range range) {
@@ -161,6 +172,12 @@ public class CodeActionUtils {
     return new MethodPtr(task.task, method);
   }
 
+  @NonNull
+  public static MethodPtr findMethod(
+      @NonNull CompileTask task, @NonNull com.itsaky.androidide.lsp.rpc.Range range) {
+    return findMethod(task, toIdeRange(range));
+  }
+
   public static String extractNotThrownExceptionName(String message) {
     final Matcher matcher = NOT_THROWN_EXCEPTION.matcher(message);
     if (!matcher.find()) {
@@ -198,6 +215,19 @@ public class CodeActionUtils {
                 .getLineMap()
                 .getPosition(range.getEnd().getLine() + 1, range.getEnd().getColumn() + 1);
     return contents.subSequence(start, end);
+  }
+
+  @NonNull
+  public static CharSequence extractRange(
+      @NonNull CompileTask task, @NonNull com.itsaky.androidide.lsp.rpc.Range range) {
+    return extractRange(task, toIdeRange(range));
+  }
+
+  @NonNull
+  private static Range toIdeRange(@NonNull com.itsaky.androidide.lsp.rpc.Range range) {
+    return new Range(
+        new Position(range.getStart().getLine(), range.getStart().getCharacter()),
+        new Position(range.getEnd().getLine(), range.getEnd().getCharacter()));
   }
 
   @Nullable

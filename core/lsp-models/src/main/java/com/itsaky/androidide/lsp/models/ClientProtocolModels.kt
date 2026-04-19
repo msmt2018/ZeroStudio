@@ -17,9 +17,12 @@ data class ApplyWorkspaceEditResponse(
 
 /** Action item wrapper used by ILanguageClient contract. */
 data class CodeActionItem(
-    val title: String = "",
-    val edit: WorkspaceEdit? = null,
-    val command: Command? = null,
+    var title: String = "",
+    var edit: WorkspaceEdit? = null,
+    var command: Command? = null,
+    // Legacy fields kept for backward compatibility with existing Java actions.
+    var kind: String? = null,
+    var changes: List<DocumentChange>? = null,
 )
 
 /** Request to perform a specific code action. */

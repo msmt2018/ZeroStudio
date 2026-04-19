@@ -106,7 +106,18 @@ class JavaDiagnosticProvider {
           // throws exception when trying to access.
           log.info("Using cached diagnostics")
           cachedDiagnostics
-        } else DiagnosticResult(file, findDiagnostics(task, file).sortedBy { it.range })
+        } else
+            DiagnosticResult(
+                file,
+                findDiagnostics(task, file).sortedWith { first, second ->
+                  val lineCmp = first.range.start.line.compareTo(second.range.start.line)
+                  if (lineCmp != 0) {
+                    lineCmp
+                  } else {
+                    first.range.start.character.compareTo(second.range.start.character)
+                  }
+                },
+            )
     return result.also {
       log.info("Analyze file completed. Found {} diagnostic items", result.diagnostics.size)
     }

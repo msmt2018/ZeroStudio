@@ -56,6 +56,34 @@ data class DiagnosticItem(
     @SerializedName("severity") var severityValue: Int = 1,
     @SerializedName("tags") var tagsValue: List<Int>? = emptyList()
 ) {
+  constructor(
+      message: String,
+      code: String? = null,
+      range: com.itsaky.androidide.models.Range,
+      source: String? = null,
+      severity: DiagnosticSeverity = DiagnosticSeverity.ERROR,
+      tags: List<DiagnosticTag> = emptyList(),
+  ) : this(
+      message = message,
+      code = code,
+      range =
+          Range.newBuilder()
+              .setStart(
+                  com.itsaky.androidide.lsp.rpc.Position.newBuilder()
+                      .setLine(range.start.line)
+                      .setCharacter(range.start.column)
+                      .build())
+              .setEnd(
+                  com.itsaky.androidide.lsp.rpc.Position.newBuilder()
+                      .setLine(range.end.line)
+                      .setCharacter(range.end.column)
+                      .build())
+              .build(),
+      source = source,
+      severityValue = severity.value,
+      tagsValue = tags.map { it.value },
+  )
+
 
   // 扩展存储数据，供 IDE 快速修复时绑定上下文
   var extra: Any? = null
