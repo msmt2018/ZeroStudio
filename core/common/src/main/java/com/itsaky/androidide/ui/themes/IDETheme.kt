@@ -296,7 +296,7 @@ enum class IDETheme(
   ),
 
   /** Monet Fuchsia theme. */
-  (
+  MONET_FUCHSIA(
       R.style.Theme_AndroidIDE_MonetFuchsia,
       R.style.Theme_AndroidIDE_MonetFuchsia_Dark,
       R.string.theme_monet_fuchsia,

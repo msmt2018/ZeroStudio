@@ -42,6 +42,7 @@ import com.itsaky.androidide.actions.FillMenuParams
 import com.itsaky.androidide.actions.SidebarActionItem
 import com.itsaky.androidide.actions.internal.DefaultActionsRegistry
 import com.itsaky.androidide.actions.sidebar.BuildVariantsSidebarAction
+import com.itsaky.androidide.actions.sidebar.ClassResourceMonitorSidebarAction
 import com.itsaky.androidide.actions.sidebar.CloseProjectSidebarAction
 import com.itsaky.androidide.actions.sidebar.DataFileTreeSidebarAction
 import com.itsaky.androidide.actions.sidebar.FileTreeSidebarAction
@@ -71,6 +72,7 @@ internal object EditorSidebarActions {
     registry.registerAction(BuildVariantsSidebarAction(context, ++order))
     registry.registerAction(TerminalSidebarAction(context, ++order))
     registry.registerAction(McpFragmentSidebarAction(context, ++order))
+    registry.registerAction(ClassResourceMonitorSidebarAction(context, ++order))
     registry.registerAction(PreferencesSidebarAction(context, ++order))
     registry.registerAction(CloseProjectSidebarAction(context, ++order))
   }
