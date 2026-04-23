@@ -790,4 +790,9 @@
      <string name="idepref_kotlin_chained_hints">Chained hints</string>
      <string name="idepref_kotlin_diagnostics">Diagnostics</string>
      <string name="idepref_kotlin_remove_unused_imports">Remove unused imports</string>
+
+    <string name="class_resource_monitor">Class Monitor</string>
+    <string name="class_resource_monitor_filter_hint">Filter by class/logger</string>
+    <string name="class_resource_monitor_reset">Reset</string>
+    <string name="class_resource_monitor_empty_hint">No samples yet.\nUse ClassResourceMonitor.trace(log) around code blocks to collect per-class stats.</string>
 </resources>

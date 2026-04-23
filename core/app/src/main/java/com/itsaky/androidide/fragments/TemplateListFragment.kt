@@ -33,6 +33,7 @@ import com.itsaky.androidide.templates.ITemplateProvider
 import com.itsaky.androidide.templates.ProjectTemplate
 import com.itsaky.androidide.templates.Template
 import com.itsaky.androidide.templates.TemplateCategory
+import com.itsaky.androidide.utils.ClassResourceMonitor
 import com.itsaky.androidide.viewmodel.MainViewModel
 import org.slf4j.LoggerFactory
 
@@ -82,14 +83,14 @@ class TemplateListFragment :
   }
 
   /** Sets up the TabLayout and ViewPager2 with categorized template data. */
-  private fun setupTabsAndPager() {
+  private fun setupTabsAndPager() = ClassResourceMonitor.trace(log) {
     log.debug("Setting up tabs and pager for templates.")
     val categories = templateProvider.getRegisteredCategories()
 
     if (categories.isEmpty()) {
       log.warn("No template categories are registered. The template list will be empty.")
       // Optionally, show an empty state view here.
-      return
+      return@trace
     }
 
     val pagerAdapter =
@@ -148,12 +149,14 @@ private class CategoryPageAdapter(
 
   override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
     val category = categories[position]
-    val templates = templateProvider.getTemplatesFor(category).filterIsInstance<ProjectTemplate>()
+    ClassResourceMonitor.trace(CategoryPageAdapter::class.java) {
+      val templates = templateProvider.getTemplatesFor(category).filterIsInstance<ProjectTemplate>()
 
-    holder.recyclerView.apply {
-      layoutManager = GridLayoutManager(context, spanCount)
-      adapter = TemplateGridAdapter(templates, onTemplateClick)
-      setHasFixedSize(true)
+      holder.recyclerView.apply {
+        layoutManager = GridLayoutManager(context, spanCount)
+        adapter = TemplateGridAdapter(templates, onTemplateClick)
+        setHasFixedSize(true)
+      }
     }
   }
 }
