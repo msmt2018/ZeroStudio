@@ -25,8 +25,8 @@ class ClassResourceMonitorFragment :
         }
       }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
-      ClassResourceMonitor.trace(log) {
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    ClassResourceMonitor.trace(log) {
         super.onViewCreated(view, savedInstanceState)
 
     binding.usagesList.layoutManager = LinearLayoutManager(requireContext())
@@ -40,7 +40,8 @@ class ClassResourceMonitorFragment :
 
     refresh()
     view.post(ticker)
-      }
+    }
+  }
 
   override fun onDestroyView() {
     view?.removeCallbacks(ticker)

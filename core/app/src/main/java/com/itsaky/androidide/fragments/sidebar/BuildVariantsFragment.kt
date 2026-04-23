@@ -48,8 +48,8 @@ class BuildVariantsFragment :
     private val log = LoggerFactory.getLogger(BuildVariantsFragment::class.java)
   }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
-      ClassResourceMonitor.trace(log) {
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    ClassResourceMonitor.trace(log) {
         super.onViewCreated(view, savedInstanceState)
     variantsViewModel._buildVariants.observe(viewLifecycleOwner) {
       populateRecyclerView()
@@ -81,7 +81,8 @@ class BuildVariantsFragment :
     )
 
     populateRecyclerView()
-      }
+    }
+  }
 
   private fun updateButtonStates(updatedVariants: MutableMap<String, BuildVariantInfo>?) {
     _binding?.apply {

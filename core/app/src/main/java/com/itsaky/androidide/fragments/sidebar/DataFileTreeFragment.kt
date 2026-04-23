@@ -67,11 +67,12 @@ class DataFileTreeFragment : BottomSheetDialogFragment(), FileClickListener, Fil
     return binding!!.root
   }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
-      ClassResourceMonitor.trace(log) {
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    ClassResourceMonitor.trace(log) {
         super.onViewCreated(view, savedInstanceState)
         loadInternalApplicationData()
-      }
+    }
+  }
 
   override fun onDestroyView() {
     super.onDestroyView()

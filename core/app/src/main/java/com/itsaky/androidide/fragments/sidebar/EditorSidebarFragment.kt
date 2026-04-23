@@ -61,11 +61,12 @@ class EditorSidebarFragment :
     }
       }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
-      ClassResourceMonitor.trace(log) {
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    ClassResourceMonitor.trace(log) {
         super.onViewCreated(view, savedInstanceState)
         EditorSidebarActions.setup(this)
-      }
+    }
+  }
 
   /** Get the (nullable) binding object for this fragment. */
   internal fun getBinding() = _binding
