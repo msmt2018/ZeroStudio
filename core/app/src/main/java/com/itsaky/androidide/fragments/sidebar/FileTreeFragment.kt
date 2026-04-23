@@ -43,6 +43,7 @@ import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
 import com.itsaky.androidide.events.ListProjectFilesRequestEvent
 import com.itsaky.androidide.models.FileExtension
 import com.itsaky.androidide.projects.IProjectManager
+import com.itsaky.androidide.utils.ClassResourceMonitor
 import com.itsaky.androidide.utils.doOnApplyWindowInsets
 import com.itsaky.androidide.viewmodel.FileTreeViewModel
 import java.io.File
@@ -53,6 +54,7 @@ import kotlinx.coroutines.withContext
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode.MAIN
+import org.slf4j.LoggerFactory
 
 /**
  * Fragment that displays the project file tree.
@@ -82,10 +84,11 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
     return binding!!.root
   }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-    super.onViewCreated(view, savedInstanceState)
-    listProjectFiles()
-  }
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
+      ClassResourceMonitor.trace(log) {
+        super.onViewCreated(view, savedInstanceState)
+        listProjectFiles()
+      }
 
   override fun onDestroyView() {
     super.onDestroyView()
@@ -101,18 +104,19 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
     viewModel.saveState(fileTreeView)
   }
 
-  override fun onClick(node: Node<FileObject>) {
-    val targetFile = (node.value as? file)?.getNativeFile() ?: return
-    if (!targetFile.exists()) {
-      return
-    }
+  override fun onClick(node: Node<FileObject>) =
+      ClassResourceMonitor.trace(log) {
+        val targetFile = (node.value as? file)?.getNativeFile() ?: return@trace
+        if (!targetFile.exists()) {
+          return@trace
+        }
 
-    if (targetFile.isFile) {
-      val event = FileClickEvent(targetFile)
-      event.put(Context::class.java, requireContext())
-      EventBus.getDefault().post(event)
-    }
-  }
+        if (targetFile.isFile) {
+          val event = FileClickEvent(targetFile)
+          event.put(Context::class.java, requireContext())
+          EventBus.getDefault().post(event)
+        }
+      }
 
   override fun onLongClick(node: Node<FileObject>) {
     val targetFile = (node.value as? file)?.getNativeFile() ?: return
@@ -140,12 +144,13 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
     fileTreeView?.expandNode(event.node)
   }
 
-  fun listProjectFiles() {
-    if (binding == null) {
-      return
-    }
+  fun listProjectFiles() =
+      ClassResourceMonitor.trace(log) {
+        if (binding == null) {
+          return@trace
+        }
 
-    CoroutineScope(Dispatchers.Main).launch {
+        CoroutineScope(Dispatchers.Main).launch {
       binding!!.horizontalCroll.visibility = View.GONE
       binding!!.loading.visibility = View.VISIBLE
 
@@ -174,10 +179,10 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
         tree.post { tree.restoreState(viewModel.savedState) }
       }
 
-      binding!!.horizontalCroll.visibility = View.VISIBLE
-      binding!!.loading.visibility = View.GONE
-    }
-  }
+          binding!!.horizontalCroll.visibility = View.VISIBLE
+          binding!!.loading.visibility = View.GONE
+        }
+      }
 
   private fun createTreeView(rootObj: FileObject): FileTree? {
     val ctx = context ?: return null
@@ -192,6 +197,7 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
 
   companion object {
     const val TAG = "editor.fileTree"
+    private val log = LoggerFactory.getLogger(FileTreeFragment::class.java)
 
     @JvmStatic
     fun newInstance(): FileTreeFragment {

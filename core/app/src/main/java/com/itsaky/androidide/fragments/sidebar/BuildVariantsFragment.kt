@@ -28,6 +28,8 @@ import com.itsaky.androidide.fragments.EmptyStateFragment
 import com.itsaky.androidide.tooling.api.models.BuildVariantInfo
 import com.itsaky.androidide.viewmodel.BuildVariantsViewModel
 import com.itsaky.androidide.viewmodel.EditorViewModel
+import com.itsaky.androidide.utils.ClassResourceMonitor
+import org.slf4j.LoggerFactory
 
 /**
  * A fragment to show the list of Android modules and its build variants.
@@ -42,8 +44,13 @@ class BuildVariantsFragment :
 
   private val editorViewModel by viewModels<EditorViewModel>(ownerProducer = { requireActivity() })
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-    super.onViewCreated(view, savedInstanceState)
+  companion object {
+    private val log = LoggerFactory.getLogger(BuildVariantsFragment::class.java)
+  }
+
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
+      ClassResourceMonitor.trace(log) {
+        super.onViewCreated(view, savedInstanceState)
     variantsViewModel._buildVariants.observe(viewLifecycleOwner) {
       populateRecyclerView()
       updateButtonStates(variantsViewModel.updatedBuildVariants)
@@ -74,7 +81,7 @@ class BuildVariantsFragment :
     )
 
     populateRecyclerView()
-  }
+      }
 
   private fun updateButtonStates(updatedVariants: MutableMap<String, BuildVariantInfo>?) {
     _binding?.apply {
@@ -88,13 +95,14 @@ class BuildVariantsFragment :
     }
   }
 
-  private fun populateRecyclerView() {
-    _binding?.variantsList?.apply {
-      this.adapter =
-          BuildVariantsAdapter(variantsViewModel, variantsViewModel.buildVariants.values.toList())
-      checkIsEmpty()
-    }
-  }
+  private fun populateRecyclerView() =
+      ClassResourceMonitor.trace(log) {
+        _binding?.variantsList?.apply {
+          this.adapter =
+              BuildVariantsAdapter(variantsViewModel, variantsViewModel.buildVariants.values.toList())
+          checkIsEmpty()
+        }
+      }
 
   private fun checkIsEmpty() {
     isEmpty = _binding?.variantsList?.adapter?.itemCount == 0

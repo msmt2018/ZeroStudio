@@ -24,12 +24,14 @@ import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
 import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
 import com.itsaky.androidide.events.ListProjectFilesRequestEvent
+import com.itsaky.androidide.utils.ClassResourceMonitor
 import com.itsaky.androidide.utils.doOnApplyWindowInsets
 import com.itsaky.androidide.viewmodel.DataFileTreeViewModel
 import java.io.File
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode.MAIN
+import org.slf4j.LoggerFactory
 
 /**
  * 用于访问特殊权限才能访问的私有目录
@@ -65,10 +67,11 @@ class DataFileTreeFragment : BottomSheetDialogFragment(), FileClickListener, Fil
     return binding!!.root
   }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-    super.onViewCreated(view, savedInstanceState)
-    loadInternalApplicationData()
-  }
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
+      ClassResourceMonitor.trace(log) {
+        super.onViewCreated(view, savedInstanceState)
+        loadInternalApplicationData()
+      }
 
   override fun onDestroyView() {
     super.onDestroyView()
@@ -78,8 +81,9 @@ class DataFileTreeFragment : BottomSheetDialogFragment(), FileClickListener, Fil
     fileTreeView = null
   }
 
-  private fun loadInternalApplicationData() {
-    if (binding == null) return
+  private fun loadInternalApplicationData() =
+      ClassResourceMonitor.trace(log) {
+        if (binding == null) return@trace
 
     binding!!.horizontalCroll.removeAllViews()
     binding!!.horizontalCroll.visibility = View.GONE
@@ -155,7 +159,7 @@ class DataFileTreeFragment : BottomSheetDialogFragment(), FileClickListener, Fil
         )
 
     tree.post { tree.restoreState(viewModel.savedState) }
-  }
+      }
 
   // 虚拟根目录包装类 (用于容纳多个磁盘入口)
   private class VirtualRootFileObject(private val children: List<FileObject>) : FileObject {
@@ -193,8 +197,9 @@ class DataFileTreeFragment : BottomSheetDialogFragment(), FileClickListener, Fil
     viewModel.saveState(fileTreeView)
   }
 
-  override fun onClick(node: Node<FileObject>) {
-    val fObj = node.value
+  override fun onClick(node: Node<FileObject>) =
+      ClassResourceMonitor.trace(log) {
+        val fObj = node.value
     // 解析出实际的 java.io.File 对象
     val targetFile =
         (fObj as? file)?.getNativeFile() ?: (fObj as? RenamedFileObject)?.file ?: return
@@ -208,10 +213,11 @@ class DataFileTreeFragment : BottomSheetDialogFragment(), FileClickListener, Fil
       event.put(Context::class.java, requireContext())
       EventBus.getDefault().post(event)
     }
-  }
+      }
 
-  override fun onLongClick(node: Node<FileObject>) {
-    val fObj = node.value
+  override fun onLongClick(node: Node<FileObject>) =
+      ClassResourceMonitor.trace(log) {
+        val fObj = node.value
     val targetFile =
         (fObj as? file)?.getNativeFile() ?: (fObj as? RenamedFileObject)?.file ?: return
 
@@ -219,7 +225,7 @@ class DataFileTreeFragment : BottomSheetDialogFragment(), FileClickListener, Fil
     event.put(Context::class.java, requireContext())
     event.put(Node::class.java, node)
     EventBus.getDefault().post(event)
-  }
+      }
 
   @Subscribe(threadMode = MAIN)
   fun onGetListFilesRequested(event: ListProjectFilesRequestEvent?) {
@@ -235,6 +241,7 @@ class DataFileTreeFragment : BottomSheetDialogFragment(), FileClickListener, Fil
 
   companion object {
     const val TAG = "editor.datafileTree"
+    private val log = LoggerFactory.getLogger(DataFileTreeFragment::class.java)
 
     @JvmStatic fun newInstance(): DataFileTreeFragment = DataFileTreeFragment()
   }

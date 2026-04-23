@@ -28,7 +28,9 @@ import androidx.core.view.updateMarginsRelative
 import androidx.core.view.updatePadding
 import com.itsaky.androidide.databinding.FragmentEditorSidebarBinding
 import com.itsaky.androidide.fragments.FragmentWithBinding
+import com.itsaky.androidide.utils.ClassResourceMonitor
 import com.itsaky.androidide.utils.EditorSidebarActions
+import org.slf4j.LoggerFactory
 
 /**
  * Fragment for showing the default items in the editor activity's sidebar.
@@ -38,7 +40,8 @@ import com.itsaky.androidide.utils.EditorSidebarActions
 class EditorSidebarFragment :
     FragmentWithBinding<FragmentEditorSidebarBinding>(FragmentEditorSidebarBinding::inflate) {
 
-  internal fun onApplyWindowInsets(insets: Insets) {
+  internal fun onApplyWindowInsets(insets: Insets) =
+      ClassResourceMonitor.trace(log) {
     _binding?.apply {
       title.updateLayoutParams<MarginLayoutParams> {
         updateMarginsRelative(
@@ -56,13 +59,18 @@ class EditorSidebarFragment :
           left = navigation.paddingLeft + insets.left,
       )
     }
-  }
+      }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-    super.onViewCreated(view, savedInstanceState)
-    EditorSidebarActions.setup(this)
-  }
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
+      ClassResourceMonitor.trace(log) {
+        super.onViewCreated(view, savedInstanceState)
+        EditorSidebarActions.setup(this)
+      }
 
   /** Get the (nullable) binding object for this fragment. */
   internal fun getBinding() = _binding
+
+  companion object {
+    private val log = LoggerFactory.getLogger(EditorSidebarFragment::class.java)
+  }
 }

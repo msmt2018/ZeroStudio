@@ -8,6 +8,7 @@ import com.itsaky.androidide.databinding.FragmentClassResourceMonitorBinding
 import com.itsaky.androidide.fragments.FragmentWithBinding
 import com.itsaky.androidide.utils.ClassResourceMonitor
 import java.util.Locale
+import org.slf4j.LoggerFactory
 
 /** Editor drawer fragment showing class/tag based CPU and memory usage. */
 class ClassResourceMonitorFragment :
@@ -24,8 +25,9 @@ class ClassResourceMonitorFragment :
         }
       }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-    super.onViewCreated(view, savedInstanceState)
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) =
+      ClassResourceMonitor.trace(log) {
+        super.onViewCreated(view, savedInstanceState)
 
     binding.usagesList.layoutManager = LinearLayoutManager(requireContext())
     binding.usagesList.adapter = adapter
@@ -38,14 +40,15 @@ class ClassResourceMonitorFragment :
 
     refresh()
     view.post(ticker)
-  }
+      }
 
   override fun onDestroyView() {
     view?.removeCallbacks(ticker)
     super.onDestroyView()
   }
 
-  private fun refresh() {
+  private fun refresh() =
+      ClassResourceMonitor.trace(log) {
     val filter = binding.searchInput.text?.toString().orEmpty().trim().lowercase(Locale.ROOT)
     val usages =
         ClassResourceMonitor.snapshot()
@@ -67,7 +70,7 @@ class ClassResourceMonitorFragment :
 
     adapter.submitList(usages)
     binding.emptyHint.visibility = if (usages.isEmpty()) View.VISIBLE else View.GONE
-  }
+      }
 
   private fun nanosToMillis(nanos: Long): String {
     val ms = nanos / 1_000_000.0
@@ -86,5 +89,6 @@ class ClassResourceMonitorFragment :
 
   companion object {
     private const val REFRESH_INTERVAL_MS = 1000L
+    private val log = LoggerFactory.getLogger(ClassResourceMonitorFragment::class.java)
   }
 }
