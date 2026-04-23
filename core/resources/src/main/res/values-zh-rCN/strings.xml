@@ -849,4 +849,9 @@
 <string name="summary_open_source_licenses">查看开放源代码许可。</string>
 <string name="idepref_jdkVersion_title">JDK 版本</string>
 <string name="idepref_jdkVersion_summary">当前选择：%1$s（更改需重启）</string>
+
+    <string name="class_resource_monitor">类资源监控</string>
+    <string name="class_resource_monitor_filter_hint">按类名/Logger过滤</string>
+    <string name="class_resource_monitor_reset">重置</string>
+    <string name="class_resource_monitor_empty_hint">暂无采样数据。\n请在代码块外层使用 ClassResourceMonitor.trace(log) 进行统计。</string>
 </resources>
