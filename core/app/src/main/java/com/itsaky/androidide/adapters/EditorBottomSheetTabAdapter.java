@@ -27,6 +27,7 @@ import com.itsaky.androidide.fragments.DiagnosticsListFragment;
 import com.itsaky.androidide.fragments.SearchResultFragment;
 import com.itsaky.androidide.fragments.output.AppLogFragment;
 import com.itsaky.androidide.fragments.output.BuildOutputFragment;
+import com.itsaky.androidide.fragments.output.EditorProcessApmFragment;
 import com.itsaky.androidide.fragments.output.IDELogFragment;
 // import com.itsaky.androidide.app.MatrixApmPanelFragment;
 import com.itsaky.androidide.BuildConfig;
@@ -60,6 +61,9 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
         // IDE log
     this.fragments.add(new Tab(fragmentActivity.getString(R.string.ide_logs), 
         IDELogFragment.class, ++index));
+
+    this.fragments.add(
+        new Tab(fragmentActivity.getString(R.string.view_apm_panel), EditorProcessApmFragment.class, ++index));
      
      //git版本控制
     // this.fragments.add(new Tab(fragmentActivity.getString(R.string.title_git), 
