@@ -1,0 +1,83 @@
+{
+  "tabs": [
+    {
+      "title": "backup",
+      "symbols": [
+        { "label": "注释", "commit": "//", "offset": 2 },
+        { "label": "←", "commit": "__MOVE_LEFT__" },
+        { "label": "↑", "commit": "__MOVE_UP__" },
+        { "label": "→", "commit": "__MOVE_RIGHT__" },
+        { "label": "\"", "commit": "\"\"", "offset": 1 },
+        { "label": "'", "commit": "''", "offset": 1 },
+        { "label": ".", "commit": "." },
+        { "label": ",", "commit": "," },
+        { "label": "/", "commit": "/" },
+        { "label": "//", "commit": "//", "offset": 2 },
+        { "label": "↓", "commit": "__MOVE_DOWN__" },
+        { "label": ":", "commit": ":" },
+        { "label": ";", "commit": ";" },
+        { "label": "#", "commit": "#" },
+        { "label": "+", "commit": "+" },
+        { "label": "−", "commit": "-" },
+        { "label": "*", "commit": "*" },
+        { "label": "=", "commit": "=" },
+        { "label": "|", "commit": "|" },
+        { "label": "~", "commit": "~" },
+        { "label": "(", "commit": "()", "offset": 1 },
+        { "label": ")", "commit": ")" },
+        { "label": "(\"", "commit": "(\"\")", "offset": 2 },
+        { "label": "\")", "commit": "\")" },
+        { "label": "{", "commit": "{}", "offset": 1 },
+        { "label": "}", "commit": "}" },
+        { "label": "()", "commit": "()", "offset": 1 },
+        { "label": "[]", "commit": "[]", "offset": 1 },
+        { "label": "{}", "commit": "{}", "offset": 1 },
+        { "label": "<", "commit": "<" },
+        { "label": ">", "commit": ">" },
+        { "label": "\\", "commit": "\\" }
+      ]
+    },
+    {
+      "title": "特殊",
+      "symbols": [
+        { "label": "↹", "commit": "\t", "offset": 1 },
+        { "label": "@", "commit": "@" },
+        { "label": "_", "commit": "_" },
+        { "label": "?", "commit": "?" },
+        { "label": "&", "commit": "&" },
+        { "label": "!", "commit": "!" },
+        { "label": "`", "commit": "`" },
+        { "label": "$", "commit": "$" },
+        { "label": "%", "commit": "%" },
+        { "label": "^", "commit": "^" },
+        { "label": "::", "commit": "::", "offset": 2 },
+        { "label": "->", "commit": "->", "offset": 2 },
+        { "label": "=>", "commit": "=>", "offset": 2 },
+        { "label": "?.", "commit": "?.", "offset": 2 },
+        { "label": "?:", "commit": "?:", "offset": 2 },
+        { "label": "in", "commit": "in", "offset": 2 }
+      ]
+    },
+    {
+      "title": "B",
+      "symbols": [
+        { "label": "{", "commit": "{}", "offset": 1 },
+        { "label": "}", "commit": "}" },
+        { "label": "[", "commit": "[]", "offset": 1 },
+        { "label": "]", "commit": "]" },
+        { "label": "(", "commit": "()", "offset": 1 },
+        { "label": ")", "commit": ")" },
+        { "label": "<", "commit": "<>", "offset": 1 },
+        { "label": ">", "commit": ">" },
+        { "label": "\"", "commit": "\"\"", "offset": 1 },
+        { "label": "'", "commit": "''", "offset": 1 },
+        { "label": "/**", "commit": "/**\n * \n */", "offset": 6 },
+        { "label": "/* */", "commit": "/*  */", "offset": 3 },
+        { "label": "//", "commit": "//", "offset": 2 },
+        { "label": "=", "commit": "=" },
+        { "label": "==", "commit": "==", "offset": 2 },
+        { "label": "!=", "commit": "!=", "offset": 2 }
+      ]
+    }
+  ]
+}

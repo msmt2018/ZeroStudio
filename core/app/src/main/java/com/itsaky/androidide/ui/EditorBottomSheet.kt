@@ -233,6 +233,8 @@ constructor(
   }
 
   fun onSlide(sheetOffset: Float) {
+    binding.symbolInput.onBottomSheetSlide(sheetOffset)
+
     val heightScale =
         if (sheetOffset >= COLLAPSE_HEADER_AT_OFFSET) {
           ((COLLAPSE_HEADER_AT_OFFSET - sheetOffset) + COLLAPSE_HEADER_AT_OFFSET) * 2f
@@ -306,7 +308,7 @@ constructor(
       return
     }
 
-    binding.symbolInput.itemAnimator?.endAnimations()
+    binding.symbolInput.endItemAnimations()
 
     TransitionManager.beginDelayedTransition(
         binding.root,

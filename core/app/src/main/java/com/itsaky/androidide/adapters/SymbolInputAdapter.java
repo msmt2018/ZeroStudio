@@ -111,6 +111,26 @@ public class SymbolInputAdapter extends RecyclerView.Adapter<SymbolInputAdapter.
     }
 
     final var controller = editor.getSnippetController();
+    if ("__MOVE_LEFT__".equals(text)) {
+      editor.moveSelection(SelectionMovement.LEFT);
+      return;
+    }
+
+    if ("__MOVE_UP__".equals(text)) {
+      editor.moveSelection(SelectionMovement.UP);
+      return;
+    }
+
+    if ("__MOVE_RIGHT__".equals(text)) {
+      editor.moveSelection(SelectionMovement.RIGHT);
+      return;
+    }
+
+    if ("__MOVE_DOWN__".equals(text)) {
+      editor.moveSelection(SelectionMovement.DOWN);
+      return;
+    }
+
     if ("\t".equals(text) && controller.isInSnippet()) {
       controller.shiftToNextTabStop();
       return;
