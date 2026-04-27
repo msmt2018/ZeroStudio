@@ -307,7 +307,13 @@ constructor(
   }
 
   fun refreshSymbolInput(editor: CodeEditorView) {
-    binding.symbolInputView.bindEditor(editor.editor)
+    val codeEditor = editor.editor
+    if (codeEditor == null) {
+      log.warn("Cannot refresh symbol input because editor is null")
+      return
+    }
+
+    binding.symbolInputView.bindEditor(codeEditor)
     binding.symbolInputView.onHostResume()
   }
 
