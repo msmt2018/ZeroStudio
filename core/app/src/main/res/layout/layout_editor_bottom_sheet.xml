@@ -1,22 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<!--
-  ~  This file is part of AndroidIDE.
-  ~
-  ~  AndroidIDE is free software: you can redistribute it and/or modify
-  ~  it under the terms of the GNU General Public License as published by
-  ~  the Free Software Foundation, either version 3 of the License, or
-  ~  (at your option) any later version.
-  ~
-  ~  AndroidIDE is distributed in the hope that it will be useful,
-  ~  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  ~  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  ~  GNU General Public License for more details.
-  ~
-  ~  You should have received a copy of the GNU General Public License
-  ~   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
-  -->
-
 <RelativeLayout
   xmlns:android="http://schemas.android.com/apk/res/android"
   xmlns:tools="http://schemas.android.com/tools"
@@ -24,7 +7,8 @@
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:background="?attr/colorSurface">
-  
+
+
   <com.google.android.material.card.MaterialCardView
     android:id="@+id/cardView"
     android:layout_width="match_parent"
@@ -36,8 +20,8 @@
     app:cardElevation="0dp"
     android:scaleX="0.9"
     android:scaleY="0.9"
-    app:cardBackgroundColor="?attr/colorSurface">
-  </com.google.android.material.card.MaterialCardView>
+    app:cardBackgroundColor="?attr/colorSurface" />
+
   <include
     android:id="@+id/border"
     layout="@layout/layout_divider_horizontal"
@@ -46,19 +30,56 @@
     android:layout_height="0.5dp"
     android:layout_alignParentTop="true" />
 
+  <LinearLayout
+    android:id="@+id/page_switch_container"
+    android:layout_width="match_parent"
+    android:layout_height="32dp"
+    android:layout_below="@id/border"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
+
+    <com.google.android.material.button.MaterialButton
+      android:id="@+id/build_status_tab"
+      style="@style/Widget.Material3.Button.TextButton"
+      android:layout_width="0dp"
+      android:layout_height="match_parent"
+      android:layout_weight="1"
+      android:insetTop="0dp"
+      android:insetBottom="0dp"
+      android:minHeight="0dp"
+      android:text="Build"
+      android:textAllCaps="false" />
+
+    <com.google.android.material.button.MaterialButton
+      android:id="@+id/symbol_input_tab"
+      style="@style/Widget.Material3.Button.TextButton"
+      android:layout_width="0dp"
+      android:layout_height="match_parent"
+      android:layout_weight="1"
+      android:insetTop="0dp"
+      android:insetBottom="0dp"
+      android:minHeight="0dp"
+      android:text="Symbols"
+      android:textAllCaps="false" />
+
+  </LinearLayout>
+
   <ViewFlipper
     android:id="@+id/header_container"
     android:layout_width="match_parent"
-    android:layout_below="@id/border"
-    android:layout_height="@dimen/editor_sheet_collapsed_height"
+    android:layout_below="@id/page_switch_container"
+    android:layout_height="wrap_content"
     android:background="?attr/colorSurface">
 
     <include
       layout="@layout/layout_editor_build_status"
       android:id="@+id/build_status"/>
 
-    <com.itsaky.androidide.ui.SymbolInputView
-      android:id="@+id/symbol_input"
+    <android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
+      android:id="@+id/symbol_input_view"
       android:layout_width="match_parent"
       android:layout_height="wrap_content"/>
 

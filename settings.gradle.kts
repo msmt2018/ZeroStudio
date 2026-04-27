@@ -217,6 +217,7 @@ include(
     ":modules:soraLanguageTreesitter",
     ":modules:soraOnigurumaNative",
     ":modules:deviceCompat",
+    ":modules:zero-Symbol-input-view",
     ":modules:zero-regular-preview",
     ":modules:thinkmap-treeview",
     ":modules:compose-preview",
