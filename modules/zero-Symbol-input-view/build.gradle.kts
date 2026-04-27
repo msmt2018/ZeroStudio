@@ -1,5 +1,6 @@
 plugins {
     id("com.android.library")
+    id("kotlin-android")
     id("com.vanniktech.maven.publish.base")
 }
 
@@ -14,9 +15,7 @@ dependencies {
     implementation("androidx.viewpager2:viewpager2:1.0.0")
     implementation("androidx.recyclerview:recyclerview:1.3.1")
 
-    implementation(projects.editor)
+    implementation(libs.common.editor)
     api(libs.androidx.annotation)
-    implementation(projects.languageJava)
-    implementation(projects.languageTextmate)
 
 }

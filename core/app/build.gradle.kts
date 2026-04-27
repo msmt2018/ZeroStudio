@@ -242,6 +242,7 @@ dependencies {
   implementation(projects.event.eventbusEvents)
   implementation(projects.modules.mtDataFilesProvider)
   implementation(projects.modules.deviceCompat)
+  implementation(project(":modules:zero-Symbol-input-view"))
   implementation(projects.core.git)
   implementation(projects.core.layoutEditor)
   // implementation(projects.core.chatai.app)
