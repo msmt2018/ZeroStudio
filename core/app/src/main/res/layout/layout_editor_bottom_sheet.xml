@@ -20,24 +20,10 @@
 <RelativeLayout
   xmlns:android="http://schemas.android.com/apk/res/android"
   xmlns:tools="http://schemas.android.com/tools"
-  xmlns:app="http://schemas.android.com/apk/res-auto"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:background="?attr/colorSurface">
   
-  <com.google.android.material.card.MaterialCardView
-    android:id="@+id/cardView"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    app:cardCornerRadius="24dp"
-    android:layout_marginLeft="16dp"
-    android:layout_marginRight="16dp"
-    app:strokeWidth="0dp"
-    app:cardElevation="0dp"
-    android:scaleX="0.9"
-    android:scaleY="0.9"
-    app:cardBackgroundColor="?attr/colorSurface">
-  </com.google.android.material.card.MaterialCardView>
   <include
     android:id="@+id/border"
     layout="@layout/layout_divider_horizontal"

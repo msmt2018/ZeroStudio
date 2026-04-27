@@ -125,7 +125,6 @@ abstract class BaseEditorActivity :
   protected val memoryUsageWatcher = MemoryUsageWatcher()
   protected val pidToDatasetIdxMap = MutableIntIntMap(initialCapacity = 3)
   private val bottomSheetHeaderHideReasons = mutableSetOf<String>()
-  private var bottomSheetCardVisibilitySnapshot: Int = View.VISIBLE
   private var bottomSheetHeaderVisibilitySnapshot: Int = View.VISIBLE
 
   var isDestroying = false
@@ -301,7 +300,6 @@ abstract class BaseEditorActivity :
       val wasRemoved = bottomSheetHeaderHideReasons.remove(reason)
       if (!wasRemoved || bottomSheetHeaderHideReasons.isNotEmpty()) return@runOnUiThread
       val bottomSheetBinding = content.bottomSheet.binding
-      bottomSheetBinding.cardView.visibility = bottomSheetCardVisibilitySnapshot
       bottomSheetBinding.headerContainer.visibility = bottomSheetHeaderVisibilitySnapshot
     }
   }
@@ -312,9 +310,7 @@ abstract class BaseEditorActivity :
       val wasAdded = bottomSheetHeaderHideReasons.add(reason)
       if (!wasAdded || bottomSheetHeaderHideReasons.size > 1) return@runOnUiThread
       val bottomSheetBinding = content.bottomSheet.binding
-      bottomSheetCardVisibilitySnapshot = bottomSheetBinding.cardView.visibility
       bottomSheetHeaderVisibilitySnapshot = bottomSheetBinding.headerContainer.visibility
-      bottomSheetBinding.cardView.visibility = View.INVISIBLE
       bottomSheetBinding.headerContainer.visibility = View.INVISIBLE
     }
   }
