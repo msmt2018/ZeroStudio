@@ -19,6 +19,7 @@ package com.itsaky.androidide.ui
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Color
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.LayoutInflater
@@ -337,7 +338,7 @@ constructor(
       height = if (index == CHILD_SYMBOL_INPUT) ViewGroup.LayoutParams.WRAP_CONTENT else (collapsedHeight + insetBottom).roundToInt()
     }
     val activeColor = resolveColorAttr(R.attr.colorPrimaryContainer)
-    val inactiveColor = resolveColorAttr(android.R.attr.transparent)
+    val inactiveColor = Color.TRANSPARENT
     binding.buildStatusTab.setBackgroundColor(if (index == CHILD_HEADER) activeColor else inactiveColor)
     binding.symbolInputTab.setBackgroundColor(if (index == CHILD_SYMBOL_INPUT) activeColor else inactiveColor)
   }
