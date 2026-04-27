@@ -57,7 +57,6 @@ import com.itsaky.androidide.tasks.TaskExecutor.CallbackWithError
 import com.itsaky.androidide.tasks.TaskExecutor.executeAsync
 import com.itsaky.androidide.tasks.TaskExecutor.executeAsyncProvideError
 import com.itsaky.androidide.utils.IntentUtils.shareFile
-import com.itsaky.androidide.utils.Symbols.forFile
 import com.itsaky.androidide.utils.flashError
 import java.io.File
 import java.io.IOException
@@ -180,6 +179,10 @@ constructor(
       }
     }
 
+    binding.buildStatusTab.setOnClickListener { selectHeaderPage(CHILD_HEADER) }
+    binding.symbolInputTab.setOnClickListener { selectHeaderPage(CHILD_SYMBOL_INPUT) }
+    selectHeaderPage(CHILD_HEADER)
+
     ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
       this.windowInsets = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures())
       insets
@@ -233,6 +236,7 @@ constructor(
   }
 
   fun onSlide(sheetOffset: Float) {
+    if (binding.headerContainer.displayedChild != CHILD_HEADER) return
     val heightScale =
         if (sheetOffset >= COLLAPSE_HEADER_AT_OFFSET) {
           ((COLLAPSE_HEADER_AT_OFFSET - sheetOffset) + COLLAPSE_HEADER_AT_OFFSET) * 2f
@@ -258,6 +262,11 @@ constructor(
 
   fun showChild(index: Int) {
     binding.headerContainer.displayedChild = index
+    when (index) {
+      CHILD_HEADER -> selectHeaderPage(CHILD_HEADER)
+      CHILD_SYMBOL_INPUT -> selectHeaderPage(CHILD_SYMBOL_INPUT)
+      else -> binding.pageSwitchContainer.visibility = View.GONE
+    }
   }
 
   fun setActionText(text: CharSequence) {
@@ -297,7 +306,8 @@ constructor(
   }
 
   fun refreshSymbolInput(editor: CodeEditorView) {
-    binding.symbolInput.refresh(editor.editor, forFile(editor.file))
+    binding.symbolInputView.bindEditor(editor.editor)
+    binding.symbolInputView.onHostResume()
   }
 
   fun onSoftInputChanged() {
@@ -306,8 +316,6 @@ constructor(
       return
     }
 
-    binding.symbolInput.itemAnimator?.endAnimations()
-
     TransitionManager.beginDelayedTransition(
         binding.root,
         MaterialSharedAxis(MaterialSharedAxis.Y, false),
@@ -315,10 +323,29 @@ constructor(
 
     val activity = context as Activity
     if (KeyboardUtils.isSoftInputVisible(activity)) {
-      binding.headerContainer.displayedChild = CHILD_SYMBOL_INPUT
+      selectHeaderPage(CHILD_SYMBOL_INPUT)
     } else {
-      binding.headerContainer.displayedChild = CHILD_HEADER
+      selectHeaderPage(CHILD_HEADER)
     }
+  }
+
+
+  private fun selectHeaderPage(index: Int) {
+    binding.pageSwitchContainer.visibility = View.VISIBLE
+    binding.headerContainer.displayedChild = index
+    binding.headerContainer.updateLayoutParams<ViewGroup.LayoutParams> {
+      height = if (index == CHILD_SYMBOL_INPUT) ViewGroup.LayoutParams.WRAP_CONTENT else (collapsedHeight + insetBottom).roundToInt()
+    }
+    val activeColor = resolveColorAttr(R.attr.colorPrimaryContainer)
+    val inactiveColor = resolveColorAttr(android.R.attr.transparent)
+    binding.buildStatusTab.setBackgroundColor(if (index == CHILD_HEADER) activeColor else inactiveColor)
+    binding.symbolInputTab.setBackgroundColor(if (index == CHILD_SYMBOL_INPUT) activeColor else inactiveColor)
+  }
+
+  private fun resolveColorAttr(attr: Int): Int {
+    val typedValue = android.util.TypedValue()
+    context.theme.resolveAttribute(attr, typedValue, true)
+    return if (typedValue.resourceId != 0) context.getColor(typedValue.resourceId) else typedValue.data
   }
 
   fun setStatus(text: CharSequence, @GravityInt gravity: Int) {
