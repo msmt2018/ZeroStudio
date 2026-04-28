@@ -39,6 +39,8 @@ import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.collection.MutableIntIntMap
 import androidx.core.graphics.Insets
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
@@ -288,6 +290,10 @@ abstract class BaseEditorActivity :
     if (this.isImeVisible != isImeVisible) {
       this.isImeVisible = isImeVisible
       onSoftInputChanged()
+    }
+
+    if (isExternalSymbolPageActive) {
+      updatePageSwitchContainerPosition()
     }
   }
 
@@ -806,6 +812,7 @@ abstract class BaseEditorActivity :
             } else if (newState == BottomSheetBehavior.STATE_COLLAPSED) {
               resetEditorSurfaceTransform()
             }
+            updatePageSwitchContainerPosition()
           }
 
           override fun onSlide(bottomSheet: View, slideOffset: Float) {
@@ -848,17 +855,35 @@ abstract class BaseEditorActivity :
       symbolInputPage.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
         updatePageSwitchContainerPosition()
       }
+      ViewCompat.setWindowInsetsAnimationCallback(
+          symbolInputPage,
+          object : WindowInsetsAnimationCompat.Callback(
+              WindowInsetsAnimationCompat.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE
+          ) {
+            override fun onProgress(
+                insets: WindowInsetsCompat,
+                runningAnimations: MutableList<WindowInsetsAnimationCompat>,
+            ): WindowInsetsCompat {
+              if (isExternalSymbolPageActive) {
+                updatePageSwitchContainerPosition()
+              }
+              return insets
+            }
+          }
+      )
       bottomSheet.setOffsetAnchor(editorAppBarLayout)
       pageSwitchBuildTab.setOnClickListener {
-        if (editorBottomSheet?.state != BottomSheetBehavior.STATE_COLLAPSED) {
-          editorBottomSheet?.setState(BottomSheetBehavior.STATE_COLLAPSED)
-        }
-        pageSwitchContainer.post {
-          if (_binding == null) return@post
+        if (isExternalSymbolPageActive) {
+          bottomSheet.suppressNextHeaderExpand()
           setExternalSymbolPageActive(false)
           bottomSheet.showChild(EditorBottomSheet.CHILD_HEADER)
           updateBottomSheetPageSwitch(isBuildStatusPage = true)
+          return@setOnClickListener
         }
+        if (editorBottomSheet?.state != BottomSheetBehavior.STATE_COLLAPSED) {
+          editorBottomSheet?.setState(BottomSheetBehavior.STATE_COLLAPSED)
+        }
+        updateBottomSheetPageSwitch(isBuildStatusPage = true)
       }
       pageSwitchSymbolTab.setOnClickListener {
         if (editorBottomSheet?.state != BottomSheetBehavior.STATE_COLLAPSED) {
@@ -952,14 +977,12 @@ abstract class BaseEditorActivity :
 
     val anchorTop =
         if (isExternalSymbolPageActive) {
-          content.symbolInputPage.top
+          content.symbolInputPage.y + content.externalSymbolInputView.y
         } else {
-          content.bottomSheet.top
+          content.bottomSheet.y
         }
 
-    val rawTargetY = (anchorTop - container.height).toFloat()
-    val minVisibleY = content.editorAppBarLayout.bottom.toFloat()
-    val targetY = kotlin.math.max(rawTargetY, minVisibleY)
+    val targetY = anchorTop - container.height
     if (lastPageSwitchY.isNaN() || kotlin.math.abs(lastPageSwitchY - targetY) > 0.5f) {
       container.y = targetY
       lastPageSwitchY = targetY

@@ -19,6 +19,7 @@ import android.widget.GridLayout
 import android.widget.LinearLayout
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.TextViewCompat
 import androidx.core.widget.NestedScrollView
@@ -94,6 +95,7 @@ class AdvancedSymbolInputView @JvmOverloads constructor(
             applyImeOffset()
         }
     private var imeBottomInsetPx = 0
+    private var imeAnimationBottomInsetPx = 0
 
     init {
         orientation = VERTICAL
@@ -126,9 +128,31 @@ class AdvancedSymbolInputView @JvmOverloads constructor(
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
             val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
             imeBottomInsetPx = imeInsets.bottom.coerceAtLeast(0)
-            applyImeOffset()
+            if (imeAnimationBottomInsetPx == 0) {
+                applyImeOffset()
+            }
             insets
         }
+        ViewCompat.setWindowInsetsAnimationCallback(
+            this,
+            object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                override fun onProgress(
+                    insets: WindowInsetsCompat,
+                    runningAnimations: MutableList<WindowInsetsAnimationCompat>
+                ): WindowInsetsCompat {
+                    imeAnimationBottomInsetPx =
+                        insets.getInsets(WindowInsetsCompat.Type.ime()).bottom.coerceAtLeast(0)
+                    applyImeOffset()
+                    return insets
+                }
+
+                override fun onEnd(animation: WindowInsetsAnimationCompat) {
+                    super.onEnd(animation)
+                    imeAnimationBottomInsetPx = 0
+                    applyImeOffset()
+                }
+            }
+        )
         refreshData()
     }
 
@@ -204,7 +228,8 @@ class AdvancedSymbolInputView @JvmOverloads constructor(
     }
 
     private fun applyImeOffset() {
-        translationY = if (followSystemIme) -imeBottomInsetPx.toFloat() else 0f
+        val imeBottom = maxOf(imeBottomInsetPx, imeAnimationBottomInsetPx)
+        translationY = if (followSystemIme) -imeBottom.toFloat() else 0f
     }
 
     /**
