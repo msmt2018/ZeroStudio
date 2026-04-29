@@ -827,6 +827,7 @@ abstract class BaseEditorActivity :
               this.bottomSheet.onSlide(slideOffset)
               this.viewContainer.scaleX = editorScale
               this.viewContainer.scaleY = editorScale
+              syncOverlayWithBottomSheetOffset(slideOffset)
               updatePageSwitchContainerPosition()
             }
           }
@@ -1017,6 +1018,19 @@ abstract class BaseEditorActivity :
     bubble.setArrowExpanded(shouldShow)
     bubble.bringToFront()
     prompt.bringToFront()
+  }
+
+  private fun syncOverlayWithBottomSheetOffset(slideOffset: Float) {
+    if (_binding == null || isExternalSymbolPageActive) return
+    val normalized = slideOffset.coerceIn(0f, 1f)
+    val revealFraction = (1f - normalized).coerceIn(0f, 1f)
+    val offsetPx = (1f - revealFraction) * content.pageSwitchContainer.height * 0.6f
+    content.pageSwitchContainer.translationY = offsetPx
+    content.pageSwitchGestureBubble.translationY = offsetPx
+    content.pageSwitchSymbolTab.translationY = offsetPx
+    content.pageSwitchContainer.alpha = revealFraction
+    content.pageSwitchGestureBubble.alpha = revealFraction
+    content.pageSwitchSymbolTab.alpha = revealFraction
   }
 
   private fun applyExternalSymbolImeInset() {
