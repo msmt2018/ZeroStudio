@@ -865,49 +865,20 @@ abstract class BaseEditorActivity :
         updatePageSwitchContainerPosition()
       }
       bottomSheet.setOffsetAnchor(editorAppBarLayout)
-      pageSwitchBuildTab.setOnClickListener {
-        blockBottomSheetExpandForTabSwitch = true
-        bottomSheet.setExpandBlocked(true)
-        forceCollapseBottomSheet(lockDurationMs = 500L)
-        setExternalSymbolPageActive(false)
-        bottomSheet.showChild(EditorBottomSheet.CHILD_HEADER)
-        ThreadUtils.runOnUiThreadDelayed({
-          blockBottomSheetExpandForTabSwitch = false
-          bottomSheet.setExpandBlocked(false)
-        }, 500)
-        updateBottomSheetPageSwitch(isBuildStatusPage = true)
-      }
-      pageSwitchSymbolTab.setOnClickListener {
-        blockBottomSheetExpandForTabSwitch = true
-        bottomSheet.setExpandBlocked(true)
-        forceCollapseBottomSheet(lockDurationMs = 320L)
-        setExternalSymbolPageActive(true)
-        ThreadUtils.runOnUiThreadDelayed({
-          blockBottomSheetExpandForTabSwitch = false
-          bottomSheet.setExpandBlocked(false)
-        }, 320)
-        updateBottomSheetPageSwitch(isBuildStatusPage = false)
-      }
       bottomSheet.onHeaderPageChanged = { page ->
         if (_binding != null) {
-          val isBuildStatusPage = page == EditorBottomSheet.CHILD_HEADER
-          val showPageSwitch = true
-          isPageSwitchVisibleForCurrentPage = showPageSwitch
-          content.pageSwitchBuildTab.isEnabled = showPageSwitch
-          content.pageSwitchSymbolTab.isEnabled = showPageSwitch
+          isPageSwitchVisibleForCurrentPage = true
 
           when (page) {
             EditorBottomSheet.STATE_EXTERNAL_SYMBOL -> {
               if (!isExternalSymbolPageActive) {
                 setExternalSymbolPageActive(true)
               }
-              updateBottomSheetPageSwitch(isBuildStatusPage = false)
             }
             EditorBottomSheet.CHILD_HEADER -> {
               if (isExternalSymbolPageActive) {
                 setExternalSymbolPageActive(false)
               }
-              updateBottomSheetPageSwitch(isBuildStatusPage = true)
             }
             EditorBottomSheet.CHILD_ACTION -> {
               if (isExternalSymbolPageActive) {
@@ -920,17 +891,12 @@ abstract class BaseEditorActivity :
           if (!enableSwipeReveal && binding.swipeReveal.isOpen) {
             binding.swipeReveal.close()
           }
-          if (!isExternalSymbolPageActive) {
-            updateBottomSheetPageSwitch(isBuildStatusPage)
-          }
           updatePageSwitchContainerPosition()
         }
       }
       setExternalSymbolPageActive(false)
       isPageSwitchVisibleForCurrentPage = true
-      content.pageSwitchBuildTab.isEnabled = true
-      content.pageSwitchSymbolTab.isEnabled = true
-      updateBottomSheetPageSwitch(isBuildStatusPage = true)
+      content.pageSwitchSymbolTab.text = getString(com.itsaky.androidide.resources.R.string.msg_swipe_up)
       content.pageSwitchContainer.text = editorViewModel.statusText
       updatePageSwitchContainerPosition()
     }
@@ -1016,6 +982,41 @@ abstract class BaseEditorActivity :
     layoutParams.anchorId = targetAnchorId
     layoutParams.anchorGravity = targetAnchorGravity
     bubble.layoutParams = layoutParams
+  }
+
+  private fun updatePageSwitchContainerPosition() {
+    if (_binding == null) return
+    val container = content.pageSwitchContainer
+    val baseTranslationY = -(container.height / 2f)
+    val desiredTranslationY =
+        if (isExternalSymbolPageActive) {
+          val symbolExpand = content.externalSymbolInputView.getExpansionFraction()
+          val collapsedOffsetRatio = (1f - symbolExpand).coerceIn(0f, 1f) * 0.4f
+          baseTranslationY + (container.height * collapsedOffsetRatio)
+        } else {
+          baseTranslationY
+        }
+    if (kotlin.math.abs(container.translationY - desiredTranslationY) > 0.5f) {
+      container.translationY = desiredTranslationY
+    }
+
+    val shouldShow = !(if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)
+    container.visibility = if (shouldShow) View.VISIBLE else View.GONE
+    val bubble = content.pageSwitchGestureBubble
+    val prompt = content.pageSwitchSymbolTab
+    if (shouldShow) {
+      val alpha = computePageSwitchAlpha()
+      if (lastPageSwitchAlpha.isNaN() || kotlin.math.abs(lastPageSwitchAlpha - alpha) > 0.01f) {
+        container.alpha = alpha
+        bubble.alpha = alpha
+        prompt.alpha = alpha
+        lastPageSwitchAlpha = alpha
+      }
+    }
+    container.bringToFront()
+    bubble.setArrowExpanded(shouldShow)
+    bubble.bringToFront()
+    prompt.bringToFront()
   }
 
   private fun applyExternalSymbolImeInset() {
@@ -1142,45 +1143,11 @@ abstract class BaseEditorActivity :
     }
   }
 
-  private fun updatePageSwitchContainerPosition() {
-    if (_binding == null) return
-    val container = content.pageSwitchContainer
-    val baseTranslationY = -(container.height / 2f)
-    val desiredTranslationY =
-        if (isExternalSymbolPageActive) {
-          val symbolExpand = content.externalSymbolInputView.getExpansionFraction()
-          val collapsedOffsetRatio = (1f - symbolExpand).coerceIn(0f, 1f) * 0.4f
-          baseTranslationY + (container.height * collapsedOffsetRatio)
-        } else {
-          baseTranslationY
-        }
-    if (kotlin.math.abs(container.translationY - desiredTranslationY) > 0.5f) {
-      container.translationY = desiredTranslationY
-    }
-
-    val shouldShow = !(if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)
-    container.visibility = if (shouldShow) View.VISIBLE else View.GONE
-    val bubble = content.pageSwitchGestureBubble
-    val prompt = content.pageSwitchSymbolTab
-    if (shouldShow) {
-      val alpha = computePageSwitchAlpha()
-      if (lastPageSwitchAlpha.isNaN() || kotlin.math.abs(lastPageSwitchAlpha - alpha) > 0.01f) {
-        container.alpha = alpha
-        bubble.alpha = alpha
-        prompt.alpha = alpha
-        lastPageSwitchAlpha = alpha
-      }
-    }
-    container.bringToFront()
-    bubble.setArrowExpanded(shouldShow)
-    bubble.bringToFront()
-    prompt.bringToFront()
-  }
-
   private fun updateBottomSheetPageSwitch(isBuildStatusPage: Boolean) {
     if (_binding == null) return
-    content.pageSwitchBuildTab.alpha = if (isBuildStatusPage) 1f else 0.55f
-    content.pageSwitchSymbolTab.alpha = if (isBuildStatusPage) 0.55f else 1f
+    content.pageSwitchSymbolTab.text =
+        if (isBuildStatusPage) getString(com.itsaky.androidide.resources.R.string.msg_swipe_up)
+        else editorViewModel.statusText
   }
 
   private fun setupDiagnosticInfo() {
