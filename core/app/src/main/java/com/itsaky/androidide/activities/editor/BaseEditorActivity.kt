@@ -208,6 +208,7 @@ abstract class BaseEditorActivity :
   private var isPageSwitchVisibleForCurrentPage = true
   private var lastPageSwitchAlpha = Float.NaN
   private var bubbleLastDragRawY = Float.NaN
+  private var bubbleAccumulatedDragY = 0f
   private var bottomSheetSlideOffset = 0f
   private var blockBottomSheetExpandForTabSwitch = false
   private var isPageSwitchAnchorUpdatePosted = false
@@ -1033,9 +1034,14 @@ abstract class BaseEditorActivity :
     content.pageSwitchSymbolTab.alpha = revealFraction
   }
 
-  private fun applyExternalSymbolImeInset() {
-    if (_binding == null) return
-    val targetImeInset = if (isExternalSymbolPageActive) latestImeBottomInset else 0
+        bubbleAccumulatedDragY = 0f
+      bubbleAccumulatedDragY += delta
+      val trigger = resources.displayMetrics.density * 24f
+      if (kotlin.math.abs(bubbleAccumulatedDragY) < trigger) return@setOnVerticalDragListener
+      if (bubbleAccumulatedDragY < 0 && behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+      } else if (bubbleAccumulatedDragY > 0 && behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+      bubbleAccumulatedDragY = 0f
+        bubbleAccumulatedDragY = 0f
     content.externalSymbolInputView.setImeBottomInset(targetImeInset)
     content.symbolInputPage.translationY = -targetImeInset.toFloat()
     content.pageSwitchContainer.translationY = 0f
