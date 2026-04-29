@@ -713,7 +713,8 @@ abstract class BaseEditorActivity :
     editorViewModel._statusText.observe(this) {
       if (!isDestroying && _binding != null) {
         content.bottomSheet.setStatus(it.first, it.second)
-        content.pageSwitchContainer.text = it.first
+        val hidden = if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden
+        content.pageSwitchContainer.text = if (hidden) getString(com.itsaky.androidide.resources.R.string.msg_swipe_up) else it.first
       }
     }
 
@@ -785,10 +786,6 @@ abstract class BaseEditorActivity :
   }
 
   private fun appendClickableSpan(
-              if (!isUserInitiatedExpandAllowed()) {
-                editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
-                return
-              }
       sb: SpannableStringBuilder,
       @StringRes textRes: Int,
       span: ClickableSpan,
@@ -815,6 +812,10 @@ abstract class BaseEditorActivity :
           override fun onStateChanged(bottomSheet: View, newState: Int) {
             if (isDestroying || _binding == null) return
             if (newState == BottomSheetBehavior.STATE_EXPANDED && blockBottomSheetExpandForTabSwitch) {
+              editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
+              return
+            }
+            if (newState == BottomSheetBehavior.STATE_EXPANDED && !isUserInitiatedExpandAllowed() && !isExternalSymbolPageActive) {
               editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
               return
             }
