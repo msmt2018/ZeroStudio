@@ -115,67 +115,51 @@
           app:behavior_peekHeight="@dimen/editor_sheet_peek_height"
           app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior" />
 
-     <com.google.android.material.card.MaterialCardView
-          android:id="@+id/page_switch_container"
-          android:layout_width="220dp"
-          android:layout_height="24dp"
-          app:layout_anchor="@id/bottom_sheet"
-          app:layout_anchorGravity="top|center_horizontal"
-          app:cardBackgroundColor="#7A2E8B"
-          app:cardCornerRadius="12dp"
-          app:cardElevation="4dp">
-
-          <LinearLayout
-               android:layout_width="match_parent"
-               android:layout_height="match_parent"
-               android:orientation="horizontal">
-
-               <TextView
-                    android:id="@+id/page_switch_build_tab"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:text="@string/bottom_sheet_page_build"
-                    android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                    android:textColor="@android:color/white" />
-
-               <TextView
-                    android:id="@+id/page_switch_symbol_tab"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:text="@string/bottom_sheet_page_symbols"
-                    android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                    android:textColor="#B3FFFFFF" />
-          </LinearLayout>
-     </com.google.android.material.card.MaterialCardView>
-
-     <com.itsaky.androidide.ui.EdgeSnapBubbleView
-          android:id="@+id/page_switch_gesture_bubble"
-          android:layout_width="56dp"
-          android:layout_height="220dp"
-          app:layout_anchor="@id/page_switch_container"
-          app:layout_anchorGravity="top|start"
-          android:layout_marginStart="-40dp"
-          android:layout_marginTop="-98dp" />
-
-
-     <FrameLayout
+     <LinearLayout
           android:id="@+id/symbol_input_page"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
-          android:background="?attr/colorSurface"
           android:layout_gravity="bottom"
-          android:visibility="gone">
+          android:orientation="vertical"
+          android:background="?attr/colorSurface">
+
+          <TextView
+               android:id="@+id/page_switch_container"
+               android:layout_width="match_parent"
+               android:layout_height="40dp"
+               android:gravity="center"
+               android:maxLines="1"
+               android:paddingHorizontal="16dp"
+               android:text="@string/msg_swipe_up"
+               android:textAppearance="@style/TextAppearance.Material3.BodyMedium"/>
+
+          <com.itsaky.androidide.ui.EdgeSnapBubbleView
+               android:id="@+id/page_switch_gesture_bubble"
+               android:layout_width="56dp"
+               android:layout_height="220dp"
+               android:layout_gravity="center_horizontal" />
+
+          <TextView
+               android:id="@+id/page_switch_symbol_tab"
+               android:layout_width="match_parent"
+               android:layout_height="32dp"
+               android:gravity="center"
+               android:maxLines="1"
+               android:text="@string/build_status_idle"
+               android:textAppearance="@style/TextAppearance.Material3.BodySmall"/>
+
+                    <TextView
+               android:id="@+id/page_switch_build_tab"
+               android:layout_width="0dp"
+               android:layout_height="0dp"
+               android:visibility="gone"/>
 
           <android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
                android:id="@+id/external_symbol_input_view"
                android:layout_width="match_parent"
                android:layout_height="wrap_content"
                android:background="?attr/colorSurface" />
-     </FrameLayout>
+     </LinearLayout>
 
      <include
           android:id="@+id/diagnosticInfo"

@@ -90,7 +90,6 @@ import com.itsaky.androidide.tasks.cancelIfActive
 import com.itsaky.androidide.ui.CodeEditorView
 import com.itsaky.androidide.ui.ContentTranslatingDrawerLayout
 import com.itsaky.androidide.ui.EditorBottomSheet
-import com.itsaky.androidide.ui.EdgeSnapBubbleView
 import com.itsaky.androidide.ui.SwipeRevealLayout
 import com.itsaky.androidide.utils.ActionMenuUtils.createMenu
 import com.itsaky.androidide.utils.ApkInstallationSessionCallback
@@ -1056,7 +1055,6 @@ abstract class BaseEditorActivity :
   private fun setupPageSwitchGestureBubble() {
     if (_binding == null) return
     val bubble = content.pageSwitchGestureBubble
-    bubble.attachToSide(EdgeSnapBubbleView.Side.LEFT)
     bubble.setOnClickListener {
       if (isExternalSymbolPageActive) {
         isSymbolPageSwitchHidden = !isSymbolPageSwitchHidden
@@ -1142,7 +1140,6 @@ abstract class BaseEditorActivity :
     container.bringToFront()
     val bubble = content.pageSwitchGestureBubble
     bubble.setArrowExpanded(shouldShow)
-    bubble.restorePosition()
     bubble.bringToFront()
   }
 
