@@ -137,14 +137,32 @@
                android:layout_width="match_parent"
                android:layout_height="220dp">
 
-               <TextView
-                    android:id="@+id/page_switch_symbol_tab"
+               <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="32dp"
-                    android:gravity="center"
-                    android:maxLines="1"
-                    android:text="@string/build_status_idle"
-                    android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp">
+
+                    <TextView
+                         android:id="@+id/page_switch_symbol_tab"
+                         android:layout_width="0dp"
+                         android:layout_height="match_parent"
+                         android:layout_weight="1"
+                         android:gravity="center_vertical"
+                         android:maxLines="1"
+                         android:text="@string/build_status_idle"
+                         android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+
+                    <TextView
+                         android:id="@+id/page_switch_cursor_info"
+                         android:layout_width="wrap_content"
+                         android:layout_height="match_parent"
+                         android:gravity="center_vertical|end"
+                         android:maxLines="1"
+                         android:text="1:1 UTF-8"
+                         android:textAppearance="@style/TextAppearance.Material3.LabelSmall" />
+               </LinearLayout>
 
                <com.itsaky.androidide.ui.EdgeSnapBubbleView
                     android:id="@+id/page_switch_gesture_bubble"

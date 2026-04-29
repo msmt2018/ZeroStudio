@@ -735,6 +735,7 @@ abstract class BaseEditorActivity :
 
     setupNoEditorView()
     setupBottomSheet()
+    updateCursorInfoDisplay()
 
     if (
         !app.prefManager.getBoolean(KEY_BOTTOM_SHEET_SHOWN) &&
@@ -1195,6 +1196,20 @@ abstract class BaseEditorActivity :
     content.pageSwitchSymbolTab.text =
         if (isBuildStatusPage) getString(com.itsaky.androidide.resources.R.string.msg_swipe_up)
         else editorViewModel.statusText
+  }
+
+  fun onEditorCursorChanged() {
+    if (isDestroying || _binding == null) return
+    updateCursorInfoDisplay()
+  }
+
+  private fun updateCursorInfoDisplay() {
+    if (_binding == null) return
+    val editorView = provideCurrentEditor()
+    val cursor = editorView?.editor?.cursor
+    val line = (cursor?.leftLine ?: 0) + 1
+    val column = (cursor?.leftColumn ?: 0) + 1
+    content.pageSwitchCursorInfo.text = String.format("%d:%d UTF-8", line, column)
   }
 
   private fun setupDiagnosticInfo() {

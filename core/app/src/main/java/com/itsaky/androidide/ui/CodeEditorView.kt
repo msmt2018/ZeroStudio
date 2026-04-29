@@ -216,6 +216,7 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
       // Keep action enabled/disabled states in sync with cursor/selection changes.
       subscribeEvent(SelectionChangeEvent::class.java) { _, _ ->
         (context as? Activity?)?.invalidateOptionsMenu()
+        (context as? BaseEditorActivity)?.onEditorCursorChanged()
         if (isKeyboardVisible) {
           val cursor = this.cursor ?: return@subscribeEvent
           this.post { ensurePositionVisible(cursor.rightLine, cursor.rightColumn) }
