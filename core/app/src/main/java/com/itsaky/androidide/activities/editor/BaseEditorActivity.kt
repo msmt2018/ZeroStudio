@@ -207,6 +207,7 @@ abstract class BaseEditorActivity :
   private var optionsMenuInvalidator: Runnable? = null
   private var isPageSwitchVisibleForCurrentPage = true
   private var lastPageSwitchAlpha = Float.NaN
+  private var bubbleLastDragRawY = Float.NaN
   private var bottomSheetSlideOffset = 0f
   private var blockBottomSheetExpandForTabSwitch = false
   private var isPageSwitchAnchorUpdatePosted = false
@@ -1057,6 +1058,28 @@ abstract class BaseEditorActivity :
   private fun setupPageSwitchGestureBubble() {
     if (_binding == null) return
     val bubble = content.pageSwitchGestureBubble
+    bubble.setOnVerticalDragListener { rawY ->
+      if (_binding == null) return@setOnVerticalDragListener
+      if (bubbleLastDragRawY.isNaN()) {
+        bubbleLastDragRawY = rawY
+        return@setOnVerticalDragListener
+      }
+      val delta = rawY - bubbleLastDragRawY
+      bubbleLastDragRawY = rawY
+      val behavior = editorBottomSheet ?: return@setOnVerticalDragListener
+      if (kotlin.math.abs(delta) < 2f) return@setOnVerticalDragListener
+      if (delta < 0 && behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+        behavior.state = BottomSheetBehavior.STATE_EXPANDED
+      } else if (delta > 0 && behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+        behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+      }
+    }
+    bubble.setOnTouchListener { _, event ->
+      if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+        bubbleLastDragRawY = Float.NaN
+      }
+      false
+    }
     bubble.setOnClickListener {
       if (isExternalSymbolPageActive) {
         isSymbolPageSwitchHidden = !isSymbolPageSwitchHidden
@@ -1137,17 +1160,21 @@ abstract class BaseEditorActivity :
 
     val shouldShow = !(if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)
     container.visibility = if (shouldShow) View.VISIBLE else View.GONE
+    val bubble = content.pageSwitchGestureBubble
+    val prompt = content.pageSwitchSymbolTab
     if (shouldShow) {
       val alpha = computePageSwitchAlpha()
       if (lastPageSwitchAlpha.isNaN() || kotlin.math.abs(lastPageSwitchAlpha - alpha) > 0.01f) {
         container.alpha = alpha
+        bubble.alpha = alpha
+        prompt.alpha = alpha
         lastPageSwitchAlpha = alpha
       }
     }
     container.bringToFront()
-    val bubble = content.pageSwitchGestureBubble
     bubble.setArrowExpanded(shouldShow)
     bubble.bringToFront()
+    prompt.bringToFront()
   }
 
   private fun updateBottomSheetPageSwitch(isBuildStatusPage: Boolean) {
