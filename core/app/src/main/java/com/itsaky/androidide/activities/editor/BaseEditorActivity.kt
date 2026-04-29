@@ -708,6 +708,7 @@ abstract class BaseEditorActivity :
     editorViewModel._statusText.observe(this) {
       if (!isDestroying && _binding != null) {
         content.bottomSheet.setStatus(it.first, it.second)
+        content.pageSwitchContainer.text = it.first
       }
     }
 
@@ -929,6 +930,7 @@ abstract class BaseEditorActivity :
       content.pageSwitchBuildTab.isEnabled = true
       content.pageSwitchSymbolTab.isEnabled = true
       updateBottomSheetPageSwitch(isBuildStatusPage = true)
+      content.pageSwitchContainer.text = editorViewModel.statusText
       updatePageSwitchContainerPosition()
     }
   }
@@ -1063,6 +1065,11 @@ abstract class BaseEditorActivity :
       }
       updatePageSwitchContainerCollapsedState(animated = true)
       updatePageSwitchBubbleAnchor()
+      if ((if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)) {
+        content.pageSwitchContainer.text = getString(com.itsaky.androidide.resources.R.string.msg_swipe_up)
+      } else {
+        content.pageSwitchContainer.text = editorViewModel.statusText
+      }
     }
   }
 
