@@ -1217,7 +1217,8 @@ abstract class BaseEditorActivity :
   private fun onSoftInputChanged() {
     if (!isDestroying) {
       invalidateOptionsMenu()
-      if (_binding != null) content.bottomSheet.onSoftInputChanged()
+      // IME-driven symbol input translation is handled by applyExternalSymbolImeInset/setupExternalSymbolImeSync.
+      // Keep bottom-sheet state independent from IME visibility to avoid implicit UI-structure shifts.
     }
   }
 
