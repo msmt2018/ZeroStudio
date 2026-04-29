@@ -894,6 +894,14 @@ abstract class BaseEditorActivity :
           updatePageSwitchContainerPosition()
         }
       }
+      bottomSheet.onHeaderStatusTextChanged = { text ->
+        if (_binding == null) return@onHeaderStatusTextChanged
+        editorViewModel.statusText = text
+        if (!(if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)) {
+          content.pageSwitchContainer.text = text
+        }
+        content.pageSwitchSymbolTab.text = text
+      }
       setExternalSymbolPageActive(false)
       isPageSwitchVisibleForCurrentPage = true
       content.pageSwitchSymbolTab.text = getString(com.itsaky.androidide.resources.R.string.msg_swipe_up)
@@ -1078,18 +1086,18 @@ abstract class BaseEditorActivity :
   private fun setupPageSwitchGestureBubble() {
     if (_binding == null) return
     val bubble = content.pageSwitchGestureBubble
-    bubble.setOnVerticalDragListener { rawY ->
-      if (_binding == null) return@setOnVerticalDragListener
+    fun handleDrag(rawY: Float) {
+      if (_binding == null) return
       if (bubbleLastDragRawY.isNaN()) {
         bubbleLastDragRawY = rawY
         bubbleAccumulatedDragY = 0f
         bubbleLastDragEventTimeMs = SystemClock.elapsedRealtime()
-        return@setOnVerticalDragListener
+        return
       }
       val delta = rawY - bubbleLastDragRawY
       bubbleLastDragRawY = rawY
-      val behavior = editorBottomSheet ?: return@setOnVerticalDragListener
-      if (kotlin.math.abs(delta) < 2f) return@setOnVerticalDragListener
+      val behavior = editorBottomSheet ?: return
+      if (kotlin.math.abs(delta) < 2f) return
 
       val now = SystemClock.elapsedRealtime()
       val dtMs = (now - bubbleLastDragEventTimeMs).coerceAtLeast(1L)
@@ -1099,7 +1107,7 @@ abstract class BaseEditorActivity :
       val velocityThreshold = resources.displayMetrics.density * 900f
       val dragThreshold = resources.displayMetrics.density * 24f
       if (kotlin.math.abs(bubbleAccumulatedDragY) < dragThreshold || velocityPxPerSec < velocityThreshold) {
-        return@setOnVerticalDragListener
+        return
       }
 
       if (bubbleAccumulatedDragY < 0 && behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
@@ -1110,7 +1118,11 @@ abstract class BaseEditorActivity :
       }
       bubbleAccumulatedDragY = 0f
     }
-    bubble.setOnTouchListener { _, event ->
+    bubble.setOnVerticalDragListener { rawY -> handleDrag(rawY) }
+    val dragTouchListener = View.OnTouchListener { _, event ->
+      if (event.actionMasked == MotionEvent.ACTION_MOVE) {
+        handleDrag(event.rawY)
+      }
       if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
         bubbleLastDragRawY = Float.NaN
         bubbleAccumulatedDragY = 0f
@@ -1118,6 +1130,8 @@ abstract class BaseEditorActivity :
       }
       false
     }
+    bubble.setOnTouchListener(dragTouchListener)
+    content.pageSwitchSymbolTab.setOnTouchListener(dragTouchListener)
     bubble.setOnClickListener {
       if (isExternalSymbolPageActive) {
         isSymbolPageSwitchHidden = !isSymbolPageSwitchHidden

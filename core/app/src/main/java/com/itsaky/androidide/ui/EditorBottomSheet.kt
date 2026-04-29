@@ -106,6 +106,7 @@ constructor(
   private var behaviorCallbackAttached = false
 
   var onHeaderPageChanged: ((Int) -> Unit)? = null
+  var onHeaderStatusTextChanged: ((CharSequence) -> Unit)? = null
 
   private val insetBottom: Int
     get() = if (isImeVisible) 0 else windowInsets?.bottom ?: 0
@@ -298,7 +299,9 @@ constructor(
 
   private val resumeHeaderExpandRunnable = Runnable { headerExpandEnabled = true }
 
-  fun setActionText(text: CharSequence) = Unit
+  fun setActionText(text: CharSequence) {
+    onHeaderStatusTextChanged?.invoke(text)
+  }
 
   fun setActionProgress(progress: Int) = Unit
 
@@ -336,7 +339,9 @@ constructor(
 
   fun onSoftInputChanged() = Unit
 
-  fun setStatus(text: CharSequence, @GravityInt gravity: Int) = Unit
+  fun setStatus(text: CharSequence, @GravityInt gravity: Int) {
+    onHeaderStatusTextChanged?.invoke(text)
+  }
 
   private fun shareFile(file: File) {
     shareFile(context, file, "text/plain")
