@@ -23,6 +23,7 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Process
+import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.method.LinkMovementMethod
@@ -209,6 +210,8 @@ abstract class BaseEditorActivity :
   private var lastPageSwitchAlpha = Float.NaN
   private var bubbleLastDragRawY = Float.NaN
   private var bubbleAccumulatedDragY = 0f
+  private var bubbleLastDragEventTimeMs = 0L
+  private var userInitiatedExpandUntilMs = 0L
   private var bottomSheetSlideOffset = 0f
   private var blockBottomSheetExpandForTabSwitch = false
   private var isPageSwitchAnchorUpdatePosted = false
@@ -782,6 +785,10 @@ abstract class BaseEditorActivity :
   }
 
   private fun appendClickableSpan(
+              if (!isUserInitiatedExpandAllowed()) {
+                editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
+                return
+              }
       sb: SpannableStringBuilder,
       @StringRes textRes: Int,
       span: ClickableSpan,
@@ -1035,13 +1042,31 @@ abstract class BaseEditorActivity :
   }
 
         bubbleAccumulatedDragY = 0f
+        bubbleLastDragEventTimeMs = SystemClock.elapsedRealtime()
+      val now = SystemClock.elapsedRealtime()
+      val dtMs = (now - bubbleLastDragEventTimeMs).coerceAtLeast(1L)
+      bubbleLastDragEventTimeMs = now
       bubbleAccumulatedDragY += delta
       val trigger = resources.displayMetrics.density * 24f
       if (kotlin.math.abs(bubbleAccumulatedDragY) < trigger) return@setOnVerticalDragListener
+      val velocityPxPerSec = kotlin.math.abs(delta) / dtMs.toFloat() * 1000f
+      val velocityThreshold = resources.displayMetrics.density * 900f
       if (bubbleAccumulatedDragY < 0 && behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+        if (velocityPxPerSec >= velocityThreshold) {
+          markUserInitiatedExpand()
+        }
       } else if (bubbleAccumulatedDragY > 0 && behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
       bubbleAccumulatedDragY = 0f
         bubbleAccumulatedDragY = 0f
+        bubbleLastDragEventTimeMs = 0L
+  private fun markUserInitiatedExpand() {
+    userInitiatedExpandUntilMs = SystemClock.elapsedRealtime() + 1200L
+  }
+
+  private fun isUserInitiatedExpandAllowed(): Boolean {
+    return SystemClock.elapsedRealtime() <= userInitiatedExpandUntilMs
+  }
+
     content.externalSymbolInputView.setImeBottomInset(targetImeInset)
     content.symbolInputPage.translationY = -targetImeInset.toFloat()
     content.pageSwitchContainer.translationY = 0f
