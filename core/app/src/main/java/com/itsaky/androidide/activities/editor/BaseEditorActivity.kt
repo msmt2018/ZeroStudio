@@ -132,7 +132,6 @@ abstract class BaseEditorActivity :
   protected val memoryUsageWatcher = MemoryUsageWatcher()
   protected val pidToDatasetIdxMap = MutableIntIntMap(initialCapacity = 3)
   private val bottomSheetHeaderHideReasons = mutableSetOf<String>()
-  private var bottomSheetHeaderVisibilitySnapshot: Int = View.VISIBLE
   private var isExternalSymbolPageActive = false
 
   var isDestroying = false
@@ -319,21 +318,14 @@ abstract class BaseEditorActivity :
   protected fun releaseBottomSheetHeaderHide(reason: String) {
     runOnUiThread {
       if (_binding == null || isDestroying) return@runOnUiThread
-      val wasRemoved = bottomSheetHeaderHideReasons.remove(reason)
-      if (!wasRemoved || bottomSheetHeaderHideReasons.isNotEmpty()) return@runOnUiThread
-      val bottomSheetBinding = content.bottomSheet.binding
-      bottomSheetBinding.headerContainer.visibility = bottomSheetHeaderVisibilitySnapshot
+      bottomSheetHeaderHideReasons.remove(reason)
     }
   }
 
   protected fun requestBottomSheetHeaderHide(reason: String) {
     runOnUiThread {
       if (_binding == null || isDestroying) return@runOnUiThread
-      val wasAdded = bottomSheetHeaderHideReasons.add(reason)
-      if (!wasAdded || bottomSheetHeaderHideReasons.size > 1) return@runOnUiThread
-      val bottomSheetBinding = content.bottomSheet.binding
-      bottomSheetHeaderVisibilitySnapshot = bottomSheetBinding.headerContainer.visibility
-      bottomSheetBinding.headerContainer.visibility = View.INVISIBLE
+      bottomSheetHeaderHideReasons.add(reason)
     }
   }
 

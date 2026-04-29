@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
   xmlns:tools="http://schemas.android.com/tools"
-  xmlns:app="http://schemas.android.com/apk/res-auto"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:background="?attr/colorSurface">
@@ -14,48 +13,12 @@
     android:layout_height="0.5dp"
     android:layout_alignParentTop="true" />
 
-  <ViewFlipper
-    android:id="@+id/header_container"
-    android:layout_width="match_parent"
-    android:layout_below="@id/border"
-    android:layout_height="@dimen/editor_sheet_collapsed_height"
-    android:background="?attr/colorSurface">
-
-    <androidx.constraintlayout.widget.ConstraintLayout
-      android:id="@+id/build_status"
-      android:layout_width="match_parent"
-      android:layout_height="56dp">
-      <TextView
-        android:id="@+id/statusText"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        tools:text="Build status"/>
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <androidx.constraintlayout.widget.ConstraintLayout
-      android:id="@+id/bottom_action"
-      android:layout_width="match_parent"
-      android:layout_height="56dp">
-      <com.google.android.material.progressindicator.LinearProgressIndicator
-        android:id="@+id/progress"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"/>
-      <TextView
-        android:id="@+id/action_text"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:gravity="center"/>
-    </androidx.constraintlayout.widget.ConstraintLayout>
-  </ViewFlipper>
-
   <com.google.android.material.tabs.TabLayout
     android:id="@+id/tabs"
     style="@style/AppTheme.TabLayout"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_below="@id/header_container" />
+    android:layout_below="@id/border" />
 
   <androidx.legacy.widget.Space
     android:id="@+id/space_bottom"

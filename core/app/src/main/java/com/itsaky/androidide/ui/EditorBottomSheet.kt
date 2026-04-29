@@ -179,22 +179,6 @@ constructor(
       (fragment as ShareableOutputFragment).clearOutput()
     }
 
-    binding.headerContainer.setOnClickListener {
-      if (expandBlocked) {
-        return@setOnClickListener
-      }
-      if (!headerExpandEnabled) {
-        return@setOnClickListener
-      }
-      if (suppressNextHeaderClickExpand) {
-        suppressNextHeaderClickExpand = false
-        return@setOnClickListener
-      }
-      if (behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
-        tryExpandSheetFromControl()
-      }
-    }
-
     ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
       this.windowInsets = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures())
       insets
@@ -257,12 +241,6 @@ constructor(
             behavior.isGestureInsetBottomIgnored = isImeVisible
 
             binding.root.updatePadding(bottom = anchorOffset + insetBottom)
-            binding.headerContainer.apply {
-              updatePaddingRelative(bottom = paddingBottom + insetBottom)
-              updateLayoutParams<ViewGroup.LayoutParams> {
-                height = (collapsedHeight + insetBottom).roundToInt()
-              }
-            }
           }
         }
 
@@ -270,31 +248,10 @@ constructor(
   }
 
   fun onSlide(sheetOffset: Float) {
-    val heightScale =
-        if (sheetOffset >= COLLAPSE_HEADER_AT_OFFSET) {
-          ((COLLAPSE_HEADER_AT_OFFSET - sheetOffset) + COLLAPSE_HEADER_AT_OFFSET) * 2f
-        } else {
-          1f
-        }
-
-    val paddingScale =
-        if (!isImeVisible && sheetOffset <= COLLAPSE_HEADER_AT_OFFSET) {
-          ((1f - sheetOffset) * 2f) - 1f
-        } else {
-          0f
-        }
-
-    val padding = insetBottom * paddingScale
-    binding.headerContainer.apply {
-      updateLayoutParams<ViewGroup.LayoutParams> {
-        height = ((collapsedHeight + padding) * heightScale).roundToInt()
-      }
-      updatePaddingRelative(bottom = padding.roundToInt())
-    }
+    // Header has been migrated to BaseEditorActivity symbol-input overlay.
   }
 
   fun showChild(index: Int) {
-    binding.headerContainer.displayedChild = if (index == CHILD_ACTION) 1 else 0
     onHeaderPageChanged?.invoke(if (index == CHILD_ACTION) CHILD_ACTION else CHILD_HEADER)
   }
 
@@ -335,19 +292,15 @@ constructor(
 
   fun suspendHeaderExpandFor(durationMs: Long) {
     headerExpandEnabled = false
-    binding.headerContainer.removeCallbacks(resumeHeaderExpandRunnable)
-    binding.headerContainer.postDelayed(resumeHeaderExpandRunnable, durationMs)
+    removeCallbacks(resumeHeaderExpandRunnable)
+    postDelayed(resumeHeaderExpandRunnable, durationMs)
   }
 
   private val resumeHeaderExpandRunnable = Runnable { headerExpandEnabled = true }
 
-  fun setActionText(text: CharSequence) {
-    binding.actionText.text = text
-  }
+  fun setActionText(text: CharSequence) = Unit
 
-  fun setActionProgress(progress: Int) {
-    binding.progress.setProgressCompat(progress, true)
-  }
+  fun setActionProgress(progress: Int) = Unit
 
   fun appendApkLog(line: LogLine) {
     pagerAdapter.logFragment?.appendLog(line)
@@ -381,32 +334,9 @@ constructor(
     // Symbol input is managed externally by BaseEditorActivity.
   }
 
-  fun onSoftInputChanged() {
-    if (context !is Activity) {
-      log.error("Bottom sheet is not attached to an activity!")
-      return
-    }
+  fun onSoftInputChanged() = Unit
 
-    TransitionManager.beginDelayedTransition(
-        binding.root,
-        MaterialSharedAxis(MaterialSharedAxis.Y, false),
-    )
-
-    val activity = context as Activity
-    if (KeyboardUtils.isSoftInputVisible(activity)) {
-      onHeaderPageChanged?.invoke(STATE_EXTERNAL_SYMBOL)
-    } else {
-      binding.headerContainer.displayedChild = CHILD_HEADER
-      onHeaderPageChanged?.invoke(CHILD_HEADER)
-    }
-  }
-
-  fun setStatus(text: CharSequence, @GravityInt gravity: Int) {
-    runOnUiThread {
-      binding.statusText.gravity = gravity
-      binding.statusText.text = text
-    }
-  }
+  fun setStatus(text: CharSequence, @GravityInt gravity: Int) = Unit
 
   private fun shareFile(file: File) {
     shareFile(context, file, "text/plain")
