@@ -894,8 +894,8 @@ abstract class BaseEditorActivity :
           updatePageSwitchContainerPosition()
         }
       }
-      bottomSheet.onHeaderStatusTextChanged = { text ->
-        if (_binding == null) return@onHeaderStatusTextChanged
+      bottomSheet.onHeaderStatusTextChanged = statusTextChanged@{ text ->
+        if (_binding == null) return@statusTextChanged
         editorViewModel.statusText = text
         if (!(if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)) {
           content.pageSwitchContainer.text = text
