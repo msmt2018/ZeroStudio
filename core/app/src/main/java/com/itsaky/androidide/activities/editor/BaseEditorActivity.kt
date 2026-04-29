@@ -895,12 +895,13 @@ abstract class BaseEditorActivity :
         }
       }
       bottomSheet.onHeaderStatusTextChanged = { text ->
-        if (_binding == null) return@onHeaderStatusTextChanged
-        editorViewModel.statusText = text
-        if (!(if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)) {
-          content.pageSwitchContainer.text = text
+        if (_binding != null) {
+          editorViewModel.statusText = text
+          if (!(if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)) {
+            content.pageSwitchContainer.text = text
+          }
+          content.pageSwitchSymbolTab.text = text
         }
-        content.pageSwitchSymbolTab.text = text
       }
       setExternalSymbolPageActive(false)
       isPageSwitchVisibleForCurrentPage = true
