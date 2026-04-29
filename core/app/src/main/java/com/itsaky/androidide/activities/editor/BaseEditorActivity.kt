@@ -1041,24 +1041,6 @@ abstract class BaseEditorActivity :
     content.pageSwitchSymbolTab.alpha = revealFraction
   }
 
-        bubbleAccumulatedDragY = 0f
-        bubbleLastDragEventTimeMs = SystemClock.elapsedRealtime()
-      val now = SystemClock.elapsedRealtime()
-      val dtMs = (now - bubbleLastDragEventTimeMs).coerceAtLeast(1L)
-      bubbleLastDragEventTimeMs = now
-      bubbleAccumulatedDragY += delta
-      val trigger = resources.displayMetrics.density * 24f
-      if (kotlin.math.abs(bubbleAccumulatedDragY) < trigger) return@setOnVerticalDragListener
-      val velocityPxPerSec = kotlin.math.abs(delta) / dtMs.toFloat() * 1000f
-      val velocityThreshold = resources.displayMetrics.density * 900f
-      if (bubbleAccumulatedDragY < 0 && behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
-        if (velocityPxPerSec >= velocityThreshold) {
-          markUserInitiatedExpand()
-        }
-      } else if (bubbleAccumulatedDragY > 0 && behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
-      bubbleAccumulatedDragY = 0f
-        bubbleAccumulatedDragY = 0f
-        bubbleLastDragEventTimeMs = 0L
   private fun markUserInitiatedExpand() {
     userInitiatedExpandUntilMs = SystemClock.elapsedRealtime() + 1200L
   }
@@ -1067,10 +1049,11 @@ abstract class BaseEditorActivity :
     return SystemClock.elapsedRealtime() <= userInitiatedExpandUntilMs
   }
 
+  private fun applyExternalSymbolImeInset() {
+    if (_binding == null) return
+    val targetImeInset = if (isExternalSymbolPageActive) latestImeBottomInset else 0
     content.externalSymbolInputView.setImeBottomInset(targetImeInset)
     content.symbolInputPage.translationY = -targetImeInset.toFloat()
-    content.pageSwitchContainer.translationY = 0f
-    updatePageSwitchAnchor()
     updatePageSwitchContainerPosition()
   }
 
@@ -1108,21 +1091,39 @@ abstract class BaseEditorActivity :
       if (_binding == null) return@setOnVerticalDragListener
       if (bubbleLastDragRawY.isNaN()) {
         bubbleLastDragRawY = rawY
+        bubbleAccumulatedDragY = 0f
+        bubbleLastDragEventTimeMs = SystemClock.elapsedRealtime()
         return@setOnVerticalDragListener
       }
       val delta = rawY - bubbleLastDragRawY
       bubbleLastDragRawY = rawY
       val behavior = editorBottomSheet ?: return@setOnVerticalDragListener
       if (kotlin.math.abs(delta) < 2f) return@setOnVerticalDragListener
-      if (delta < 0 && behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+
+      val now = SystemClock.elapsedRealtime()
+      val dtMs = (now - bubbleLastDragEventTimeMs).coerceAtLeast(1L)
+      bubbleLastDragEventTimeMs = now
+      bubbleAccumulatedDragY += delta
+      val velocityPxPerSec = kotlin.math.abs(delta) / dtMs.toFloat() * 1000f
+      val velocityThreshold = resources.displayMetrics.density * 900f
+      val dragThreshold = resources.displayMetrics.density * 24f
+      if (kotlin.math.abs(bubbleAccumulatedDragY) < dragThreshold || velocityPxPerSec < velocityThreshold) {
+        return@setOnVerticalDragListener
+      }
+
+      if (bubbleAccumulatedDragY < 0 && behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+        markUserInitiatedExpand()
         behavior.state = BottomSheetBehavior.STATE_EXPANDED
-      } else if (delta > 0 && behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+      } else if (bubbleAccumulatedDragY > 0 && behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
         behavior.state = BottomSheetBehavior.STATE_COLLAPSED
       }
+      bubbleAccumulatedDragY = 0f
     }
     bubble.setOnTouchListener { _, event ->
       if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
         bubbleLastDragRawY = Float.NaN
+        bubbleAccumulatedDragY = 0f
+        bubbleLastDragEventTimeMs = 0L
       }
       false
     }
