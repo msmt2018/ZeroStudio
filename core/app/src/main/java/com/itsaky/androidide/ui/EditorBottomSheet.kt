@@ -342,11 +342,11 @@ constructor(
   private val resumeHeaderExpandRunnable = Runnable { headerExpandEnabled = true }
 
   fun setActionText(text: CharSequence) {
-    binding.bottomAction.actionText.text = text
+    binding.actionText.text = text
   }
 
   fun setActionProgress(progress: Int) {
-    binding.bottomAction.progress.setProgressCompat(progress, true)
+    binding.progress.setProgressCompat(progress, true)
   }
 
   fun appendApkLog(line: LogLine) {
@@ -403,10 +403,8 @@ constructor(
 
   fun setStatus(text: CharSequence, @GravityInt gravity: Int) {
     runOnUiThread {
-      binding.buildStatus.let {
-        it.statusText.gravity = gravity
-        it.statusText.text = text
-      }
+      binding.statusText.gravity = gravity
+      binding.statusText.text = text
     }
   }
 
