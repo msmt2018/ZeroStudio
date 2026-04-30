@@ -901,6 +901,28 @@ abstract class BaseEditorActivity :
         updateSymbolHeaderPosition()
       }
       bottomSheet.setOffsetAnchor(editorAppBarLayout)
+      bottomSheet.onHeaderStatusChanged = { text, gravity ->
+        if (_binding == null || isDestroying) return@onHeaderStatusChanged
+        content.symbolStatusText.gravity = gravity
+        content.symbolStatusText.text =
+            if (text.isBlank() && !editorViewModel.isBuildInProgress && !editorViewModel.isInitializing) {
+              getString(string.msg_swipe_up)
+            } else {
+              text
+            }
+      }
+      bottomSheet.onHeaderActionChanged = { text, progress ->
+        if (_binding == null || isDestroying || isExternalSymbolPageActive) return@onHeaderActionChanged
+        content.symbolStatusText.gravity = Gravity.CENTER
+        content.symbolStatusText.text = if (text.isBlank()) getString(string.msg_installing_apk) else text
+        content.symbolCursorText.text = "${progress.coerceIn(0, 100)}%"
+      }
+      bottomSheet.onHeaderVisualFractionChanged = { fraction ->
+        if (_binding == null || isDestroying || isExternalSymbolPageActive) return@onHeaderVisualFractionChanged
+        val alpha = fraction.coerceIn(0f, 1f)
+        content.symbolStatusText.alpha = alpha
+        content.symbolCursorText.alpha = alpha
+      }
       symbolStatusText.setOnClickListener {
         setExternalSymbolPageActive(!isExternalSymbolPageActive)
       }

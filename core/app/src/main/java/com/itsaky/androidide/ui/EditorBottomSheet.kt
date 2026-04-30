@@ -106,6 +106,9 @@ constructor(
   private var behaviorCallbackAttached = false
 
   var onHeaderPageChanged: ((Int) -> Unit)? = null
+  var onHeaderStatusChanged: ((CharSequence, Int) -> Unit)? = null
+  var onHeaderActionChanged: ((CharSequence, Int) -> Unit)? = null
+  var onHeaderVisualFractionChanged: ((Float) -> Unit)? = null
 
   private val insetBottom: Int
     get() = if (isImeVisible) 0 else windowInsets?.bottom ?: 0
@@ -291,6 +294,7 @@ constructor(
       }
       updatePaddingRelative(bottom = padding.roundToInt())
     }
+    onHeaderVisualFractionChanged?.invoke(heightScale.coerceIn(0f, 1f))
   }
 
   fun showChild(index: Int) {
@@ -343,10 +347,12 @@ constructor(
 
   fun setActionText(text: CharSequence) {
     binding.bottomAction.actionText.text = text
+    onHeaderActionChanged?.invoke(text, binding.bottomAction.progress.progress)
   }
 
   fun setActionProgress(progress: Int) {
     binding.bottomAction.progress.setProgressCompat(progress, true)
+    onHeaderActionChanged?.invoke(binding.bottomAction.actionText.text ?: "", progress)
   }
 
   fun appendApkLog(line: LogLine) {
@@ -407,6 +413,7 @@ constructor(
         it.statusText.gravity = gravity
         it.statusText.text = text
       }
+      onHeaderStatusChanged?.invoke(text, gravity)
     }
   }
 
