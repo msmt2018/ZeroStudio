@@ -31,6 +31,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import android.view.Gravity
+import android.view.MotionEvent
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.viewModels
@@ -217,6 +218,8 @@ abstract class BaseEditorActivity :
   private var isBuildPageSwitchHidden = true
   private var cursorSelectionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
   private var isSymbolPageSwitchHidden = true
+  private var bubbleDragStartY = 0f
+  private var bubbleDragConsumed = false
 
   companion object {
 
@@ -1069,7 +1072,32 @@ abstract class BaseEditorActivity :
   private fun setupPageSwitchGestureBubble() {
     if (_binding == null) return
     val bubble = content.pageSwitchGestureBubble
+    bubble.setOnTouchListener { _, event ->
+      when (event.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+          bubbleDragStartY = event.rawY
+          bubbleDragConsumed = false
+        }
+        MotionEvent.ACTION_MOVE -> {
+          val deltaY = event.rawY - bubbleDragStartY
+          if (kotlin.math.abs(deltaY) > 24f) {
+            bubbleDragConsumed = true
+            if (deltaY < 0f) {
+              editorBottomSheet?.state = BottomSheetBehavior.STATE_EXPANDED
+              content.bottomSheet.showChild(EditorBottomSheet.CHILD_HEADER)
+            } else {
+              editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
+            }
+          }
+        }
+      }
+      false
+    }
     bubble.setOnClickListener {
+      if (bubbleDragConsumed) {
+        bubbleDragConsumed = false
+        return@setOnClickListener
+      }
       if (isExternalSymbolPageActive) {
         isSymbolPageSwitchHidden = !isSymbolPageSwitchHidden
       } else {
