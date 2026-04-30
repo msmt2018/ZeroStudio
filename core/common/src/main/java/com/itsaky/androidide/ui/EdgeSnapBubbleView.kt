@@ -1,6 +1,5 @@
 package com.itsaky.androidide.ui
 
-import android.app.Activity
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -46,7 +45,6 @@ class EdgeSnapBubbleView : View {
   private var arrowPath: Path? = null
 
   private var onBackListener: OnBackListener? = null
-  private var side: Side = Side.LEFT
   private var showArrowUp: Boolean = true
 
   fun setOnBackListener(onBackListener: OnBackListener?) {
@@ -150,13 +148,6 @@ class EdgeSnapBubbleView : View {
 
       MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
         if (isEdge) {
-          if (deltaX >= backMaxWidth && left) {
-            back()
-          } else if (abs(deltaX) >= backMaxWidth && right) {
-            if (!isOnlyLeftBack) {
-              back()
-            }
-          }
           // 轻触也触发点击切换。
           if (abs(deltaX) < backMaxWidth * 0.2f) {
             performClick()
@@ -171,16 +162,6 @@ class EdgeSnapBubbleView : View {
       }
     }
     return isEdge
-  }
-
-  private fun back() {
-    if (onBackListener != null) {
-      onBackListener!!.onBack()
-    } else {
-      @Suppress("DEPRECATION")
-      (context as? Activity)?.onBackPressed()
-      performClick()
-    }
   }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -266,15 +247,8 @@ class EdgeSnapBubbleView : View {
 
   fun getBackViewHeight(): Float = backViewHeight
 
-  fun attachToSide(newSide: Side) {
-    side = newSide
-    val parentView = parent as? View ?: return
-    x = if (side == Side.LEFT) 0f else (parentView.width - width).toFloat()
-  }
-
   fun restorePosition() {
-    val parentView = parent as? View ?: return
-    x = if (side == Side.LEFT) 0f else (parentView.width - width).toFloat()
+    x = ((parent as? View)?.width?.minus(width)?.div(2f)) ?: x
   }
 
   override fun performClick(): Boolean {
@@ -287,8 +261,6 @@ class EdgeSnapBubbleView : View {
     showArrowUp = expanded
     invalidate()
   }
-
-  enum class Side { LEFT, RIGHT }
 
   interface OnBackListener {
     fun onBack()

@@ -115,51 +115,35 @@
           app:behavior_peekHeight="@dimen/editor_sheet_peek_height"
           app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior" />
 
-     <com.google.android.material.card.MaterialCardView
-          android:id="@+id/page_switch_container"
-          android:layout_width="220dp"
-          android:layout_height="24dp"
-          app:layout_anchor="@id/bottom_sheet"
-          app:layout_anchorGravity="top|center_horizontal"
-          app:cardBackgroundColor="#7A2E8B"
-          app:cardCornerRadius="12dp"
-          app:cardElevation="4dp">
+     <TextView
+          android:id="@+id/symbol_status_text"
+          android:layout_width="match_parent"
+          android:layout_height="48dp"
+          android:layout_gravity="bottom"
+          android:background="#A8CAE6CF"
+          android:gravity="center_vertical"
+          android:paddingStart="16dp"
+          android:paddingEnd="88dp"
+          android:text="@string/msg_swipe_up"
+          android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
 
-          <LinearLayout
-               android:layout_width="match_parent"
-               android:layout_height="match_parent"
-               android:orientation="horizontal">
-
-               <TextView
-                    android:id="@+id/page_switch_build_tab"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:text="@string/bottom_sheet_page_build"
-                    android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                    android:textColor="@android:color/white" />
-
-               <TextView
-                    android:id="@+id/page_switch_symbol_tab"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:text="@string/bottom_sheet_page_symbols"
-                    android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                    android:textColor="#B3FFFFFF" />
-          </LinearLayout>
-     </com.google.android.material.card.MaterialCardView>
+     <TextView
+          android:id="@+id/symbol_cursor_text"
+          android:layout_width="wrap_content"
+          android:layout_height="48dp"
+          android:layout_gravity="bottom|end"
+          android:gravity="center_vertical"
+          android:paddingEnd="16dp"
+          android:text="1:1"
+          android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
 
      <com.itsaky.androidide.ui.EdgeSnapBubbleView
           android:id="@+id/page_switch_gesture_bubble"
           android:layout_width="56dp"
           android:layout_height="220dp"
-          app:layout_anchor="@id/page_switch_container"
-          app:layout_anchorGravity="top|start"
-          android:layout_marginStart="-40dp"
-          android:layout_marginTop="-98dp" />
+          app:layout_anchor="@id/symbol_status_text"
+          app:layout_anchorGravity="top|center_horizontal"
+          android:layout_marginTop="-112dp" />
 
 
      <FrameLayout
