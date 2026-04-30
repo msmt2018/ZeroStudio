@@ -721,6 +721,9 @@ abstract class BaseEditorActivity :
     )
     val visible = editorViewModel.isBuildInProgress || editorViewModel.isInitializing
     content.progressIndicator.visibility = if (visible) View.VISIBLE else View.GONE
+    if (!visible && content.symbolStatusText.text.isNullOrBlank()) {
+      content.symbolStatusText.text = getString(string.msg_swipe_up)
+    }
     invalidateOptionsMenu()
   }
 
@@ -730,6 +733,13 @@ abstract class BaseEditorActivity :
     editorViewModel._statusText.observe(this) {
       if (!isDestroying && _binding != null) {
         content.bottomSheet.setStatus(it.first, it.second)
+        content.symbolStatusText.gravity = it.second
+        content.symbolStatusText.text =
+            if (it.first.isBlank() && !editorViewModel.isBuildInProgress && !editorViewModel.isInitializing) {
+              getString(string.msg_swipe_up)
+            } else {
+              it.first
+            }
       }
     }
 
