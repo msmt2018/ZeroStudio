@@ -510,6 +510,8 @@ abstract class BaseEditorActivity :
 
   override fun onDestroy() {
     checkIsDestroying()
+    cursorSelectionReceipt?.unsubscribe()
+    cursorSelectionReceipt = null
     preDestroy()
     super.onDestroy()
     postDestroy()
@@ -974,6 +976,7 @@ abstract class BaseEditorActivity :
     content.bottomSheet.setBottomSheetDragEnabled(!active)
     content.symbolInputPage.visibility = if (active) View.VISIBLE else View.GONE
     content.bottomSheet.visibility = if (active) View.INVISIBLE else View.VISIBLE
+    content.symbolCursorText.visibility = if (active) View.VISIBLE else View.GONE
     updatePageSwitchAnchor()
     applyExternalSymbolImeInset()
     contentCardRealHeight?.let { baseHeight ->
@@ -1031,6 +1034,7 @@ abstract class BaseEditorActivity :
     content.externalSymbolInputView.setImeBottomInset(targetImeInset)
     content.symbolInputPage.translationY = -targetImeInset.toFloat()
     content.symbolStatusText.translationY = 0f
+    content.symbolCursorText.translationY = content.symbolStatusText.translationY
     updatePageSwitchAnchor()
     updatePageSwitchContainerPosition()
   }
@@ -1090,20 +1094,41 @@ abstract class BaseEditorActivity :
             .setDuration(200L)
             .withEndAction { container.visibility = View.GONE }
             .start()
+        content.symbolCursorText
+            .animate()
+            .alpha(0f)
+            .translationY(content.symbolCursorText.translationY + hiddenShift)
+            .setDuration(200L)
+            .withEndAction { content.symbolCursorText.visibility = View.GONE }
+            .start()
       } else {
         container.alpha = 0f
         container.translationY += hiddenShift
         container.visibility = View.GONE
+        content.symbolCursorText.alpha = 0f
+        content.symbolCursorText.translationY += hiddenShift
+        content.symbolCursorText.visibility = View.GONE
       }
     } else {
       container.visibility = View.VISIBLE
+      content.symbolCursorText.visibility = View.VISIBLE
       if (animated) {
         val targetTranslationY = container.translationY
         container.alpha = 0f
         container.translationY = targetTranslationY + hiddenShift
         container.animate().alpha(1f).translationY(targetTranslationY).setDuration(220L).start()
+        val cursorTargetTranslationY = content.symbolCursorText.translationY
+        content.symbolCursorText.alpha = 0f
+        content.symbolCursorText.translationY = cursorTargetTranslationY + hiddenShift
+        content.symbolCursorText
+            .animate()
+            .alpha(1f)
+            .translationY(cursorTargetTranslationY)
+            .setDuration(220L)
+            .start()
       } else {
         container.alpha = 1f
+        content.symbolCursorText.alpha = 1f
       }
     }
     content.pageSwitchGestureBubble.setArrowExpanded(!shouldHide)
@@ -1136,18 +1161,22 @@ abstract class BaseEditorActivity :
         }
     if (kotlin.math.abs(container.translationY - desiredTranslationY) > 0.5f) {
       container.translationY = desiredTranslationY
+      content.symbolCursorText.translationY = desiredTranslationY
     }
 
     val shouldShow = !(if (isExternalSymbolPageActive) isSymbolPageSwitchHidden else isBuildPageSwitchHidden)
     container.visibility = if (shouldShow) View.VISIBLE else View.GONE
+    content.symbolCursorText.visibility = if (shouldShow) View.VISIBLE else View.GONE
     if (shouldShow) {
       val alpha = computePageSwitchAlpha()
       if (lastPageSwitchAlpha.isNaN() || kotlin.math.abs(lastPageSwitchAlpha - alpha) > 0.01f) {
         container.alpha = alpha
+        content.symbolCursorText.alpha = alpha
         lastPageSwitchAlpha = alpha
       }
     }
     container.bringToFront()
+    content.symbolCursorText.bringToFront()
     val bubble = content.pageSwitchGestureBubble
     bubble.setArrowExpanded(shouldShow)
     bubble.restorePosition()
@@ -1157,6 +1186,7 @@ abstract class BaseEditorActivity :
   private fun updateBottomSheetPageSwitch(isBuildStatusPage: Boolean) {
     if (_binding == null) return
     content.symbolStatusText.alpha = if (isBuildStatusPage) 1f else 0.75f
+    content.symbolCursorText.alpha = content.symbolStatusText.alpha
   }
 
   private fun setupDiagnosticInfo() {
