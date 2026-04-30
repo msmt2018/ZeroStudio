@@ -221,6 +221,7 @@ abstract class BaseEditorActivity :
   private var bubbleDragStartY = 0f
   private var bubbleDragConsumed = false
   private val bubbleDragThresholdPx by lazy { 24f * resources.displayMetrics.density }
+  private var currentBottomSheetHeaderPage: Int = EditorBottomSheet.CHILD_HEADER
 
   companion object {
 
@@ -914,12 +915,14 @@ abstract class BaseEditorActivity :
       bottomSheet.onHeaderVisualFractionChanged = { fraction ->
         if (_binding == null || isDestroying || isExternalSymbolPageActive) return@onHeaderVisualFractionChanged
         symbolHeaderController?.onVisualFractionChanged(fraction)
+        updateSymbolHeaderPosition()
       }
       symbolStatusText.setOnClickListener {
         setExternalSymbolPageActive(!isExternalSymbolPageActive)
       }
       bottomSheet.onHeaderPageChanged = { page ->
         if (_binding != null) {
+          currentBottomSheetHeaderPage = page
           val isBuildStatusPage = page == EditorBottomSheet.CHILD_HEADER
           content.symbolStatusText.isEnabled = true
 
@@ -979,6 +982,9 @@ abstract class BaseEditorActivity :
     content.symbolInputPage.visibility = if (active) View.VISIBLE else View.GONE
     content.bottomSheet.visibility = if (active) View.INVISIBLE else View.VISIBLE
     content.symbolCursorText.visibility = if (active) View.VISIBLE else View.GONE
+    if (!active) {
+      symbolHeaderController?.onPageChanged(currentBottomSheetHeaderPage)
+    }
     updateSymbolHeaderAnchor()
     applyExternalSymbolImeInset()
     contentCardRealHeight?.let { baseHeight ->
@@ -1166,14 +1172,20 @@ abstract class BaseEditorActivity :
   }
 
   private fun computeSymbolHeaderAlpha(): Float {
+    val pageAdjust =
+        when (currentBottomSheetHeaderPage) {
+          EditorBottomSheet.CHILD_ACTION -> 0.85f
+          EditorBottomSheet.CHILD_HEADER -> 1f
+          else -> 0.9f
+        }
     return if (isExternalSymbolPageActive) {
-      content.externalSymbolInputView.getExpansionFraction().coerceIn(0f, 1f)
+      (content.externalSymbolInputView.getExpansionFraction() * pageAdjust).coerceIn(0f, 1f)
     } else if (bottomSheetSlideOffset < 0f) {
-      (1f + bottomSheetSlideOffset).coerceIn(0f, 1f)
+      ((1f + bottomSheetSlideOffset) * pageAdjust).coerceIn(0f, 1f)
     } else if (bottomSheetSlideOffset <= 0.5f) {
-      1f
+      pageAdjust
     } else {
-      (((0.5f - bottomSheetSlideOffset) + 0.5f) * 2f).coerceIn(0f, 1f)
+      ((((0.5f - bottomSheetSlideOffset) + 0.5f) * 2f) * pageAdjust).coerceIn(0f, 1f)
     }
   }
 
