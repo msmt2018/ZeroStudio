@@ -104,6 +104,8 @@ constructor(
   private var headerExpandEnabled = true
   private var expandBlocked = false
   private var behaviorCallbackAttached = false
+  private var currentActionText: CharSequence = ""
+  private var currentActionProgress: Int = 0
 
   var onHeaderPageChanged: ((Int) -> Unit)? = null
   var onHeaderStatusChanged: ((CharSequence, Int) -> Unit)? = null
@@ -346,13 +348,13 @@ constructor(
   private val resumeHeaderExpandRunnable = Runnable { headerExpandEnabled = true }
 
   fun setActionText(text: CharSequence) {
-    binding.bottomAction.actionText.text = text
-    onHeaderActionChanged?.invoke(text, binding.bottomAction.progress.progress)
+    currentActionText = text
+    onHeaderActionChanged?.invoke(currentActionText, currentActionProgress)
   }
 
   fun setActionProgress(progress: Int) {
-    binding.bottomAction.progress.setProgressCompat(progress, true)
-    onHeaderActionChanged?.invoke(binding.bottomAction.actionText.text ?: "", progress)
+    currentActionProgress = progress.coerceIn(0, 100)
+    onHeaderActionChanged?.invoke(currentActionText ?: "", currentActionProgress)
   }
 
   fun appendApkLog(line: LogLine) {
@@ -409,10 +411,6 @@ constructor(
 
   fun setStatus(text: CharSequence, @GravityInt gravity: Int) {
     runOnUiThread {
-      binding.buildStatus.let {
-        it.statusText.gravity = gravity
-        it.statusText.text = text
-      }
       onHeaderStatusChanged?.invoke(text, gravity)
     }
   }
