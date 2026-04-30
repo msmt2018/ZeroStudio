@@ -900,8 +900,8 @@ abstract class BaseEditorActivity :
         updateSymbolHeaderPosition()
       }
       bottomSheet.setOffsetAnchor(editorAppBarLayout)
-      bottomSheet.onHeaderStatusChanged = { text, gravity ->
-        if (_binding == null || isDestroying) return@onHeaderStatusChanged
+      bottomSheet.onHeaderStatusChanged = statusChanged@{ text, gravity ->
+        if (_binding == null || isDestroying) return@statusChanged
         content.symbolStatusText.gravity = gravity
         symbolHeaderController?.onStatusChanged(
             text,
@@ -909,12 +909,12 @@ abstract class BaseEditorActivity :
             editorViewModel.isBuildInProgress || editorViewModel.isInitializing
         )
       }
-      bottomSheet.onHeaderActionChanged = { text, progress ->
-        if (_binding == null || isDestroying || isExternalSymbolPageActive) return@onHeaderActionChanged
+      bottomSheet.onHeaderActionChanged = actionChanged@{ text, progress ->
+        if (_binding == null || isDestroying || isExternalSymbolPageActive) return@actionChanged
         symbolHeaderController?.onActionChanged(text, progress)
       }
-      bottomSheet.onHeaderVisualFractionChanged = { fraction ->
-        if (_binding == null || isDestroying || isExternalSymbolPageActive) return@onHeaderVisualFractionChanged
+      bottomSheet.onHeaderVisualFractionChanged = fractionChanged@{ fraction ->
+        if (_binding == null || isDestroying || isExternalSymbolPageActive) return@fractionChanged
         symbolHeaderController?.onVisualFractionChanged(fraction)
         updateSymbolHeaderPosition()
       }
