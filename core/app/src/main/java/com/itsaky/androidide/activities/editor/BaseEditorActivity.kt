@@ -1246,8 +1246,7 @@ abstract class BaseEditorActivity :
 
   private fun updateBottomSheetHeaderVisualState(isBuildStatusPage: Boolean) {
     if (_binding == null) return
-    content.symbolStatusText.alpha = if (isBuildStatusPage) 1f else 0.75f
-    content.symbolCursorText.alpha = content.symbolStatusText.alpha
+    symbolHeaderController?.onVisualFractionChanged(if (isBuildStatusPage) 1f else 0.75f)
   }
 
   private fun setupDiagnosticInfo() {
