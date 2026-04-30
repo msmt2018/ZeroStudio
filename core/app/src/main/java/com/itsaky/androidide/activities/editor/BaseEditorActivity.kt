@@ -950,8 +950,6 @@ abstract class BaseEditorActivity :
               if (isExternalSymbolPageActive) {
                 setExternalSymbolPageActive(false)
               }
-              content.symbolStatusText.gravity = Gravity.CENTER
-              content.symbolStatusText.text = getString(string.msg_installing_apk)
             }
           }
           val enableSwipeReveal = page == EditorBottomSheet.CHILD_HEADER && !isExternalSymbolPageActive
@@ -961,9 +959,7 @@ abstract class BaseEditorActivity :
           }
           if (!isExternalSymbolPageActive) {
             updateBottomSheetHeaderVisualState(isBuildStatusPage)
-            if (isBuildStatusPage && content.symbolStatusText.text.isNullOrBlank()) {
-              content.symbolStatusText.text = getString(string.msg_swipe_up)
-            }
+            syncSymbolHeaderTextForPage(page)
           }
           updateSymbolHeaderPosition()
         }
@@ -1246,6 +1242,23 @@ abstract class BaseEditorActivity :
     if (_binding == null) return
     content.symbolStatusText.alpha = if (isBuildStatusPage) 1f else 0.75f
     content.symbolCursorText.alpha = content.symbolStatusText.alpha
+  }
+
+  private fun syncSymbolHeaderTextForPage(page: Int) {
+    if (_binding == null || isDestroying) return
+    when (page) {
+      EditorBottomSheet.CHILD_ACTION -> {
+        content.symbolStatusText.gravity = Gravity.CENTER
+        if (content.symbolStatusText.text.isNullOrBlank()) {
+          content.symbolStatusText.text = getString(string.msg_installing_apk)
+        }
+      }
+      EditorBottomSheet.CHILD_HEADER -> {
+        if (content.symbolStatusText.text.isNullOrBlank()) {
+          content.symbolStatusText.text = getString(string.msg_swipe_up)
+        }
+      }
+    }
   }
 
   private fun setupDiagnosticInfo() {
