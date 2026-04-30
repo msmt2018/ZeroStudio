@@ -928,6 +928,8 @@ abstract class BaseEditorActivity :
               if (isExternalSymbolPageActive) {
                 setExternalSymbolPageActive(false)
               }
+              content.symbolStatusText.gravity = Gravity.CENTER
+              content.symbolStatusText.text = getString(string.msg_installing_apk)
             }
           }
           val enableSwipeReveal = page == EditorBottomSheet.CHILD_HEADER && !isExternalSymbolPageActive
@@ -937,6 +939,9 @@ abstract class BaseEditorActivity :
           }
           if (!isExternalSymbolPageActive) {
             updateBottomSheetHeaderVisualState(isBuildStatusPage)
+            if (isBuildStatusPage && content.symbolStatusText.text.isNullOrBlank()) {
+              content.symbolStatusText.text = getString(string.msg_swipe_up)
+            }
           }
           updateSymbolHeaderPosition()
         }
