@@ -209,10 +209,8 @@ abstract class BaseEditorActivity :
   }
 
   private var optionsMenuInvalidator: Runnable? = null
-  private var isSymbolHeaderVisibleForCurrentPage = true
   private var lastSymbolHeaderAlpha = Float.NaN
   private var bottomSheetSlideOffset = 0f
-  private var blockBottomSheetExpandForTabSwitch = false
   private var isSymbolHeaderAnchorUpdatePosted = false
   private var latestImeBottomInset = 0
   private var isBuildHeaderHidden = true
@@ -842,10 +840,6 @@ abstract class BaseEditorActivity :
         object : BottomSheetCallback() {
           override fun onStateChanged(bottomSheet: View, newState: Int) {
             if (isDestroying || _binding == null) return
-            if (newState == BottomSheetBehavior.STATE_EXPANDED && blockBottomSheetExpandForTabSwitch) {
-              editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
-              return
-            }
             if (newState == BottomSheetBehavior.STATE_EXPANDED) {
               val editor = provideCurrentEditor()
               editor?.editor?.ensureWindowsDismissed()
@@ -929,9 +923,7 @@ abstract class BaseEditorActivity :
       bottomSheet.onHeaderPageChanged = { page ->
         if (_binding != null) {
           val isBuildStatusPage = page == EditorBottomSheet.CHILD_HEADER
-          val showPageSwitch = true
-          isSymbolHeaderVisibleForCurrentPage = showPageSwitch
-          content.symbolStatusText.isEnabled = showPageSwitch
+          content.symbolStatusText.isEnabled = true
 
           when (page) {
             EditorBottomSheet.STATE_EXTERNAL_SYMBOL -> {
@@ -965,27 +957,10 @@ abstract class BaseEditorActivity :
         }
       }
       setExternalSymbolPageActive(false)
-      isSymbolHeaderVisibleForCurrentPage = true
       content.symbolStatusText.isEnabled = true
       updateBottomSheetHeaderVisualState(isBuildStatusPage = true)
       updateSymbolHeaderPosition()
     }
-  }
-
-  private fun forceCollapseBottomSheet(lockDurationMs: Long) {
-    if (_binding == null) return
-    content.bottomSheet.suspendHeaderExpandFor(lockDurationMs)
-    content.bottomSheet.suppressNextHeaderExpand()
-    content.bottomSheet.setBottomSheetDragEnabled(false)
-    content.bottomSheet.forceCollapse()
-    editorBottomSheet?.setState(BottomSheetBehavior.STATE_COLLAPSED)
-    ThreadUtils.runOnUiThreadDelayed(
-        {
-          if (_binding == null || isDestroying) return@runOnUiThreadDelayed
-          content.bottomSheet.setBottomSheetDragEnabled(!isExternalSymbolPageActive)
-        },
-        lockDurationMs
-    )
   }
 
   private fun setExternalSymbolPageActive(active: Boolean) {
