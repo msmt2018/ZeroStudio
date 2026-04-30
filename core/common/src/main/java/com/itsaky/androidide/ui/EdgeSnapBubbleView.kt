@@ -44,12 +44,7 @@ class EdgeSnapBubbleView : View {
   private var backPath: Path? = null
   private var arrowPath: Path? = null
 
-  private var onBackListener: OnBackListener? = null
   private var showArrowUp: Boolean = true
-
-  fun setOnBackListener(onBackListener: OnBackListener?) {
-    this.onBackListener = onBackListener
-  }
 
   fun setOnlyLeftBack(onlyLeftBack: Boolean) {
     isOnlyLeftBack = onlyLeftBack
@@ -260,9 +255,5 @@ class EdgeSnapBubbleView : View {
     // expanded=true 表示容器显示中，箭头朝上（点击后收起）
     showArrowUp = expanded
     invalidate()
-  }
-
-  interface OnBackListener {
-    fun onBack()
   }
 }
