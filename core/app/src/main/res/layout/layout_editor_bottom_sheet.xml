@@ -38,12 +38,12 @@
     android:scaleY="0.9"
     app:cardBackgroundColor="?attr/colorSurface">
   </com.google.android.material.card.MaterialCardView>
-  <include
+  <View
     android:id="@+id/border"
-    layout="@layout/layout_divider_horizontal"
     android:layout_width="match_parent"
     android:layout_marginBottom="2dp"
     android:layout_height="0.5dp"
+    android:background="?attr/colorOutline"
     android:layout_alignParentTop="true" />
 
   <ViewFlipper
@@ -53,13 +53,15 @@
     android:layout_height="@dimen/editor_sheet_collapsed_height"
     android:background="?attr/colorSurface">
 
-    <include
-      layout="@layout/layout_editor_build_status"
-      android:id="@+id/build_status"/>
+    <FrameLayout
+      android:id="@+id/build_status"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
 
-    <include
-      layout="@layout/layout_editor_bottom_action"
-      android:id="@+id/bottom_action"/>
+    <FrameLayout
+      android:id="@+id/bottom_action"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
 
   </ViewFlipper>
 
