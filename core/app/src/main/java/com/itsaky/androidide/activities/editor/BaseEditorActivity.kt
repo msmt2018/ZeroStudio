@@ -220,6 +220,7 @@ abstract class BaseEditorActivity :
   private var isSymbolPageSwitchHidden = true
   private var bubbleDragStartY = 0f
   private var bubbleDragConsumed = false
+  private val bubbleDragThresholdPx by lazy { 24f * resources.displayMetrics.density }
 
   companion object {
 
@@ -1080,7 +1081,7 @@ abstract class BaseEditorActivity :
         }
         MotionEvent.ACTION_MOVE -> {
           val deltaY = event.rawY - bubbleDragStartY
-          if (kotlin.math.abs(deltaY) > 24f) {
+          if (kotlin.math.abs(deltaY) > bubbleDragThresholdPx) {
             bubbleDragConsumed = true
             if (deltaY < 0f) {
               editorBottomSheet?.state = BottomSheetBehavior.STATE_EXPANDED
@@ -1089,6 +1090,9 @@ abstract class BaseEditorActivity :
               editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
             }
           }
+        }
+        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+          bubbleDragStartY = 0f
         }
       }
       false
