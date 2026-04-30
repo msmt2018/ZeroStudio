@@ -1,6 +1,5 @@
 package com.itsaky.androidide.ui
 
-import android.app.Activity
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -46,7 +45,6 @@ class EdgeSnapBubbleView : View {
   private var arrowPath: Path? = null
 
   private var onBackListener: OnBackListener? = null
-  private var side: Side = Side.LEFT
   private var showArrowUp: Boolean = true
 
   fun setOnBackListener(onBackListener: OnBackListener?) {
@@ -93,23 +91,9 @@ class EdgeSnapBubbleView : View {
       MotionEvent.ACTION_DOWN -> {
         downX = ev.x
         forwardX = downX
-        // 原始逻辑保留：边缘触发。
-        if (downX <= backEdgeWidth) {
-          isEdge = true
-          left = true
-          right = false
-        } else if (downX >= width - backEdgeWidth) {
-          isEdge = true
-          right = true
-          left = false
-        }
-        // 项目需求：固定吸附在 page_switch_container 顶部边缘可直接显示与点击。
-        // 因此若未命中边缘，也允许进入左侧形态绘制和点击，不隐藏。
-        if (!isEdge) {
-          isEdge = true
-          left = true
-          right = false
-        }
+        isEdge = true
+        left = true
+        right = false
       }
 
       MotionEvent.ACTION_MOVE -> {
@@ -151,11 +135,7 @@ class EdgeSnapBubbleView : View {
       MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
         if (isEdge) {
           if (deltaX >= backMaxWidth && left) {
-            back()
-          } else if (abs(deltaX) >= backMaxWidth && right) {
-            if (!isOnlyLeftBack) {
-              back()
-            }
+            onBackListener?.onBack()
           }
           // 轻触也触发点击切换。
           if (abs(deltaX) < backMaxWidth * 0.2f) {
@@ -171,16 +151,6 @@ class EdgeSnapBubbleView : View {
       }
     }
     return isEdge
-  }
-
-  private fun back() {
-    if (onBackListener != null) {
-      onBackListener!!.onBack()
-    } else {
-      @Suppress("DEPRECATION")
-      (context as? Activity)?.onBackPressed()
-      performClick()
-    }
   }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -266,16 +236,9 @@ class EdgeSnapBubbleView : View {
 
   fun getBackViewHeight(): Float = backViewHeight
 
-  fun attachToSide(newSide: Side) {
-    side = newSide
-    val parentView = parent as? View ?: return
-    x = if (side == Side.LEFT) 0f else (parentView.width - width).toFloat()
-  }
+  fun attachToSide(newSide: Side) = Unit
 
-  fun restorePosition() {
-    val parentView = parent as? View ?: return
-    x = if (side == Side.LEFT) 0f else (parentView.width - width).toFloat()
-  }
+  fun restorePosition() = Unit
 
   override fun performClick(): Boolean {
     super.performClick()
