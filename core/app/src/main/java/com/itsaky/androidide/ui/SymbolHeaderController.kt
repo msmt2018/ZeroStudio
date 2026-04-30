@@ -11,56 +11,79 @@ class SymbolHeaderController(
     private val statusView: TextView,
     private val cursorView: TextView,
 ) {
-  private var isExternalSymbolMode: Boolean = false
-  private var lastStatusText: CharSequence = ""
+  private data class State(
+      val isExternalSymbolMode: Boolean = false,
+      val statusText: CharSequence = "",
+      val statusGravity: Int = Gravity.CENTER,
+      val cursorText: CharSequence = "",
+      val alpha: Float = 1f,
+  )
+
+  private var state = State()
+
+  private fun render(newState: State) {
+    state = newState
+    statusView.gravity = newState.statusGravity
+    statusView.text =
+        if (newState.statusText.isBlank() && !newState.isExternalSymbolMode) {
+          statusView.context.getString(R.string.msg_swipe_up)
+        } else {
+          newState.statusText
+        }
+    cursorView.text = newState.cursorText
+    statusView.alpha = newState.alpha
+    cursorView.alpha = newState.alpha
+  }
 
   fun onExternalModeChanged(external: Boolean) {
-    isExternalSymbolMode = external
+    render(state.copy(isExternalSymbolMode = external))
   }
 
   fun onStatusChanged(text: CharSequence, gravity: Int, isBusy: Boolean) {
-    statusView.gravity = gravity
-    lastStatusText = text
-    statusView.text =
-        if (text.isBlank() && !isBusy) {
-          statusView.context.getString(R.string.msg_swipe_up)
-        } else {
-          text
-        }
+    val statusText =
+        if (text.isBlank() && !isBusy) statusView.context.getString(R.string.msg_swipe_up) else text
+    render(state.copy(statusText = statusText, statusGravity = gravity))
   }
 
   fun onActionChanged(actionText: CharSequence, progress: Int) {
-    if (isExternalSymbolMode) return
-    statusView.gravity = Gravity.CENTER
-    statusView.text =
+    if (state.isExternalSymbolMode) return
+    val statusText =
         if (actionText.isBlank()) {
           statusView.context.getString(R.string.msg_installing_apk)
         } else {
           actionText
         }
-    cursorView.text = "${progress.coerceIn(0, 100)}%"
+    render(
+        state.copy(
+            statusText = statusText,
+            statusGravity = Gravity.CENTER,
+            cursorText = "${progress.coerceIn(0, 100)}%"
+        )
+    )
   }
 
   fun onVisualFractionChanged(fraction: Float) {
-    if (isExternalSymbolMode) return
+    if (state.isExternalSymbolMode) return
     val alpha = fraction.coerceIn(0f, 1f)
-    statusView.alpha = alpha
-    cursorView.alpha = alpha
+    render(state.copy(alpha = alpha))
   }
 
   fun onPageChanged(page: Int) {
+    var text = state.statusText
+    var gravity = state.statusGravity
     if (page == EditorBottomSheet.CHILD_ACTION) {
-      statusView.gravity = Gravity.CENTER
-      if (statusView.text.isNullOrBlank()) {
-        statusView.text = statusView.context.getString(R.string.msg_installing_apk)
+      gravity = Gravity.CENTER
+      if (text.isBlank()) {
+        text = statusView.context.getString(R.string.msg_installing_apk)
       }
-    } else if (page == EditorBottomSheet.CHILD_HEADER && statusView.text.isNullOrBlank()) {
-      statusView.text = statusView.context.getString(R.string.msg_swipe_up)
+    } else if (page == EditorBottomSheet.CHILD_HEADER && text.isBlank()) {
+      text = statusView.context.getString(R.string.msg_swipe_up)
     }
+    render(state.copy(statusText = text, statusGravity = gravity))
   }
 
   fun onCursorChanged(text: CharSequence) {
-    if (!isExternalSymbolMode) return
-    cursorView.text = text
+    if (!state.isExternalSymbolMode) return
+    render(state.copy(cursorText = text))
   }
 }
