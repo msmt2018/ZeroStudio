@@ -104,6 +104,8 @@ import com.itsaky.androidide.viewmodel.EditorViewModel
 import com.itsaky.androidide.xml.resources.ResourceTableRegistry
 import com.itsaky.androidide.xml.versions.ApiVersionsRegistry
 import com.itsaky.androidide.xml.widgets.WidgetTableRegistry
+import io.github.rosemoe.sora.event.SelectionChangeEvent
+import io.github.rosemoe.sora.event.SubscriptionReceipt
 import java.io.File
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -213,6 +215,7 @@ abstract class BaseEditorActivity :
   private var isPageSwitchAnchorUpdatePosted = false
   private var latestImeBottomInset = 0
   private var isBuildPageSwitchHidden = true
+  private var cursorSelectionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
   private var isSymbolPageSwitchHidden = true
 
   companion object {
@@ -661,7 +664,25 @@ abstract class BaseEditorActivity :
   fun refreshSymbolInput(editor: CodeEditorView) {
     if (isDestroying || _binding == null) return
     content.bottomSheet.refreshSymbolInput(editor)
-    editor.editor?.also { content.externalSymbolInputView.bindEditor(it) }
+    editor.editor?.also {
+      content.externalSymbolInputView.bindEditor(it)
+      bindCursorIndicator(editor)
+    }
+  }
+
+  private fun bindCursorIndicator(editorView: CodeEditorView) {
+    cursorSelectionReceipt?.unsubscribe()
+    val editor = editorView.editor ?: return
+    fun updateIndicator() {
+      if (_binding == null || isDestroying) return
+      val left = editor.cursor.left()
+      content.symbolCursorText.text = "${left.line + 1}:${left.column + 1}"
+    }
+    updateIndicator()
+    cursorSelectionReceipt =
+        editor.subscribeEvent(SelectionChangeEvent::class.java) { _, _ ->
+          runOnUiThread { updateIndicator() }
+        }
   }
 
   private fun checkIsDestroying() {
@@ -1125,8 +1146,7 @@ abstract class BaseEditorActivity :
 
   private fun updateBottomSheetPageSwitch(isBuildStatusPage: Boolean) {
     if (_binding == null) return
-    content.symbolStatusText.alpha = if (isBuildStatusPage) 1f else 0.55f
-    content.symbolStatusText.alpha = if (isBuildStatusPage) 0.55f else 1f
+    content.symbolStatusText.alpha = if (isBuildStatusPage) 1f else 0.75f
   }
 
   private fun setupDiagnosticInfo() {
