@@ -953,7 +953,6 @@ abstract class BaseEditorActivity :
           }
           if (!isExternalSymbolPageActive) {
             updateBottomSheetHeaderVisualState(isBuildStatusPage)
-            syncSymbolHeaderTextForPage(page)
             symbolHeaderController?.onPageChanged(page)
           }
           updateSymbolHeaderPosition()
@@ -1249,23 +1248,6 @@ abstract class BaseEditorActivity :
     if (_binding == null) return
     content.symbolStatusText.alpha = if (isBuildStatusPage) 1f else 0.75f
     content.symbolCursorText.alpha = content.symbolStatusText.alpha
-  }
-
-  private fun syncSymbolHeaderTextForPage(page: Int) {
-    if (_binding == null || isDestroying) return
-    when (page) {
-      EditorBottomSheet.CHILD_ACTION -> {
-        content.symbolStatusText.gravity = Gravity.CENTER
-        if (content.symbolStatusText.text.isNullOrBlank()) {
-          content.symbolStatusText.text = getString(string.msg_installing_apk)
-        }
-      }
-      EditorBottomSheet.CHILD_HEADER -> {
-        if (content.symbolStatusText.text.isNullOrBlank()) {
-          content.symbolStatusText.text = getString(string.msg_swipe_up)
-        }
-      }
-    }
   }
 
   private fun setupDiagnosticInfo() {
