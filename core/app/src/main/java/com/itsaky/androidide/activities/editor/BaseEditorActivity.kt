@@ -93,6 +93,7 @@ import com.itsaky.androidide.ui.ContentTranslatingDrawerLayout
 import com.itsaky.androidide.ui.EditorBottomSheet
 import com.itsaky.androidide.ui.EdgeSnapBubbleView
 import com.itsaky.androidide.ui.SwipeRevealLayout
+import com.itsaky.androidide.ui.SymbolHeaderController
 import com.itsaky.androidide.utils.ActionMenuUtils.createMenu
 import com.itsaky.androidide.utils.ApkInstallationSessionCallback
 import com.itsaky.androidide.utils.DialogUtils.newMaterialDialogBuilder
@@ -215,6 +216,7 @@ abstract class BaseEditorActivity :
   private var latestImeBottomInset = 0
   private var isBuildHeaderHidden = true
   private var cursorSelectionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
+  private var symbolHeaderController: SymbolHeaderController? = null
   private var isSymbolHeaderHidden = true
   private var bubbleDragStartY = 0f
   private var bubbleDragConsumed = false
@@ -680,7 +682,7 @@ abstract class BaseEditorActivity :
     fun updateIndicator() {
       if (_binding == null || isDestroying) return
       val left = editor.cursor.left()
-      content.symbolCursorText.text = "${left.line + 1}:${left.column + 1}"
+      symbolHeaderController?.onCursorChanged("${left.line + 1}:${left.column + 1}")
     }
     updateIndicator()
     cursorSelectionReceipt =
@@ -880,6 +882,7 @@ abstract class BaseEditorActivity :
 
     content.apply {
       setupExternalSymbolImeSync()
+      symbolHeaderController = SymbolHeaderController(symbolStatusText, symbolCursorText)
       symbolStatusText.bringToFront()
       pageSwitchGestureBubble.bringToFront()
       symbolStatusText.post {
@@ -898,24 +901,19 @@ abstract class BaseEditorActivity :
       bottomSheet.onHeaderStatusChanged = { text, gravity ->
         if (_binding == null || isDestroying) return@onHeaderStatusChanged
         content.symbolStatusText.gravity = gravity
-        content.symbolStatusText.text =
-            if (text.isBlank() && !editorViewModel.isBuildInProgress && !editorViewModel.isInitializing) {
-              getString(string.msg_swipe_up)
-            } else {
-              text
-            }
+        symbolHeaderController?.onStatusChanged(
+            text,
+            gravity,
+            editorViewModel.isBuildInProgress || editorViewModel.isInitializing
+        )
       }
       bottomSheet.onHeaderActionChanged = { text, progress ->
         if (_binding == null || isDestroying || isExternalSymbolPageActive) return@onHeaderActionChanged
-        content.symbolStatusText.gravity = Gravity.CENTER
-        content.symbolStatusText.text = if (text.isBlank()) getString(string.msg_installing_apk) else text
-        content.symbolCursorText.text = "${progress.coerceIn(0, 100)}%"
+        symbolHeaderController?.onActionChanged(text, progress)
       }
       bottomSheet.onHeaderVisualFractionChanged = { fraction ->
         if (_binding == null || isDestroying || isExternalSymbolPageActive) return@onHeaderVisualFractionChanged
-        val alpha = fraction.coerceIn(0f, 1f)
-        content.symbolStatusText.alpha = alpha
-        content.symbolCursorText.alpha = alpha
+        symbolHeaderController?.onVisualFractionChanged(fraction)
       }
       symbolStatusText.setOnClickListener {
         setExternalSymbolPageActive(!isExternalSymbolPageActive)
@@ -952,6 +950,7 @@ abstract class BaseEditorActivity :
           if (!isExternalSymbolPageActive) {
             updateBottomSheetHeaderVisualState(isBuildStatusPage)
             syncSymbolHeaderTextForPage(page)
+            symbolHeaderController?.onPageChanged(page)
           }
           updateSymbolHeaderPosition()
         }
@@ -966,6 +965,7 @@ abstract class BaseEditorActivity :
   private fun setExternalSymbolPageActive(active: Boolean) {
     if (_binding == null) return
     isExternalSymbolPageActive = active
+    symbolHeaderController?.onExternalModeChanged(active)
     if (active) {
       bottomSheetSlideOffset = 0f
       resetEditorSurfaceTransform()
