@@ -220,6 +220,7 @@ abstract class BaseEditorActivity :
   private var isSymbolHeaderHidden = true
   private var bubbleDragStartY = 0f
   private var bubbleDragConsumed = false
+  private var bubbleDragProgress = -1f
   private val bubbleDragThresholdPx by lazy { 24f * resources.displayMetrics.density }
   private var currentBottomSheetHeaderPage: Int = EditorBottomSheet.CHILD_HEADER
 
@@ -1085,6 +1086,9 @@ abstract class BaseEditorActivity :
         }
         MotionEvent.ACTION_MOVE -> {
           val deltaY = event.rawY - bubbleDragStartY
+          val dragDistance = (kotlin.math.abs(deltaY) / (content.bottomSheet.height.coerceAtLeast(1) * 0.5f))
+          bubbleDragProgress = dragDistance.coerceIn(0f, 1f)
+          applySymbolHeaderProgress(1f - bubbleDragProgress)
           if (kotlin.math.abs(deltaY) > bubbleDragThresholdPx) {
             bubbleDragConsumed = true
             if (deltaY < 0f) {
@@ -1097,6 +1101,8 @@ abstract class BaseEditorActivity :
         }
         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
           bubbleDragStartY = 0f
+          bubbleDragProgress = -1f
+          updateSymbolHeaderPosition()
         }
       }
       false
@@ -1172,6 +1178,9 @@ abstract class BaseEditorActivity :
   }
 
   private fun computeSymbolHeaderAlpha(): Float {
+    if (bubbleDragProgress >= 0f) {
+      return (1f - bubbleDragProgress).coerceIn(0.2f, 1f)
+    }
     val pageAdjust =
         when (currentBottomSheetHeaderPage) {
           EditorBottomSheet.CHILD_ACTION -> 0.85f
@@ -1223,6 +1232,17 @@ abstract class BaseEditorActivity :
     bubble.setArrowExpanded(shouldShow)
     bubble.restorePosition()
     bubble.bringToFront()
+  }
+
+  private fun applySymbolHeaderProgress(progress: Float) {
+    if (_binding == null || isDestroying) return
+    val clamped = progress.coerceIn(0f, 1f)
+    content.symbolStatusText.alpha = clamped
+    content.symbolCursorText.alpha = clamped
+    val shift = content.symbolStatusText.height * (1f - clamped)
+    content.symbolStatusText.translationY = -(content.symbolStatusText.height / 2f) + shift
+    content.symbolCursorText.translationY = content.symbolStatusText.translationY
+    content.pageSwitchGestureBubble.setArrowExpanded(clamped > 0.5f)
   }
 
   private fun updateBottomSheetHeaderVisualState(isBuildStatusPage: Boolean) {
