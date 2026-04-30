@@ -1177,6 +1177,10 @@ abstract class BaseEditorActivity :
   }
 
   private fun computeSymbolHeaderAlpha(): Float {
+    return resolveUnifiedHeaderProgress().coerceIn(0f, 1f)
+  }
+
+  private fun resolveUnifiedHeaderProgress(): Float {
     if (bubbleDragProgress >= 0f) {
       return (1f - bubbleDragProgress).coerceIn(0.2f, 1f)
     }
@@ -1242,6 +1246,7 @@ abstract class BaseEditorActivity :
     content.symbolStatusText.translationY = -(content.symbolStatusText.height / 2f) + shift
     content.symbolCursorText.translationY = content.symbolStatusText.translationY
     content.pageSwitchGestureBubble.setArrowExpanded(clamped > 0.5f)
+    symbolHeaderController?.onVisualFractionChanged(clamped)
   }
 
   private fun updateBottomSheetHeaderVisualState(isBuildStatusPage: Boolean) {
