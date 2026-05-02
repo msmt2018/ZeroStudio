@@ -234,65 +234,38 @@ constructor(
     behavior.isGestureInsetBottomIgnored = isVisible
   }
 
-  fun setOffsetAnchor(view: View, symbolInputPage: View) {
+  fun setOffsetAnchor(appBarLayout: View, symbolInputPage: View) {
     this.symbolInputPage = symbolInputPage
     val listener =
         object : ViewTreeObserver.OnGlobalLayoutListener {
           override fun onGlobalLayout() {
-            view.viewTreeObserver.removeOnGlobalLayoutListener(this)
-            anchorOffset = view.height + SizeUtils.dp2px(1f)
-
-            // 设置 peekHeight 为 0，当折叠时完全隐藏 sheet，只显示锚定在其上方的 symbol_input_page
-            behavior.peekHeight = 0
-            behavior.expandedOffset = anchorOffset
-            behavior.isGestureInsetBottomIgnored = isImeVisible
-
-            binding.root.updatePadding(bottom = anchorOffset + insetBottom)
+            appBarLayout.viewTreeObserver.removeOnGlobalLayoutListener(this)
             
-            resetSymbolInputPageHeight()
+            behavior.expandedOffset = appBarLayout.height
+            behavior.isGestureInsetBottomIgnored = isImeVisible
           }
         }
 
-    view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    appBarLayout.viewTreeObserver.addOnGlobalLayoutListener(listener)
   }
 
   fun resetSymbolInputPageHeight() {
       if (!isExternalSymbolMode) {
-          symbolInputPage?.apply {
-              updatePaddingRelative(bottom = paddingBottom + insetBottom)
-              updateLayoutParams<ViewGroup.LayoutParams> {
-                  height = (collapsedHeight + insetBottom).roundToInt()
-              }
-              alpha = 1f
-          }
+          symbolInputPage?.alpha = 1f
       }
   }
 
   fun onSlide(sheetOffset: Float) {
     if (isExternalSymbolMode) return
 
-    val heightScale =
-        if (sheetOffset >= COLLAPSE_HEADER_AT_OFFSET) {
-          ((COLLAPSE_HEADER_AT_OFFSET - sheetOffset) + COLLAPSE_HEADER_AT_OFFSET) * 2f
-        } else {
-          1f
-        }
-
-    val paddingScale =
-        if (!isImeVisible && sheetOffset <= COLLAPSE_HEADER_AT_OFFSET) {
-          ((1f - sheetOffset) * 2f) - 1f
-        } else {
-          0f
-        }
-
-    val padding = insetBottom * paddingScale
-    symbolInputPage?.apply {
-      updateLayoutParams<ViewGroup.LayoutParams> {
-        height = ((collapsedHeight + padding) * heightScale).roundToInt()
-      }
-      updatePaddingRelative(bottom = padding.roundToInt())
-      alpha = heightScale
+    // 当 BottomSheet 向上滑动展开时，平滑淡出顶部的 symbolInputPage (APK/构建状态条)
+    val alphaScale = if (sheetOffset <= COLLAPSE_HEADER_AT_OFFSET) {
+        1f - (sheetOffset / COLLAPSE_HEADER_AT_OFFSET)
+    } else {
+        0f
     }
+    
+    symbolInputPage?.alpha = alphaScale
   }
 
   fun showChild(index: Int) {
