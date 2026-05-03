@@ -27,6 +27,7 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
@@ -216,6 +217,7 @@ abstract class BaseEditorActivity :
   private var optionsMenuInvalidator: Runnable? = null
   private var bottomSheetSlideOffset = 0f
   private var isBottomSheetFocusMode = false
+  private var isHeaderContainerCollapsedByBubble = false
   private var blockBottomSheetExpandForTabSwitch = false
   private var latestImeBottomInset = 0
   private var pendingBottomSheetState: Int? = null
@@ -994,6 +996,7 @@ abstract class BaseEditorActivity :
     content.bottomSheet.isExternalSymbolMode = active
     
     if (active) {
+      isHeaderContainerCollapsedByBubble = false
       bottomSheetSlideOffset = 0f
       resetEditorSurfaceTransform()
       
@@ -1026,6 +1029,7 @@ abstract class BaseEditorActivity :
       applyExternalSymbolImeInset()
       
     } else {
+      isHeaderContainerCollapsedByBubble = false
       content.bottomSheet.setBottomSheetDragEnabled(true)
       
       content.symbolInputPage.visibility = View.VISIBLE
@@ -1139,11 +1143,7 @@ abstract class BaseEditorActivity :
     bubble.setPosition(EdgeSnapBubbleView.Position.TOP)
     
     bubble.setOnBubbleClickListener {
-      if (editorBottomSheet?.state == BottomSheetBehavior.STATE_EXPANDED) {
-         requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
-      } else {
-         requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
-      }
+      toggleHeaderContainerByBubble()
     }
     
     bubble.setOnBubbleGestureListener(
@@ -1166,6 +1166,63 @@ abstract class BaseEditorActivity :
           }
         }
     )
+  }
+
+  private fun toggleHeaderContainerByBubble() {
+    if (_binding == null || isExternalSymbolPageActive) return
+    val collapse = !isHeaderContainerCollapsedByBubble
+    isHeaderContainerCollapsedByBubble = collapse
+    animateHeaderContainerVisibility(show = !collapse)
+  }
+
+  private fun animateHeaderContainerVisibility(show: Boolean) {
+    if (_binding == null) return
+    val views = arrayOf(content.cardView, content.headerContainer, content.tvCursorPosition, content.border.root)
+    val startY = (-48f * resources.displayMetrics.density)
+    val overshootY = (-12f * resources.displayMetrics.density)
+    val duration = 220L
+    views.forEach { view ->
+      view.animate().cancel()
+      if (show) {
+        view.visibility = View.VISIBLE
+        view.translationY = startY
+        view.alpha = 0f
+        view.animate()
+            .translationY(overshootY)
+            .alpha(0.7f)
+            .setDuration(duration / 2)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .withEndAction {
+              view.animate()
+                  .translationY(0f)
+                  .alpha(1f)
+                  .setDuration(duration / 2)
+                  .setInterpolator(AccelerateDecelerateInterpolator())
+                  .start()
+            }
+            .start()
+      } else {
+        view.animate()
+            .translationY(overshootY)
+            .alpha(0.65f)
+            .setDuration(duration / 2)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .withEndAction {
+              view.animate()
+                  .translationY(startY)
+                  .alpha(0f)
+                  .setDuration(duration / 2)
+                  .setInterpolator(AccelerateDecelerateInterpolator())
+                  .withEndAction {
+                    view.visibility = View.GONE
+                    view.translationY = 0f
+                  }
+                  .start()
+            }
+            .start()
+      }
+    }
+    updateEdgeBubbleAnchorToHeader(show)
   }
 
   private fun requestBottomSheetState(targetState: Int) {
