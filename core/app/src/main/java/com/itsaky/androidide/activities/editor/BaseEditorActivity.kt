@@ -944,18 +944,15 @@ abstract class BaseEditorActivity :
   private fun updateEdgeBubbleAnchorToHeader(anchorToHeader: Boolean) {
     if (_binding == null) return
     content.pageSwitchGestureBubble.updateLayoutParams<RelativeLayout.LayoutParams> {
+      // IMPORTANT: Do not create any dependency against header_container/border because
+      // header_container is positioned below border and border is positioned below bubble.
+      // Any bubble <-> header relation can create a RelativeLayout dependency cycle.
       removeRule(RelativeLayout.ALIGN_PARENT_TOP)
       removeRule(RelativeLayout.ABOVE)
       removeRule(RelativeLayout.ALIGN_TOP)
       removeRule(RelativeLayout.ALIGN_BOTTOM)
       removeRule(RelativeLayout.BELOW)
-      if (anchorToHeader) {
-        // Keep bubble directly above header; never align to header top/bottom to avoid
-        // RelativeLayout dependency cycles (bubble -> border -> header -> bubble).
-        addRule(RelativeLayout.ABOVE, R.id.header_container)
-      } else {
-        addRule(RelativeLayout.ALIGN_PARENT_TOP)
-      }
+      addRule(RelativeLayout.ALIGN_PARENT_TOP)
     }
   }
 
