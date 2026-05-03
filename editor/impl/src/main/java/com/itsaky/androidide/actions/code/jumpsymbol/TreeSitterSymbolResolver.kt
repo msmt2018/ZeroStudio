@@ -76,7 +76,10 @@ object TreeSitterSymbolResolver {
         SymbolInfo(name, "Package Declaration", startLine, SymbolType.PACKAGE)
       }
       "import_declaration" -> {
-        val name = getNodeText(node.getChildByFieldName("name"), source) ?: return null
+        val name =
+            getNodeText(node.getChildByFieldName("name"), source)
+                ?: getNodeText(node, source)?.removePrefix("import")?.removeSuffix(";")?.trim()
+                ?: return null
         SymbolInfo(name, "Import", startLine, SymbolType.IMPORT)
       }
       "class_declaration" -> {
@@ -94,9 +97,8 @@ object TreeSitterSymbolResolver {
       "method_declaration" -> {
         val name = getNodeText(node.getChildByFieldName("name"), source) ?: return null
         val params = getNodeText(node.getChildByFieldName("parameters"), source) ?: "()"
-        val returnType = getNodeText(node.getChildByFieldName("type"), source) ?: "void"
 
-        SymbolInfo(name, "$params : $returnType", startLine, SymbolType.METHOD)
+        SymbolInfo(name, params, startLine, SymbolType.METHOD)
       }
       "constructor_declaration" -> {
         val name = getNodeText(node.getChildByFieldName("name"), source) ?: return null
@@ -141,7 +143,10 @@ object TreeSitterSymbolResolver {
         SymbolInfo(name, "Package", startLine, SymbolType.PACKAGE)
       }
       "import_header" -> {
-        val name = getNodeText(findChildByType(node, "identifier"), source) ?: "import"
+        val name =
+            getNodeText(findChildByType(node, "identifier"), source)
+                ?: getNodeText(node, source)?.removePrefix("import")?.trim()
+                ?: "import"
         SymbolInfo(name, "Import", startLine, SymbolType.IMPORT)
       }
       "class_declaration" -> {
@@ -156,12 +161,13 @@ object TreeSitterSymbolResolver {
         val name = getNodeText(findChildByType(node, "simple_identifier"), source) ?: "<anon>"
         val params = getNodeText(findChildByType(node, "function_value_parameters"), source) ?: "()"
 
-        SymbolInfo(name, params, startLine, SymbolType.FUNCTION)
+        SymbolInfo(name, params, startLine, SymbolType.METHOD)
       }
       "property_declaration" -> {
         val decl = findChildByType(node, "variable_declaration")
         val name = getNodeText(findChildByType(decl, "simple_identifier"), source) ?: "prop"
-        SymbolInfo(name, "Property", startLine, SymbolType.VARIABLE)
+        val type = getNodeText(findChildByType(decl, "type_annotation"), source) ?: "Property"
+        SymbolInfo(name, type, startLine, SymbolType.FIELD)
       }
       else -> null
     }
@@ -173,9 +179,15 @@ object TreeSitterSymbolResolver {
     return try {
       val start = node.startByte
       val end = node.endByte
-      if (start < 0 || end > source.length || start >= end) null else source.substring(start, end)
+      val bytes = source.toByteArray(Charsets.UTF_8)
+      if (start < 0 || end > bytes.size || start >= end) {
+        null
+      } else {
+        String(bytes, start, end - start, Charsets.UTF_8)
+      }
     } catch (e: IllegalStateException) {
-      // 如果仍然发生 "Cannot access native object"，则捕获并返回 null
+      null
+    } catch (e: Exception) {
       null
     }
   }
