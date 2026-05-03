@@ -1,38 +1,31 @@
-# JDWP Client 模块
+# JDWP Client（全功能架构版）
 
-该模块现在已按“扩展建议”一次性落地为可直接用于 Termux IPC/跨进程调试的完整客户端骨架。
+## 协议分层（已落地）
 
-## 已实现能力（当前版本）
+1. Transport 层：`JdwpTransport` / `SocketJdwpTransport`
+2. Packetize 层：`JdwpCodec` + `JdwpBuffer`
+3. JDWP Commands 层：`JdwpClient`（Set 1/2/9/11/15 等）
+4. JDI-like 层：`JdwpSymbolRepository`（类/方法缓存解析）
 
-- 连接与握手
-  - 标准 `JDWP-Handshake`。
-- 传输层
-  - `JdwpTransport` 抽象。
-  - `SocketJdwpTransport`（支持 TCP socket，可直接用于 IPC 转发链路末端）。
-- 协议编解码
-  - 完整 command packet 编码。
-  - reply/event packet 自动识别与解析。
-  - 大端序二进制读写工具 `JdwpBuffer`。
-- 异步收包循环（已实现）
-  - 后台事件泵线程持续收包。
-  - 请求/回复通过 `id` 自动匹配。
-  - 支持注册 event listener 接收异步事件。
-- VM / Class / Symbol 查询
-  - `VirtualMachine.Version`
-  - `VirtualMachine.AllThreads`
-  - `VirtualMachine.Suspend` / `Resume`
-  - `VirtualMachine.ClassesBySignature`
-  - `ReferenceType.Fields`
-  - `ReferenceType.Methods`
-  - `ObjectReference.ReferenceType`
-  - `ObjectReference.GetValues`
-- EventRequest
-  - `EventRequest.Set`（当前提供 VM_DEATH 快捷注册）
-  - `EventRequest.Clear`
-- 错误处理
-  - JDWP 错误码映射 + 异常抛出。
+## 核心能力
 
-## 快速示例
+- 严格握手：`JDWP-Handshake` 14 字节双向校验。
+- 异步收包：后台 pump + `CompletableFuture` 按 Packet ID 匹配回复。
+- Event 处理：支持 event listener 与 EventRequest.Set / Clear。
+- IDSizes：握手后自动调用 `VirtualMachine.IDSizes`，按目标 JVM 动态 ID 长度解析。
+- 符号链路：`ClassesBySignature -> Methods/Fields`。
+- 对象读写：`ObjectReference.GetValues / SetValues`。
+- 远程方法调用：`ObjectReference.InvokeMethod`（支持 options，如 `INVOKE_SINGLE_THREADED`）。
+
+## 已实现命令（摘要）
+
+- VM(Set=1): `Version`, `AllThreads`, `IDSizes`, `Suspend`, `Resume`, `ClassesBySignature`
+- ReferenceType(Set=2): `Fields`, `Methods`
+- ObjectReference(Set=9): `ReferenceType`, `GetValues`, `SetValues`, `InvokeMethod`
+- ThreadReference(Set=11): `Name`, `Status`
+- EventRequest(Set=15): `Set`, `Clear`
+
+## 使用示例
 
 ```kotlin
 SocketJdwpTransport("127.0.0.1", 5005).use { transport ->
@@ -40,27 +33,15 @@ SocketJdwpTransport("127.0.0.1", 5005).use { transport ->
     client.connectAndHandshake()
 
     client.setEventListener { event ->
-      println("JDWP event: set=${event.commandSet}, cmd=${event.command}")
+      println("event: set=${event.commandSet}, cmd=${event.command}")
     }
 
-    val version = client.vmVersion()
-    val threads = client.allThreads()
-    val firstThread = threads.firstOrNull()?.let(client::threadInfo)
+    val repo = JdwpSymbolRepository(client)
+    val cls = repo.resolveClass("Lcom/example/Main;")
+    val method = repo.resolveMethod(cls, "run")
 
-    val classes = client.classesBySignature("Lcom/example/Main;")
-    val methods = classes.firstOrNull()?.let { client.methods(it.typeId) }
-
-    println(version)
-    println(firstThread)
-    println(methods)
+    println(client.vmVersion())
+    println(method)
   }
 }
 ```
-
-## 集成建议（core/app 或 termux 层）
-
-- 将 `JdwpTransport` 作为可替换依赖注入：
-  - 本地调试用 `SocketJdwpTransport`。
-  - Termux 会话链路可封装自定义 transport（Unix domain socket / 本地代理隧道）。
-- 在上层提供符号服务（Class/Method/Field/Object）缓存，避免重复 round-trip。
-- 若要进一步覆盖“方法调用/断点/单步”等高级能力，可在当前结构上继续新增对应 command set API。
