@@ -8,25 +8,18 @@ data class VmVersionReply(
   val vmName: String,
 )
 
-data class ClassInfo(
-  val refTypeTag: Byte,
-  val typeId: ReferenceTypeId,
-  val status: Int,
-)
+data class ClassInfo(val refTypeTag: Byte, val typeId: ReferenceTypeId, val status: Int)
+data class MethodInfo(val id: MethodId, val name: String, val signature: String, val modifiers: Int)
+data class FieldInfo(val id: FieldId, val name: String, val signature: String, val modifiers: Int)
 
-data class MethodInfo(
-  val id: MethodId,
-  val name: String,
-  val signature: String,
-  val modifiers: Int,
-)
+data class ThreadInfo(val name: String, val threadStatus: Int, val suspendStatus: Int)
+data class ObjectReferenceInfo(val refTypeTag: Byte, val typeId: ReferenceTypeId)
+data class TaggedValue(val tag: Byte, val rawValue: Long)
 
-data class FieldInfo(
-  val id: FieldId,
-  val name: String,
-  val signature: String,
-  val modifiers: Int,
-)
+enum class JdwpEventKind(val code: Byte) { BREAKPOINT(2), SINGLE_STEP(1), METHOD_ENTRY(40), METHOD_EXIT(41), VM_DEATH(99) }
+enum class JdwpSuspendPolicy(val code: Byte) { NONE(0), EVENT_THREAD(1), ALL(2) }
+
+data class EventRequestId(val raw: Int)
 
 object JdwpErrors {
   private val mapping = mapOf<UShort, String>(
@@ -42,7 +35,6 @@ object JdwpErrors {
 
   fun throwIfError(code: UShort) {
     if (code.toInt() == 0) return
-    val name = mapping[code] ?: "UNKNOWN"
-    throw IllegalStateException("JDWP error $code ($name)")
+    throw IllegalStateException("JDWP error $code (${mapping[code] ?: "UNKNOWN"})")
   }
 }
