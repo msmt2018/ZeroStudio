@@ -223,6 +223,7 @@ include(
     ":modules:compose-preview",
     // ":modules:colorpicker",
     ":modules:kotlinc",
+    ":modules:jdwp-client",
 
 )
 
