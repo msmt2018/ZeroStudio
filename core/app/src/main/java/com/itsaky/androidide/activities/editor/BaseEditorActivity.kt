@@ -32,6 +32,7 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import android.widget.RelativeLayout
 import android.view.Gravity
+import android.view.MotionEvent
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.viewModels
@@ -120,6 +121,7 @@ import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode.MAIN
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import android.view.ViewConfiguration
 
 /**
  * Base class for EditorActivity which handles most of the view related things.
@@ -141,6 +143,9 @@ abstract class BaseEditorActivity :
   private var bottomSheetCardVisibilitySnapshot: Int = View.VISIBLE
   private var bottomSheetHeaderVisibilitySnapshot: Int = View.VISIBLE
   private var isExternalSymbolPageActive = false
+  private var headerGestureStartY = 0f
+  private var headerGestureDragging = false
+  private val headerGestureTouchSlop by lazy { ViewConfiguration.get(this).scaledTouchSlop }
 
   var isDestroying = false
     protected set
@@ -650,6 +655,7 @@ abstract class BaseEditorActivity :
   fun refreshSymbolInput(editor: CodeEditorView) {
     if (isDestroying || _binding == null) return
     content.bottomSheet.refreshSymbolInput(editor)
+    editor.editor?.let { content.externalSymbolInputView.bindEditor(it) }
   }
 
   private fun checkIsDestroying() {
@@ -1137,13 +1143,7 @@ abstract class BaseEditorActivity :
     bubble.setOrientation(EdgeSnapBubbleView.Orientation.HORIZONTAL)
     bubble.setPosition(EdgeSnapBubbleView.Position.TOP)
     
-    bubble.setOnBubbleClickListener {
-      if (editorBottomSheet?.state == BottomSheetBehavior.STATE_EXPANDED) {
-         requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
-      } else {
-         requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
-      }
-    }
+    bubble.setOnBubbleClickListener { toggleHeaderContainerVisibility() }
     
     bubble.setOnBubbleGestureListener(
         object : EdgeSnapBubbleView.OnBubbleGestureListener {
@@ -1165,6 +1165,62 @@ abstract class BaseEditorActivity :
           }
         }
     )
+
+    val headerGestureListener =
+        View.OnTouchListener { _, event ->
+          when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+              headerGestureStartY = event.rawY
+              headerGestureDragging = false
+              true
+            }
+            MotionEvent.ACTION_MOVE -> {
+              val deltaY = event.rawY - headerGestureStartY
+              if (!headerGestureDragging && abs(deltaY) > headerGestureTouchSlop) {
+                headerGestureDragging = true
+              }
+              true
+            }
+            MotionEvent.ACTION_UP -> {
+              val deltaY = event.rawY - headerGestureStartY
+              if (headerGestureDragging) {
+                if (deltaY < -headerGestureTouchSlop) requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
+                if (deltaY > headerGestureTouchSlop) requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
+              }
+              headerGestureDragging = false
+              true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+              headerGestureDragging = false
+              true
+            }
+            else -> false
+          }
+        }
+    content.headerContainer.setOnTouchListener(headerGestureListener)
+    content.pageSwitchGestureBubble.setOnTouchListener(headerGestureListener)
+  }
+
+  private fun toggleHeaderContainerVisibility() {
+    if (_binding == null) return
+    val header = content.headerContainer
+    val targetVisible = header.visibility != View.VISIBLE
+    if (targetVisible) {
+      header.visibility = View.VISIBLE
+      header.alpha = 0f
+      header.translationY = -header.height.toFloat().coerceAtLeast(24f)
+      header.animate().alpha(1f).translationY(0f).setDuration(180L).start()
+    } else {
+      header.animate().alpha(0f).translationY(-header.height.toFloat().coerceAtLeast(24f)).setDuration(180L)
+          .withEndAction {
+            header.visibility = View.GONE
+            header.alpha = 1f
+            header.translationY = 0f
+            updateEdgeBubbleAnchorToHeader(false)
+          }
+          .start()
+    }
+    if (targetVisible) updateEdgeBubbleAnchorToHeader(true)
   }
 
   private fun requestBottomSheetState(targetState: Int) {
