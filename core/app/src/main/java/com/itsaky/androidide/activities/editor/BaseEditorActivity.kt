@@ -948,9 +948,11 @@ abstract class BaseEditorActivity :
       removeRule(RelativeLayout.ABOVE)
       removeRule(RelativeLayout.ALIGN_TOP)
       removeRule(RelativeLayout.ALIGN_BOTTOM)
+      removeRule(RelativeLayout.BELOW)
       if (anchorToHeader) {
-        addRule(RelativeLayout.ALIGN_TOP, R.id.header_container)
-        addRule(RelativeLayout.ALIGN_BOTTOM, R.id.header_container)
+        // Keep bubble directly above header; never align to header top/bottom to avoid
+        // RelativeLayout dependency cycles (bubble -> border -> header -> bubble).
+        addRule(RelativeLayout.ABOVE, R.id.header_container)
       } else {
         addRule(RelativeLayout.ALIGN_PARENT_TOP)
       }
