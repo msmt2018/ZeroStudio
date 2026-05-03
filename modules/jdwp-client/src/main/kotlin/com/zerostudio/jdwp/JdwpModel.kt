@@ -7,11 +7,13 @@ data class MethodInfo(val id: MethodId, val name: String, val signature: String,
 data class FieldInfo(val id: FieldId, val name: String, val signature: String, val modifiers: Int)
 data class ThreadInfo(val name: String, val threadStatus: Int, val suspendStatus: Int)
 data class ObjectReferenceInfo(val refTypeTag: Byte, val typeId: ReferenceTypeId)
+data class FrameInfo(val frameId: FrameId, val typeTag: Byte, val classId: ReferenceTypeId, val methodId: MethodId, val index: Long)
 
 data class TaggedValue(val tag: Byte, val rawValue: Long)
 data class ValueToSet(val fieldId: FieldId, val value: TaggedValue)
+data class InvokeResult(val returnValue: TaggedValue, val exceptionObjectId: ObjectId?)
 
-enum class JdwpEventKind(val code: Byte) { BREAKPOINT(2), SINGLE_STEP(1), METHOD_ENTRY(40), METHOD_EXIT(41), CLASS_PREPARE(8), VM_DEATH(99) }
+enum class JdwpEventKind(val code: Byte) { BREAKPOINT(2), SINGLE_STEP(1), METHOD_ENTRY(40), METHOD_EXIT(41), CLASS_UNLOAD(9), CLASS_PREPARE(8), VM_DEATH(99) }
 enum class JdwpSuspendPolicy(val code: Byte) { NONE(0), EVENT_THREAD(1), ALL(2) }
 data class EventRequestId(val raw: Int)
 

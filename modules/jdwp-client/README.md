@@ -1,47 +1,34 @@
-# JDWP Client（全功能架构版）
+# JDWP Client（远程 RPC 调试版）
 
-## 协议分层（已落地）
+本模块把 JDWP 当作“远程过程调用系统”实现，面向 Android <-> Termux JVM 的 TCP 字节流调试。
 
-1. Transport 层：`JdwpTransport` / `SocketJdwpTransport`
-2. Packetize 层：`JdwpCodec` + `JdwpBuffer`
-3. JDWP Commands 层：`JdwpClient`（Set 1/2/9/11/15 等）
-4. JDI-like 层：`JdwpSymbolRepository`（类/方法缓存解析）
+## 分层架构
+1. Transport: `JdwpTransport` / `SocketJdwpTransport`
+2. Packetize: `JdwpCodec` + `JdwpBuffer`
+3. Command Mapping: `JdwpClient`
+4. JDI-like: `JdwpSymbolRepository`
 
-## 核心能力
+## 关键远程能力
+- 严格握手：`JDWP-Handshake`。
+- 心跳保活：定时 `VirtualMachine.Version`，超时触发断线回调。
+- 动态 IDSizes：自动适配 32/64 位 ID。
+- 远程对象持有：`DisableCollection` / `EnableCollection`。
+- 方法调用链路：线程挂起 -> MethodsByName -> InvokeMethod -> 返回值/异常对象。
+- 调用栈：`ThreadReference.Frames`。
+- 断点/事件：`EventRequest.Set/Clear` + 异步事件回调。
+- 全类列表：`VirtualMachine.AllClasses`。
 
-- 严格握手：`JDWP-Handshake` 14 字节双向校验。
-- 异步收包：后台 pump + `CompletableFuture` 按 Packet ID 匹配回复。
-- Event 处理：支持 event listener 与 EventRequest.Set / Clear。
-- IDSizes：握手后自动调用 `VirtualMachine.IDSizes`，按目标 JVM 动态 ID 长度解析。
-- 符号链路：`ClassesBySignature -> Methods/Fields`。
-- 对象读写：`ObjectReference.GetValues / SetValues`。
-- 远程方法调用：`ObjectReference.InvokeMethod`（支持 options，如 `INVOKE_SINGLE_THREADED`）。
-
-## 已实现命令（摘要）
-
-- VM(Set=1): `Version`, `AllThreads`, `IDSizes`, `Suspend`, `Resume`, `ClassesBySignature`
-- ReferenceType(Set=2): `Fields`, `Methods`
-- ObjectReference(Set=9): `ReferenceType`, `GetValues`, `SetValues`, `InvokeMethod`
-- ThreadReference(Set=11): `Name`, `Status`
-- EventRequest(Set=15): `Set`, `Clear`
-
-## 使用示例
-
+## 快速验证（建议第一步）
 ```kotlin
-SocketJdwpTransport("127.0.0.1", 5005).use { transport ->
-  JdwpClient(transport).use { client ->
-    client.connectAndHandshake()
+val client = JdwpClient(SocketJdwpTransport("127.0.0.1", 5005))
+client.connectAndHandshake()
+println(client.allThreads())
+println(client.allClasses().take(20))
+```
 
-    client.setEventListener { event ->
-      println("event: set=${event.commandSet}, cmd=${event.command}")
-    }
-
-    val repo = JdwpSymbolRepository(client)
-    val cls = repo.resolveClass("Lcom/example/Main;")
-    val method = repo.resolveMethod(cls, "run")
-
-    println(client.vmVersion())
-    println(method)
-  }
-}
+## 变量修改示例
+```kotlin
+val cls = client.classesBySignature("Lcom/example/Main;").first()
+val field = client.fields(cls.typeId).first { it.name == "counter" }
+client.setObjectValues(ObjectId(0x1234), listOf(ValueToSet(field.id, TaggedValue('I'.code.toByte(), 42))))
 ```
