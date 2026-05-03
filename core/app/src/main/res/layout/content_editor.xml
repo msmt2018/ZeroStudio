@@ -127,6 +127,13 @@
           android:clipChildren="false"
           android:visibility="gone">
 
+          <android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
+               android:id="@+id/external_symbol_input_view"
+               android:layout_width="match_parent"
+               android:layout_height="wrap_content"
+               android:elevation="4dp"
+               android:background="?attr/colorSurface" />
+
           <RelativeLayout
                android:id="@+id/header_overlay_container"
                android:layout_width="match_parent"
@@ -199,12 +206,6 @@
                android:layout_height="0.5dp"
                android:background="?attr/colorOutlineVariant" />
 
-          <android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
-               android:id="@+id/external_symbol_input_view"
-               android:layout_width="match_parent"
-               android:layout_height="wrap_content"
-               android:elevation="4dp"
-               android:background="?attr/colorSurface" />
      </LinearLayout>
 
      <include

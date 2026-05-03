@@ -650,6 +650,7 @@ abstract class BaseEditorActivity :
   fun refreshSymbolInput(editor: CodeEditorView) {
     if (isDestroying || _binding == null) return
     content.bottomSheet.refreshSymbolInput(editor)
+    content.externalSymbolInputView.bindEditor(editor.editor)
   }
 
   private fun checkIsDestroying() {
