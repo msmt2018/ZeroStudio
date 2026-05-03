@@ -847,6 +847,7 @@ abstract class BaseEditorActivity :
 
     content.apply {
       setupExternalSymbolImeSync()
+      provideCurrentEditor()?.editor?.let { externalSymbolInputView.bindEditor(it) }
       bottomSheet.onActionTextChanged = { content.bottomAction.actionText.text = it }
       bottomSheet.onActionProgressChanged = { content.bottomAction.progress.setProgressCompat(it, true) }
       bottomSheet.onStatusChanged = { text, gravity ->
@@ -1138,11 +1139,7 @@ abstract class BaseEditorActivity :
     bubble.setPosition(EdgeSnapBubbleView.Position.TOP)
     
     bubble.setOnBubbleClickListener {
-      if (editorBottomSheet?.state == BottomSheetBehavior.STATE_EXPANDED) {
-         requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
-      } else {
-         requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
-      }
+      toggleHeaderContainerVisibility()
     }
     
     bubble.setOnBubbleGestureListener(
@@ -1165,6 +1162,30 @@ abstract class BaseEditorActivity :
           }
         }
     )
+  }
+
+
+  private fun toggleHeaderContainerVisibility() {
+    if (_binding == null || isExternalSymbolPageActive) return
+    val show = content.headerContainer.visibility != View.VISIBLE
+    val containerHeight = content.headerOverlayContainer.height.toFloat().takeIf { it > 0f } ?: 1f
+    val translationFrom = if (show) -containerHeight else 0f
+    val translationTo = if (show) 0f else -containerHeight
+    if (show) {
+      content.headerContainer.visibility = View.VISIBLE
+    }
+    content.headerOverlayContainer.animate().cancel()
+    content.headerOverlayContainer.translationY = translationFrom
+    content.headerOverlayContainer.animate()
+      .translationY(translationTo)
+      .setDuration(200L)
+      .withEndAction {
+        if (_binding == null) return@withEndAction
+        content.headerOverlayContainer.translationY = 0f
+        content.headerContainer.visibility = if (show) View.VISIBLE else View.GONE
+      }
+      .start()
+    updateEdgeBubbleAnchorToHeader(show)
   }
 
   private fun requestBottomSheetState(targetState: Int) {
