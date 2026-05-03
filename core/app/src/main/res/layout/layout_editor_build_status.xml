@@ -25,7 +25,7 @@
     android:id="@+id/statusText"
     android:layout_width="0dp"
     android:layout_height="match_parent"
-    android:minHeight="56dp"
+    android:minHeight="14dp"
     android:paddingStart="16dp"
     android:paddingEnd="16dp"
     android:gravity="center"
