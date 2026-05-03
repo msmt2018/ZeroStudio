@@ -119,7 +119,7 @@
           android:id="@+id/symbol_input_page"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
-          android:layout_gravity="bottom"
+          app:layout_anchor="@id/bottom_sheet"
           app:layout_anchorGravity="top"
           android:orientation="vertical"
           android:elevation="0dp"
