@@ -213,14 +213,16 @@ constructor(
     appBarLayout.viewTreeObserver.addOnGlobalLayoutListener(listener)
   }
 
-  // 修复核心：监听 BottomSheet 滑动并计算物理偏移，完美向上推起 symbolInputPage
+  fun resetSymbolInputPageHeight() {
+      if (!isExternalSymbolMode) {
+          symbolInputPage?.alpha = 1f
+      }
+  }
+
   fun onSlide(sheetOffset: Float) {
-    if (isExternalSymbolMode) return
-    val parentView = parent as? View ?: return
-    val visibleHeight = parentView.height - top
-    
-    // 强制将整个输入控制页向上平移，保持紧贴 BottomSheet 的顶部
-    symbolInputPage?.translationY = -visibleHeight.toFloat()
+    // 修复核心：彻底删除手动改变 translationY 的代码。
+    // 之前手动改变 translationY 会与 CoordinatorLayout 锚定机制产生冲突，导致了高度上的双倍真空缝隙。
+    // 我们只需要在这里改变透明度等特效即可。
   }
 
   fun showChild(index: Int) {

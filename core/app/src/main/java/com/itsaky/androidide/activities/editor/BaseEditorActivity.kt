@@ -282,6 +282,8 @@ abstract class BaseEditorActivity :
     val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
     
     _binding?.content?.bottomSheet?.setImeVisible(imeInsets.bottom > 0)
+    
+    // 我们仅处理 contentCard 的缩放适配，不人工添加 imeInset 作为 paddingTop/paddingBottom
     _binding?.contentCard?.updateLayoutParams<ViewGroup.LayoutParams> {
       this.height = if (isExternalSymbolPageActive) height else (height - imeInsets.bottom)
     }
@@ -316,6 +318,7 @@ abstract class BaseEditorActivity :
       if (!wasRemoved || bottomSheetHeaderHideReasons.isNotEmpty()) return@runOnUiThread
       content.cardView.visibility = bottomSheetCardVisibilitySnapshot
       content.headerContainer.visibility = bottomSheetHeaderVisibilitySnapshot
+      updateEdgeBubbleAnchorToHeader(content.headerContainer.visibility == View.VISIBLE)
     }
   }
 
@@ -728,25 +731,6 @@ abstract class BaseEditorActivity :
     setupNoEditorView()
     setupBottomSheet()
 
-    // 默认不自动展开BottomSheet
-    /*
-    if (
-        !app.prefManager.getBoolean(KEY_BOTTOM_SHEET_SHOWN) &&
-            editorBottomSheet?.state != BottomSheetBehavior.STATE_EXPANDED
-    ) {
-      editorBottomSheet?.state = BottomSheetBehavior.STATE_EXPANDED
-      ThreadUtils.runOnUiThreadDelayed(
-          {
-            if (!isDestroying) {
-              editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
-              app.prefManager.putBoolean(KEY_BOTTOM_SHEET_SHOWN, true)
-            }
-          },
-          1500,
-      )
-    }
-    */
-
     binding.contentCard.progress = 0f
     binding.swipeReveal.dragListener =
         object : SwipeRevealLayout.OnDragListener {
@@ -833,7 +817,7 @@ abstract class BaseEditorActivity :
             if (isDestroying || _binding == null) return
             content.apply {
               bottomSheetSlideOffset = slideOffset
-              // 随滑动调整编辑器缩放效果，增加一点视差
+              // 随滑动调整编辑器缩放效果，增加视差
               val safeOffset = slideOffset.coerceIn(0f, 1f)
               val editorScale = 1 - safeOffset * (1 - EDITOR_CONTAINER_SCALE_FACTOR)
               
@@ -872,14 +856,14 @@ abstract class BaseEditorActivity :
       
       pageSwitchGestureBubble.bringToFront()
       
-      // 修复核心：延迟请求重新布局以修复 Bubble 初始挤压在边缘的 Bug
+      // 延迟请求重新布局以修复 Bubble 初始被挤压形变的 Bug
       symbolInputPage.post {
         setupPageSwitchGestureBubble()
         pageSwitchGestureBubble.requestLayout()
         pageSwitchGestureBubble.invalidate()
       }
       
-      // 动态推算 BottomSheet 保护 Padding 避免内容被 Header 遮盖
+      // 动态保护 BottomSheet Padding，防止顶栏挡住内容
       symbolInputPage.viewTreeObserver.addOnGlobalLayoutListener {
           val pageHeight = symbolInputPage.height
           if (pageHeight > 0 && bottomSheet.paddingTop != pageHeight) {
@@ -983,7 +967,7 @@ abstract class BaseEditorActivity :
       content.border.root.visibility = View.VISIBLE
       content.tvCursorPosition.visibility = View.VISIBLE
       
-      // 修复核心：在未展开键盘时（沉寂态）确保符号栏能够交互
+      // 在未展开键盘时（沉寂态）确保符号栏能够交互
       content.externalSymbolInputView.visibility = View.VISIBLE
       
       content.symbolInputPage.translationY = 0f
@@ -1009,15 +993,14 @@ abstract class BaseEditorActivity :
     if (_binding == null) return
     val symbolInputPage = content.symbolInputPage
 
-    // 修复核心：废弃原先冲突的位移动画逻辑，完全依靠 padding
+    // 废弃原先冲突的位移动画逻辑，完全依靠 padding
     ViewCompat.setOnApplyWindowInsetsListener(symbolInputPage) { view, insets ->
         val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
         latestImeBottomInset = imeBottom
         
-        // 软键盘弹起时利用 setImeBottomInset 使内容自发撑高
-        content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
-
-        // 重置 Y 轴位移避免异常双重偏移
+        // 软键盘弹起时，并不需要依靠这个 padding 把自己挤上去，CoordinatorLayout + adjustResize 天然搞定了高度贴合。
+        // 此处强制清除所有的平移污染
+        content.externalSymbolInputView.setImeBottomInset(0)
         view.translationY = 0f
 
         insets
@@ -1034,9 +1017,11 @@ abstract class BaseEditorActivity :
     if (_binding == null) return
     val bubble = content.pageSwitchGestureBubble
     bubble.setOrientation(EdgeSnapBubbleView.Orientation.HORIZONTAL)
-    bubble.setPosition(EdgeSnapBubbleView.Position.TOP)
     
-    // 修复核心 4：点击 Bubble 产生 3D Z轴切换隐藏/显示动画
+    // 驼峰方向设为底部，确保拉伸弧度朝上
+    bubble.setPosition(EdgeSnapBubbleView.Position.BOTTOM)
+    
+    // 点击事件：切换 header_container 的显示与隐藏（3D 景深感平移动画）
     bubble.setOnBubbleClickListener {
       isHeaderContainerExpanded = !isHeaderContainerExpanded
       val header = content.headerContainer
@@ -1066,7 +1051,7 @@ abstract class BaseEditorActivity :
       }
     }
     
-    // 修复核心 2：纯粹控制 BottomSheet 的展开/折叠
+    // 手势事件：专职处理 BottomSheet 的展开与折叠 (完全隔离)
     bubble.setOnBubbleGestureListener(
         object : EdgeSnapBubbleView.OnBubbleGestureListener {
           override fun onDrag(fraction: Float) {
@@ -1074,11 +1059,10 @@ abstract class BaseEditorActivity :
           }
 
           override fun onRelease(fraction: Float) {
-             // fraction > 0.15f 代表向上滑动
-             // fraction < -0.15f 代表向下滑动
-             if (fraction > 0.15f) { 
+             // 因为 Bubble 在底端，所以往上拉为负值，往下拉为正值
+             if (fraction < -0.15f) { // 向上拉伸触发
                 requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
-             } else if (fraction < -0.15f) { 
+             } else if (fraction > 0.15f) { // 向下拉伸触发
                 requestBottomSheetState(BottomSheetBehavior.STATE_HIDDEN)
              }
           }
