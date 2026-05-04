@@ -318,7 +318,7 @@ abstract class BaseEditorActivity :
       if (!wasRemoved || bottomSheetHeaderHideReasons.isNotEmpty()) return@runOnUiThread
       content.cardView.visibility = bottomSheetCardVisibilitySnapshot
       content.headerContainer.visibility = bottomSheetHeaderVisibilitySnapshot
-      updateEdgeBubbleAnchorToHeader(content.headerContainer.visibility == View.VISIBLE)
+      // updateEdgeBubbleAnchorToHeader(content.headerContainer.visibility == View.VISIBLE)
     }
   }
 
