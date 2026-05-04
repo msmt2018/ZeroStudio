@@ -87,10 +87,12 @@ constructor(
     val localContext = getContext() ?: return@lazy 0f
     localContext.resources.getDimension(R.dimen.editor_sheet_collapsed_height)
   }
+  
   private val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
     BottomSheetBehavior.from(this).apply {
       isFitToContents = false
-      skipCollapsed = true
+      // 必须允许 Collapsed 状态介入，否则当拖拽超过边界时无法正确回弹。
+      skipCollapsed = false
     }
   }
 
@@ -124,6 +126,28 @@ constructor(
     const val CHILD_HEADER = 0
     const val CHILD_ACTION = 1
     const val STATE_EXTERNAL_SYMBOL = -1
+  }
+
+  private val peekHeightListener = ViewTreeObserver.OnGlobalLayoutListener {
+      val page = symbolInputPage ?: return@OnGlobalLayoutListener
+      if (!isExternalSymbolMode && page.height > 0) {
+          // 动态同步 PeekHeight: 确保无论是只有头部还是包含符号栏，都能恰好露出而不遮挡或掉出屏幕底部
+          if (behavior.peekHeight != page.height) {
+              behavior.peekHeight = page.height
+              
+              val parent = page.parent as? ViewGroup
+              if (parent != null) {
+                  val editorContainer = parent.findViewById<View>(R.id.editor_container)
+                  if (editorContainer != null) {
+                      val params = editorContainer.layoutParams as ViewGroup.MarginLayoutParams
+                      if (params.bottomMargin != page.height) {
+                          params.bottomMargin = page.height
+                          editorContainer.layoutParams = params
+                      }
+                  }
+              }
+          }
+      }
   }
 
   private fun initialize(context: FragmentActivity) {
@@ -234,65 +258,41 @@ constructor(
     behavior.isGestureInsetBottomIgnored = isVisible
   }
 
-  fun setOffsetAnchor(view: View, symbolInputPage: View) {
+  fun setOffsetAnchor(appBarLayout: View, symbolInputPage: View) {
     this.symbolInputPage = symbolInputPage
     val listener =
         object : ViewTreeObserver.OnGlobalLayoutListener {
           override fun onGlobalLayout() {
-            view.viewTreeObserver.removeOnGlobalLayoutListener(this)
-            anchorOffset = view.height + SizeUtils.dp2px(1f)
-
-            // 设置 peekHeight 为 0，当折叠时完全隐藏 sheet，只显示锚定在其上方的 symbol_input_page
-            behavior.peekHeight = 0
-            behavior.expandedOffset = anchorOffset
-            behavior.isGestureInsetBottomIgnored = isImeVisible
-
-            binding.root.updatePadding(bottom = anchorOffset + insetBottom)
+            appBarLayout.viewTreeObserver.removeOnGlobalLayoutListener(this)
             
-            resetSymbolInputPageHeight()
+            behavior.expandedOffset = appBarLayout.height
+            behavior.isGestureInsetBottomIgnored = isImeVisible
           }
         }
 
-    view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    appBarLayout.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    
+    symbolInputPage.viewTreeObserver.removeOnGlobalLayoutListener(peekHeightListener)
+    symbolInputPage.viewTreeObserver.addOnGlobalLayoutListener(peekHeightListener)
   }
 
   fun resetSymbolInputPageHeight() {
       if (!isExternalSymbolMode) {
-          symbolInputPage?.apply {
-              updatePaddingRelative(bottom = paddingBottom + insetBottom)
-              updateLayoutParams<ViewGroup.LayoutParams> {
-                  height = (collapsedHeight + insetBottom).roundToInt()
-              }
-              alpha = 1f
-          }
+          symbolInputPage?.alpha = 1f
       }
   }
 
   fun onSlide(sheetOffset: Float) {
     if (isExternalSymbolMode) return
 
-    val heightScale =
-        if (sheetOffset >= COLLAPSE_HEADER_AT_OFFSET) {
-          ((COLLAPSE_HEADER_AT_OFFSET - sheetOffset) + COLLAPSE_HEADER_AT_OFFSET) * 2f
-        } else {
-          1f
-        }
-
-    val paddingScale =
-        if (!isImeVisible && sheetOffset <= COLLAPSE_HEADER_AT_OFFSET) {
-          ((1f - sheetOffset) * 2f) - 1f
-        } else {
-          0f
-        }
-
-    val padding = insetBottom * paddingScale
-    symbolInputPage?.apply {
-      updateLayoutParams<ViewGroup.LayoutParams> {
-        height = ((collapsedHeight + padding) * heightScale).roundToInt()
-      }
-      updatePaddingRelative(bottom = padding.roundToInt())
-      alpha = heightScale
+    val offset = sheetOffset.coerceIn(0f, 1f)
+    val alphaScale = if (offset <= COLLAPSE_HEADER_AT_OFFSET) {
+        1f - (offset / COLLAPSE_HEADER_AT_OFFSET)
+    } else {
+        0f
     }
+    
+    symbolInputPage?.alpha = alphaScale
   }
 
   fun showChild(index: Int) {
@@ -379,7 +379,7 @@ constructor(
   }
 
   fun refreshSymbolInput(@Suppress("UNUSED_PARAMETER") editor: CodeEditorView) {
-    // Symbol input is managed externally by BaseEditorActivity.
+    // 符号输入栏已转移至外部管理器 (BaseEditorActivity) 管理绑定
   }
 
   fun onSoftInputChanged() {
