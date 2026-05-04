@@ -61,15 +61,12 @@
           android:id="@+id/view_container"
           android:layout_width="match_parent"
           android:layout_height="match_parent"
-          android:layout_marginBottom="16dp"
           app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior">
 
-          <!--Views in this flipper are dynamically added and must be instances of CodeEditorView-->
           <ViewFlipper
                android:id="@+id/editor_container"
                android:layout_width="match_parent"
-               android:layout_height="match_parent"
-               android:layout_marginBottom="@dimen/editor_sheet_peek_height" />
+               android:layout_height="match_parent" />
 
           <androidx.constraintlayout.widget.ConstraintLayout
                android:layout_width="match_parent"
@@ -110,22 +107,22 @@
           android:id="@+id/bottom_sheet"
           android:layout_width="match_parent"
           android:layout_height="match_parent"
-          app:behavior_hideable="false"
-          android:clipToPadding="true"
-          app:behavior_peekHeight="@dimen/editor_sheet_peek_height"
+          android:layout_gravity="bottom"
+          app:behavior_hideable="true"
+          app:behavior_skipCollapsed="true"
+          android:clipToPadding="false"
+          app:behavior_peekHeight="0dp"
           app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior" />
 
      <LinearLayout
           android:id="@+id/symbol_input_page"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
-          app:layout_anchor="@id/bottom_sheet"
-          app:layout_anchorGravity="top"
+          android:layout_gravity="bottom"
           android:orientation="vertical"
           android:elevation="8dp"
           android:background="@null"
-          android:clipChildren="false"
-          android:visibility="gone">
+          android:clipChildren="false">
 
           <RelativeLayout
                android:id="@+id/header_overlay_container"
