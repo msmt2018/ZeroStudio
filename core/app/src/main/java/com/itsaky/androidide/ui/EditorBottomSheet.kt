@@ -24,7 +24,6 @@ import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
 import android.widget.RelativeLayout
 import androidx.annotation.GravityInt
 import androidx.appcompat.widget.TooltipCompat
@@ -33,14 +32,12 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
-import androidx.transition.TransitionManager
 import com.blankj.utilcode.util.KeyboardUtils
 import com.blankj.utilcode.util.ThreadUtils.runOnUiThread
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.tabs.TabLayout.OnTabSelectedListener
 import com.google.android.material.tabs.TabLayout.Tab
 import com.google.android.material.tabs.TabLayoutMediator
-import com.google.android.material.transition.MaterialSharedAxis
 import com.itsaky.androidide.R
 import com.itsaky.androidide.adapters.DiagnosticsAdapter
 import com.itsaky.androidide.adapters.EditorBottomSheetTabAdapter
@@ -91,7 +88,6 @@ constructor(
   private var expandBlocked = false
   private var behaviorCallbackAttached = false
   
-  private var symbolInputPage: View? = null
   var isExternalSymbolMode = false
 
   var onHeaderPageChanged: ((Int) -> Unit)? = null
@@ -200,28 +196,8 @@ constructor(
     behavior.isGestureInsetBottomIgnored = isVisible
   }
 
-  /**
-   * 动态推算并维护 ExpandedOffset 属性
-   * 当上方组件（Toolbar 或 Header）高度产生变化时，实时调整 BottomSheet 展开后的最高点
-   */
-  fun setOffsetAnchor(appBarLayout: View, symbolInputPage: View) {
-    this.symbolInputPage = symbolInputPage
-    
-    symbolInputPage.viewTreeObserver.addOnGlobalLayoutListener {
-        val pageHeight = symbolInputPage.height
-        if (pageHeight > 0) {
-            behavior.expandedOffset = appBarLayout.height + pageHeight
-        }
-    }
-
-    appBarLayout.viewTreeObserver.addOnGlobalLayoutListener {
-        behavior.isGestureInsetBottomIgnored = isImeVisible
-    }
-  }
-
   fun onSlide(sheetOffset: Float) {
-      // 完美锚定机制：无需任何手动平移或透明度修改！
-      // CoordinatorLayout 自动保证吸附
+      // 动画与物理位置计算已完全由 BaseEditorActivity 的 PreDraw 引擎接管，本处无需处理
   }
 
   fun showChild(index: Int) {
@@ -282,7 +258,6 @@ constructor(
 
   fun onSoftInputChanged() {
     if (context !is Activity) return
-    TransitionManager.beginDelayedTransition(binding.root, MaterialSharedAxis(MaterialSharedAxis.Y, false))
     if (KeyboardUtils.isSoftInputVisible(context as Activity)) {
       onHeaderPageChanged?.invoke(STATE_EXTERNAL_SYMBOL)
     } else {

@@ -108,20 +108,18 @@
           android:layout_width="match_parent"
           android:layout_height="match_parent"
           android:layout_gravity="bottom"
-          app:behavior_hideable="false"
+          app:behavior_hideable="true"
           app:behavior_skipCollapsed="false"
           android:clipToPadding="false"
-          app:behavior_peekHeight="0dp"
           app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior" />
 
      <LinearLayout
           android:id="@+id/symbol_input_page"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
-          app:layout_anchor="@id/bottom_sheet"
-          app:layout_anchorGravity="bottom"
+          android:layout_gravity="top"
           android:orientation="vertical"
-          android:elevation="8dp"
+          android:elevation="12dp"
           android:background="@null"
           android:clipChildren="false">
 
@@ -138,19 +136,6 @@
                     android:layout_height="24dp"
                     android:layout_alignParentTop="true"
                     android:background="@android:color/transparent" />
-
-               <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/cardView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="24dp"
-                    android:layout_marginLeft="16dp"
-                    android:layout_marginRight="16dp"
-                    app:strokeWidth="0dp"
-                    app:cardElevation="0dp"
-                    android:scaleX="0.9"
-                    android:scaleY="0.9"
-                    app:cardBackgroundColor="?attr/colorSurface" />
 
                <include
                     android:id="@+id/border"
@@ -193,10 +178,12 @@
           </RelativeLayout>
 
           <View
+               android:id="@+id/separator_line"
                android:layout_width="match_parent"
                android:layout_height="0.5dp"
                android:background="?attr/colorOutlineVariant" />
 
+          <!-- AdvancedSymbolInputView 置于最底端 -->
           <android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
                android:id="@+id/external_symbol_input_view"
                android:layout_width="match_parent"

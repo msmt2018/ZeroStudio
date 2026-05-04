@@ -19,11 +19,7 @@ class EdgeSnapBubbleView : View {
 
   /** backView 高度 */
   private var backViewHeight: Float = 0f
-
-  /** 边缘触发距离 */
   private var backEdgeWidth: Float = 0f
-
-  /** 最大返回触发距离 */
   private var backMaxWidth: Float = 0f
 
   private var thresholdLeft: Float = 0f
@@ -101,19 +97,23 @@ class EdgeSnapBubbleView : View {
     arrowPath = Path()
 
     backPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    backPaint!!.color = 0xAA000000.toInt()
+    // 根据主题自动适配颜色，代替写死的半透明黑
+    val typedValue = android.util.TypedValue()
+    context.theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceVariant, typedValue, true)
+    backPaint!!.color = typedValue.data
     backPaint!!.style = Paint.Style.FILL_AND_STROKE
 
     arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    arrowPaint!!.color = Color.WHITE
+    context.theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, typedValue, true)
+    arrowPaint!!.color = typedValue.data
     arrowPaint!!.style = Paint.Style.STROKE
     arrowPaint!!.strokeWidth = 6f
     arrowPaint!!.strokeCap = Paint.Cap.ROUND
     arrowPaint!!.strokeJoin = Paint.Join.ROUND
   }
 
-override fun onTouchEvent(ev: MotionEvent): Boolean {
-    // 兼容水平模式下的垂直拖拽手势
+  override fun onTouchEvent(ev: MotionEvent): Boolean {
+    // 水平模式下的垂直拖拽手势
     val currentTouchX = if (orientation == Orientation.HORIZONTAL) ev.y else ev.x
     // 固定绘制锚点，保障拖拽手势时视觉驼峰完美居中
     currentY = if (orientation == Orientation.HORIZONTAL) backViewHeight / 2f else ev.y
@@ -167,11 +167,11 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
 
       MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
         if (isEdge) {
-          // 轻触作为点击事件响应
-          if (abs(deltaX) < backMaxWidth * 0.2f) {
+          if (abs(deltaX) < backMaxWidth * 0.15f) {
             performClick()
+          } else {
+            onBubbleGestureListener?.onRelease(getDragFraction())
           }
-          onBubbleGestureListener?.onRelease(getDragFraction())
           deltaX = 0f
           invalidate()
         }
@@ -193,44 +193,60 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
     val leftX = (centerX - baseHalfWidth).coerceAtLeast(0f)
     val rightX = (centerX + baseHalfWidth).coerceAtMost(width.toFloat())
 
-    val baseDepth = (height * 0.32f).coerceAtLeast(6f)
-    val signedOffset = (dragDelta / backMaxWidth).coerceIn(-1f, 1f) * (height * 0.2f)
-    val humpDepth = (baseDepth + signedOffset).coerceIn(height * 0.16f, height * 0.62f)
+    // 默认绘制一条短平的胶囊作为指示器
+    val indicatorHeight = 12f
+    val indicatorWidth = 80f
+    
+    // 只有手势上拉时（deltaX > 0），才进行驼峰形变
+    val pullOffset = if (dragDelta > 0) dragDelta else 0f
+    val safeOffset = pullOffset.coerceAtMost(backMaxWidth)
 
     val baseY = height.toFloat()
-    val tipY = height.toFloat() - humpDepth
-
-    backPath!!.moveTo(leftX, baseY)
-    backPath!!.cubicTo(
-      centerX - baseHalfWidth * 0.55f, baseY,
-      centerX - baseHalfWidth * 0.18f, tipY,
-      centerX, tipY,
-    )
-    backPath!!.cubicTo(
-      centerX + baseHalfWidth * 0.18f, tipY,
-      centerX + baseHalfWidth * 0.55f, baseY,
-      rightX, baseY,
-    )
-    backPath!!.close()
-    canvas.drawPath(backPath!!, backPaint!!)
-
-    val arrowCenterY = tipY + if(showArrowUp) 6f else 2f
-    val arrowTopY = arrowCenterY - 4f
-    val arrowBottomY = arrowCenterY + 4f
-    val arrowHalf = 10f
     
-    if (showArrowUp) {
-      // 向上箭头 ^
-      arrowPath!!.moveTo(centerX - arrowHalf, arrowBottomY)
-      arrowPath!!.lineTo(centerX, arrowTopY)
-      arrowPath!!.lineTo(centerX + arrowHalf, arrowBottomY)
+    if (safeOffset <= 5f) {
+        // 未拖拽：画个胶囊横条
+        backPaint!!.alpha = 150
+        canvas.drawRoundRect(centerX - indicatorWidth/2, baseY - indicatorHeight, centerX + indicatorWidth/2, baseY, 6f, 6f, backPaint!!)
+        backPaint!!.alpha = 255
     } else {
-      // 向下箭头 v
-      arrowPath!!.moveTo(centerX - arrowHalf, arrowTopY)
-      arrowPath!!.lineTo(centerX, arrowBottomY)
-      arrowPath!!.lineTo(centerX + arrowHalf, arrowTopY)
+        // 拖拽：画贝塞尔驼峰
+        val tipY = baseY - safeOffset
+        backPath!!.moveTo(leftX, baseY)
+        backPath!!.cubicTo(
+          centerX - baseHalfWidth * 0.55f, baseY,
+          centerX - baseHalfWidth * 0.18f, tipY,
+          centerX, tipY,
+        )
+        backPath!!.cubicTo(
+          centerX + baseHalfWidth * 0.18f, tipY,
+          centerX + baseHalfWidth * 0.55f, baseY,
+          rightX, baseY,
+        )
+        backPath!!.close()
+        
+        backPaint!!.alpha = (255 * (safeOffset / backMaxWidth)).toInt().coerceIn(100, 255)
+        canvas.drawPath(backPath!!, backPaint!!)
+        backPaint!!.alpha = 255
+
+        // 箭头
+        val arrowCenterY = tipY + 20f
+        val arrowTopY = arrowCenterY - 8f
+        val arrowBottomY = arrowCenterY + 8f
+        val arrowHalf = 12f
+        
+        if (showArrowUp) {
+          arrowPath!!.moveTo(centerX - arrowHalf, arrowBottomY)
+          arrowPath!!.lineTo(centerX, arrowTopY)
+          arrowPath!!.lineTo(centerX + arrowHalf, arrowBottomY)
+        } else {
+          arrowPath!!.moveTo(centerX - arrowHalf, arrowTopY)
+          arrowPath!!.lineTo(centerX, arrowBottomY)
+          arrowPath!!.lineTo(centerX + arrowHalf, arrowTopY)
+        }
+        arrowPaint!!.alpha = (255 * (safeOffset / backMaxWidth)).toInt().coerceIn(50, 255)
+        canvas.drawPath(arrowPath!!, arrowPaint!!)
+        arrowPaint!!.alpha = 255
     }
-    canvas.drawPath(arrowPath!!, arrowPaint!!)
   }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -271,7 +287,7 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
     }
 
     canvas.save()
-
+    val drawDelta = if (deltaX == 0f) backMaxWidth * 0.35f else abs(deltaX)
     if ((deltaX > 0 && left) || (deltaX == 0f && !right)) {
       backPath!!.moveTo(0f, deltaY)
       backPath!!.quadTo(0f, backViewHeight / 4 + deltaY, drawDelta / 3, backViewHeight * 3 / 8 + deltaY)
@@ -379,10 +395,9 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
     this.backEdgeWidth = backEdgeWidth
   }
 
-  fun setBackMaxWidth(backMaxWidth: Float) {
-    this.backMaxWidth = backMaxWidth
-  }
-
+  fun setBackViewHeight(backViewHeight: Float) { this.backViewHeight = backViewHeight }
+  fun setBackEdgeWidth(backEdgeWidth: Float) { this.backEdgeWidth = backEdgeWidth }
+  fun setBackMaxWidth(backMaxWidth: Float) { this.backMaxWidth = backMaxWidth }
   fun getBackEdgeWidth(): Float = backEdgeWidth
 
   fun getBackMaxWidth(): Float = backMaxWidth
@@ -398,22 +413,10 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
   fun restorePosition() {
     val parentView = parent as? View ?: return
     when (position) {
-      Position.LEFT -> {
-        x = 0f
-        y = ((parentView.height - height) / 2f).coerceAtLeast(0f)
-      }
-      Position.RIGHT -> {
-        x = (parentView.width - width).toFloat()
-        y = ((parentView.height - height) / 2f).coerceAtLeast(0f)
-      }
-      Position.TOP -> {
-        x = ((parentView.width - width) / 2f).coerceAtLeast(0f)
-        y = 0f
-      }
-      Position.BOTTOM -> {
-        x = ((parentView.width - width) / 2f).coerceAtLeast(0f)
-        y = (parentView.height - height).toFloat()
-      }
+      Position.LEFT -> { x = 0f; y = ((parentView.height - height) / 2f).coerceAtLeast(0f) }
+      Position.RIGHT -> { x = (parentView.width - width).toFloat(); y = ((parentView.height - height) / 2f).coerceAtLeast(0f) }
+      Position.TOP -> { x = ((parentView.width - width) / 2f).coerceAtLeast(0f); y = 0f }
+      Position.BOTTOM -> { x = ((parentView.width - width) / 2f).coerceAtLeast(0f); y = (parentView.height - height).toFloat() }
     }
   }
 
