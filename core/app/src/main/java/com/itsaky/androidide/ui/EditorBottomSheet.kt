@@ -76,8 +76,10 @@ constructor(
   val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
     BottomSheetBehavior.from(this).apply {
       isFitToContents = false
-      skipCollapsed = true
-      state = BottomSheetBehavior.STATE_HIDDEN
+      // 不允许跳过折叠态，也不允许完全隐藏，让其归位在 0dp
+      skipCollapsed = false
+      isHideable = false
+      state = BottomSheetBehavior.STATE_COLLAPSED
     }
   }
 
@@ -267,8 +269,8 @@ constructor(
   }
 
   fun forceCollapse() {
-    if (behavior.state != BottomSheetBehavior.STATE_HIDDEN) {
-      behavior.state = BottomSheetBehavior.STATE_HIDDEN
+    if (behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+      behavior.state = BottomSheetBehavior.STATE_COLLAPSED
     }
   }
 

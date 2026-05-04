@@ -177,8 +177,8 @@ abstract class BaseEditorActivity :
             binding.root.closeDrawer(GravityCompat.START)
           } else if (isExternalSymbolPageActive) {
             setExternalSymbolPageActive(false)
-          } else if (editorBottomSheet?.state != BottomSheetBehavior.STATE_HIDDEN && editorBottomSheet?.state != BottomSheetBehavior.STATE_COLLAPSED) {
-            requestBottomSheetState(BottomSheetBehavior.STATE_HIDDEN)
+          } else if (editorBottomSheet?.state != BottomSheetBehavior.STATE_COLLAPSED) {
+            requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
           } else if (binding.swipeReveal.isOpen) {
             binding.swipeReveal.close()
           } else {
@@ -802,12 +802,12 @@ abstract class BaseEditorActivity :
               return
             }
             if (newState == BottomSheetBehavior.STATE_EXPANDED && blockBottomSheetExpandForTabSwitch) {
-              requestBottomSheetState(BottomSheetBehavior.STATE_HIDDEN)
+              requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
               return
             }
             if (newState == BottomSheetBehavior.STATE_EXPANDED) {
               provideCurrentEditor()?.editor?.ensureWindowsDismissed()
-            } else if (newState == BottomSheetBehavior.STATE_COLLAPSED || newState == BottomSheetBehavior.STATE_HIDDEN) {
+            } else if (newState == BottomSheetBehavior.STATE_COLLAPSED) {
               resetEditorSurfaceTransform()
             }
             updateBindingHierarchyForMode(newState)
@@ -863,19 +863,19 @@ abstract class BaseEditorActivity :
         pageSwitchGestureBubble.invalidate()
       }
       
-      // 动态推算 BottomSheet 保护 Padding 避免内容被 Header 遮盖
-      symbolInputPage.viewTreeObserver.addOnGlobalLayoutListener {
-          val pageHeight = symbolInputPage.height
-          // 仅在非外部模式（即未弹键盘）时干预 padding
-          if (pageHeight > 0 && bottomSheet.paddingTop != pageHeight && !isExternalSymbolPageActive) {
-              bottomSheet.setPadding(
-                  bottomSheet.paddingLeft,
-                  pageHeight,
-                  bottomSheet.paddingRight,
-                  bottomSheet.paddingBottom
-              )
-          }
-      }
+      // // 动态推算 BottomSheet 保护 Padding 避免内容被 Header 遮盖
+      // symbolInputPage.viewTreeObserver.addOnGlobalLayoutListener {
+          // val pageHeight = symbolInputPage.height
+          // // 仅在非外部模式（即未弹键盘）时干预 padding
+          // if (pageHeight > 0 && bottomSheet.paddingTop != pageHeight && !isExternalSymbolPageActive) {
+              // bottomSheet.setPadding(
+                  // bottomSheet.paddingLeft,
+                  // pageHeight,
+                  // bottomSheet.paddingRight,
+                  // bottomSheet.paddingBottom
+              // )
+          // }
+      // }
 
       viewContainer.viewTreeObserver.addOnGlobalLayoutListener(observer)
       bottomSheet.setOffsetAnchor(editorAppBarLayout, symbolInputPage)
@@ -918,7 +918,7 @@ abstract class BaseEditorActivity :
     content.bottomSheet.suppressNextHeaderExpand()
     content.bottomSheet.setBottomSheetDragEnabled(false)
     content.bottomSheet.forceCollapse()
-    editorBottomSheet?.setState(BottomSheetBehavior.STATE_HIDDEN)
+    editorBottomSheet?.setState(BottomSheetBehavior.STATE_COLLAPSED)
     ThreadUtils.runOnUiThreadDelayed(
         {
           if (_binding == null || isDestroying) return@runOnUiThreadDelayed
@@ -937,8 +937,8 @@ abstract class BaseEditorActivity :
       bottomSheetSlideOffset = 0f
       resetEditorSurfaceTransform()
       
-      if (editorBottomSheet?.state != BottomSheetBehavior.STATE_HIDDEN && editorBottomSheet?.state != BottomSheetBehavior.STATE_COLLAPSED) {
-        editorBottomSheet?.setState(BottomSheetBehavior.STATE_HIDDEN)
+      if (editorBottomSheet?.state != BottomSheetBehavior.STATE_COLLAPSED) {
+        editorBottomSheet?.setState(BottomSheetBehavior.STATE_COLLAPSED)
       }
       content.bottomSheet.forceCollapse()
       content.bottomSheet.setBottomSheetDragEnabled(false)
@@ -999,8 +999,8 @@ abstract class BaseEditorActivity :
         val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
         latestImeBottomInset = imeBottom
         
-        // 软键盘弹起时利用 setImeBottomInset 使内容自发撑高
-        content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
+        // 当软键盘弹起且不在扩展符号栏模式时，依靠设置 Padding 把工具栏完美抬起
+        view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, imeBottom)
 
         // 重置 Y 轴位移避免异常双重偏移
         view.translationY = 0f
@@ -1061,12 +1061,11 @@ abstract class BaseEditorActivity :
           }
 
           override fun onRelease(fraction: Float) {
-             // Android 坐标系 Y 轴向下为正。向上拖拽时 fraction 是负数。
-             // 反转手势判断逻辑，向上滑展开，向下滑关闭
-             if (fraction < -0.15f) { 
+             // 安卓屏幕 Y 轴向下为正，所以向上滑 fraction 是负数
+             if (fraction < -0.15f) { // 向上划 (拉起)
                 requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
-             } else if (fraction > 0.15f) { 
-                requestBottomSheetState(BottomSheetBehavior.STATE_HIDDEN)
+             } else if (fraction > 0.15f) { // 向下划 (关闭)
+                requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
              }
           }
         }
