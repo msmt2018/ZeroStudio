@@ -76,9 +76,7 @@ constructor(
   val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
     BottomSheetBehavior.from(this).apply {
       isFitToContents = false
-      // 不允许跳过折叠态，也不允许完全隐藏，让其归位在 0dp
-      skipCollapsed = false
-      isHideable = false
+      skipCollapsed = false // 必须为 false 才能在 0dp 高度正常潜伏
       state = BottomSheetBehavior.STATE_COLLAPSED
     }
   }
@@ -106,7 +104,6 @@ constructor(
     const val CHILD_HEADER = 0
     const val CHILD_ACTION = 1
     const val STATE_EXTERNAL_SYMBOL = -1
-    const val COLLAPSE_HEADER_AT_OFFSET = 0.5f
   }
 
   private fun initialize(context: FragmentActivity) {
@@ -203,38 +200,28 @@ constructor(
     behavior.isGestureInsetBottomIgnored = isVisible
   }
 
+  /**
+   * 动态推算并维护 ExpandedOffset 属性
+   * 当上方组件（Toolbar 或 Header）高度产生变化时，实时调整 BottomSheet 展开后的最高点
+   */
   fun setOffsetAnchor(appBarLayout: View, symbolInputPage: View) {
     this.symbolInputPage = symbolInputPage
-    val listener =
-        object : ViewTreeObserver.OnGlobalLayoutListener {
-          override fun onGlobalLayout() {
-            appBarLayout.viewTreeObserver.removeOnGlobalLayoutListener(this)
-            behavior.expandedOffset = appBarLayout.height
-            behavior.isGestureInsetBottomIgnored = isImeVisible
-          }
+    
+    symbolInputPage.viewTreeObserver.addOnGlobalLayoutListener {
+        val pageHeight = symbolInputPage.height
+        if (pageHeight > 0) {
+            behavior.expandedOffset = appBarLayout.height + pageHeight
         }
-    appBarLayout.viewTreeObserver.addOnGlobalLayoutListener(listener)
-  }
+    }
 
-  fun resetSymbolInputPageHeight() {
-      if (!isExternalSymbolMode) {
-          symbolInputPage?.alpha = 1f
-      }
+    appBarLayout.viewTreeObserver.addOnGlobalLayoutListener {
+        behavior.isGestureInsetBottomIgnored = isImeVisible
+    }
   }
 
   fun onSlide(sheetOffset: Float) {
-    if (isExternalSymbolMode) return
-
-    // 只处理 Alpha 渐变。位移 (Y轴上推) 已由 CoordinatorLayout 的 app:layout_anchor 属性完美接管
-    // 手动加 translationY 会导致“推了两次”的巨大间隔 Bug
-    val offset = sheetOffset.coerceIn(0f, 1f)
-    val alphaScale = if (offset <= COLLAPSE_HEADER_AT_OFFSET) {
-        1f - (offset / COLLAPSE_HEADER_AT_OFFSET)
-    } else {
-        0f
-    }
-    
-    symbolInputPage?.alpha = alphaScale
+      // 完美锚定机制：无需任何手动平移或透明度修改！
+      // CoordinatorLayout 自动保证吸附
   }
 
   fun showChild(index: Int) {
