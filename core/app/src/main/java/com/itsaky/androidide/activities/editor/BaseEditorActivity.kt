@@ -592,8 +592,8 @@ abstract class BaseEditorActivity :
 
   open fun hideBottomSheet() {
     if (isDestroying || _binding == null) return
-    if (editorBottomSheet?.state != BottomSheetBehavior.STATE_HIDDEN) {
-      editorBottomSheet?.state = BottomSheetBehavior.STATE_HIDDEN
+    if (editorBottomSheet?.state != BottomSheetBehavior.STATE_COLLAPSED) {
+      editorBottomSheet?.state = BottomSheetBehavior.STATE_COLLAPSED
     }
   }
 
@@ -863,10 +863,11 @@ abstract class BaseEditorActivity :
         pageSwitchGestureBubble.invalidate()
       }
       
-      // 动态保护 BottomSheet Padding，防止顶栏挡住内容
+      // 动态推算 BottomSheet 保护 Padding 避免内容被 Header 遮盖
       symbolInputPage.viewTreeObserver.addOnGlobalLayoutListener {
           val pageHeight = symbolInputPage.height
-          if (pageHeight > 0 && bottomSheet.paddingTop != pageHeight) {
+          // 仅在非外部模式（即未弹键盘）时干预 padding
+          if (pageHeight > 0 && bottomSheet.paddingTop != pageHeight && !isExternalSymbolPageActive) {
               bottomSheet.setPadding(
                   bottomSheet.paddingLeft,
                   pageHeight,
@@ -998,9 +999,10 @@ abstract class BaseEditorActivity :
         val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
         latestImeBottomInset = imeBottom
         
-        // 软键盘弹起时，并不需要依靠这个 padding 把自己挤上去，CoordinatorLayout + adjustResize 天然搞定了高度贴合。
-        // 此处强制清除所有的平移污染
-        content.externalSymbolInputView.setImeBottomInset(0)
+        // 软键盘弹起时利用 setImeBottomInset 使内容自发撑高
+        content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
+
+        // 重置 Y 轴位移避免异常双重偏移
         view.translationY = 0f
 
         insets
@@ -1027,7 +1029,7 @@ abstract class BaseEditorActivity :
       val header = content.headerContainer
       
       if (isHeaderContainerExpanded) {
-          // 显示：恢复大小、平移和透明度
+          // 显示：向上向前平移恢复
           header.visibility = View.VISIBLE
           header.animate()
               .scaleX(1f).scaleY(1f)
@@ -1059,10 +1061,11 @@ abstract class BaseEditorActivity :
           }
 
           override fun onRelease(fraction: Float) {
-             // 因为 Bubble 在底端，所以往上拉为负值，往下拉为正值
-             if (fraction < -0.15f) { // 向上拉伸触发
+             // Android 坐标系 Y 轴向下为正。向上拖拽时 fraction 是负数。
+             // 反转手势判断逻辑，向上滑展开，向下滑关闭
+             if (fraction < -0.15f) { 
                 requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
-             } else if (fraction > 0.15f) { // 向下拉伸触发
+             } else if (fraction > 0.15f) { 
                 requestBottomSheetState(BottomSheetBehavior.STATE_HIDDEN)
              }
           }

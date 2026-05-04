@@ -104,6 +104,7 @@ constructor(
     const val CHILD_HEADER = 0
     const val CHILD_ACTION = 1
     const val STATE_EXTERNAL_SYMBOL = -1
+    const val COLLAPSE_HEADER_AT_OFFSET = 0.5f
   }
 
   private fun initialize(context: FragmentActivity) {
@@ -220,9 +221,18 @@ constructor(
   }
 
   fun onSlide(sheetOffset: Float) {
-    // 修复核心：彻底删除手动改变 translationY 的代码。
-    // 之前手动改变 translationY 会与 CoordinatorLayout 锚定机制产生冲突，导致了高度上的双倍真空缝隙。
-    // 我们只需要在这里改变透明度等特效即可。
+    if (isExternalSymbolMode) return
+
+    // 只处理 Alpha 渐变。位移 (Y轴上推) 已由 CoordinatorLayout 的 app:layout_anchor 属性完美接管
+    // 手动加 translationY 会导致“推了两次”的巨大间隔 Bug
+    val offset = sheetOffset.coerceIn(0f, 1f)
+    val alphaScale = if (offset <= COLLAPSE_HEADER_AT_OFFSET) {
+        1f - (offset / COLLAPSE_HEADER_AT_OFFSET)
+    } else {
+        0f
+    }
+    
+    symbolInputPage?.alpha = alphaScale
   }
 
   fun showChild(index: Int) {
