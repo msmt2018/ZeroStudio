@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import kotlin.math.abs
 
 /**
@@ -52,6 +53,7 @@ class EdgeSnapBubbleView : View {
   private var orientation: Orientation = Orientation.VERTICAL
   private var isMirrored: Boolean = false
   private var showArrowUp: Boolean = true
+  private var hasResolvedParentWidth = false
 
   /** 绑定气泡区域点击事件 */
   fun setOnBubbleClickListener(listener: OnBubbleClickListener?) {
@@ -260,6 +262,37 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
     mWidth = finalWidth + 1
     thresholdLeft = (mWidth / 3).toFloat()
     thresholdRight = thresholdLeft * 2
+    if (!hasResolvedParentWidth) {
+      postResolveParentWidth()
+    }
+  }
+
+  private fun postResolveParentWidth() {
+    post {
+      val parentWidth = (parent as? View)?.width ?: width
+      if (parentWidth > 0) {
+        mWidth = parentWidth + 1
+        thresholdLeft = (mWidth / 3).toFloat()
+        thresholdRight = thresholdLeft * 2
+        hasResolvedParentWidth = true
+        invalidate()
+      } else {
+        viewTreeObserver.addOnGlobalLayoutListener(
+          object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+              val resolved = (parent as? View)?.width ?: width
+              if (resolved <= 0) return
+              viewTreeObserver.removeOnGlobalLayoutListener(this)
+              mWidth = resolved + 1
+              thresholdLeft = (mWidth / 3).toFloat()
+              thresholdRight = thresholdLeft * 2
+              hasResolvedParentWidth = true
+              invalidate()
+            }
+          }
+        )
+      }
+    }
   }
 
   override fun onDraw(canvas: Canvas) {
