@@ -216,6 +216,7 @@ abstract class BaseEditorActivity :
   private var bottomSheetSlideOffset = 0f
   private var blockBottomSheetExpandForTabSwitch = false
   private var latestImeBottomInset = 0
+  private var latestNavBottomInset = 0
   private var pendingBottomSheetState: Int? = null
   private var cursorPositionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
 
@@ -275,6 +276,9 @@ abstract class BaseEditorActivity :
     val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
     
     _binding?.content?.bottomSheet?.setImeVisible(imeInsets.bottom > 0)
+    latestImeBottomInset = imeInsets.bottom
+    latestNavBottomInset = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+    updateSymbolInputAnchorForIme(imeInsets.bottom > 0)
     _binding?.contentCard?.updateLayoutParams<ViewGroup.LayoutParams> {
       this.height = if (isExternalSymbolPageActive) height else (height - imeInsets.bottom)
     }
@@ -815,6 +819,10 @@ abstract class BaseEditorActivity :
               val editorScale = 1 - slideOffset * (1 - EDITOR_CONTAINER_SCALE_FACTOR)
               
               this.bottomSheet.onSlide(slideOffset)
+              val hideProgress = slideOffset.coerceIn(0f, 1f)
+              val shift = this.headerOverlayContainer.height * hideProgress
+              this.headerOverlayContainer.translationY = -shift
+              this.headerOverlayContainer.alpha = 1f - hideProgress
               
               this.viewContainer.scaleX = editorScale
               this.viewContainer.scaleY = editorScale
@@ -908,6 +916,22 @@ abstract class BaseEditorActivity :
     content.symbolInputPage.layoutParams = params
   }
 
+  private fun updateSymbolInputAnchorForIme(isImeVisible: Boolean) {
+    if (_binding == null) return
+    val params = content.symbolInputPage.layoutParams as CoordinatorLayout.LayoutParams
+    if (isImeVisible) {
+      params.anchorId = View.NO_ID
+      params.anchorGravity = Gravity.NO_GRAVITY
+      params.gravity = Gravity.BOTTOM
+      params.bottomMargin = (latestImeBottomInset - latestNavBottomInset).coerceAtLeast(0)
+      content.symbolInputPage.layoutParams = params
+      return
+    }
+    params.bottomMargin = 0
+    content.symbolInputPage.layoutParams = params
+    updateSymbolInputPageAnchor(isExternalSymbolPageActive)
+  }
+
   private fun setExternalSymbolPageActive(active: Boolean) {
     if (_binding == null) return
     isExternalSymbolPageActive = active
@@ -942,6 +966,7 @@ abstract class BaseEditorActivity :
       content.externalSymbolInputView.visibility = View.VISIBLE
       
       updateSymbolInputPageAnchor(true)
+      updateSymbolInputAnchorForIme(isImeVisible)
       applyExternalSymbolImeInset()
       
     } else {
@@ -962,6 +987,7 @@ abstract class BaseEditorActivity :
       content.symbolInputPage.translationY = 0f
       
       updateSymbolInputPageAnchor(false)
+      updateSymbolInputAnchorForIme(isImeVisible)
       content.bottomSheet.resetSymbolInputPageHeight()
     }
     
@@ -1028,6 +1054,8 @@ abstract class BaseEditorActivity :
         val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
         val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
         latestImeBottomInset = imeBottom
+        latestNavBottomInset = navBottom
+        updateSymbolInputAnchorForIme(insets.isVisible(WindowInsetsCompat.Type.ime()))
         
         content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
 

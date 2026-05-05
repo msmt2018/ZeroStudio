@@ -262,6 +262,13 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
     thresholdRight = thresholdLeft * 2
   }
 
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    if (w > 0 && h > 0 && (w != oldw || h != oldh)) {
+      post { restorePosition() }
+    }
+  }
+
   override fun onDraw(canvas: Canvas) {
     if (deltaX > backMaxWidth && left) {
       deltaX = backMaxWidth
