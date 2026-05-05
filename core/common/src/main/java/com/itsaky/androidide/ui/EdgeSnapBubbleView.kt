@@ -287,7 +287,6 @@ class EdgeSnapBubbleView : View {
     }
 
     canvas.save()
-    val drawDelta = if (deltaX == 0f) backMaxWidth * 0.35f else abs(deltaX)
     if ((deltaX > 0 && left) || (deltaX == 0f && !right)) {
       backPath!!.moveTo(0f, deltaY)
       backPath!!.quadTo(0f, backViewHeight / 4 + deltaY, drawDelta / 3, backViewHeight * 3 / 8 + deltaY)
@@ -386,14 +385,6 @@ class EdgeSnapBubbleView : View {
     // }
     // canvas.drawPath(arrowPath!!, arrowPaint!!)
   // }
-
-  fun setBackViewHeight(backViewHeight: Float) {
-    this.backViewHeight = backViewHeight
-  }
-
-  fun setBackEdgeWidth(backEdgeWidth: Float) {
-    this.backEdgeWidth = backEdgeWidth
-  }
 
   fun setBackViewHeight(backViewHeight: Float) { this.backViewHeight = backViewHeight }
   fun setBackEdgeWidth(backEdgeWidth: Float) { this.backEdgeWidth = backEdgeWidth }
