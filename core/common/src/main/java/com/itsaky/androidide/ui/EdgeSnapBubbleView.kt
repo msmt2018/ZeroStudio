@@ -129,7 +129,8 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
       }
 
       MotionEvent.ACTION_MOVE -> {
-        deltaX = downX - currentTouchX
+        val rawDelta = downX - currentTouchX
+        deltaX = if (orientation == Orientation.HORIZONTAL) rawDelta.coerceAtLeast(0f) else rawDelta
         val diff = forwardX - currentTouchX
         if (diff > 0) {
           if (currentTouchX < thresholdLeft && left) {
@@ -160,7 +161,10 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
         }
         forwardX = currentTouchX
         if (isEdge) {
-          onBubbleGestureListener?.onDrag(getDragFraction())
+          val dragFraction = getDragFraction()
+          if (orientation != Orientation.HORIZONTAL || dragFraction > 0f) {
+            onBubbleGestureListener?.onDrag(dragFraction)
+          }
           invalidate()
         }
       }
@@ -171,7 +175,10 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
           if (abs(deltaX) < backMaxWidth * 0.2f) {
             performClick()
           }
-          onBubbleGestureListener?.onRelease(getDragFraction())
+          val dragFraction = getDragFraction()
+          if (orientation != Orientation.HORIZONTAL || dragFraction > 0f) {
+            onBubbleGestureListener?.onRelease(dragFraction)
+          }
           deltaX = 0f
           invalidate()
         }
