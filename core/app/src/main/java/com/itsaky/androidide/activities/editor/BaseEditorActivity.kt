@@ -216,6 +216,7 @@ abstract class BaseEditorActivity :
   private var bottomSheetSlideOffset = 0f
   private var blockBottomSheetExpandForTabSwitch = false
   private var latestImeBottomInset = 0
+  private var imeAnchorActive = false
   private var pendingBottomSheetState: Int? = null
   private var cursorPositionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
 
@@ -815,6 +816,7 @@ abstract class BaseEditorActivity :
               val editorScale = 1 - slideOffset * (1 - EDITOR_CONTAINER_SCALE_FACTOR)
               
               this.bottomSheet.onSlide(slideOffset)
+              updateSymbolOverlayBySheetOffset(slideOffset)
               
               this.viewContainer.scaleX = editorScale
               this.viewContainer.scaleY = editorScale
@@ -976,9 +978,42 @@ abstract class BaseEditorActivity :
 
   private fun applyExternalSymbolImeInset() {
     if (_binding == null) return
-    content.symbolInputPage.translationY = 0f
     val targetImeInset = if (isExternalSymbolPageActive) latestImeBottomInset else 0
     content.externalSymbolInputView.setImeBottomInset(targetImeInset)
+    updateSymbolInputPageAnchorForIme(imeAnchorActive)
+  }
+
+  private fun updateSymbolOverlayBySheetOffset(slideOffset: Float) {
+    if (_binding == null) return
+    val progress = slideOffset.coerceIn(0f, 1f)
+    val alpha = (1f - progress).coerceIn(0f, 1f)
+    val translateY = progress * content.headerOverlayContainer.height * 0.5f
+    content.headerOverlayContainer.alpha = alpha
+    content.headerOverlayContainer.translationY = translateY
+    content.externalSymbolInputView.alpha = alpha
+    content.externalSymbolInputView.translationY = translateY
+  }
+
+  private fun updateSymbolInputPageAnchorForIme(imeVisible: Boolean) {
+    if (_binding == null) return
+    imeAnchorActive = imeVisible
+    val symbolInputPage = content.symbolInputPage
+    if (!isExternalSymbolPageActive) {
+      updateSymbolInputPageAnchor(false)
+      symbolInputPage.translationY = if (imeVisible && latestImeBottomInset > 0) {
+        -latestImeBottomInset.toFloat()
+      } else {
+        0f
+      }
+      return
+    }
+
+    updateSymbolInputPageAnchor(true)
+    symbolInputPage.translationY = if (imeVisible && latestImeBottomInset > 0) {
+      -latestImeBottomInset.toFloat()
+    } else {
+      0f
+    }
   }
 
   private fun setupExternalSymbolImeSync() {
@@ -1026,18 +1061,11 @@ abstract class BaseEditorActivity :
 
     ViewCompat.setOnApplyWindowInsetsListener(symbolInputPage) { view, insets ->
         val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-        val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
         latestImeBottomInset = imeBottom
+        val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime()) && imeBottom > 0
         
         content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
-
-        val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
-        if (isExternalSymbolPageActive) {
-            val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
-            view.translationY = targetTranslationY
-        } else {
-            view.translationY = 0f
-        }
+        updateSymbolInputPageAnchorForIme(isImeVisible)
 
         insets
     }
