@@ -216,6 +216,7 @@ abstract class BaseEditorActivity :
   private var bottomSheetSlideOffset = 0f
   private var blockBottomSheetExpandForTabSwitch = false
   private var latestImeBottomInset = 0
+  private var isImeVisibleForSymbolInput = false
   private var pendingBottomSheetState: Int? = null
   private var cursorPositionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
 
@@ -896,15 +897,10 @@ abstract class BaseEditorActivity :
   private fun updateSymbolInputPageAnchor(active: Boolean) {
     if (_binding == null) return
     val params = content.symbolInputPage.layoutParams as CoordinatorLayout.LayoutParams
-    if (active) {
-      params.anchorId = View.NO_ID
-      params.anchorGravity = Gravity.NO_GRAVITY
-      params.gravity = Gravity.BOTTOM
-    } else {
-      params.anchorId = R.id.bottom_sheet
-      params.anchorGravity = Gravity.TOP
-      params.gravity = Gravity.NO_GRAVITY
-    }
+    // 始终锚定到底部抽屉顶部；IME 弹出时通过 translation 同步到 IME 顶部。
+    params.anchorId = R.id.bottom_sheet
+    params.anchorGravity = Gravity.TOP
+    params.gravity = Gravity.NO_GRAVITY
     content.symbolInputPage.layoutParams = params
   }
 
@@ -960,7 +956,8 @@ abstract class BaseEditorActivity :
       content.externalSymbolInputView.visibility = View.GONE
       
       content.symbolInputPage.translationY = 0f
-      
+      isImeVisibleForSymbolInput = false
+
       updateSymbolInputPageAnchor(false)
       content.bottomSheet.resetSymbolInputPageHeight()
     }
@@ -1032,6 +1029,7 @@ abstract class BaseEditorActivity :
         content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
 
         val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+        isImeVisibleForSymbolInput = isImeVisible
         if (isExternalSymbolPageActive) {
             val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
             view.translationY = targetTranslationY

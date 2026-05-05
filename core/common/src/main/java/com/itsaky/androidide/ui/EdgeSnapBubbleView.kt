@@ -113,8 +113,12 @@ class EdgeSnapBubbleView : View {
   }
 
 override fun onTouchEvent(ev: MotionEvent): Boolean {
+    if (orientation == Orientation.HORIZONTAL) {
+      return handleHorizontalTouchEvent(ev)
+    }
+
     // 兼容水平模式下的垂直拖拽手势
-    val currentTouchX = if (orientation == Orientation.HORIZONTAL) ev.y else ev.x
+    val currentTouchX = ev.x
     // 固定绘制锚点，保障拖拽手势时视觉驼峰完美居中
     currentY = if (orientation == Orientation.HORIZONTAL) backViewHeight / 2f else ev.y
     
@@ -182,6 +186,40 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
       }
     }
     return isEdge
+  }
+
+  private fun handleHorizontalTouchEvent(ev: MotionEvent): Boolean {
+    currentY = backViewHeight / 2f
+    when (ev.actionMasked) {
+      MotionEvent.ACTION_DOWN -> {
+        downX = ev.y
+        deltaX = 0f
+        isEdge = true
+        parent?.requestDisallowInterceptTouchEvent(true)
+        invalidate()
+        return true
+      }
+      MotionEvent.ACTION_MOVE -> {
+        if (!isEdge) return false
+        val dy = downX - ev.y
+        deltaX = dy.coerceIn(-backMaxWidth, backMaxWidth)
+        onBubbleGestureListener?.onDrag(getDragFraction())
+        invalidate()
+        return true
+      }
+      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+        if (!isEdge) return false
+        if (abs(deltaX) < backMaxWidth * 0.2f) {
+          performClick()
+        }
+        onBubbleGestureListener?.onRelease(getDragFraction())
+        deltaX = 0f
+        isEdge = false
+        invalidate()
+        return true
+      }
+    }
+    return false
   }
 
   private fun drawHorizontalBubble(canvas: Canvas, dragDelta: Float) {
