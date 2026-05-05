@@ -815,7 +815,11 @@ abstract class BaseEditorActivity :
               val editorScale = 1 - slideOffset * (1 - EDITOR_CONTAINER_SCALE_FACTOR)
               
               this.bottomSheet.onSlide(slideOffset)
-              
+              val hiddenFraction = slideOffset.coerceIn(0f, 1f)
+              this.headerOverlayContainer.alpha = 1f - hiddenFraction
+              this.pageSwitchGestureBubble.alpha = 1f - hiddenFraction
+              this.externalSymbolInputView.alpha = 1f - (hiddenFraction * 0.35f)
+
               this.viewContainer.scaleX = editorScale
               this.viewContainer.scaleY = editorScale
             }
@@ -896,7 +900,7 @@ abstract class BaseEditorActivity :
   private fun updateSymbolInputPageAnchor(active: Boolean) {
     if (_binding == null) return
     val params = content.symbolInputPage.layoutParams as CoordinatorLayout.LayoutParams
-    if (active) {
+    if (active || latestImeBottomInset > 0) {
       params.anchorId = View.NO_ID
       params.anchorGravity = Gravity.NO_GRAVITY
       params.gravity = Gravity.BOTTOM
@@ -1012,8 +1016,6 @@ abstract class BaseEditorActivity :
                 insets: WindowInsetsCompat,
                 runningAnimations: MutableList<WindowInsetsAnimationCompat>
             ): WindowInsetsCompat {
-                if (!isExternalSymbolPageActive) return insets
-
                 val imeAnimation = runningAnimations.find { it.typeMask and WindowInsetsCompat.Type.ime() != 0 }
                 if (imeAnimation != null) {
                     val fraction = imeAnimation.interpolatedFraction
@@ -1028,16 +1030,16 @@ abstract class BaseEditorActivity :
         val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
         val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
         latestImeBottomInset = imeBottom
-        
-        content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
-
         val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
-        if (isExternalSymbolPageActive) {
-            val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
-            view.translationY = targetTranslationY
+        content.externalSymbolInputView.setImeBottomInset(if (isImeVisible) imeBottom else 0)
+
+        val targetTranslationY = if (isImeVisible && imeBottom > 0) {
+            -(imeBottom - navBottom).toFloat().coerceAtMost(0f)
         } else {
-            view.translationY = 0f
+            0f
         }
+        view.translationY = targetTranslationY
+        updateSymbolInputPageAnchor(isExternalSymbolPageActive)
 
         insets
     }
