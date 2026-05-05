@@ -815,7 +815,8 @@ abstract class BaseEditorActivity :
               val editorScale = 1 - slideOffset * (1 - EDITOR_CONTAINER_SCALE_FACTOR)
               
               this.bottomSheet.onSlide(slideOffset)
-              
+              updateLayoutBinding(slideOffset = slideOffset)
+
               this.viewContainer.scaleX = editorScale
               this.viewContainer.scaleY = editorScale
             }
@@ -962,7 +963,7 @@ abstract class BaseEditorActivity :
       content.symbolInputPage.translationY = 0f
       
       updateSymbolInputPageAnchor(false)
-      content.bottomSheet.resetSymbolInputPageHeight()
+      content.bottomSheet.resetSymbolInputPageAnchor()
     }
     
     content.pageSwitchGestureBubble.bringToFront()
@@ -979,20 +980,22 @@ abstract class BaseEditorActivity :
     content.symbolInputPage.translationY = 0f
     val targetImeInset = if (isExternalSymbolPageActive) latestImeBottomInset else 0
     content.externalSymbolInputView.setImeBottomInset(targetImeInset)
+    updateLayoutBinding(imeInset = targetImeInset)
   }
 
   private fun setupExternalSymbolImeSync() {
     if (_binding == null) return
     val symbolInputPage = content.symbolInputPage
+    val symbolInputView = content.externalSymbolInputView
 
     ViewCompat.setWindowInsetsAnimationCallback(
-        symbolInputPage,
+        symbolInputView,
         object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
             var startTranslationY = 0f
             var endTranslationY = 0f
 
             override fun onPrepare(animation: WindowInsetsAnimationCompat) {
-                startTranslationY = symbolInputPage.translationY
+                startTranslationY = symbolInputView.translationY
                 super.onPrepare(animation)
             }
 
@@ -1000,7 +1003,7 @@ abstract class BaseEditorActivity :
                 animation: WindowInsetsAnimationCompat,
                 bounds: WindowInsetsAnimationCompat.BoundsCompat
             ): WindowInsetsAnimationCompat.BoundsCompat {
-                val insets = ViewCompat.getRootWindowInsets(symbolInputPage)
+                val insets = ViewCompat.getRootWindowInsets(symbolInputView)
                 val imeBottom = insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
                 val navBottom = insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
                 
@@ -1017,7 +1020,7 @@ abstract class BaseEditorActivity :
                 val imeAnimation = runningAnimations.find { it.typeMask and WindowInsetsCompat.Type.ime() != 0 }
                 if (imeAnimation != null) {
                     val fraction = imeAnimation.interpolatedFraction
-                    symbolInputPage.translationY = startTranslationY + (endTranslationY - startTranslationY) * fraction
+                    symbolInputView.translationY = startTranslationY + (endTranslationY - startTranslationY) * fraction
                 }
                 return insets
             }
@@ -1034,13 +1037,39 @@ abstract class BaseEditorActivity :
         val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
         if (isExternalSymbolPageActive) {
             val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
-            view.translationY = targetTranslationY
+            updateLayoutBinding(imeInset = imeBottom)
         } else {
-            view.translationY = 0f
+            updateLayoutBinding(imeInset = 0)
         }
 
         insets
     }
+  }
+
+  private fun updateLayoutBinding(slideOffset: Float = bottomSheetSlideOffset, imeInset: Int = latestImeBottomInset) {
+    if (_binding == null) return
+    val sheetTop = content.bottomSheet.top.toFloat()
+    val symbolHeight = content.externalSymbolInputView.height.toFloat()
+    val imeActive = isImeVisible && imeInset > 0
+    val targetBottomY = if (imeActive) {
+      (content.realContainer.height - imeInset).toFloat()
+    } else {
+      sheetTop
+    }
+    val symbolTop = targetBottomY - symbolHeight
+    content.externalSymbolInputView.translationY = symbolTop - content.externalSymbolInputView.top
+
+    val hide = slideOffset.coerceIn(0f, 1f)
+    val headerShift = -content.headerContainer.height * hide
+    content.headerContainer.translationY = headerShift
+    content.headerContainer.alpha = 1f - hide
+    content.headerContainer.scaleX = 1f - 0.08f * hide
+    content.headerContainer.scaleY = 1f - 0.08f * hide
+
+    content.pageSwitchGestureBubble.translationY = headerShift - (content.pageSwitchGestureBubble.height * 0.35f * hide)
+    content.pageSwitchGestureBubble.alpha = 1f - hide
+    content.pageSwitchGestureBubble.scaleX = 1f - 0.12f * hide
+    content.pageSwitchGestureBubble.scaleY = 1f - 0.12f * hide
   }
 
   private fun resetEditorSurfaceTransform() {
@@ -1068,10 +1097,13 @@ abstract class BaseEditorActivity :
           override fun onDrag(fraction: Float) {
              if (_binding != null) {
                  val progress = fraction.coerceIn(0f, 1f)
-                 val alpha = (1f - progress * 0.8f).coerceIn(0.2f, 1f)
-                 content.headerContainer.alpha = alpha
-                 content.cardView.alpha = alpha
-                 content.pageSwitchGestureBubble.alpha = (0.6f + 0.4f * (1f - progress)).coerceIn(0.4f, 1f)
+                 editorBottomSheet?.let { behavior ->
+                   val target = if (progress >= 0.5f) BottomSheetBehavior.STATE_HALF_EXPANDED else BottomSheetBehavior.STATE_COLLAPSED
+                   if (behavior.state != BottomSheetBehavior.STATE_DRAGGING) {
+                     behavior.state = target
+                   }
+                 }
+                 updateLayoutBinding(slideOffset = progress)
              }
           }
 
@@ -1081,9 +1113,7 @@ abstract class BaseEditorActivity :
              } else {
                 requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
              }
-             content.headerContainer.alpha = 1f
-             content.cardView.alpha = 1f
-             content.pageSwitchGestureBubble.alpha = 1f
+             updateLayoutBinding(slideOffset = if (fraction > 0.15f) 1f else 0f)
           }
         }
     )

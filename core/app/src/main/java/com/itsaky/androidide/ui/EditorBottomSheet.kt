@@ -31,9 +31,7 @@ import androidx.appcompat.widget.TooltipCompat
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
-import androidx.core.view.updatePaddingRelative
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.transition.TransitionManager
@@ -66,7 +64,6 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
 import java.util.concurrent.Callable
-import kotlin.math.roundToInt
 import org.slf4j.LoggerFactory
 
 /**
@@ -83,10 +80,6 @@ constructor(
     defStyleRes: Int = 0,
 ) : RelativeLayout(context, attrs, defStyleAttr, defStyleRes) {
 
-  private val collapsedHeight: Float by lazy {
-    val localContext = getContext() ?: return@lazy 0f
-    localContext.resources.getDimension(R.dimen.editor_sheet_collapsed_height)
-  }
   private val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
     BottomSheetBehavior.from(this).apply {
       isFitToContents = false
@@ -112,6 +105,7 @@ constructor(
   var onActionTextChanged: ((CharSequence) -> Unit)? = null
   var onActionProgressChanged: ((Int) -> Unit)? = null
   var onStatusChanged: ((CharSequence, Int) -> Unit)? = null
+  var onSheetProgressChanged: ((Float) -> Unit)? = null
 
   private val insetBottom: Int
     get() = if (isImeVisible) 0 else windowInsets?.bottom ?: 0
@@ -119,8 +113,6 @@ constructor(
   companion object {
 
     private val log = LoggerFactory.getLogger(EditorBottomSheet::class.java)
-    private const val COLLAPSE_HEADER_AT_OFFSET = 0.5f
-
     const val CHILD_HEADER = 0
     const val CHILD_ACTION = 1
     const val STATE_EXTERNAL_SYMBOL = -1
@@ -222,7 +214,9 @@ constructor(
             }
           }
 
-          override fun onSlide(bottomSheet: View, slideOffset: Float) = Unit
+          override fun onSlide(bottomSheet: View, slideOffset: Float) {
+            onSheetProgressChanged?.invoke(slideOffset.coerceIn(0f, 1f))
+          }
         }
     )
     behaviorCallbackAttached = true
@@ -248,51 +242,22 @@ constructor(
             behavior.isGestureInsetBottomIgnored = isImeVisible
 
             binding.root.updatePadding(bottom = anchorOffset + insetBottom)
-            
-            resetSymbolInputPageHeight()
+            resetSymbolInputPageAnchor()
           }
         }
 
     view.viewTreeObserver.addOnGlobalLayoutListener(listener)
   }
 
-  fun resetSymbolInputPageHeight() {
-      if (!isExternalSymbolMode) {
-          symbolInputPage?.apply {
-              updatePaddingRelative(bottom = paddingBottom + insetBottom)
-              updateLayoutParams<ViewGroup.LayoutParams> {
-                  height = (collapsedHeight + insetBottom).roundToInt()
-              }
-              alpha = 1f
-          }
-      }
+  fun resetSymbolInputPageAnchor() {
+    if (isExternalSymbolMode) return
+    symbolInputPage?.alpha = 1f
+    symbolInputPage?.translationY = 0f
   }
 
   fun onSlide(sheetOffset: Float) {
     if (isExternalSymbolMode) return
-
-    val heightScale =
-        if (sheetOffset >= COLLAPSE_HEADER_AT_OFFSET) {
-          ((COLLAPSE_HEADER_AT_OFFSET - sheetOffset) + COLLAPSE_HEADER_AT_OFFSET) * 2f
-        } else {
-          1f
-        }
-
-    val paddingScale =
-        if (!isImeVisible && sheetOffset <= COLLAPSE_HEADER_AT_OFFSET) {
-          ((1f - sheetOffset) * 2f) - 1f
-        } else {
-          0f
-        }
-
-    val padding = insetBottom * paddingScale
-    symbolInputPage?.apply {
-      updateLayoutParams<ViewGroup.LayoutParams> {
-        height = ((collapsedHeight + padding) * heightScale).roundToInt()
-      }
-      updatePaddingRelative(bottom = padding.roundToInt())
-      alpha = heightScale
-    }
+    onSheetProgressChanged?.invoke(sheetOffset.coerceIn(0f, 1f))
   }
 
   fun showChild(index: Int) {
