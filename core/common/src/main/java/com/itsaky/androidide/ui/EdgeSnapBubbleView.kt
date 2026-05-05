@@ -70,10 +70,13 @@ class EdgeSnapBubbleView : View {
       Position.RIGHT, Position.BOTTOM -> Side.RIGHT
     }
     restorePosition()
+    invalidate()
   }
 
   fun setOrientation(newOrientation: Orientation) {
     orientation = newOrientation
+    requestLayout()
+    invalidate()
   }
 
   fun setMirrored(mirrored: Boolean) {
@@ -196,6 +199,7 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
   }
 
   private fun drawHorizontalBubble(canvas: Canvas, dragDelta: Float) {
+    if (width <= 0 || height <= 0) return
     backPath!!.reset()
     arrowPath!!.reset()
 
@@ -250,6 +254,10 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
 
     // 水平模式本意是让宽度保证足够绘制空间（而不是抬高高度）
     if (orientation == Orientation.HORIZONTAL) {
+        val minHeight = (24f * resources.displayMetrics.density).toInt()
+        if (finalHeight < minHeight) {
+            finalHeight = minHeight
+        }
         val minWidth = (backMaxWidth * 1.5f).toInt()
         if (finalWidth < minWidth) {
             finalWidth = minWidth

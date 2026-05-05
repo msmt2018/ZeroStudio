@@ -218,6 +218,7 @@ abstract class BaseEditorActivity :
   private var latestImeBottomInset = 0
   private var pendingBottomSheetState: Int? = null
   private var cursorPositionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
+  private var lastAppliedImeBottom = 0
 
   companion object {
 
@@ -273,11 +274,14 @@ abstract class BaseEditorActivity :
     
     val height = contentCardRealHeight ?: return
     val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+    isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+    lastAppliedImeBottom = imeInsets.bottom
     
     _binding?.content?.bottomSheet?.setImeVisible(imeInsets.bottom > 0)
     _binding?.contentCard?.updateLayoutParams<ViewGroup.LayoutParams> {
       this.height = if (isExternalSymbolPageActive) height else (height - imeInsets.bottom)
     }
+    syncFloatingStackForSheetSlide(bottomSheetSlideOffset)
 
     val isImeVisibleNow = imeInsets.bottom > 0
     if (this.isImeVisible != isImeVisibleNow) {
@@ -815,6 +819,7 @@ abstract class BaseEditorActivity :
               val editorScale = 1 - slideOffset * (1 - EDITOR_CONTAINER_SCALE_FACTOR)
               
               this.bottomSheet.onSlide(slideOffset)
+              syncFloatingStackForSheetSlide(slideOffset)
               
               this.viewContainer.scaleX = editorScale
               this.viewContainer.scaleY = editorScale
@@ -976,9 +981,10 @@ abstract class BaseEditorActivity :
 
   private fun applyExternalSymbolImeInset() {
     if (_binding == null) return
-    content.symbolInputPage.translationY = 0f
     val targetImeInset = if (isExternalSymbolPageActive) latestImeBottomInset else 0
+    content.symbolInputPage.translationY = if (targetImeInset > 0) -targetImeInset.toFloat() else 0f
     content.externalSymbolInputView.setImeBottomInset(targetImeInset)
+    syncFloatingStackForSheetSlide(bottomSheetSlideOffset)
   }
 
   private fun setupExternalSymbolImeSync() {
@@ -1032,15 +1038,32 @@ abstract class BaseEditorActivity :
         content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
 
         val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+        lastAppliedImeBottom = imeBottom
         if (isExternalSymbolPageActive) {
-            val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
+            val targetTranslationY = if (isImeVisible && imeBottom > 0) -imeBottom.toFloat() else 0f
             view.translationY = targetTranslationY
         } else {
             view.translationY = 0f
         }
+        syncFloatingStackForSheetSlide(bottomSheetSlideOffset)
 
         insets
     }
+  }
+
+  private fun syncFloatingStackForSheetSlide(slideOffsetRaw: Float) {
+    if (_binding == null) return
+    val slide = slideOffsetRaw.coerceIn(0f, 1f)
+    val hideProgress = if (isImeVisible || lastAppliedImeBottom > 0) 1f else slide
+    val alpha = (1f - hideProgress).coerceIn(0f, 1f)
+    val translate = -content.headerOverlayContainer.height * hideProgress
+    content.headerOverlayContainer.translationY = translate
+    content.headerContainer.alpha = alpha
+    content.cardView.alpha = alpha
+    content.tvCursorPosition.alpha = alpha
+    content.pageSwitchGestureBubble.alpha = alpha
+    content.headerOverlayContainer.bringToFront()
+    content.symbolInputPage.bringToFront()
   }
 
   private fun resetEditorSurfaceTransform() {
