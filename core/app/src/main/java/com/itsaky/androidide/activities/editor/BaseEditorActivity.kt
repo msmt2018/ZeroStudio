@@ -815,7 +815,13 @@ abstract class BaseEditorActivity :
               val editorScale = 1 - slideOffset * (1 - EDITOR_CONTAINER_SCALE_FACTOR)
               
               this.bottomSheet.onSlide(slideOffset)
-              
+              applyLayeredVisibilityByBottomSheet(slideOffset)
+              val imeVisible = ViewCompat.getRootWindowInsets(symbolInputPage)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+              if (!imeVisible) {
+                val anchorBottom = bottomSheet.top
+                updateSymbolStackByBottomAnchor(anchorBottom)
+              }
+
               this.viewContainer.scaleX = editorScale
               this.viewContainer.scaleY = editorScale
             }
@@ -906,6 +912,32 @@ abstract class BaseEditorActivity :
       params.gravity = Gravity.NO_GRAVITY
     }
     content.symbolInputPage.layoutParams = params
+  }
+
+
+  private fun updateSymbolStackByBottomAnchor(anchorBottom: Int) {
+    if (_binding == null) return
+    val safeAnchorBottom = anchorBottom.coerceAtLeast(0)
+    val pageHeight = content.symbolInputPage.height
+    val pageTop = safeAnchorBottom - pageHeight
+    content.symbolInputPage.y = pageTop.toFloat()
+
+    val headerContainer = content.headerOverlayContainer
+    val bubble = content.pageSwitchGestureBubble
+    val stackTop = pageTop
+
+    headerContainer.y = (stackTop - headerContainer.height).toFloat()
+    bubble.y = (headerContainer.y - bubble.height)
+  }
+
+  private fun applyLayeredVisibilityByBottomSheet(slideOffset: Float) {
+    if (_binding == null) return
+    val progress = slideOffset.coerceIn(0f, 1f)
+    val visibilityAlpha = (1f - progress).coerceIn(0f, 1f)
+    content.headerOverlayContainer.alpha = visibilityAlpha
+    content.headerContainer.alpha = visibilityAlpha
+    content.cardView.alpha = visibilityAlpha
+    content.pageSwitchGestureBubble.alpha = (0.55f + 0.45f * visibilityAlpha).coerceIn(0.55f, 1f)
   }
 
   private fun setExternalSymbolPageActive(active: Boolean) {
@@ -1004,7 +1036,7 @@ abstract class BaseEditorActivity :
                 val imeBottom = insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
                 val navBottom = insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
                 
-                endTranslationY = if (imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
+                endTranslationY = if (imeBottom > navBottom) -(imeBottom - navBottom).toFloat() else 0f
                 return bounds
             }
 
@@ -1033,10 +1065,15 @@ abstract class BaseEditorActivity :
 
         val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
         if (isExternalSymbolPageActive) {
-            val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
+            val targetTranslationY = if (isImeVisible && imeBottom > navBottom) -(imeBottom - navBottom).toFloat() else 0f
             view.translationY = targetTranslationY
+            val imeTop = view.bottom + targetTranslationY.toInt()
+            updateSymbolStackByBottomAnchor(imeTop)
         } else {
             view.translationY = 0f
+            if (!isImeVisible) {
+              updateSymbolStackByBottomAnchor(content.bottomSheet.top)
+            }
         }
 
         insets
