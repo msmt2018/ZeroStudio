@@ -244,7 +244,28 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
     canvas.drawPath(arrowPath!!, arrowPaint!!)
   }
 
-  override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+  
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    post {
+      if (parent is View) {
+        val parentWidth = (parent as View).width
+        if (parentWidth > 0 && width != parentWidth) {
+          layoutParams = layoutParams.apply { this.width = parentWidth }
+        }
+      }
+      requestLayout()
+      invalidate()
+    }
+  }
+
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    mWidth = w.coerceAtLeast(1)
+    thresholdLeft = (mWidth / 3f)
+    thresholdRight = thresholdLeft * 2f
+  }
+override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
     var finalWidth = MeasureSpec.getSize(widthMeasureSpec)
     var finalHeight = MeasureSpec.getSize(heightMeasureSpec)
 
