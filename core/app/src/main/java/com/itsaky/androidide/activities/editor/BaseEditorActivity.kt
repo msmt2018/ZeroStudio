@@ -216,6 +216,7 @@ abstract class BaseEditorActivity :
   private var bottomSheetSlideOffset = 0f
   private var blockBottomSheetExpandForTabSwitch = false
   private var latestImeBottomInset = 0
+  private var isImeVisible = false
   private var pendingBottomSheetState: Int? = null
   private var cursorPositionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
 
@@ -942,7 +943,7 @@ abstract class BaseEditorActivity :
       content.externalSymbolInputView.visibility = View.VISIBLE
       
       updateSymbolInputPageAnchor(true)
-      applyExternalSymbolImeInset()
+      syncSymbolInputPageWithAnchor()
       
     } else {
       content.bottomSheet.setBottomSheetDragEnabled(true)
@@ -959,10 +960,9 @@ abstract class BaseEditorActivity :
       content.tvCursorPosition.visibility = View.VISIBLE
       content.externalSymbolInputView.visibility = View.GONE
       
-      content.symbolInputPage.translationY = 0f
-      
       updateSymbolInputPageAnchor(false)
       content.bottomSheet.resetSymbolInputPageHeight()
+      syncSymbolInputPageWithAnchor()
     }
     
     content.pageSwitchGestureBubble.bringToFront()
@@ -976,9 +976,21 @@ abstract class BaseEditorActivity :
 
   private fun applyExternalSymbolImeInset() {
     if (_binding == null) return
-    content.symbolInputPage.translationY = 0f
-    val targetImeInset = if (isExternalSymbolPageActive) latestImeBottomInset else 0
-    content.externalSymbolInputView.setImeBottomInset(targetImeInset)
+    syncSymbolInputPageWithAnchor()
+  }
+
+  private fun syncSymbolInputPageWithAnchor() {
+    if (_binding == null) return
+    val navBottom = ViewCompat.getRootWindowInsets(content.symbolInputPage)
+      ?.getInsets(WindowInsetsCompat.Type.navigationBars())
+      ?.bottom ?: 0
+    val keyboardOffset = if (isImeVisible && latestImeBottomInset > 0) {
+      (latestImeBottomInset - navBottom).coerceAtLeast(0)
+    } else {
+      0
+    }
+    content.symbolInputPage.translationY = -keyboardOffset.toFloat()
+    content.externalSymbolInputView.setImeBottomInset(if (isImeVisible) latestImeBottomInset else 0)
   }
 
   private fun setupExternalSymbolImeSync() {
@@ -1004,7 +1016,7 @@ abstract class BaseEditorActivity :
                 val imeBottom = insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
                 val navBottom = insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
                 
-                endTranslationY = if (imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
+                endTranslationY = if (imeBottom > 0) -(imeBottom - navBottom).coerceAtLeast(0).toFloat() else 0f
                 return bounds
             }
 
@@ -1012,12 +1024,11 @@ abstract class BaseEditorActivity :
                 insets: WindowInsetsCompat,
                 runningAnimations: MutableList<WindowInsetsAnimationCompat>
             ): WindowInsetsCompat {
-                if (!isExternalSymbolPageActive) return insets
-
                 val imeAnimation = runningAnimations.find { it.typeMask and WindowInsetsCompat.Type.ime() != 0 }
                 if (imeAnimation != null) {
                     val fraction = imeAnimation.interpolatedFraction
                     symbolInputPage.translationY = startTranslationY + (endTranslationY - startTranslationY) * fraction
+                    content.externalSymbolInputView.setImeBottomInset((latestImeBottomInset * fraction).toInt())
                 }
                 return insets
             }
@@ -1031,13 +1042,8 @@ abstract class BaseEditorActivity :
         
         content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
 
-        val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
-        if (isExternalSymbolPageActive) {
-            val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
-            view.translationY = targetTranslationY
-        } else {
-            view.translationY = 0f
-        }
+        isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+        syncSymbolInputPageWithAnchor()
 
         insets
     }
@@ -1067,19 +1073,22 @@ abstract class BaseEditorActivity :
         object : EdgeSnapBubbleView.OnBubbleGestureListener {
           override fun onDrag(fraction: Float) {
              if (_binding != null) {
-                 val absFrac = abs(fraction)
-                 val alpha = (1f - absFrac * 0.8f).coerceIn(0.2f, 1f)
+                 // 仅上滑手势驱动抽屉展开动画，下滑不播放驼峰拉伸
+                 val upwardFraction = fraction.coerceAtLeast(0f)
+                 content.pageSwitchGestureBubble.alpha = (0.35f + upwardFraction * 0.65f).coerceIn(0.35f, 1f)
+                 val alpha = (1f - upwardFraction * 0.8f).coerceIn(0.2f, 1f)
                  content.headerContainer.alpha = alpha
              }
           }
 
           override fun onRelease(fraction: Float) {
-             if (fraction > 0.15f) { 
+             if (fraction > 0.15f) {
                 requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
-             } else if (fraction < -0.15f) { 
+             } else if (fraction < -0.15f) {
                 requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
              }
              content.headerContainer.alpha = 1f
+             content.pageSwitchGestureBubble.alpha = 1f
           }
         }
     )

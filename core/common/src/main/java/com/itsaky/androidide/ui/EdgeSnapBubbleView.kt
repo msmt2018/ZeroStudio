@@ -113,11 +113,38 @@ class EdgeSnapBubbleView : View {
   }
 
 override fun onTouchEvent(ev: MotionEvent): Boolean {
-    // 兼容水平模式下的垂直拖拽手势
-    val currentTouchX = if (orientation == Orientation.HORIZONTAL) ev.y else ev.x
-    // 固定绘制锚点，保障拖拽手势时视觉驼峰完美居中
-    currentY = if (orientation == Orientation.HORIZONTAL) backViewHeight / 2f else ev.y
-    
+    if (orientation == Orientation.HORIZONTAL) {
+      currentY = backViewHeight / 2f
+      when (ev.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+          downX = ev.y
+          isEdge = true
+          deltaX = 0f
+          parent?.requestDisallowInterceptTouchEvent(true)
+        }
+        MotionEvent.ACTION_MOVE -> {
+          if (!isEdge) return false
+          // 上滑手势为正进度；下滑保持 0，不触发拉伸动画。
+          deltaX = (downX - ev.y).coerceIn(0f, backMaxWidth)
+          onBubbleGestureListener?.onDrag(getDragFraction())
+          invalidate()
+        }
+        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+          if (!isEdge) return false
+          val fraction = getDragFraction()
+          if (fraction < 0.2f) performClick()
+          onBubbleGestureListener?.onRelease(fraction)
+          isEdge = false
+          deltaX = 0f
+          invalidate()
+        }
+      }
+      return true
+    }
+
+    val currentTouchX = ev.x
+    currentY = ev.y
+
     when (ev.action) {
       MotionEvent.ACTION_DOWN -> {
         downX = currentTouchX
