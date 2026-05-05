@@ -129,7 +129,14 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
       }
 
       MotionEvent.ACTION_MOVE -> {
-        deltaX = downX - currentTouchX
+        // HORIZONTAL(顶部气泡)模式：上滑应为正进度，下滑应为负进度
+        // VERTICAL 模式保持现有左右语义。
+        deltaX =
+            if (orientation == Orientation.HORIZONTAL) {
+              downX - currentTouchX
+            } else {
+              downX - currentTouchX
+            }
         val diff = forwardX - currentTouchX
         if (diff > 0) {
           if (currentTouchX < thresholdLeft && left) {
@@ -160,7 +167,14 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
         }
         forwardX = currentTouchX
         if (isEdge) {
-          onBubbleGestureListener?.onDrag(getDragFraction())
+          val fraction =
+              if (orientation == Orientation.HORIZONTAL) {
+                // 顶部模式只响应“向上拉伸”动画；向下手势不播放驼峰动画。
+                (deltaX / backMaxWidth).coerceIn(0f, 1f)
+              } else {
+                getDragFraction()
+              }
+          onBubbleGestureListener?.onDrag(fraction)
           invalidate()
         }
       }
@@ -171,7 +185,13 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
           if (abs(deltaX) < backMaxWidth * 0.2f) {
             performClick()
           }
-          onBubbleGestureListener?.onRelease(getDragFraction())
+          val releaseFraction =
+              if (orientation == Orientation.HORIZONTAL) {
+                (deltaX / backMaxWidth).coerceIn(0f, 1f)
+              } else {
+                getDragFraction()
+              }
+          onBubbleGestureListener?.onRelease(releaseFraction)
           deltaX = 0f
           invalidate()
         }
