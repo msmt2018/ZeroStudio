@@ -896,7 +896,11 @@ abstract class BaseEditorActivity :
   private fun updateSymbolInputPageAnchor(active: Boolean) {
     if (_binding == null) return
     val params = content.symbolInputPage.layoutParams as CoordinatorLayout.LayoutParams
-    if (active) {
+    if (latestImeBottomInset > 0) {
+      params.anchorId = View.NO_ID
+      params.anchorGravity = Gravity.NO_GRAVITY
+      params.gravity = Gravity.BOTTOM
+    } else if (active) {
       params.anchorId = View.NO_ID
       params.anchorGravity = Gravity.NO_GRAVITY
       params.gravity = Gravity.BOTTOM
@@ -976,9 +980,9 @@ abstract class BaseEditorActivity :
 
   private fun applyExternalSymbolImeInset() {
     if (_binding == null) return
-    content.symbolInputPage.translationY = 0f
-    val targetImeInset = if (isExternalSymbolPageActive) latestImeBottomInset else 0
+    val targetImeInset = latestImeBottomInset
     content.externalSymbolInputView.setImeBottomInset(targetImeInset)
+    content.symbolInputPage.translationY = if (latestImeBottomInset > 0) -latestImeBottomInset.toFloat() else 0f
   }
 
   private fun setupExternalSymbolImeSync() {
@@ -1012,8 +1016,6 @@ abstract class BaseEditorActivity :
                 insets: WindowInsetsCompat,
                 runningAnimations: MutableList<WindowInsetsAnimationCompat>
             ): WindowInsetsCompat {
-                if (!isExternalSymbolPageActive) return insets
-
                 val imeAnimation = runningAnimations.find { it.typeMask and WindowInsetsCompat.Type.ime() != 0 }
                 if (imeAnimation != null) {
                     val fraction = imeAnimation.interpolatedFraction
@@ -1027,17 +1029,12 @@ abstract class BaseEditorActivity :
     ViewCompat.setOnApplyWindowInsetsListener(symbolInputPage) { view, insets ->
         val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
         val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-        latestImeBottomInset = imeBottom
-        
-        content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
-
         val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
-        if (isExternalSymbolPageActive) {
-            val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
-            view.translationY = targetTranslationY
-        } else {
-            view.translationY = 0f
-        }
+        latestImeBottomInset = if (isImeVisible) (imeBottom - navBottom).coerceAtLeast(0) else 0
+        updateSymbolInputPageAnchor(isExternalSymbolPageActive)
+        content.externalSymbolInputView.setImeBottomInset(if (isImeVisible) imeBottom else 0)
+        val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
+        view.translationY = targetTranslationY
 
         insets
     }
@@ -1071,6 +1068,7 @@ abstract class BaseEditorActivity :
                  val alpha = (1f - progress * 0.8f).coerceIn(0.2f, 1f)
                  content.headerContainer.alpha = alpha
                  content.cardView.alpha = alpha
+                 content.externalSymbolInputView.alpha = alpha
                  content.pageSwitchGestureBubble.alpha = (0.6f + 0.4f * (1f - progress)).coerceIn(0.4f, 1f)
              }
           }
@@ -1083,6 +1081,7 @@ abstract class BaseEditorActivity :
              }
              content.headerContainer.alpha = 1f
              content.cardView.alpha = 1f
+             content.externalSymbolInputView.alpha = 1f
              content.pageSwitchGestureBubble.alpha = 1f
           }
         }

@@ -74,6 +74,8 @@ class EdgeSnapBubbleView : View {
 
   fun setOrientation(newOrientation: Orientation) {
     orientation = newOrientation
+    requestLayout()
+    post { restorePosition() }
   }
 
   fun setMirrored(mirrored: Boolean) {
@@ -260,6 +262,13 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
     mWidth = finalWidth + 1
     thresholdLeft = (mWidth / 3).toFloat()
     thresholdRight = thresholdLeft * 2
+  }
+
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    if (w != oldw || h != oldh) {
+      post { restorePosition() }
+    }
   }
 
   override fun onDraw(canvas: Canvas) {
