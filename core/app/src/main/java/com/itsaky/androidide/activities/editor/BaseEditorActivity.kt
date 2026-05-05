@@ -893,16 +893,20 @@ abstract class BaseEditorActivity :
     )
   }
 
-  private fun updateSymbolInputPageAnchor(active: Boolean) {
+  private fun updateSymbolInputPageAnchor(active: Boolean, imeVisible: Boolean = false) {
     if (_binding == null) return
     val params = content.symbolInputPage.layoutParams as CoordinatorLayout.LayoutParams
-    if (active) {
+    if (imeVisible) {
+      params.anchorId = View.NO_ID
+      params.anchorGravity = Gravity.NO_GRAVITY
+      params.gravity = Gravity.BOTTOM
+    } else if (active) {
       params.anchorId = View.NO_ID
       params.anchorGravity = Gravity.NO_GRAVITY
       params.gravity = Gravity.BOTTOM
     } else {
       params.anchorId = R.id.bottom_sheet
-      params.anchorGravity = Gravity.TOP
+      params.anchorGravity = Gravity.BOTTOM
       params.gravity = Gravity.NO_GRAVITY
     }
     content.symbolInputPage.layoutParams = params
@@ -941,7 +945,7 @@ abstract class BaseEditorActivity :
       content.tvCursorPosition.visibility = View.GONE
       content.externalSymbolInputView.visibility = View.VISIBLE
       
-      updateSymbolInputPageAnchor(true)
+      updateSymbolInputPageAnchor(true, latestImeBottomInset > 0)
       applyExternalSymbolImeInset()
       
     } else {
@@ -961,7 +965,7 @@ abstract class BaseEditorActivity :
       
       content.symbolInputPage.translationY = 0f
       
-      updateSymbolInputPageAnchor(false)
+      updateSymbolInputPageAnchor(false, latestImeBottomInset > 0)
       content.bottomSheet.resetSymbolInputPageHeight()
     }
     
@@ -1012,7 +1016,6 @@ abstract class BaseEditorActivity :
                 insets: WindowInsetsCompat,
                 runningAnimations: MutableList<WindowInsetsAnimationCompat>
             ): WindowInsetsCompat {
-                if (!isExternalSymbolPageActive) return insets
 
                 val imeAnimation = runningAnimations.find { it.typeMask and WindowInsetsCompat.Type.ime() != 0 }
                 if (imeAnimation != null) {
@@ -1032,12 +1035,10 @@ abstract class BaseEditorActivity :
         content.externalSymbolInputView.setImeBottomInset(if (isExternalSymbolPageActive) imeBottom else 0)
 
         val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
-        if (isExternalSymbolPageActive) {
-            val targetTranslationY = if (isImeVisible && imeBottom > 0) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
-            view.translationY = targetTranslationY
-        } else {
-            view.translationY = 0f
-        }
+        val shouldFollowIme = isImeVisible && imeBottom > 0
+        updateSymbolInputPageAnchor(isExternalSymbolPageActive, shouldFollowIme)
+        val targetTranslationY = if (shouldFollowIme) -(imeBottom - navBottom).toFloat().coerceAtMost(0f) else 0f
+        view.translationY = targetTranslationY
 
         insets
     }
