@@ -244,6 +244,18 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
     canvas.drawPath(arrowPath!!, arrowPaint!!)
   }
 
+
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    post {
+      mWidth = width + 1
+      thresholdLeft = (mWidth / 3).toFloat()
+      thresholdRight = thresholdLeft * 2f
+      restorePosition()
+      invalidate()
+    }
+  }
+
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
     var finalWidth = MeasureSpec.getSize(widthMeasureSpec)
     var finalHeight = MeasureSpec.getSize(heightMeasureSpec)

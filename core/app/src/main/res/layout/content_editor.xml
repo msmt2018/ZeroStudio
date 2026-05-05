@@ -1,21 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  ~  This file is part of AndroidIDE.
-  ~
-  ~  AndroidIDE is free software: you can redistribute it and/or modify
-  ~  it under the terms of the GNU General Public License as published by
-  ~  the Free Software Foundation, either version 3 of the License, or
-  ~  (at your option) any later version.
-  ~
-  ~  AndroidIDE is distributed in the hope that it will be useful,
-  ~  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  ~  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  ~  GNU General Public License for more details.
-  ~
-  ~  You should have received a copy of the GNU General Public License
-  ~   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
-  -->
-
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
      xmlns:app="http://schemas.android.com/apk/res-auto"
      xmlns:tools="http://schemas.android.com/tools"
@@ -32,45 +15,13 @@
           android:background="@android:color/transparent"
           android:fitsSystemWindows="false"
           app:layout_behavior="com.google.android.material.appbar.AppBarLayout$Behavior">
-
-          <com.itsaky.androidide.ui.ExtendedMenuToolbar
-               android:id="@+id/editor_toolbar"
-               android:layout_width="match_parent"
-               android:layout_height="wrap_content"
-               android:elevation="10dp" />
-
-          <com.google.android.material.progressindicator.LinearProgressIndicator
-               android:id="@+id/progress_indicator"
-               android:layout_width="match_parent"
-               android:layout_height="wrap_content"
-               android:indeterminate="true" />
-
-          <com.google.android.material.tabs.TabLayout
-               android:id="@+id/tabs"
-               app:tabIconTint="@null"
-               app:tint="@null"
-               android:tint="@null"
-               style="@style/AppTheme.TabLayout"
-               android:layout_width="match_parent"
-               android:layout_height="wrap_content"
-               app:tabGravity="start" />
-
+          <com.itsaky.androidide.ui.ExtendedMenuToolbar android:id="@+id/editor_toolbar" android:layout_width="match_parent" android:layout_height="wrap_content" android:elevation="10dp" />
+          <com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/progress_indicator" android:layout_width="match_parent" android:layout_height="wrap_content" android:indeterminate="true" />
+          <com.google.android.material.tabs.TabLayout android:id="@+id/tabs" app:tabIconTint="@null" app:tint="@null" android:tint="@null" style="@style/AppTheme.TabLayout" android:layout_width="match_parent" android:layout_height="wrap_content" app:tabGravity="start" />
      </com.google.android.material.appbar.AppBarLayout>
 
-     <ViewFlipper
-          android:id="@+id/view_container"
-          android:layout_width="match_parent"
-          android:layout_height="match_parent"
-          android:layout_marginBottom="16dp"
-          app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior">
-
-          <!--Views in this flipper are dynamically added and must be instances of CodeEditorView-->
-          <ViewFlipper
-               android:id="@+id/editor_container"
-               android:layout_width="match_parent"
-               android:layout_height="match_parent"
-               android:layout_marginBottom="@dimen/editor_sheet_peek_height" />
-
+     <ViewFlipper android:id="@+id/view_container" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginBottom="16dp" app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior">
+          <ViewFlipper android:id="@+id/editor_container" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginBottom="@dimen/editor_sheet_peek_height" />
           <androidx.constraintlayout.widget.ConstraintLayout
                android:layout_width="match_parent"
                android:layout_height="match_parent">
@@ -103,7 +54,6 @@
                     tools:text="Open right drawer for files\nSwipe from bottom for build output" />
 
           </androidx.constraintlayout.widget.ConstraintLayout>
-
      </ViewFlipper>
 
      <com.itsaky.androidide.ui.EditorBottomSheet
@@ -119,85 +69,12 @@
           android:id="@+id/symbol_input_page"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
-          android:layout_gravity="bottom"
+          app:layout_anchor="@id/bottom_sheet"
           app:layout_anchorGravity="top"
           android:orientation="vertical"
-          android:elevation="0dp"
           android:background="@null"
           android:clipChildren="false"
           android:visibility="gone">
-
-          <RelativeLayout
-               android:id="@+id/header_overlay_container"
-               android:layout_width="match_parent"
-               android:layout_height="wrap_content"
-               android:elevation="0dp"
-               android:background="@null">
-
-               <com.itsaky.androidide.ui.EdgeSnapBubbleView
-                    android:id="@+id/page_switch_gesture_bubble"
-                    android:layout_width="match_parent"
-                    android:layout_height="24dp"
-                    android:layout_alignParentTop="true"
-                    android:background="@android:color/transparent" />
-
-               <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/cardView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="24dp"
-                    android:layout_marginLeft="16dp"
-                    android:layout_marginRight="16dp"
-                    app:strokeWidth="0dp"
-                    app:cardElevation="0dp"
-                    android:scaleX="0.9"
-                    android:scaleY="0.9"
-                    app:cardBackgroundColor="?attr/colorSurface" />
-
-               <include
-                    android:id="@+id/border"
-                    layout="@layout/layout_divider_horizontal"
-                    android:layout_width="match_parent"
-                    android:layout_marginBottom="0dp"
-                    android:layout_height="0.1dp"
-                    android:layout_below="@id/page_switch_gesture_bubble" />
-
-               <ViewFlipper
-                    android:id="@+id/header_container"
-                    android:layout_width="match_parent"
-                    android:layout_below="@id/border"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/colorSurface">
-
-                    <include
-                         layout="@layout/layout_editor_build_status"
-                         android:id="@+id/build_status" />
-
-                    <include
-                         layout="@layout/layout_editor_bottom_action"
-                         android:id="@+id/bottom_action" />
-
-               </ViewFlipper>
-
-               <TextView
-                    android:id="@+id/tv_cursor_position"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignTop="@id/header_container"
-                    android:layout_alignBottom="@id/header_container"
-                    android:layout_alignEnd="@id/header_container"
-                    android:gravity="center_vertical"
-                    android:layout_marginEnd="16dp"
-                    android:text="1:1"
-                    android:fontFamily="monospace"
-                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                    android:textColor="?attr/colorOutline" />
-          </RelativeLayout>
-
-          <View
-               android:layout_width="match_parent"
-               android:layout_height="0.5dp"
-               android:background="?attr/colorOutlineVariant" />
 
           <android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
                android:id="@+id/external_symbol_input_view"
@@ -205,10 +82,40 @@
                android:layout_height="wrap_content"
                android:elevation="4dp"
                android:background="?attr/colorSurface" />
+
+          <include android:id="@+id/border" layout="@layout/layout_divider_horizontal" android:layout_width="match_parent" android:layout_height="0.1dp" />
+
+          <ViewFlipper
+               android:id="@+id/header_container"
+               android:layout_width="match_parent"
+               android:layout_height="wrap_content"
+               android:background="?attr/colorSurface">
+               <include layout="@layout/layout_editor_build_status" android:id="@+id/build_status" />
+               <include layout="@layout/layout_editor_bottom_action" android:id="@+id/bottom_action" />
+          </ViewFlipper>
+
+          <TextView android:id="@+id/tv_cursor_position" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="end" android:layout_marginEnd="16dp" android:gravity="center_vertical" android:text="1:1" android:fontFamily="monospace" android:textAppearance="@style/TextAppearance.Material3.BodySmall" android:textColor="?attr/colorOutline" />
+
+          <com.google.android.material.card.MaterialCardView
+               android:id="@+id/cardView"
+               android:layout_width="match_parent"
+               android:layout_height="wrap_content"
+               app:cardCornerRadius="24dp"
+               android:layout_marginHorizontal="16dp"
+               app:strokeWidth="0dp"
+               app:cardElevation="0dp"
+               android:scaleX="0.9"
+               android:scaleY="0.9"
+               app:cardBackgroundColor="?attr/colorSurface" />
+
+          <com.itsaky.androidide.ui.EdgeSnapBubbleView
+               android:id="@+id/page_switch_gesture_bubble"
+               android:layout_width="match_parent"
+               android:layout_height="24dp"
+               android:background="@android:color/transparent" />
+
      </LinearLayout>
 
-     <include
-          android:id="@+id/diagnosticInfo"
-          layout="@layout/layout_diagnostic_info" />
+     <include android:id="@+id/diagnosticInfo" layout="@layout/layout_diagnostic_info" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
