@@ -31,14 +31,11 @@ import androidx.appcompat.widget.TooltipCompat
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
-import androidx.core.view.updatePaddingRelative
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.transition.TransitionManager
 import com.blankj.utilcode.util.KeyboardUtils
-import com.blankj.utilcode.util.SizeUtils
 import com.blankj.utilcode.util.ThreadUtils.runOnUiThread
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.tabs.TabLayout.OnTabSelectedListener
@@ -66,7 +63,6 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
 import java.util.concurrent.Callable
-import kotlin.math.roundToInt
 import org.slf4j.LoggerFactory
 
 /**
@@ -83,10 +79,6 @@ constructor(
     defStyleRes: Int = 0,
 ) : RelativeLayout(context, attrs, defStyleAttr, defStyleRes) {
 
-  private val collapsedHeight: Float by lazy {
-    val localContext = getContext() ?: return@lazy 0f
-    localContext.resources.getDimension(R.dimen.editor_sheet_collapsed_height)
-  }
   private val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
     BottomSheetBehavior.from(this).apply {
       isFitToContents = false
@@ -105,7 +97,6 @@ constructor(
   private var expandBlocked = false
   private var behaviorCallbackAttached = false
   
-  private var symbolInputPage: View? = null
   var isExternalSymbolMode = false
 
   var onHeaderPageChanged: ((Int) -> Unit)? = null
@@ -119,9 +110,7 @@ constructor(
   companion object {
 
     private val log = LoggerFactory.getLogger(EditorBottomSheet::class.java)
-    private const val COLLAPSE_HEADER_AT_OFFSET = 0.5f
-
-    const val CHILD_HEADER = 0
+      const val CHILD_HEADER = 0
     const val CHILD_ACTION = 1
     const val STATE_EXTERNAL_SYMBOL = -1
   }
@@ -234,66 +223,26 @@ constructor(
     behavior.isGestureInsetBottomIgnored = isVisible
   }
 
-  fun setOffsetAnchor(view: View, symbolInputPage: View) {
-    this.symbolInputPage = symbolInputPage
+  fun setOffsetAnchor(view: View, @Suppress("UNUSED_PARAMETER") symbolInputPage: View) {
     val listener =
         object : ViewTreeObserver.OnGlobalLayoutListener {
           override fun onGlobalLayout() {
             view.viewTreeObserver.removeOnGlobalLayoutListener(this)
-            anchorOffset = view.height + SizeUtils.dp2px(1f)
-
-            // 设置 peekHeight 为 0，当折叠时完全隐藏 sheet，只显示锚定在其上方的 symbol_input_page
+            anchorOffset = view.height
             behavior.peekHeight = 0
+            behavior.halfExpandedRatio = 0.5f
             behavior.expandedOffset = anchorOffset
             behavior.isGestureInsetBottomIgnored = isImeVisible
-
             binding.root.updatePadding(bottom = anchorOffset + insetBottom)
-            
-            resetSymbolInputPageHeight()
           }
         }
 
     view.viewTreeObserver.addOnGlobalLayoutListener(listener)
   }
 
-  fun resetSymbolInputPageHeight() {
-      if (!isExternalSymbolMode) {
-          symbolInputPage?.apply {
-              updatePaddingRelative(bottom = paddingBottom + insetBottom)
-              updateLayoutParams<ViewGroup.LayoutParams> {
-                  height = (collapsedHeight + insetBottom).roundToInt()
-              }
-              alpha = 1f
-          }
-      }
-  }
+  fun resetSymbolInputPageHeight() = Unit
 
-  fun onSlide(sheetOffset: Float) {
-    if (isExternalSymbolMode) return
-
-    val heightScale =
-        if (sheetOffset >= COLLAPSE_HEADER_AT_OFFSET) {
-          ((COLLAPSE_HEADER_AT_OFFSET - sheetOffset) + COLLAPSE_HEADER_AT_OFFSET) * 2f
-        } else {
-          1f
-        }
-
-    val paddingScale =
-        if (!isImeVisible && sheetOffset <= COLLAPSE_HEADER_AT_OFFSET) {
-          ((1f - sheetOffset) * 2f) - 1f
-        } else {
-          0f
-        }
-
-    val padding = insetBottom * paddingScale
-    symbolInputPage?.apply {
-      updateLayoutParams<ViewGroup.LayoutParams> {
-        height = ((collapsedHeight + padding) * heightScale).roundToInt()
-      }
-      updatePaddingRelative(bottom = padding.roundToInt())
-      alpha = heightScale
-    }
-  }
+  fun onSlide(@Suppress("UNUSED_PARAMETER") sheetOffset: Float) = Unit
 
   fun showChild(index: Int) {
     onHeaderPageChanged?.invoke(if (index == CHILD_ACTION) CHILD_ACTION else CHILD_HEADER)
