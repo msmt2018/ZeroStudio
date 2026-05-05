@@ -31,9 +31,7 @@ import androidx.appcompat.widget.TooltipCompat
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
-import androidx.core.view.updatePaddingRelative
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.transition.TransitionManager
@@ -66,7 +64,6 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
 import java.util.concurrent.Callable
-import kotlin.math.roundToInt
 import org.slf4j.LoggerFactory
 
 /**
@@ -83,14 +80,10 @@ constructor(
     defStyleRes: Int = 0,
 ) : RelativeLayout(context, attrs, defStyleAttr, defStyleRes) {
 
-  private val collapsedHeight: Float by lazy {
-    val localContext = getContext() ?: return@lazy 0f
-    localContext.resources.getDimension(R.dimen.editor_sheet_collapsed_height)
-  }
   private val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
     BottomSheetBehavior.from(this).apply {
       isFitToContents = false
-      skipCollapsed = true
+      skipCollapsed = false
     }
   }
 
@@ -107,6 +100,7 @@ constructor(
   
   private var symbolInputPage: View? = null
   var isExternalSymbolMode = false
+  private var modalState: Int = MODAL_STANDARD
 
   var onHeaderPageChanged: ((Int) -> Unit)? = null
   var onActionTextChanged: ((CharSequence) -> Unit)? = null
@@ -119,7 +113,9 @@ constructor(
   companion object {
 
     private val log = LoggerFactory.getLogger(EditorBottomSheet::class.java)
-    private const val COLLAPSE_HEADER_AT_OFFSET = 0.5f
+    const val MODAL_STANDARD = 0
+    const val MODAL_EXPANDED = 1
+    const val MODAL_IME = 2
 
     const val CHILD_HEADER = 0
     const val CHILD_ACTION = 1
@@ -232,6 +228,7 @@ constructor(
   fun setImeVisible(isVisible: Boolean) {
     isImeVisible = isVisible
     behavior.isGestureInsetBottomIgnored = isVisible
+    modalState = if (isVisible) MODAL_IME else if (behavior.state == BottomSheetBehavior.STATE_EXPANDED || behavior.state == BottomSheetBehavior.STATE_HALF_EXPANDED) MODAL_EXPANDED else MODAL_STANDARD
   }
 
   fun setOffsetAnchor(view: View, symbolInputPage: View) {
@@ -244,6 +241,7 @@ constructor(
 
             // 设置 peekHeight 为 0，当折叠时完全隐藏 sheet，只显示锚定在其上方的 symbol_input_page
             behavior.peekHeight = 0
+            behavior.halfExpandedRatio = 0.5f
             behavior.expandedOffset = anchorOffset
             behavior.isGestureInsetBottomIgnored = isImeVisible
 
@@ -257,42 +255,14 @@ constructor(
   }
 
   fun resetSymbolInputPageHeight() {
-      if (!isExternalSymbolMode) {
-          symbolInputPage?.apply {
-              updatePaddingRelative(bottom = paddingBottom + insetBottom)
-              updateLayoutParams<ViewGroup.LayoutParams> {
-                  height = (collapsedHeight + insetBottom).roundToInt()
-              }
-              alpha = 1f
-          }
-      }
+    if (isExternalSymbolMode) return
+    symbolInputPage?.alpha = 1f
   }
 
   fun onSlide(sheetOffset: Float) {
     if (isExternalSymbolMode) return
-
-    val heightScale =
-        if (sheetOffset >= COLLAPSE_HEADER_AT_OFFSET) {
-          ((COLLAPSE_HEADER_AT_OFFSET - sheetOffset) + COLLAPSE_HEADER_AT_OFFSET) * 2f
-        } else {
-          1f
-        }
-
-    val paddingScale =
-        if (!isImeVisible && sheetOffset <= COLLAPSE_HEADER_AT_OFFSET) {
-          ((1f - sheetOffset) * 2f) - 1f
-        } else {
-          0f
-        }
-
-    val padding = insetBottom * paddingScale
-    symbolInputPage?.apply {
-      updateLayoutParams<ViewGroup.LayoutParams> {
-        height = ((collapsedHeight + padding) * heightScale).roundToInt()
-      }
-      updatePaddingRelative(bottom = padding.roundToInt())
-      alpha = heightScale
-    }
+    modalState = if (isImeVisible) MODAL_IME else if (sheetOffset > 0f) MODAL_EXPANDED else MODAL_STANDARD
+    symbolInputPage?.alpha = 1f
   }
 
   fun showChild(index: Int) {
@@ -332,6 +302,7 @@ constructor(
     if (behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
       behavior.state = BottomSheetBehavior.STATE_COLLAPSED
     }
+    if (!isImeVisible) modalState = MODAL_STANDARD
   }
 
   fun suspendHeaderExpandFor(durationMs: Long) {
@@ -395,8 +366,10 @@ constructor(
 
     val activity = context as Activity
     if (KeyboardUtils.isSoftInputVisible(activity)) {
+      modalState = MODAL_IME
       onHeaderPageChanged?.invoke(STATE_EXTERNAL_SYMBOL)
     } else {
+      modalState = if (behavior.state == BottomSheetBehavior.STATE_EXPANDED || behavior.state == BottomSheetBehavior.STATE_HALF_EXPANDED) MODAL_EXPANDED else MODAL_STANDARD
       onHeaderPageChanged?.invoke(CHILD_HEADER)
     }
   }
