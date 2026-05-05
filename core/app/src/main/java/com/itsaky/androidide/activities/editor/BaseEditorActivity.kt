@@ -108,7 +108,6 @@ import com.itsaky.androidide.xml.widgets.WidgetTableRegistry
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.event.SubscriptionReceipt
 import java.io.File
-import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlinx.coroutines.CoroutineScope
@@ -896,15 +895,9 @@ abstract class BaseEditorActivity :
   private fun updateSymbolInputPageAnchor(active: Boolean) {
     if (_binding == null) return
     val params = content.symbolInputPage.layoutParams as CoordinatorLayout.LayoutParams
-    if (active) {
-      params.anchorId = View.NO_ID
-      params.anchorGravity = Gravity.NO_GRAVITY
-      params.gravity = Gravity.BOTTOM
-    } else {
-      params.anchorId = R.id.bottom_sheet
-      params.anchorGravity = Gravity.TOP
-      params.gravity = Gravity.NO_GRAVITY
-    }
+    params.anchorId = R.id.bottom_sheet
+    params.anchorGravity = Gravity.TOP
+    params.gravity = Gravity.NO_GRAVITY
     content.symbolInputPage.layoutParams = params
   }
 
@@ -1067,19 +1060,23 @@ abstract class BaseEditorActivity :
         object : EdgeSnapBubbleView.OnBubbleGestureListener {
           override fun onDrag(fraction: Float) {
              if (_binding != null) {
-                 val absFrac = abs(fraction)
-                 val alpha = (1f - absFrac * 0.8f).coerceIn(0.2f, 1f)
+                 val progress = fraction.coerceIn(0f, 1f)
+                 val alpha = (1f - progress * 0.8f).coerceIn(0.2f, 1f)
                  content.headerContainer.alpha = alpha
+                 content.cardView.alpha = alpha
+                 content.pageSwitchGestureBubble.alpha = (0.6f + 0.4f * (1f - progress)).coerceIn(0.4f, 1f)
              }
           }
 
           override fun onRelease(fraction: Float) {
-             if (fraction > 0.15f) { 
+             if (fraction > 0.15f) {
                 requestBottomSheetState(BottomSheetBehavior.STATE_EXPANDED)
-             } else if (fraction < -0.15f) { 
+             } else {
                 requestBottomSheetState(BottomSheetBehavior.STATE_COLLAPSED)
              }
              content.headerContainer.alpha = 1f
+             content.cardView.alpha = 1f
+             content.pageSwitchGestureBubble.alpha = 1f
           }
         }
     )

@@ -129,6 +129,17 @@ override fun onTouchEvent(ev: MotionEvent): Boolean {
       }
 
       MotionEvent.ACTION_MOVE -> {
+        if (orientation == Orientation.HORIZONTAL) {
+          val rawDrag = downX - currentTouchX
+          deltaX = rawDrag.coerceAtLeast(0f).coerceAtMost(backMaxWidth)
+          forwardX = currentTouchX
+          if (isEdge) {
+            onBubbleGestureListener?.onDrag(getDragFraction())
+            invalidate()
+          }
+          return true
+        }
+
         deltaX = downX - currentTouchX
         val diff = forwardX - currentTouchX
         if (diff > 0) {
