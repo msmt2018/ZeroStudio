@@ -205,7 +205,7 @@ abstract class BaseEditorActivity :
     }
   }
 
-  private var isImeVisible = false
+  private var activityImeVisible = false
   private var contentCardRealHeight: Int? = null
   private val editorSurfaceContainerBackground by lazy { resolveAttr(R.attr.colorSurfaceDim) }
   private val editorLayoutCorners by lazy {
@@ -281,8 +281,8 @@ abstract class BaseEditorActivity :
     }
 
     val isImeVisibleNow = imeInsets.bottom > 0
-    if (this.isImeVisible != isImeVisibleNow) {
-      this.isImeVisible = isImeVisibleNow
+    if (this.activityImeVisible != isImeVisibleNow) {
+      this.activityImeVisible = isImeVisibleNow
       onSoftInputChanged()
     }
   }
