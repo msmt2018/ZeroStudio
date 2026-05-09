@@ -792,4 +792,5 @@
      <string name="idepref_kotlin_remove_unused_imports">Remove unused imports</string>
     <string name="bottom_sheet_page_build">Build status</string>
     <string name="bottom_sheet_page_symbols">Symbol input</string>
+    <string name="action_color_query">Color Query</string>
 </resources>

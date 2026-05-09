@@ -5,6 +5,9 @@
     <string name="apm_menu_self_cleanup">应用内自清理(页面/LSP/Tooling)</string>
     <string name="apm_title">APM 实时监控</string>
     <string name="apm_sampling_desc">采样: 1s（类文件扫描: 15s）</string>
+    <string name="apm_start_monitoring">启动监控</string>
+    <string name="apm_stop_monitoring">停止监控</string>
+    <string name="apm_monitoring_paused_desc">监控已暂停。启动监控后才会采集 CPU/内存/进程指标。</string>
     <string name="apm_cpu_usage">CPU 使用率(%)</string>
     <string name="apm_process_pss">进程 PSS(MB)</string>
     <string name="apm_metric_rss">RSS</string>

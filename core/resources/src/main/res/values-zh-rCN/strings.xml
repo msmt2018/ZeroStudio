@@ -870,4 +870,5 @@
 MD5：%7$s
 SHA1：%8$s
 SHA256：%9$s</string>
+    <string name="action_color_query">颜色查询</string>
 </resources>

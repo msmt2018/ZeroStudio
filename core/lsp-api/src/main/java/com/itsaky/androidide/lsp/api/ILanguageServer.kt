@@ -45,6 +45,8 @@ import com.itsaky.androidide.lsp.models.DidCloseTextDocumentParams
 import com.itsaky.androidide.lsp.models.DidOpenTextDocumentParams
 import com.itsaky.androidide.lsp.models.DidSaveTextDocumentParams
 import com.itsaky.androidide.lsp.models.DocumentLink
+import com.itsaky.androidide.lsp.models.DocumentDiagnosticParams
+import com.itsaky.androidide.lsp.models.DocumentDiagnosticReport
 import com.itsaky.androidide.lsp.models.ExecuteCommandParams
 import com.itsaky.androidide.lsp.models.DocumentSymbolsResult
 import com.itsaky.androidide.lsp.models.ExpandSelectionParams
@@ -186,6 +188,17 @@ interface ILanguageServer {
    *   available.
    */
   suspend fun analyze(file: Path): DiagnosticResult
+
+  /**
+   * Whether this server supports pull-based diagnostics (textDocument/diagnostic).
+   */
+  fun supportsDocumentDiagnostics(): Boolean = false
+
+  /**
+   * Pull diagnostics for a document. Default returns null when unsupported.
+   */
+  suspend fun documentDiagnostics(params: DocumentDiagnosticParams): DocumentDiagnosticReport? = null
+
 
   /**
    * Format the given source code input.

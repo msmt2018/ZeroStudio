@@ -169,14 +169,16 @@ open class SignatureHelpWindow(
     val selection = editor.cursor.left()
     val charX = editor.getCharOffsetX(selection.line, selection.column)
     val margin = editor.dpUnit * 10
-    val anchor = editor.getCharOffsetY(selection.line, selection.column) - editor.rowHeight - margin
+    val caretY = editor.getCharOffsetY(selection.line, selection.column)
     val maxY = (editor.height - height).coerceAtLeast(0)
-    val aboveTop = anchor - height
-    if (aboveTop < 0) {
-      // Avoid forcing the popup below the caret so we don't cover completion window
-      return false
-    }
-    val windowY = aboveTop.coerceAtMost(maxY.toFloat())
+    val aboveTop = caretY - editor.rowHeight - margin - height
+    val belowTop = caretY + margin
+    val windowY =
+        when {
+          aboveTop >= 0 -> aboveTop
+          belowTop <= maxY -> belowTop
+          else -> maxY.toFloat()
+        }
     val windowX = (charX - width / 2).coerceAtLeast(0f)
     setLocationAbsolutely(windowX.toInt(), windowY.toInt())
     return true

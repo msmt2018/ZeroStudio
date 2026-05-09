@@ -51,6 +51,8 @@ import com.itsaky.androidide.lsp.api.ILanguageServerRegistry
 import com.itsaky.androidide.lsp.java.JavaLanguageServer
 import com.itsaky.androidide.lsp.kotlin.KotlinLanguageServerImpl
 import com.itsaky.androidide.lsp.models.DiagnosticResult
+import com.itsaky.androidide.lsp.models.DocumentDiagnosticParams
+import com.itsaky.androidide.lsp.models.DocumentDiagnosticReportKind
 import com.itsaky.androidide.lsp.servers.toml.TomlServer
 import com.itsaky.androidide.lsp.xml.XMLLanguageServer
 import com.itsaky.androidide.models.Range
@@ -390,19 +392,24 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
       val editor = _binding?.editor ?: return@launch
       val languageServer = editor.languageServer
 
-      if (
-          languageServer is KotlinLanguageServerImpl &&
-              (file.extension == "kt" || file.extension == "kts")
-      ) {
+      if (languageServer != null) {
         try {
-          val result = languageServer.analyze(file.toPath())
+          val diagnostics =
+              if (languageServer.supportsDocumentDiagnostics()) {
+                val report =
+                    languageServer.documentDiagnostics(
+                        DocumentDiagnosticParams(file = file.toPath()))
+                if (report != null && report.kind == DocumentDiagnosticReportKind.FULL) {
+                  report.diagnostics
+                } else {
+                  emptyList()
+                }
+              } else {
+                val result = languageServer.analyze(file.toPath())
+                if (result != DiagnosticResult.NO_UPDATE) result.diagnostics else emptyList()
+              }
 
-          if (result != DiagnosticResult.NO_UPDATE) {
-            withContext(Dispatchers.Main) {
-              // Access the diagnostics field directly
-              editor.updateEditorDiagnostics(result.diagnostics)
-            }
-          }
+          withContext(Dispatchers.Main) { editor.updateEditorDiagnostics(diagnostics) }
         } catch (e: Exception) {
           log.error("Failed to analyze file for diagnostics", e)
         }

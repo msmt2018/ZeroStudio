@@ -74,7 +74,9 @@ import kotlinx.coroutines.launch
 class EditorProcessApmFragment : Fragment() {
 
   private var monitorJob: Job? = null
+  private var monitor: EditorProcessApmMonitor? = null
   private val snapshotState = mutableStateOf<EditorProcessApmSnapshot?>(null)
+  private val isMonitoringState = mutableStateOf(false)
 
   override fun onCreateView(
       inflater: LayoutInflater,
@@ -87,6 +89,8 @@ class EditorProcessApmFragment : Fragment() {
             snapshot = snapshotState.value,
             onCleanProcesses = ::runCleanupViaTermux,
             onInAppSelfCleanup = ::runInAppSelfCleanup,
+            isMonitoring = isMonitoringState.value,
+            onToggleMonitoring = ::toggleMonitoring,
         )
       }
     }
@@ -94,17 +98,38 @@ class EditorProcessApmFragment : Fragment() {
 
   override fun onStart() {
     super.onStart()
-    val monitor = EditorProcessApmMonitor(requireContext().applicationContext)
-    monitorJob?.cancel()
-    monitorJob =
-        viewLifecycleOwner.lifecycleScope.launch {
-          monitor.stream(intervalMs = 1000L).collect { snapshot -> snapshotState.value = snapshot }
-        }
   }
 
   override fun onStop() {
-    monitorJob?.cancel()
+    stopMonitoring(clearSnapshot = false)
     super.onStop()
+  }
+
+  private fun toggleMonitoring() {
+    if (isMonitoringState.value) {
+      stopMonitoring(clearSnapshot = true)
+    } else {
+      startMonitoring()
+    }
+  }
+
+  private fun startMonitoring() {
+    if (isMonitoringState.value) return
+    val localMonitor = monitor ?: EditorProcessApmMonitor(requireContext().applicationContext).also { monitor = it }
+    monitorJob?.cancel()
+    isMonitoringState.value = true
+    monitorJob =
+      viewLifecycleOwner.lifecycleScope.launch {
+        localMonitor.stream(intervalMs = 1000L).collect { snapshot -> snapshotState.value = snapshot }
+      }
+  }
+
+  private fun stopMonitoring(clearSnapshot: Boolean) {
+    monitorJob?.cancel()
+    monitorJob = null
+    monitor = null
+    isMonitoringState.value = false
+    if (clearSnapshot) snapshotState.value = null
   }
 
   private fun runCleanupViaTermux() {
@@ -142,6 +167,8 @@ private fun EditorApmMonitorScreen(
     snapshot: EditorProcessApmSnapshot?,
     onCleanProcesses: () -> Unit,
     onInAppSelfCleanup: () -> Unit,
+    isMonitoring: Boolean,
+    onToggleMonitoring: () -> Unit,
 ) {
   val cpuHistory = remember { mutableStateListOf<Float>() }
   val pssHistory = remember { mutableStateListOf<Float>() }
@@ -173,6 +200,13 @@ private fun EditorApmMonitorScreen(
                     },
                 )
                 DropdownMenuItem(
+                    text = { Text(if (isMonitoring) stringResource(ResString.string.apm_stop_monitoring) else stringResource(ResString.string.apm_start_monitoring)) },
+                    onClick = {
+                      menuExpanded = false
+                      onToggleMonitoring()
+                    },
+                )
+                DropdownMenuItem(
                     text = { Text(stringResource(ResString.string.apm_menu_self_cleanup)) },
                     onClick = {
                       menuExpanded = false
@@ -190,7 +224,7 @@ private fun EditorApmMonitorScreen(
     ) {
       item {
         Text(
-            text = stringResource(ResString.string.apm_sampling_desc),
+            text = if (isMonitoring) stringResource(ResString.string.apm_sampling_desc) else stringResource(ResString.string.apm_monitoring_paused_desc),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

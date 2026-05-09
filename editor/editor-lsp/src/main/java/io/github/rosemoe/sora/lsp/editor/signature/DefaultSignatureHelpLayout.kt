@@ -85,7 +85,7 @@ class DefaultSignatureHelpLayout : SignatureHelpLayout {
   override fun applyColorScheme(colorScheme: EditorColorScheme, typeface: Typeface) {
     val editor = window.editor
     textColor = colorScheme.getColor(EditorColorScheme.SIGNATURE_TEXT_NORMAL)
-    highlightColor = colorScheme.getColor(EditorColorScheme.SIGNATURE_TEXT_HIGHLIGHTED_PARAMETER)
+    highlightColor = darkenColor(colorScheme.getColor(EditorColorScheme.SIGNATURE_TEXT_HIGHLIGHTED_PARAMETER), 0.22f)
     codeTypeface = typeface
     signatureTextView.typeface = typeface
     signatureTextView.setTextColor(textColor)
@@ -214,6 +214,14 @@ class DefaultSignatureHelpLayout : SignatureHelpLayout {
     }
     latestEditorTextSize = newSize
     applyEditorScale(newSize)
+  }
+
+  private fun darkenColor(color: Int, factor: Float): Int {
+    val a = color ushr 24 and 0xFF
+    val r = ((color ushr 16) and 0xFF) * (1f - factor)
+    val g = ((color ushr 8) and 0xFF) * (1f - factor)
+    val b = (color and 0xFF) * (1f - factor)
+    return (a shl 24) or (r.toInt().coerceIn(0, 255) shl 16) or (g.toInt().coerceIn(0, 255) shl 8) or b.toInt().coerceIn(0, 255)
   }
 
   private fun appendSignatureText(

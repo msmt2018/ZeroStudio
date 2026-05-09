@@ -28,6 +28,8 @@ import com.itsaky.androidide.actions.build.RunTasksAction
 import com.itsaky.androidide.actions.code.CodeActionsMenu
 import com.itsaky.androidide.actions.cursor.*
 import com.itsaky.androidide.actions.editor.CopyAction
+import com.itsaky.androidide.actions.editor.ColorQueryTextAction
+import com.itsaky.androidide.actions.editor.ColorQueryToolbarAction
 import com.itsaky.androidide.actions.editor.CutAction
 import com.itsaky.androidide.actions.editor.ExpandSelectionAction
 import com.itsaky.androidide.actions.editor.LongSelectAction
@@ -90,12 +92,14 @@ class EditorActivityActions {
       registry.registerAction(DisconnectLogSendersAction(context, order++))
       registry.registerAction(LaunchAppAction(context, order++))
       registry.registerAction(FindInPathAction(context, order++))
+      registry.registerAction(ColorQueryToolbarAction(context, order++))
 
       // editor text actions
       registry.registerAction(SelectAllAction(context, order++))
       registry.registerAction(CutAction(context, order++))
       registry.registerAction(CopyAction(context, order++))
       registry.registerAction(PasteAction(context, order++))
+      registry.registerAction(ColorQueryTextAction(context, order++))
       registry.registerAction(LongSelectAction(context, order++))
       registry.registerAction(ExpandSelectionAction(context, order++))
       registry.registerAction(FormatCodeAction(context, order++))

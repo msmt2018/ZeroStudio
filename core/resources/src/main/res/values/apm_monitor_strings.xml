@@ -5,6 +5,9 @@
     <string name="apm_menu_self_cleanup">In-App Self Cleanup (Pages/LSP/Tooling)</string>
     <string name="apm_title">APM Real-time Monitor</string>
     <string name="apm_sampling_desc">Sampling: 1s (Class scan: 15s)</string>
+    <string name="apm_start_monitoring">Start Monitoring</string>
+    <string name="apm_stop_monitoring">Stop Monitoring</string>
+    <string name="apm_monitoring_paused_desc">Monitoring is paused. Start monitoring to collect CPU/memory/process metrics.</string>
     <string name="apm_cpu_usage">CPU Usage (%)</string>
     <string name="apm_process_pss">Process PSS (MB)</string>
     <string name="apm_metric_uss">USS</string>
