@@ -27,6 +27,18 @@ import androidx.compose.ui.window.Dialog
 import com.smarttoolfactory.colorpicker.picker.*
 import com.smarttoolfactory.colorpicker.ui.Blue400
 import com.smarttoolfactory.extendedcolors.util.ColorUtil
+import kotlin.math.roundToInt
+
+private enum class HexOutputFormat(val label: String) {
+  HEX_LOWER("#d9d9d9"),
+  HEX_UPPER("#D9D9D9"),
+  SRGB_PERCENT("color(srgb 85% 85% 85%)"),
+  SRGB_DECIMAL("color(srgb 0.85 0.85 0.85)"),
+  RGB_PERCENT("rgb(85% 85% 85%)"),
+  RGB_INT("rgb(217 217 217)"),
+  HSL("hsl(none 0% 85%)"),
+  HWB("hwb(none 85% 15%)"),
+}
 
 @Composable
 fun ColorPickerRingDiamondHSLDialog(
@@ -105,17 +117,7 @@ fun ColorPickerRingDiamondHEXDialog(
           "CIE XYZ D50",
           "CIE XYZ D65",
       )
-  val codeFormats =
-      listOf(
-          "#d9d9d9",
-          "#D9D9D9",
-          "color(srgb 85% 85% 85%)",
-          "color(srgb 0.85 0.85 0.85)",
-          "rgb(85% 85% 85%)",
-          "rgb(217 217 217)",
-          "hsl(none 0% 85%)",
-          "hwb(none 85% 15%)",
-      )
+  val codeFormats = HexOutputFormat.entries
   var modeExpanded by remember { mutableStateOf(false) }
   var spaceExpanded by remember { mutableStateOf(false) }
   var formatExpanded by remember { mutableStateOf(false) }
@@ -140,10 +142,38 @@ fun ColorPickerRingDiamondHEXDialog(
           }
         }
       }
-      Text(selectedFormat, modifier = Modifier.padding(6.dp).clickable { formatExpanded = true }, color = Color.White)
+      val formatText =
+          when (selectedFormat) {
+            HexOutputFormat.HEX_LOWER -> hexString.lowercase()
+            HexOutputFormat.HEX_UPPER -> hexString.uppercase()
+            HexOutputFormat.SRGB_PERCENT -> {
+              val r = (color.red * 100).roundToInt()
+              val g = (color.green * 100).roundToInt()
+              val b = (color.blue * 100).roundToInt()
+              "color(srgb $r% $g% $b%)"
+            }
+            HexOutputFormat.SRGB_DECIMAL -> {
+              "color(srgb %.2f %.2f %.2f)".format(color.red, color.green, color.blue)
+            }
+            HexOutputFormat.RGB_PERCENT -> {
+              val r = (color.red * 100).roundToInt()
+              val g = (color.green * 100).roundToInt()
+              val b = (color.blue * 100).roundToInt()
+              "rgb($r% $g% $b%)"
+            }
+            HexOutputFormat.RGB_INT -> {
+              val r = (color.red * 255).roundToInt()
+              val g = (color.green * 255).roundToInt()
+              val b = (color.blue * 255).roundToInt()
+              "rgb($r $g $b)"
+            }
+            HexOutputFormat.HSL -> "hsl(none 0% ${(color.red * 100).roundToInt()}%)"
+            HexOutputFormat.HWB -> "hwb(none ${(color.red * 100).roundToInt()}% ${(100 - color.red * 100).roundToInt()}%)"
+          }
+      Text(formatText, modifier = Modifier.padding(6.dp).clickable { formatExpanded = true }, color = Color.White)
       DropdownMenu(expanded = formatExpanded, onDismissRequest = { formatExpanded = false }) {
         codeFormats.forEach { mode ->
-          DropdownMenuItem(onClick = { selectedFormat = mode; formatExpanded = false }) { Text(mode) }
+          DropdownMenuItem(onClick = { selectedFormat = mode; formatExpanded = false }) { Text(mode.label) }
         }
       }
       when (selectedMode) {
