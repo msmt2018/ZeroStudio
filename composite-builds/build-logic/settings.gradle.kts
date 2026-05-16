@@ -35,6 +35,6 @@ dependencyResolutionManagement {
   versionCatalogs { create("libs") { from(files("../../gradle/libs.versions.toml")) } }
 }
 
-include(":common", ":desugaring", ":desugaring-core", ":plugins", ":properties-parser")
+include(":common", ":desugaring", ":plugins", ":properties-parser")
 
 rootProject.name = "build-logic"
