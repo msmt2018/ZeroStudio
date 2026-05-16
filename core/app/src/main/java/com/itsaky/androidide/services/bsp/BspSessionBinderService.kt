@@ -8,10 +8,12 @@ import com.itsaky.androidide.bsp.ipc.IBspSessionCallback
 import com.itsaky.androidide.bsp.ipc.IBspSessionService
 import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.projects.builder.BuildService
+import com.itsaky.androidide.projects.internal.ProjectManagerImpl
 import com.itsaky.androidide.tooling.api.messages.InitializeProjectParams
 import com.itsaky.androidide.tooling.api.bsp.ipc.BspWireProtocol
 import java.net.URI
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import org.slf4j.LoggerFactory
 
 /**
@@ -27,6 +29,7 @@ class BspSessionBinderService : Service() {
   private val log = LoggerFactory.getLogger(BspSessionBinderService::class.java)
   private val callbacks = RemoteCallbackList<IBspSessionCallback>()
   private val executor = Executors.newSingleThreadExecutor()
+  private val lastSyncAt = AtomicLong(0L)
 
   private val binder =
     object : IBspSessionService.Stub() {
@@ -54,8 +57,25 @@ class BspSessionBinderService : Service() {
       }
 
       override fun syncWorkspace(optionsJson: String?): String {
-        publish(BspWireProtocol.TOPIC_LOG, "{\"phase\":\"sync\",\"state\":\"delegated\"}")
-        return ok("sync delegated to BSP workspace flow")
+        val service = buildService() ?: return error("BuildService unavailable")
+        executor.execute {
+          runCatching {
+            val now = System.currentTimeMillis()
+            if (now - lastSyncAt.get() < 1200) {
+              publish(BspWireProtocol.TOPIC_LOG, "{\"phase\":\"sync\",\"state\":\"throttled\"}")
+              return@runCatching
+            }
+            lastSyncAt.set(now)
+            publish(BspWireProtocol.TOPIC_LOG, "{\"phase\":\"sync\",\"state\":\"start\"}")
+            val manager = ProjectManagerImpl.getInstance()
+            val initParams = InitializeProjectParams(manager.projectDir.canonicalPath)
+            service.initializeProject(initParams).get()
+            publish(BspWireProtocol.TOPIC_LOG, "{\"phase\":\"sync\",\"state\":\"finish\"}")
+          }.onFailure {
+            publish(BspWireProtocol.TOPIC_LOG, "{\"phase\":\"sync\",\"state\":\"error\"}")
+          }
+        }
+        return ok("sync submitted")
       }
 
       override fun compile(targetIdsJson: String?, optionsJson: String?): String {
