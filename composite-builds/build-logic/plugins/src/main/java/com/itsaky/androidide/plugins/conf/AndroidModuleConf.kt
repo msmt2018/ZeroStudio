@@ -75,6 +75,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     return LocalDate.now().format(dateFormatter)
   }
 
+  @Suppress("DEPRECATION")
   extensions.getByType(BaseExtension::class.java).run {
     compileSdkVersion(BuildConfig.compileSdk)
     lintOptions.isCheckDependencies = true

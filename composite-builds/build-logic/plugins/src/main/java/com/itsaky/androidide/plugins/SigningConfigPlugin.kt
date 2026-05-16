@@ -35,6 +35,7 @@ import org.gradle.api.Project
  */
 class SigningConfigPlugin : Plugin<Project> {
 
+  @Suppress("DEPRECATION")
   override fun apply(target: Project) {
     target.run {
       if (isFDroidBuild) {

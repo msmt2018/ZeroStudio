@@ -3,7 +3,7 @@ package com.itsaky.androidide.plugins.tasks
 import groovy.json.JsonSlurper
 import java.io.File
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.net.URLEncoder
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -653,7 +653,7 @@ open class ZeroAutoTranslateTask : DefaultTask() {
       }
 
       fun execute(): String {
-        val conn = URL(url).openConnection() as HttpURLConnection
+        val conn = URI.create(url).toURL().openConnection() as HttpURLConnection
         conn.requestMethod = method
         conn.connectTimeout = 15000
         conn.readTimeout = 15000

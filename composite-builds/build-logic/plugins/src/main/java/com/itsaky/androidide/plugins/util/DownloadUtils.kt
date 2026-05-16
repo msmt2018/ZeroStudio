@@ -20,7 +20,7 @@ package com.itsaky.androidide.plugins.util
 import java.io.File
 import java.math.BigInteger
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.security.DigestInputStream
 import java.security.MessageDigest
 import org.gradle.api.GradleException
@@ -63,7 +63,7 @@ object DownloadUtils {
 
     file.parentFile.mkdirs()
 
-    val connection = URL(remoteUrl).openConnection() as HttpURLConnection
+    val connection = URI.create(remoteUrl).toURL().openConnection() as HttpURLConnection
     connection.instanceFollowRedirects = true
 
     file.outputStream().buffered().use { out ->

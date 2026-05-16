@@ -31,6 +31,7 @@ import org.gradle.api.Project
  */
 class AndroidIDEPlugin : Plugin<Project> {
 
+  @Suppress("DEPRECATION")
   override fun apply(target: Project) = target.run {
     if (project.path == rootProject.path) {
       throw GradleException("Cannot apply ${AndroidIDEPlugin::class.simpleName} to root project")
@@ -62,6 +63,6 @@ class AndroidIDEPlugin : Plugin<Project> {
 
     logger.info("${project.path} will run task '$taskName' for tests in CI")
 
-    project.tasks.create("runTestsInCI") { dependsOn(taskName) }
+    project.tasks.register("runTestsInCI") { dependsOn(taskName) }
   }
 }
