@@ -28,9 +28,14 @@ import androidx.core.app.NotificationManagerCompat
 import com.blankj.utilcode.util.ResourceUtils
 import com.blankj.utilcode.util.ZipUtils
 import ch.epfl.scala.bsp4j.BuildServer
+import ch.epfl.scala.bsp4j.BuildTargetIdentifier
+import ch.epfl.scala.bsp4j.CompileParams
+import ch.epfl.scala.bsp4j.TestParams
 import ch.epfl.scala.bsp4j.ExitBuildParams
 import ch.epfl.scala.bsp4j.InitializeBuildParams
 import ch.epfl.scala.bsp4j.OnBuildInitializedParams
+import ch.epfl.scala.bsp4j.TaskId
+import ch.epfl.scala.bsp4j.WorkspaceBuildTargetsParams
 import com.itsaky.androidide.BuildConfig
 import com.itsaky.androidide.R.*
 import com.itsaky.androidide.app.BaseApplication
@@ -94,6 +99,7 @@ class GradleBuildService :
   private var outputReaderJob: Job? = null
   private var notificationManager: NotificationManager? = null
   private var bspServer: BuildServer? = null
+  @Volatile private var currentBspTaskId: TaskId? = null
   private var eventListener: EventListener? = null
   private var isReleaseVariant = false
 
@@ -571,134 +577,44 @@ class GradleBuildService :
     * - The implementation below resolves OutOfMemory exceptions seamlessly.
     */
 
-    return performBuildTasks(
-        CompletableFuture.supplyAsync {
-          val buildInfo = BuildInfo(tasksList)
-          prepareBuild(buildInfo)
-
-          try {
-            val projectDir = ProjectManagerImpl.getInstance().projectDir
-            val gradlewPath = File(projectDir, "gradlew").absolutePath
-
-            val command = mutableListOf("sh", gradlewPath)
-            command.addAll(tasks)
-
-            val buildArgs = getBuildArguments().get()
-            command.addAll(buildArgs)
-
-            log.info("Executing command: ${command.joinToString(" ")}")
-
-            val processBuilder = ProcessBuilder(command)
-            processBuilder.directory(projectDir)
-
-            // Get Termux environment
-            val termuxEnv = TermuxShellEnvironment().getEnvironment(this@GradleBuildService, false)
-
-            // Add custom environment variables from Environment class
-            val customEnv = HashMap<String, String>()
-            Environment.putEnvironment(customEnv, false)
-
-            // Merge environments
-            val finalEnv = processBuilder.environment()
-            finalEnv.putAll(termuxEnv)
-            finalEnv.putAll(customEnv)
-
-            // Ensure PATH includes BIN_DIR for clang, python, etc.
-            val currentPath = finalEnv["PATH"] ?: ""
-            val binDirPath = Environment.BIN_DIR.absolutePath
-            val prefixBinPath = File(Environment.PREFIX, "bin").absolutePath
-
-            // Add BIN_DIR and PREFIX/bin to PATH if not already present
-            val pathEntries = mutableListOf<String>()
-            if (!currentPath.contains(binDirPath)) {
-              pathEntries.add(binDirPath)
-            }
-            if (!currentPath.contains(prefixBinPath)) {
-              pathEntries.add(prefixBinPath)
-            }
-            pathEntries.add(currentPath)
-
-            finalEnv["PATH"] = pathEntries.filter { it.isNotEmpty() }.joinToString(":")
-
-            // Add LD_LIBRARY_PATH for native libraries
-            val ldLibraryPath = finalEnv["LD_LIBRARY_PATH"] ?: ""
-            val libDirPath = Environment.LIB_DIR.absolutePath
-            finalEnv["LD_LIBRARY_PATH"] =
-                if (ldLibraryPath.isEmpty()) {
-                  libDirPath
-                } else {
-                  "$libDirPath:$ldLibraryPath"
-                }
-
-            // Set TMPDIR
-            finalEnv["TMPDIR"] = Environment.TMP_DIR.absolutePath
-
-            log.info("PATH set to: ${finalEnv["PATH"]}")
-            log.info("LD_LIBRARY_PATH set to: ${finalEnv["LD_LIBRARY_PATH"]}")
-
-            val process = processBuilder.start()
-            currentBuildProcess = process
-
-            val outputReader = process.inputStream.bufferedReader()
-            val errorReader = process.errorStream.bufferedReader()
-
-            val outputReaderJob =
-                buildServiceScope.launch(Dispatchers.IO) {
-                  try {
-                    outputReader.useLines { lines -> lines.forEach { line -> logOutput(line) } }
-                  } catch (error: Throwable) {
-                    if (shouldIgnoreProcessStreamError(error)) {
-                      log.debug("Ignoring gradle stdout stream close during cancellation/teardown")
-                    } else {
-                      log.error("Failed while reading gradle stdout", error)
-                    }
-                  }
-                }
-
-            val errorReaderJob =
-                buildServiceScope.launch(Dispatchers.IO) {
-                  try {
-                    errorReader.useLines { lines -> lines.forEach { line -> logOutput(line) } }
-                  } catch (error: Throwable) {
-                    if (shouldIgnoreProcessStreamError(error)) {
-                      log.debug("Ignoring gradle stderr stream close during cancellation/teardown")
-                    } else {
-                      log.error("Failed while reading gradle stderr", error)
-                    }
-                  }
-                }
-
-            val exitCode = process.waitFor()
-
-            kotlinx.coroutines.runBlocking {
-              outputReaderJob.join()
-              errorReaderJob.join()
-            }
-            currentBuildProcess = null
-
-            val result =
-                if (exitCode == 0) {
-                  TaskExecutionResult(true, null)
-                } else {
-                  TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
-                }
-
-            if (result.isSuccessful) {
-              onBuildSuccessful(BuildResult(tasksList))
-            } else {
-              onBuildFailed(BuildResult(tasksList))
-            }
-
-            result
-          } catch (e: Exception) {
-            log.error("Failed to execute gradlew with sh", e)
-            val result = TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
-            onBuildFailed(BuildResult(tasksList))
-            currentBuildProcess = null
-            result
-          }
+    return performBuildTasks(CompletableFuture.supplyAsync {
+      prepareBuild(BuildInfo(tasksList))
+      try {
+        val targets = bspServer!!.workspaceBuildTargets(WorkspaceBuildTargetsParams()).get().targets
+            .map { it.id }
+        if (targets.isEmpty()) {
+          return@supplyAsync TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
         }
-    )
+
+        val taskId = TaskId("androidide-${System.currentTimeMillis()}")
+        currentBspTaskId = taskId
+        val runTests = tasksList.any { it.contains("test", true) }
+
+        val statusCode = if (runTests) {
+          val p = TestParams(targets)
+          p.originId = taskId.id
+          bspServer!!.buildTargetTest(p).get().statusCode
+        } else {
+          val p = CompileParams(targets)
+          p.originId = taskId.id
+          p.arguments = getBuildArguments().get()
+          bspServer!!.buildTargetCompile(p).get().statusCode
+        }
+
+        val ok = statusCode == 1 || statusCode == 0
+        val result = if (ok) TaskExecutionResult(true, null)
+          else TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
+        if (result.isSuccessful) onBuildSuccessful(BuildResult(tasksList)) else onBuildFailed(BuildResult(tasksList))
+        result
+      } catch (e: Exception) {
+        log.error("Failed to execute BSP build/test", e)
+        val result = TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
+        onBuildFailed(BuildResult(tasksList))
+        result
+      } finally {
+        currentBspTaskId = null
+      }
+    })
   }
 
   /** Kills any running gradlew processes forcefully */
@@ -726,10 +642,12 @@ class GradleBuildService :
 
   override fun cancelCurrentBuild(): CompletableFuture<BuildCancellationRequestResult> {
     checkServerStarted()
-    killGradlewProcesses()
-    currentBuildProcess?.destroy()
-
-    val cancellationFuture = CompletableFuture.completedFuture(BuildCancellationRequestResult(true, null))
+    val taskId = currentBspTaskId
+    val cancellationFuture = if (taskId != null) {
+      bspServer!!.buildCancel(taskId).handle { _, _ -> BuildCancellationRequestResult(true, null) }
+    } else {
+      CompletableFuture.completedFuture(BuildCancellationRequestResult(true, BuildCancellationRequestResult.Reason.NO_RUNNING_BUILD))
+    }
 
     buildServiceScope.launch {
       try {
