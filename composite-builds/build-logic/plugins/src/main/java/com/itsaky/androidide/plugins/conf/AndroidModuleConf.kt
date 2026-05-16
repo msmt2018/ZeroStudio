@@ -76,7 +76,11 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     return LocalDate.now().format(dateFormatter)
   }
 
-  extensions.getByType(CommonExtension::class.java).run {
+  @Suppress("UNCHECKED_CAST")
+  val commonExt =
+      extensions.getByType(CommonExtension::class.java) as CommonExtension<*, *, *, *, *, *>
+
+  commonExt.run {
     compileSdk = BuildConfig.compileSdk
     lint { checkDependencies = true }
     packaging {
