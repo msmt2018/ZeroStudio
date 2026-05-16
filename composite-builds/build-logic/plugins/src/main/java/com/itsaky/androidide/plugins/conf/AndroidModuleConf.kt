@@ -153,11 +153,6 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     }
     ext.defaultConfig {
       minSdk = BuildConfig.minSdk
-      targetSdk = BuildConfig.targetSdk
-      versionCode = projectVersionCode
-      versionName = "v" + getCurrentDateVersion()
-      multiDexEnabled = true
-      testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
       ndk {
         abiFilters.clear()
         abiFilters += flavorsAbis.keys
@@ -211,7 +206,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     appExt.buildTypes.getByName("debug") { isMinifyEnabled = false }
     appExt.buildTypes.getByName("release") {
       isMinifyEnabled = true
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      proguardFiles("proguard-rules.pro")
     }
   } else {
     val libExt = extensions.getByType(LibraryExtension::class.java)
@@ -219,7 +214,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     libExt.buildTypes.getByName("debug") { isMinifyEnabled = false }
     libExt.buildTypes.getByName("release") {
       isMinifyEnabled = false
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      proguardFiles("proguard-rules.pro")
     }
   }
 }
