@@ -33,6 +33,7 @@ import org.eclipse.lsp4j.jsonrpc.services.JsonSegment
  * @author Akash Yadav
  */
 @JsonSegment("server")
+@Deprecated("Use BSP endpoints via tooling.api.bsp package")
 interface IToolingApiServer {
 
   /** Returns the metadata about the tooling server. */

@@ -1,0 +1,7 @@
+{
+  "name": "AndroidIDE Gradle BSP",
+  "version": "1.0.0",
+  "bspVersion": "2.2.0",
+  "languages": ["java", "kotlin"],
+  "argv": ["./gradlew", "--quiet", "bsp"]
+}

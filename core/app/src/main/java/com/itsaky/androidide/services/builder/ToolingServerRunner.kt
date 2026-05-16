@@ -18,12 +18,10 @@
 package com.itsaky.androidide.services.builder
 
 import ch.qos.logback.core.CoreConstants
+import ch.epfl.scala.bsp4j.BuildServer
 import com.itsaky.androidide.shell.executeProcessAsync
 import com.itsaky.androidide.tasks.cancelIfActive
-import com.itsaky.androidide.tooling.api.IProject
-import com.itsaky.androidide.tooling.api.IToolingApiClient
-import com.itsaky.androidide.tooling.api.IToolingApiServer
-import com.itsaky.androidide.tooling.api.util.ToolingApiLauncher
+import com.itsaky.androidide.tooling.api.bsp.BspServerConnection
 import com.itsaky.androidide.utils.Environment
 import com.termux.shared.reflection.ReflectionUtils
 import java.io.InputStream
@@ -95,7 +93,8 @@ internal class ToolingServerRunner(
                       // objects from the JDK, their package name must be declared here with
                       // '--add-opens' to prevent InaccessibleObjectException.
                       // For example, some of the model classes has members of type java.io.File.
-                      // When sending/receiving these type of objects using LSP4J, members of
+                      // When sending/receiving these type of objects over JSON-RPC (legacy
+                      // LSP4J transport and BSP migration phase), members of
                       // these objects are reflectively accessed by Gson. If we do no specify
                       // '--add-opens' for 'java.io' (for java.io.File) package, JVM will throw an
                       // InaccessibleObjectException.
@@ -128,17 +127,15 @@ internal class ToolingServerRunner(
               val outputStream = process.outputStream
               val errorStream = process.errorStream
 
-              val launcher =
-                  ToolingApiLauncher.newClientLauncher(
+              val bspConnection =
+                  BspServerConnection(
                       observer!!.getClient(),
                       inputStream,
                       outputStream,
                   )
-
-              val future = launcher.startListening()
+              val future = bspConnection.startListening()
               observer?.onListenerStarted(
-                  server = launcher.remoteProxy as IToolingApiServer,
-                  projectProxy = launcher.remoteProxy as IProject,
+                  bspServer = bspConnection.server,
                   errorStream = errorStream,
               )
 
@@ -200,14 +197,13 @@ internal class ToolingServerRunner(
   interface Observer {
 
     fun onListenerStarted(
-        server: IToolingApiServer,
-        projectProxy: IProject,
+        bspServer: BuildServer,
         errorStream: InputStream,
     )
 
     fun onServerExited(exitCode: Int)
 
-    fun getClient(): IToolingApiClient
+    fun getClient(): Any
   }
 
   /** Callback to listen for Tooling API server start event. */
