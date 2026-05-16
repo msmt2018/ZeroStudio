@@ -17,7 +17,7 @@
 
 package com.itsaky.androidide.plugins
 
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.ApplicationExtension
 import com.itsaky.androidide.build.config.isFDroidBuild
 import com.itsaky.androidide.plugins.util.isAndroidModule
 import org.gradle.api.GradleException
@@ -31,7 +31,6 @@ import org.gradle.api.Project
  */
 class AndroidIDEPlugin : Plugin<Project> {
 
-  @Suppress("DEPRECATION")
   override fun apply(target: Project) = target.run {
     if (project.path == rootProject.path) {
       throw GradleException("Cannot apply ${AndroidIDEPlugin::class.simpleName} to root project")
@@ -47,11 +46,11 @@ class AndroidIDEPlugin : Plugin<Project> {
     }
 
     if (isFDroidBuild && project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
-      val baseExtension = extensions.getByType(BaseExtension::class.java)
+      val appExtension = extensions.getByType(ApplicationExtension::class.java)
       logger.warn("Building for F-Droid with configuration:")
-      logger.warn("applicationId = ${baseExtension.defaultConfig.applicationId}")
-      logger.warn("versionName = ${baseExtension.defaultConfig.versionName}")
-      logger.warn("versionCode = ${baseExtension.defaultConfig.versionCode}")
+      logger.warn("applicationId = ${appExtension.defaultConfig.applicationId}")
+      logger.warn("versionName = ${appExtension.defaultConfig.versionName}")
+      logger.warn("versionCode = ${appExtension.defaultConfig.versionCode}")
       logger.warn("--- x --- x ---")
     }
 

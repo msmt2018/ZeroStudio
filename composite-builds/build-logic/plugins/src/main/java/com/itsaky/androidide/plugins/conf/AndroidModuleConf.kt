@@ -21,7 +21,8 @@ import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.FilterConfiguration
 import com.android.build.api.variant.impl.getFilter
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.CommonExtension
+import com.android.build.api.dsl.ApplicationExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import com.itsaky.androidide.build.config.FDroidConfig
 import com.itsaky.androidide.build.config.isFDroidBuild
@@ -75,18 +76,18 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     return LocalDate.now().format(dateFormatter)
   }
 
-  @Suppress("DEPRECATION")
-  extensions.getByType(BaseExtension::class.java).run {
-    compileSdkVersion(BuildConfig.compileSdk)
-    lintOptions.isCheckDependencies = true
-    packagingOptions {
-      resources.excludes.addAll(
+  extensions.getByType(CommonExtension::class.java).run {
+    compileSdk = BuildConfig.compileSdk
+    lint { checkDependencies = true }
+    packaging {
+      resources {
+        excludes.addAll(
           arrayOf(
               "META-INF/CHANGES",
               "META-INF/README.md",
           )
-      )
-      resources.pickFirsts.addAll(
+        )
+        pickFirsts.addAll(
           arrayOf(
               "META-INF/eclipse.inf",
               "META-INF/LICENSE.md",
@@ -101,7 +102,8 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
               "about.ini",
               "modeling32.png",
           )
-      )
+        )
+      }
     }
 
     defaultConfig {
@@ -124,17 +126,18 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     configureCoreLibDesugaring(coreLibDesugDep)
 
     if (project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
-      packagingOptions { jniLibs { useLegacyPackaging = true } }
+      extensions.getByType(ApplicationExtension::class.java).run {
+        packaging { jniLibs { useLegacyPackaging = true } }
 
-      splits {
-        abi {
-          reset()
-          isEnable = true
-          isUniversalApk = false
-          if (isFDroidBuild) {
-            include(FDroidConfig.fDroidBuildArch!!)
-          } else {
-            include(*flavorsAbis.keys.toTypedArray())
+        splits {
+          abi {
+            isEnable = true
+            isUniversalApk = false
+            if (isFDroidBuild) {
+              include(FDroidConfig.fDroidBuildArch!!)
+            } else {
+              include(*flavorsAbis.keys.toTypedArray())
+            }
           }
         }
       }
