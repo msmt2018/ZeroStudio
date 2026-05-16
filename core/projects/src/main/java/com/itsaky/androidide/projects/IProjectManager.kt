@@ -9,10 +9,7 @@ package com.itsaky.androidide.projects
 
 import androidx.annotation.RestrictTo
 import com.android.builder.model.v2.models.ProjectSyncIssues
-import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.projects.android.AndroidModule
-import com.itsaky.androidide.projects.builder.BuildService
-import com.itsaky.androidide.tooling.api.IProject
 import com.itsaky.androidide.utils.ServiceLoader
 import java.io.File
 import java.nio.file.Path
@@ -51,9 +48,7 @@ interface IProjectManager {
   fun openProject(path: String) = openProject(File(path))
 
   @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
-  suspend fun setupProject(
-      project: IProject? = Lookup.getDefault().lookup(BuildService.KEY_PROJECT_PROXY)
-  )
+  suspend fun setupProject()
 
   suspend fun isGradleSyncNeeded(projectDir: File): Boolean
 

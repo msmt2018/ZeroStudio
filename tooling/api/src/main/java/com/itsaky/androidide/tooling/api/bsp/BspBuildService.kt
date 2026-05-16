@@ -7,6 +7,8 @@ import ch.epfl.scala.bsp4j.ExitBuildParams
 import ch.epfl.scala.bsp4j.InitializeBuildResult
 import ch.epfl.scala.bsp4j.OnBuildInitializedParams
 import ch.epfl.scala.bsp4j.TaskId
+import ch.epfl.scala.bsp4j.WorkspaceBuildTargetsParams
+import ch.epfl.scala.bsp4j.WorkspaceBuildTargetsResult
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -17,6 +19,8 @@ interface BspBuildService {
   fun initialize(rootUri: String): CompletableFuture<InitializeBuildResult>
 
   fun compile(params: CompileParams): CompletableFuture<CompileResult>
+
+  fun workspaceBuildTargets(params: WorkspaceBuildTargetsParams): CompletableFuture<WorkspaceBuildTargetsResult>
 
   fun cancel(taskId: TaskId): CompletableFuture<Any>
 
@@ -37,6 +41,10 @@ class DefaultBspBuildService(private val connection: BspServerConnection) : BspB
 
   override fun compile(params: CompileParams): CompletableFuture<CompileResult> =
     server.buildTargetCompile(params)
+
+  override fun workspaceBuildTargets(
+    params: WorkspaceBuildTargetsParams
+  ): CompletableFuture<WorkspaceBuildTargetsResult> = server.workspaceBuildTargets(params)
 
   override fun cancel(taskId: TaskId): CompletableFuture<Any> = server.buildCancel(taskId)
 
