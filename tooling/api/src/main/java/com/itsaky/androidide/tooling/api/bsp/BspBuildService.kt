@@ -1,0 +1,49 @@
+package com.itsaky.androidide.tooling.api.bsp
+
+import ch.epfl.scala.bsp4j.BuildServer
+import ch.epfl.scala.bsp4j.CompileParams
+import ch.epfl.scala.bsp4j.CompileResult
+import ch.epfl.scala.bsp4j.ExitBuildParams
+import ch.epfl.scala.bsp4j.InitializeBuildResult
+import ch.epfl.scala.bsp4j.OnBuildInitializedParams
+import ch.epfl.scala.bsp4j.TaskId
+import java.util.concurrent.CompletableFuture
+
+/**
+ * BSP-first service contract used by higher modules to avoid direct dependency on legacy RPC
+ * contracts.
+ */
+interface BspBuildService {
+  fun initialize(rootUri: String): CompletableFuture<InitializeBuildResult>
+
+  fun compile(params: CompileParams): CompletableFuture<CompileResult>
+
+  fun cancel(taskId: TaskId): CompletableFuture<Any>
+
+  fun shutdown(): CompletableFuture<Any>
+}
+
+class DefaultBspBuildService(private val connection: BspServerConnection) : BspBuildService {
+
+  private val server: BuildServer
+    get() = connection.server
+
+  override fun initialize(rootUri: String): CompletableFuture<InitializeBuildResult> {
+    return connection.initialize(rootUri).thenApply {
+      server.onBuildInitialized(OnBuildInitializedParams())
+      it
+    }
+  }
+
+  override fun compile(params: CompileParams): CompletableFuture<CompileResult> =
+    server.buildTargetCompile(params)
+
+  override fun cancel(taskId: TaskId): CompletableFuture<Any> = server.buildCancel(taskId)
+
+  override fun shutdown(): CompletableFuture<Any> {
+    return connection.shutdown().thenApply {
+      server.onBuildExit(ExitBuildParams())
+      it
+    }
+  }
+}

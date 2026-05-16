@@ -50,7 +50,7 @@ interface BuildService {
   /** Whether a build is in progress or not. */
   val isBuildInProgress: Boolean
 
-  /** Returns `true` if and only if the tooling API server has been started, `false` otherwise. */
+  /** Returns `true` if and only if the build server (legacy tooling/BSP) has been started. */
   fun isToolingServerStarted(): Boolean
 
   /** Returns the [ToolingServerMetadata] of the tooling API server. */
