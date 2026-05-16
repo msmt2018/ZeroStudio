@@ -21,7 +21,6 @@ import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.FilterConfiguration
 import com.android.build.api.variant.impl.getFilter
-import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.LibraryExtension
 import com.itsaky.androidide.build.config.BuildConfig
@@ -77,62 +76,107 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     return LocalDate.now().format(dateFormatter)
   }
 
-  val commonExt: CommonExtension =
-      if (isAppModule) {
-        extensions.getByType(ApplicationExtension::class.java)
-      } else {
-        extensions.getByType(LibraryExtension::class.java)
-      }
-
-  commonExt.run {
-    compileSdk = BuildConfig.compileSdk
-    lint { checkDependencies = true }
-    packaging {
+  fun configureSharedAndroid(ext: ApplicationExtension) {
+    ext.compileSdk = BuildConfig.compileSdk
+    ext.lint { checkDependencies = true }
+    ext.packaging {
       resources {
         excludes.addAll(
-          arrayOf(
-              "META-INF/CHANGES",
-              "META-INF/README.md",
-          )
+            arrayOf(
+                "META-INF/CHANGES",
+                "META-INF/README.md",
+            )
         )
         pickFirsts.addAll(
-          arrayOf(
-              "META-INF/eclipse.inf",
-              "META-INF/LICENSE.md",
-              "META-INF/AL2.0",
-              "META-INF/LGPL2.1",
-              "META-INF/INDEX.LIST",
-              "about_files/LICENSE-2.0.txt",
-              "plugin.xml",
-              "plugin.properties",
-              "about.mappings",
-              "about.properties",
-              "about.ini",
-              "modeling32.png",
-          )
+            arrayOf(
+                "META-INF/eclipse.inf",
+                "META-INF/LICENSE.md",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1",
+                "META-INF/INDEX.LIST",
+                "about_files/LICENSE-2.0.txt",
+                "plugin.xml",
+                "plugin.properties",
+                "about.mappings",
+                "about.properties",
+                "about.ini",
+                "modeling32.png",
+            )
         )
       }
     }
-
-    defaultConfig {
+    ext.defaultConfig {
       minSdk = BuildConfig.minSdk
       targetSdk = BuildConfig.targetSdk
       versionCode = projectVersionCode
       versionName = "v" + getCurrentDateVersion()
-
-      // required
       multiDexEnabled = true
-
       testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
-    compileOptions {
+    ext.compileOptions {
       sourceCompatibility = BuildConfig.javaVersion17
       targetCompatibility = BuildConfig.javaVersion17
     }
+    ext.testOptions { unitTests.isIncludeAndroidResources = true }
+    ext.buildFeatures.viewBinding = true
+    ext.buildFeatures.buildConfig = true
+  }
 
-    configureCoreLibDesugaring(coreLibDesugDep)
+  fun configureSharedAndroid(ext: LibraryExtension) {
+    ext.compileSdk = BuildConfig.compileSdk
+    ext.lint { checkDependencies = true }
+    ext.packaging {
+      resources {
+        excludes.addAll(
+            arrayOf(
+                "META-INF/CHANGES",
+                "META-INF/README.md",
+            )
+        )
+        pickFirsts.addAll(
+            arrayOf(
+                "META-INF/eclipse.inf",
+                "META-INF/LICENSE.md",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1",
+                "META-INF/INDEX.LIST",
+                "about_files/LICENSE-2.0.txt",
+                "plugin.xml",
+                "plugin.properties",
+                "about.mappings",
+                "about.properties",
+                "about.ini",
+                "modeling32.png",
+            )
+        )
+      }
+    }
+    ext.defaultConfig {
+      minSdk = BuildConfig.minSdk
+      targetSdk = BuildConfig.targetSdk
+      versionCode = projectVersionCode
+      versionName = "v" + getCurrentDateVersion()
+      multiDexEnabled = true
+      testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+      ndk {
+        abiFilters.clear()
+        abiFilters += flavorsAbis.keys
+      }
+    }
+    ext.compileOptions {
+      sourceCompatibility = BuildConfig.javaVersion17
+      targetCompatibility = BuildConfig.javaVersion17
+    }
+    ext.testOptions { unitTests.isIncludeAndroidResources = true }
+    ext.buildFeatures.viewBinding = true
+    ext.buildFeatures.buildConfig = true
+  }
 
+  configureCoreLibDesugaring(coreLibDesugDep)
+
+  if (isAppModule) {
+    val appExt = extensions.getByType(ApplicationExtension::class.java)
+    configureSharedAndroid(appExt)
     if (project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
       extensions.getByType(ApplicationExtension::class.java).run {
         packaging { jniLibs { useLegacyPackaging = true } }
@@ -163,39 +207,20 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
           }
         }
       }
-    } else {
-      defaultConfig {
-        ndk {
-          abiFilters.clear()
-          abiFilters += flavorsAbis.keys
-        }
-      }
     }
-
-    buildTypes.getByName("debug") { isMinifyEnabled = false }
-    buildTypes.getByName("release") {
-
-      // from AGP 8.4.0 onwards, there are some behavioral changes in R8
-      // enabling R8 on library projects results in missing class errors
-      // see https://issuetracker.google.com/issues/338411137#comment11
-      isMinifyEnabled = isAppModule
+    appExt.buildTypes.getByName("debug") { isMinifyEnabled = false }
+    appExt.buildTypes.getByName("release") {
+      isMinifyEnabled = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
-
-    // development build type
-    // similar to 'release', but disables proguard/r8
-    // this build type can be used to gain release-like performance at runtime
-    // the build are faster for this build type as compared to 'release'
-    // buildTypes.register("dev") {
-    // initWith(buildTypes.getByName("release"))
-    // isMinifyEnabled = false
-    // }
-
-    testOptions { unitTests.isIncludeAndroidResources = true }
-
-    buildFeatures.viewBinding = true
-    buildFeatures.buildConfig = true
-    // buildFeatures.compose = true
+  } else {
+    val libExt = extensions.getByType(LibraryExtension::class.java)
+    configureSharedAndroid(libExt)
+    libExt.buildTypes.getByName("debug") { isMinifyEnabled = false }
+    libExt.buildTypes.getByName("release") {
+      isMinifyEnabled = false
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+    }
   }
 }
 
