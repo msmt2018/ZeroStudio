@@ -45,9 +45,6 @@ import com.itsaky.androidide.services.ToolingServerNotStartedException
 import com.itsaky.androidide.services.builder.ToolingServerRunner.OnServerStartListener
 import com.itsaky.androidide.tasks.ifCancelledOrInterrupted
 import com.itsaky.androidide.tasks.runOnUiThread
-import com.itsaky.androidide.tooling.api.ForwardingToolingApiClient
-import com.itsaky.androidide.tooling.api.IToolingApiClient
-import com.itsaky.androidide.tooling.api.IToolingApiServer
 import com.itsaky.androidide.tooling.api.LogSenderConfig.PROPERTY_LOGSENDER_ENABLED
 import com.itsaky.androidide.tooling.api.messages.InitializeProjectParams
 import com.itsaky.androidide.tooling.api.messages.LogMessageParams
@@ -84,24 +81,18 @@ import org.slf4j.LoggerFactory
  * @author Akash Yadav
  */
 class GradleBuildService :
-    Service(), BuildService, IToolingApiClient, ToolingServerRunner.Observer {
+    Service(), BuildService, ToolingServerRunner.Observer {
 
   private var mBinder: GradleServiceBinder? = null
   private var isToolingServerStarted = false
   override var isBuildInProgress = false
     private set
 
-  /**
-   * We do not provide direct access to GradleBuildService instance to the Tooling API launcher as
-   * it may cause memory leaks. Instead, we create another client object which forwards all calls to
-   * us. So, when the service is destroyed, we release the reference to the service from this
-   * client.
-   */
-  private var _toolingApiClient: ForwardingToolingApiClient? = null
+  /** Lightweight BSP client endpoint object for JSON-RPC launcher local services. */
+  private val bspClientEndpoint: Any = Any()
   private var toolingServerRunner: ToolingServerRunner? = null
   private var outputReaderJob: Job? = null
   private var notificationManager: NotificationManager? = null
-  private var server: IToolingApiServer? = null
   private var bspServer: BuildServer? = null
   private var eventListener: EventListener? = null
   private var isReleaseVariant = false
@@ -146,7 +137,7 @@ class GradleBuildService :
   }
 
   override fun isToolingServerStarted(): Boolean {
-    return isToolingServerStarted && server != null
+    return isToolingServerStarted && bspServer != null
   }
 
   private fun showNotification(
@@ -211,17 +202,6 @@ class GradleBuildService :
     lookup.unregister(BuildService.KEY_BUILD_SERVICE)
     lookup.unregister(BuildService.KEY_PROJECT_PROXY)
 
-    server?.also { server ->
-      try {
-        log.info("Shutting down Tooling API server...")
-        // send the shutdown request but do not wait for the server to respond
-        // the service should not block the onDestroy call in order to avoid timeouts
-        // the tooling server must release resources and exit automatically
-        server.shutdown().get(1, TimeUnit.SECONDS)
-      } catch (e: Throwable) {
-        log.error("Failed to shutdown Tooling API server", e)
-      }
-    }
     bspServer?.also { bsp ->
       try {
         bsp.buildShutdown().get(1, TimeUnit.SECONDS)
@@ -234,9 +214,6 @@ class GradleBuildService :
     log.debug("Cancelling tooling server runner...")
     toolingServerRunner?.release()
     toolingServerRunner = null
-
-    _toolingApiClient?.client = null
-    _toolingApiClient = null
 
     log.debug("Cancelling tooling server output reader job...")
     outputReaderJob?.cancel()
@@ -358,14 +335,9 @@ class GradleBuildService :
     stopForeground(STOP_FOREGROUND_REMOVE)
   }
 
-  override fun getClient(): IToolingApiClient {
-    if (_toolingApiClient == null) {
-      _toolingApiClient = ForwardingToolingApiClient(this)
-    }
-    return _toolingApiClient!!
-  }
+  override fun getClient(): Any = bspClientEndpoint
 
-  override fun logMessage(params: LogMessageParams) {
+  fun logMessage(params: LogMessageParams) {
     val logger = LoggerFactory.getLogger(params.tag)
     when (params.level) {
       'D' -> logger.debug(params.message)
@@ -377,16 +349,16 @@ class GradleBuildService :
     }
   }
 
-  override fun logOutput(line: String) {
+  fun logOutput(line: String) {
     eventListener?.onOutput(line)
   }
 
-  override fun prepareBuild(buildInfo: BuildInfo) {
+  fun prepareBuild(buildInfo: BuildInfo) {
     updateNotification(getString(R.string.build_status_in_progress), true)
     eventListener?.prepareBuild(buildInfo)
   }
 
-  override fun onBuildSuccessful(result: BuildResult) {
+  fun onBuildSuccessful(result: BuildResult) {
     updateNotification(getString(R.string.build_status_sucess), false)
     eventListener?.onBuildSuccessful(result.tasks)
     if (result.tasks.any { it.contains("assemble", true) || it.contains("bundle", true) }) {
@@ -397,16 +369,16 @@ class GradleBuildService :
     }
   }
 
-  override fun onBuildFailed(result: BuildResult) {
+  fun onBuildFailed(result: BuildResult) {
     updateNotification(getString(R.string.build_status_failed), false)
     eventListener?.onBuildFailed(result.tasks)
   }
 
-  override fun onProgressEvent(event: ProgressEvent) {
+  fun onProgressEvent(event: ProgressEvent) {
     eventListener?.onProgressEvent(event)
   }
 
-  override fun getBuildArguments(): CompletableFuture<List<String>> {
+  fun getBuildArguments(): CompletableFuture<List<String>> {
     val extraArgs = ArrayList<String>()
 
     if (DevOpsPreferences.logsenderEnabled) {
@@ -450,7 +422,7 @@ class GradleBuildService :
     return CompletableFuture.completedFuture(extraArgs)
   }
 
-  override fun checkGradleWrapperAvailability(): CompletableFuture<GradleWrapperCheckResult> {
+  fun checkGradleWrapperAvailability(): CompletableFuture<GradleWrapperCheckResult> {
     return if (isGradleWrapperAvailable)
         CompletableFuture.completedFuture(GradleWrapperCheckResult(true))
     else installWrapper()
@@ -507,12 +479,7 @@ class GradleBuildService :
 
   override fun metadata(): CompletableFuture<ToolingServerMetadata> {
     checkServerStarted()
-    if (server == null && bspServer != null) {
-      return CompletableFuture.completedFuture(
-          ToolingServerMetadata(pid ?: -1)
-      )
-    }
-    return server!!.metadata()
+    return CompletableFuture.completedFuture(ToolingServerMetadata(pid ?: -1))
   }
 
   override fun initializeProject(
@@ -520,18 +487,15 @@ class GradleBuildService :
   ): CompletableFuture<InitializeResult> {
     checkServerStarted()
     Objects.requireNonNull(params)
-    if (server == null && bspServer != null) {
-      val initialize = InitializeBuildParams()
-      initialize.displayName = "AndroidIDE"
-      initialize.version = BuildConfig.VERSION_NAME
-      initialize.bspVersion = "2.2.0"
-      initialize.rootUri = File(params.directory).toURI().toString()
-      return performBuildTasks(bspServer!!.buildInitialize(initialize).thenApply {
-        bspServer!!.onBuildInitialized(OnBuildInitializedParams())
-        InitializeResult(true, null)
-      })
-    }
-    return performBuildTasks(server!!.initialize(params)).thenApply { result ->
+    val initialize = InitializeBuildParams()
+    initialize.displayName = "AndroidIDE"
+    initialize.version = BuildConfig.VERSION_NAME
+    initialize.bspVersion = "2.2.0"
+    initialize.rootUri = File(params.directory).toURI().toString()
+    return performBuildTasks(bspServer!!.buildInitialize(initialize).thenApply {
+      bspServer!!.onBuildInitialized(OnBuildInitializedParams())
+      InitializeResult(true, null)
+    }).thenApply { result ->
       if (result != null) {
         buildServiceScope.launch {
           try {
@@ -762,13 +726,10 @@ class GradleBuildService :
 
   override fun cancelCurrentBuild(): CompletableFuture<BuildCancellationRequestResult> {
     checkServerStarted()
-    if (server == null && bspServer != null) {
-      killGradlewProcesses()
-      currentBuildProcess?.destroy()
-      return CompletableFuture.completedFuture(BuildCancellationRequestResult(true, null))
-    }
+    killGradlewProcesses()
+    currentBuildProcess?.destroy()
 
-    val cancellationFuture = server!!.cancelCurrentBuild()
+    val cancellationFuture = CompletableFuture.completedFuture(BuildCancellationRequestResult(true, null))
 
     buildServiceScope.launch {
       try {
@@ -802,14 +763,13 @@ class GradleBuildService :
         currentBuildProcess = null
 
         try {
-          server?.shutdown()?.get(2, TimeUnit.SECONDS)
+          bspServer?.buildShutdown()?.get(2, TimeUnit.SECONDS)
         } catch (e: Throwable) {
           log.warn("Tooling server shutdown during cleanup failed", e)
         }
 
         toolingServerRunner?.release()
         toolingServerRunner = null
-        server = null
         isToolingServerStarted = false
 
         Runtime.getRuntime().gc()
@@ -893,19 +853,19 @@ class GradleBuildService :
       null
     } else
         object : EventListener {
-          override fun prepareBuild(buildInfo: BuildInfo) {
+          fun prepareBuild(buildInfo: BuildInfo) {
             runOnUiThread { listener.prepareBuild(buildInfo) }
           }
 
-          override fun onBuildSuccessful(tasks: List<String?>) {
+          fun onBuildSuccessful(tasks: List<String?>) {
             runOnUiThread { listener.onBuildSuccessful(tasks) }
           }
 
-          override fun onProgressEvent(event: ProgressEvent) {
+          fun onProgressEvent(event: ProgressEvent) {
             runOnUiThread { listener.onProgressEvent(event) }
           }
 
-          override fun onBuildFailed(tasks: List<String?>) {
+          fun onBuildFailed(tasks: List<String?>) {
             runOnUiThread { listener.onBuildFailed(tasks) }
           }
 
