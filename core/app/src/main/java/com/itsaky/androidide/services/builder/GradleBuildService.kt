@@ -70,6 +70,7 @@ import java.io.InputStream
 import java.lang.ref.WeakReference
 import java.util.Objects
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.Collections
 import kotlinx.coroutines.CoroutineName
@@ -100,12 +101,15 @@ class GradleBuildService :
   private var notificationManager: NotificationManager? = null
   private var bspServer: BuildServer? = null
   @Volatile private var currentBspTaskId: TaskId? = null
+  @Volatile private var cachedTargets: List<BuildTargetIdentifier>? = null
+  @Volatile private var lastOutputAtMillis: Long = 0L
   private var eventListener: EventListener? = null
   private var isReleaseVariant = false
 
   @Volatile private var currentBuildProcess: Process? = null
 
   private val serviceJob = SupervisorJob()
+  private val buildExecutor = Executors.newSingleThreadExecutor()
   private val buildServiceScope =
       CoroutineScope(serviceJob + Dispatchers.Default + CoroutineName("GradleBuildService"))
   private val pendingBuildRequests = Collections.synchronizedSet(mutableSetOf<CompletableFuture<*>>())
@@ -234,6 +238,7 @@ class GradleBuildService :
     currentBuildProcess?.destroy()
     currentBuildProcess = null
     serviceJob.cancel()
+    buildExecutor.shutdownNow()
 
     isToolingServerStarted = false
     super.onDestroy()
@@ -356,6 +361,12 @@ class GradleBuildService :
   }
 
   fun logOutput(line: String) {
+    val now = System.currentTimeMillis()
+    // Throttle high-frequency output bursts to reduce UI/event pressure.
+    if (now - lastOutputAtMillis < 20 && !line.contains("error", true) && !line.contains("fail", true)) {
+      return
+    }
+    lastOutputAtMillis = now
     eventListener?.onOutput(line)
   }
 
@@ -577,11 +588,10 @@ class GradleBuildService :
     * - The implementation below resolves OutOfMemory exceptions seamlessly.
     */
 
-    return performBuildTasks(CompletableFuture.supplyAsync {
+    return performBuildTasks(CompletableFuture.supplyAsync({
       prepareBuild(BuildInfo(tasksList))
       try {
-        val targets = bspServer!!.workspaceBuildTargets(WorkspaceBuildTargetsParams()).get().targets
-            .map { it.id }
+        val targets = resolveBuildTargets()
         if (targets.isEmpty()) {
           return@supplyAsync TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
         }
@@ -614,7 +624,14 @@ class GradleBuildService :
       } finally {
         currentBspTaskId = null
       }
-    })
+    }, buildExecutor))
+  }
+
+  private fun resolveBuildTargets(): List<BuildTargetIdentifier> {
+    cachedTargets?.let { if (it.isNotEmpty()) return it }
+    val targets = bspServer!!.workspaceBuildTargets(WorkspaceBuildTargetsParams()).get().targets.map { it.id }
+    cachedTargets = targets
+    return targets
   }
 
   /** Kills any running gradlew processes forcefully */
@@ -685,6 +702,8 @@ class GradleBuildService :
         } catch (e: Throwable) {
           log.warn("Tooling server shutdown during cleanup failed", e)
         }
+
+        cachedTargets = null
 
         toolingServerRunner?.release()
         toolingServerRunner = null
