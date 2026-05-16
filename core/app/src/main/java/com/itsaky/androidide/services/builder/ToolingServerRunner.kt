@@ -95,7 +95,8 @@ internal class ToolingServerRunner(
                       // objects from the JDK, their package name must be declared here with
                       // '--add-opens' to prevent InaccessibleObjectException.
                       // For example, some of the model classes has members of type java.io.File.
-                      // When sending/receiving these type of objects using LSP4J, members of
+                      // When sending/receiving these type of objects over JSON-RPC (legacy
+                      // LSP4J transport and BSP migration phase), members of
                       // these objects are reflectively accessed by Gson. If we do no specify
                       // '--add-opens' for 'java.io' (for java.io.File) package, JVM will throw an
                       // InaccessibleObjectException.

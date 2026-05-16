@@ -24,10 +24,5 @@ This repository has started migrating the Gradle tooling transport layer from cu
 
 ## Upstream BSP sources
 
-Attempted to clone upstream BSP spec repository:
-
-```bash
-git clone https://github.com/build-server-protocol/build-server-protocol third_party/build-server-protocol
-```
-
-The current environment returned HTTP 403 for GitHub connectivity, so vendoring upstream sources must be retried in a network-enabled runner.
+Migration uses the **published BSP SDK from Maven Central** (`ch.epfl.scala:bsp4j`) as the canonical protocol model.
+No local clone of `build-server-protocol/build-server-protocol` is required for runtime integration.
