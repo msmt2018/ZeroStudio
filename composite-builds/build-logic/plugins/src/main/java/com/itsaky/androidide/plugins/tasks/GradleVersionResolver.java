@@ -33,21 +33,22 @@
 
 package com.itsaky.androidide.plugins.tasks;
 
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.LATEST;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.NIGHTLY;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.RELEASE_CANDIDATE;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.RELEASE_NIGHTLY;
-
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
+import java.util.Set;
 import java.util.Map;
 import org.gradle.api.GradleException;
 import org.gradle.api.resources.TextResource;
-import org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources;
 import org.gradle.util.GradleVersion;
 
 class GradleVersionResolver {
+  static final String LATEST = "latest";
+  static final String RELEASE_CANDIDATE = "release-candidate";
+  static final String NIGHTLY = "nightly";
+  static final String RELEASE_NIGHTLY = "release-nightly";
+  static final Set<String> PLACE_HOLDERS =
+      Set.of(LATEST, RELEASE_CANDIDATE, NIGHTLY, RELEASE_NIGHTLY);
 
   private TextResource latest;
   private TextResource releaseCandidate;
@@ -96,7 +97,7 @@ class GradleVersionResolver {
   }
 
   static boolean isPlaceHolder(String version) {
-    return DefaultWrapperVersionsResources.PLACE_HOLDERS.contains(version);
+    return PLACE_HOLDERS.contains(version);
   }
 
   GradleVersion getGradleVersion() {
