@@ -59,17 +59,17 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
-            "platforms;android-37" \
-            "build-tools;37.0.0" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
             "platform-tools" \
             "ndk;27.1.12297006" \
             "cmake;3.22.1"
 
-      - name: Verify Android SDK platform 37 files
+      - name: Verify Android SDK platform 36 files
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |
