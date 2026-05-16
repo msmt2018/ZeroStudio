@@ -22,6 +22,7 @@ plugins {
 }
 
 dependencies {
+  api(libs.common.ch.epfl.scala.bsp4j)
   api(libs.common.lsp4j.jsonrpc)
 
   api(projects.tooling.builderModelImpl)

@@ -92,6 +92,7 @@ orgEclipseJdtAnnotation = "2.3.100"
 snakeyamlEngine = "2.10"
 bcrypt = "0.10.2"
 lsp4jVersion = "0.24.0"
+bsp4jVersion = "2.2.0-M2"
 exposedVersion = "0.37.3"
 jmhVersion = "1.20"
 org-apache-compress = "1.21"
@@ -233,6 +234,7 @@ common-javapoet = { module = "com.squareup:javapoet", version = "1.13.0" }
 common-ksp = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
 common-lsp4j-jsonrpc = { module = "org.eclipse.lsp4j:org.eclipse.lsp4j.jsonrpc", version.ref = "lsp4jVersion" }
 common-org-eclipse-lsp4j = { module = "org.eclipse.lsp4j:org.eclipse.lsp4j", version.ref = "lsp4jVersion" }
+common-ch-epfl-scala-bsp4j = { module = "ch.epfl.scala:bsp4j", version.ref = "bsp4jVersion" }
 common-leakcanary = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanary" }
 common-retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit-serialization-json = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version.ref = "retrofit" }
@@ -638,4 +640,3 @@ com-jaredsburrows-license = { id = "com.jaredsburrows.license", version = "0.8.4
 gradle-publish = { id = "com.gradle.plugin-publish", version = "1.2.1" }
 realm-gradle-plugin = { id = "io.realm:realm-gradle-plugin", version.ref = "iorealm" }
 baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
-
