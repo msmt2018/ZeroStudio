@@ -28,6 +28,9 @@ import androidx.core.app.NotificationManagerCompat
 import com.blankj.utilcode.util.ResourceUtils
 import com.blankj.utilcode.util.ZipUtils
 import ch.epfl.scala.bsp4j.BuildServer
+import ch.epfl.scala.bsp4j.ExitBuildParams
+import ch.epfl.scala.bsp4j.InitializeBuildParams
+import ch.epfl.scala.bsp4j.OnBuildInitializedParams
 import com.itsaky.androidide.BuildConfig
 import com.itsaky.androidide.R.*
 import com.itsaky.androidide.app.BaseApplication
@@ -100,6 +103,7 @@ class GradleBuildService :
   private var outputReaderJob: Job? = null
   private var notificationManager: NotificationManager? = null
   private var server: IToolingApiServer? = null
+  private var bspServer: BuildServer? = null
   private var eventListener: EventListener? = null
   private var isReleaseVariant = false
 
@@ -217,6 +221,14 @@ class GradleBuildService :
         server.shutdown().get(1, TimeUnit.SECONDS)
       } catch (e: Throwable) {
         log.error("Failed to shutdown Tooling API server", e)
+      }
+    }
+    bspServer?.also { bsp ->
+      try {
+        bsp.buildShutdown().get(1, TimeUnit.SECONDS)
+        bsp.onBuildExit(ExitBuildParams())
+      } catch (e: Throwable) {
+        log.warn("Failed to shutdown BSP server", e)
       }
     }
 
@@ -341,6 +353,7 @@ class GradleBuildService :
   ) {
     startServerOutputReader(errorStream)
     this.server = server
+    this.bspServer = bspServer
     projectProxy?.also { Lookup.getDefault().update(BuildService.KEY_PROJECT_PROXY, it) }
     isToolingServerStarted = true
   }
@@ -499,6 +512,11 @@ class GradleBuildService :
 
   override fun metadata(): CompletableFuture<ToolingServerMetadata> {
     checkServerStarted()
+    if (server == null && bspServer != null) {
+      return CompletableFuture.completedFuture(
+          ToolingServerMetadata(pid ?: -1)
+      )
+    }
     return server!!.metadata()
   }
 
@@ -507,6 +525,17 @@ class GradleBuildService :
   ): CompletableFuture<InitializeResult> {
     checkServerStarted()
     Objects.requireNonNull(params)
+    if (server == null && bspServer != null) {
+      val initialize = InitializeBuildParams()
+      initialize.displayName = "AndroidIDE"
+      initialize.version = BuildConfig.VERSION_NAME
+      initialize.bspVersion = "2.2.0"
+      initialize.rootUri = File(params.directory).toURI().toString()
+      return performBuildTasks(bspServer!!.buildInitialize(initialize).thenApply {
+        bspServer!!.onBuildInitialized(OnBuildInitializedParams())
+        InitializeResult(true, null)
+      })
+    }
     return performBuildTasks(server!!.initialize(params)).thenApply { result ->
       if (result != null) {
         buildServiceScope.launch {
@@ -738,6 +767,11 @@ class GradleBuildService :
 
   override fun cancelCurrentBuild(): CompletableFuture<BuildCancellationRequestResult> {
     checkServerStarted()
+    if (server == null && bspServer != null) {
+      killGradlewProcesses()
+      currentBuildProcess?.destroy()
+      return CompletableFuture.completedFuture(BuildCancellationRequestResult(true, null))
+    }
 
     val cancellationFuture = server!!.cancelCurrentBuild()
 
