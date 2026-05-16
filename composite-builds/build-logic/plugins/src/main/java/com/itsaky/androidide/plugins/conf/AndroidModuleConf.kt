@@ -23,6 +23,7 @@ import com.android.build.api.variant.FilterConfiguration
 import com.android.build.api.variant.impl.getFilter
 import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.dsl.LibraryExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import com.itsaky.androidide.build.config.FDroidConfig
 import com.itsaky.androidide.build.config.isFDroidBuild
@@ -76,9 +77,12 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     return LocalDate.now().format(dateFormatter)
   }
 
-  @Suppress("UNCHECKED_CAST")
-  val commonExt =
-      extensions.getByType(CommonExtension::class.java) as CommonExtension<*, *, *, *, *, *>
+  val commonExt: CommonExtension =
+      if (isAppModule) {
+        extensions.getByType(ApplicationExtension::class.java)
+      } else {
+        extensions.getByType(LibraryExtension::class.java)
+      }
 
   commonExt.run {
     compileSdk = BuildConfig.compileSdk
