@@ -46,7 +46,6 @@ import com.itsaky.androidide.services.builder.ToolingServerRunner.OnServerStartL
 import com.itsaky.androidide.tasks.ifCancelledOrInterrupted
 import com.itsaky.androidide.tasks.runOnUiThread
 import com.itsaky.androidide.tooling.api.ForwardingToolingApiClient
-import com.itsaky.androidide.tooling.api.IProject
 import com.itsaky.androidide.tooling.api.IToolingApiClient
 import com.itsaky.androidide.tooling.api.IToolingApiServer
 import com.itsaky.androidide.tooling.api.LogSenderConfig.PROPERTY_LOGSENDER_ENABLED
@@ -346,15 +345,11 @@ class GradleBuildService :
   }
 
   override fun onListenerStarted(
-      server: IToolingApiServer?,
-      projectProxy: IProject?,
       bspServer: BuildServer,
       errorStream: InputStream,
   ) {
     startServerOutputReader(errorStream)
-    this.server = server
     this.bspServer = bspServer
-    projectProxy?.also { Lookup.getDefault().update(BuildService.KEY_PROJECT_PROXY, it) }
     isToolingServerStarted = true
   }
 

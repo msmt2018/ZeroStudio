@@ -21,9 +21,6 @@ import ch.qos.logback.core.CoreConstants
 import ch.epfl.scala.bsp4j.BuildServer
 import com.itsaky.androidide.shell.executeProcessAsync
 import com.itsaky.androidide.tasks.cancelIfActive
-import com.itsaky.androidide.tooling.api.IProject
-import com.itsaky.androidide.tooling.api.IToolingApiClient
-import com.itsaky.androidide.tooling.api.IToolingApiServer
 import com.itsaky.androidide.tooling.api.bsp.BspServerConnection
 import com.itsaky.androidide.utils.Environment
 import com.termux.shared.reflection.ReflectionUtils
@@ -138,8 +135,6 @@ internal class ToolingServerRunner(
                   )
               val future = bspConnection.startListening()
               observer?.onListenerStarted(
-                  server = null,
-                  projectProxy = null,
                   bspServer = bspConnection.server,
                   errorStream = errorStream,
               )
@@ -202,15 +197,13 @@ internal class ToolingServerRunner(
   interface Observer {
 
     fun onListenerStarted(
-        server: IToolingApiServer?,
-        projectProxy: IProject?,
         bspServer: BuildServer,
         errorStream: InputStream,
     )
 
     fun onServerExited(exitCode: Int)
 
-    fun getClient(): IToolingApiClient
+    fun getClient(): Any
   }
 
   /** Callback to listen for Tooling API server start event. */
