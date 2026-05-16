@@ -17,6 +17,7 @@
 
 package com.itsaky.androidide.plugins.conf
 
+import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.FilterConfiguration
@@ -69,10 +70,12 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
-  extensions.getByType(BaseExtension::class.java).run {
-    lintOptions.isCheckDependencies = true
+  val commonExtension =
+      extensions.getByType(CommonExtension::class.java) as CommonExtension<*, *, *, *, *, *>
+  commonExtension.run {
+    lint { checkDependencies = true }
 
-    packagingOptions {
+    packaging {
       resources {
         excludes.addAll(
             arrayOf(
