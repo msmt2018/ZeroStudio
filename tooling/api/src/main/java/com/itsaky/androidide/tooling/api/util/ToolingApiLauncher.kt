@@ -19,9 +19,6 @@ package com.itsaky.androidide.tooling.api.util
 import com.google.gson.GsonBuilder
 import com.itsaky.androidide.builder.model.DefaultJavaCompileOptions
 import com.itsaky.androidide.builder.model.IJavaCompilerSettings
-import com.itsaky.androidide.tooling.api.IProject
-import com.itsaky.androidide.tooling.api.IToolingApiClient
-import com.itsaky.androidide.tooling.api.IToolingApiServer
 import com.itsaky.androidide.tooling.api.models.AndroidProjectMetadata
 import com.itsaky.androidide.tooling.api.models.AndroidVariantMetadata
 import com.itsaky.androidide.tooling.api.models.BasicAndroidVariantMetadata
@@ -78,7 +75,7 @@ import java.util.concurrent.Executors
 import org.eclipse.lsp4j.jsonrpc.Launcher
 
 /**
- * Utility class for launching [IToolingApiClient] and [IToolingApiServer].
+ * Utility class for launching BSP/JSON-RPC services.
  *
  * @author Akash Yadav
  */
@@ -192,19 +189,6 @@ object ToolingApiLauncher {
     )
   }
 
-  fun newClientLauncher(
-      client: IToolingApiClient,
-      `in`: InputStream?,
-      out: OutputStream?,
-  ): Launcher<Any> {
-    return newIoLauncher(
-        arrayOf(client),
-        arrayOf(IToolingApiServer::class.java, IProject::class.java),
-        `in`,
-        out,
-    )
-  }
-
   fun newIoLauncher(
       locals: Array<Any>,
       remotes: Array<Class<*>?>,
@@ -222,18 +206,4 @@ object ToolingApiLauncher {
         .create()
   }
 
-  @JvmStatic
-  fun newServerLauncher(
-      server: IToolingApiServer,
-      project: IProject,
-      `in`: InputStream?,
-      out: OutputStream?,
-  ): Launcher<Any> {
-    return newIoLauncher(
-        arrayOf(server, project),
-        arrayOf(IToolingApiClient::class.java),
-        `in`,
-        out,
-    )
-  }
 }
