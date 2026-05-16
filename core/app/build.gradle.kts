@@ -8,7 +8,6 @@ import java.util.Properties
 plugins {
   id("com.itsaky.androidide.core-app")
   id("com.android.application")
-  id("kotlin-android")
   id("kotlin-kapt")
   id("kotlin-parcelize")
   id("androidx.navigation.safeargs.kotlin")
@@ -116,7 +115,6 @@ configurations.all {
   // }
 
   exclude(group = "com.google.googlejavaformat", module = "google-java-format")
-  exclude(group = "org.jetbrains.kotlin", module = "kotlin-android-extensions-runtime")
   exclude(group = "org.jetbrains.kotlin", module = "kotlin-compiler")
   // exclude(group = "org.jetbrains.kotlin", module = "kotlin-compiler-embeddable")
   exclude(group = "com.google.firebase", module = "protolite-well-known-types")

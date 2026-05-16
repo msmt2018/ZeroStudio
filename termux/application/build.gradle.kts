@@ -5,7 +5,6 @@ import com.itsaky.androidide.plugins.TerminalBootstrapPackagesPlugin
 
 plugins {
   id("com.android.library")
-  id("kotlin-android")
 }
 
 apply { plugin(TerminalBootstrapPackagesPlugin::class.java) }

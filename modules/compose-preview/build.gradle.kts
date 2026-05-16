@@ -20,7 +20,6 @@ import java.util.zip.ZipFile
 
 plugins {
   id("com.android.library")
-  id("kotlin-android")
   alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 

@@ -4,7 +4,6 @@ import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
   id("com.android.library")
-  id("org.jetbrains.kotlin.android")
   id("dev.rikka.tools.refine")
   id("dev.rikka.tools.materialthemebuilder")
 }
