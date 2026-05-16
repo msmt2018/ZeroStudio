@@ -111,6 +111,14 @@
                android:name=".services.builder.GradleBuildService" />
 
           <service
+               android:exported="false"
+               android:name=".services.bsp.BspSessionBinderService">
+               <intent-filter>
+                    <action android:name="com.itsaky.androidide.bsp.BIND_SESSION_SERVICE" />
+               </intent-filter>
+          </service>
+
+          <service
                android:exported="true"
                android:name=".services.log.LogReceiverService"
                android:permission="com.itsaky.androidide.permission.BIND_LOG_SERVICE">

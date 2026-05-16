@@ -37,6 +37,7 @@ dependencies {
   api(projects.utilities.shared)
 
   api(libs.google.gson)
+  api(libs.common.ch.epfl.scala.bsp4j)
   api(libs.common.lsp4j.jsonrpc)
   implementation(libs.common.jkotlin)
 }

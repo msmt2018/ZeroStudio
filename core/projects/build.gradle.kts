@@ -49,6 +49,7 @@ dependencies {
 
 
   implementation(libs.common.io)
+  implementation(libs.common.ch.epfl.scala.bsp4j)
   implementation(libs.common.kotlin.coroutines.android)
   implementation(libs.google.auto.service.annotations)
   implementation(libs.google.guava)

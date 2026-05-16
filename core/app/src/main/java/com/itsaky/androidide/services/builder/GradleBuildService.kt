@@ -27,6 +27,15 @@ import android.text.TextUtils
 import androidx.core.app.NotificationManagerCompat
 import com.blankj.utilcode.util.ResourceUtils
 import com.blankj.utilcode.util.ZipUtils
+import ch.epfl.scala.bsp4j.BuildServer
+import ch.epfl.scala.bsp4j.BuildTargetIdentifier
+import ch.epfl.scala.bsp4j.CompileParams
+import ch.epfl.scala.bsp4j.TestParams
+import ch.epfl.scala.bsp4j.ExitBuildParams
+import ch.epfl.scala.bsp4j.InitializeBuildParams
+import ch.epfl.scala.bsp4j.OnBuildInitializedParams
+import ch.epfl.scala.bsp4j.TaskId
+import ch.epfl.scala.bsp4j.WorkspaceBuildTargetsParams
 import com.itsaky.androidide.BuildConfig
 import com.itsaky.androidide.R.*
 import com.itsaky.androidide.app.BaseApplication
@@ -41,10 +50,6 @@ import com.itsaky.androidide.services.ToolingServerNotStartedException
 import com.itsaky.androidide.services.builder.ToolingServerRunner.OnServerStartListener
 import com.itsaky.androidide.tasks.ifCancelledOrInterrupted
 import com.itsaky.androidide.tasks.runOnUiThread
-import com.itsaky.androidide.tooling.api.ForwardingToolingApiClient
-import com.itsaky.androidide.tooling.api.IProject
-import com.itsaky.androidide.tooling.api.IToolingApiClient
-import com.itsaky.androidide.tooling.api.IToolingApiServer
 import com.itsaky.androidide.tooling.api.LogSenderConfig.PROPERTY_LOGSENDER_ENABLED
 import com.itsaky.androidide.tooling.api.messages.InitializeProjectParams
 import com.itsaky.androidide.tooling.api.messages.LogMessageParams
@@ -65,6 +70,7 @@ import java.io.InputStream
 import java.lang.ref.WeakReference
 import java.util.Objects
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.Collections
 import kotlinx.coroutines.CoroutineName
@@ -81,30 +87,29 @@ import org.slf4j.LoggerFactory
  * @author Akash Yadav
  */
 class GradleBuildService :
-    Service(), BuildService, IToolingApiClient, ToolingServerRunner.Observer {
+    Service(), BuildService, ToolingServerRunner.Observer {
 
   private var mBinder: GradleServiceBinder? = null
   private var isToolingServerStarted = false
   override var isBuildInProgress = false
     private set
 
-  /**
-   * We do not provide direct access to GradleBuildService instance to the Tooling API launcher as
-   * it may cause memory leaks. Instead, we create another client object which forwards all calls to
-   * us. So, when the service is destroyed, we release the reference to the service from this
-   * client.
-   */
-  private var _toolingApiClient: ForwardingToolingApiClient? = null
+  /** Lightweight BSP client endpoint object for JSON-RPC launcher local services. */
+  private val bspClientEndpoint: Any = Any()
   private var toolingServerRunner: ToolingServerRunner? = null
   private var outputReaderJob: Job? = null
   private var notificationManager: NotificationManager? = null
-  private var server: IToolingApiServer? = null
+  private var bspServer: BuildServer? = null
+  @Volatile private var currentBspTaskId: TaskId? = null
+  @Volatile private var cachedTargets: List<BuildTargetIdentifier>? = null
+  @Volatile private var lastOutputAtMillis: Long = 0L
   private var eventListener: EventListener? = null
   private var isReleaseVariant = false
 
   @Volatile private var currentBuildProcess: Process? = null
 
   private val serviceJob = SupervisorJob()
+  private val buildExecutor = Executors.newSingleThreadExecutor()
   private val buildServiceScope =
       CoroutineScope(serviceJob + Dispatchers.Default + CoroutineName("GradleBuildService"))
   private val pendingBuildRequests = Collections.synchronizedSet(mutableSetOf<CompletableFuture<*>>())
@@ -142,7 +147,7 @@ class GradleBuildService :
   }
 
   override fun isToolingServerStarted(): Boolean {
-    return isToolingServerStarted && server != null
+    return isToolingServerStarted && bspServer != null
   }
 
   private fun showNotification(
@@ -207,24 +212,18 @@ class GradleBuildService :
     lookup.unregister(BuildService.KEY_BUILD_SERVICE)
     lookup.unregister(BuildService.KEY_PROJECT_PROXY)
 
-    server?.also { server ->
+    bspServer?.also { bsp ->
       try {
-        log.info("Shutting down Tooling API server...")
-        // send the shutdown request but do not wait for the server to respond
-        // the service should not block the onDestroy call in order to avoid timeouts
-        // the tooling server must release resources and exit automatically
-        server.shutdown().get(1, TimeUnit.SECONDS)
+        bsp.buildShutdown().get(1, TimeUnit.SECONDS)
+        bsp.onBuildExit(ExitBuildParams())
       } catch (e: Throwable) {
-        log.error("Failed to shutdown Tooling API server", e)
+        log.warn("Failed to shutdown BSP server", e)
       }
     }
 
     log.debug("Cancelling tooling server runner...")
     toolingServerRunner?.release()
     toolingServerRunner = null
-
-    _toolingApiClient?.client = null
-    _toolingApiClient = null
 
     log.debug("Cancelling tooling server output reader job...")
     outputReaderJob?.cancel()
@@ -239,6 +238,7 @@ class GradleBuildService :
     currentBuildProcess?.destroy()
     currentBuildProcess = null
     serviceJob.cancel()
+    buildExecutor.shutdownNow()
 
     isToolingServerStarted = false
     super.onDestroy()
@@ -333,13 +333,11 @@ class GradleBuildService :
   }
 
   override fun onListenerStarted(
-      server: IToolingApiServer,
-      projectProxy: IProject,
+      bspServer: BuildServer,
       errorStream: InputStream,
   ) {
     startServerOutputReader(errorStream)
-    this.server = server
-    Lookup.getDefault().update(BuildService.KEY_PROJECT_PROXY, projectProxy)
+    this.bspServer = bspServer
     isToolingServerStarted = true
   }
 
@@ -348,14 +346,9 @@ class GradleBuildService :
     stopForeground(STOP_FOREGROUND_REMOVE)
   }
 
-  override fun getClient(): IToolingApiClient {
-    if (_toolingApiClient == null) {
-      _toolingApiClient = ForwardingToolingApiClient(this)
-    }
-    return _toolingApiClient!!
-  }
+  override fun getClient(): Any = bspClientEndpoint
 
-  override fun logMessage(params: LogMessageParams) {
+  fun logMessage(params: LogMessageParams) {
     val logger = LoggerFactory.getLogger(params.tag)
     when (params.level) {
       'D' -> logger.debug(params.message)
@@ -367,16 +360,22 @@ class GradleBuildService :
     }
   }
 
-  override fun logOutput(line: String) {
+  fun logOutput(line: String) {
+    val now = System.currentTimeMillis()
+    // Throttle high-frequency output bursts to reduce UI/event pressure.
+    if (now - lastOutputAtMillis < 20 && !line.contains("error", true) && !line.contains("fail", true)) {
+      return
+    }
+    lastOutputAtMillis = now
     eventListener?.onOutput(line)
   }
 
-  override fun prepareBuild(buildInfo: BuildInfo) {
+  fun prepareBuild(buildInfo: BuildInfo) {
     updateNotification(getString(R.string.build_status_in_progress), true)
     eventListener?.prepareBuild(buildInfo)
   }
 
-  override fun onBuildSuccessful(result: BuildResult) {
+  fun onBuildSuccessful(result: BuildResult) {
     updateNotification(getString(R.string.build_status_sucess), false)
     eventListener?.onBuildSuccessful(result.tasks)
     if (result.tasks.any { it.contains("assemble", true) || it.contains("bundle", true) }) {
@@ -387,16 +386,16 @@ class GradleBuildService :
     }
   }
 
-  override fun onBuildFailed(result: BuildResult) {
+  fun onBuildFailed(result: BuildResult) {
     updateNotification(getString(R.string.build_status_failed), false)
     eventListener?.onBuildFailed(result.tasks)
   }
 
-  override fun onProgressEvent(event: ProgressEvent) {
+  fun onProgressEvent(event: ProgressEvent) {
     eventListener?.onProgressEvent(event)
   }
 
-  override fun getBuildArguments(): CompletableFuture<List<String>> {
+  fun getBuildArguments(): CompletableFuture<List<String>> {
     val extraArgs = ArrayList<String>()
 
     if (DevOpsPreferences.logsenderEnabled) {
@@ -440,7 +439,7 @@ class GradleBuildService :
     return CompletableFuture.completedFuture(extraArgs)
   }
 
-  override fun checkGradleWrapperAvailability(): CompletableFuture<GradleWrapperCheckResult> {
+  fun checkGradleWrapperAvailability(): CompletableFuture<GradleWrapperCheckResult> {
     return if (isGradleWrapperAvailable)
         CompletableFuture.completedFuture(GradleWrapperCheckResult(true))
     else installWrapper()
@@ -497,7 +496,7 @@ class GradleBuildService :
 
   override fun metadata(): CompletableFuture<ToolingServerMetadata> {
     checkServerStarted()
-    return server!!.metadata()
+    return CompletableFuture.completedFuture(ToolingServerMetadata(pid ?: -1))
   }
 
   override fun initializeProject(
@@ -505,7 +504,15 @@ class GradleBuildService :
   ): CompletableFuture<InitializeResult> {
     checkServerStarted()
     Objects.requireNonNull(params)
-    return performBuildTasks(server!!.initialize(params)).thenApply { result ->
+    val initialize = InitializeBuildParams()
+    initialize.displayName = "AndroidIDE"
+    initialize.version = BuildConfig.VERSION_NAME
+    initialize.bspVersion = "2.2.0"
+    initialize.rootUri = File(params.directory).toURI().toString()
+    return performBuildTasks(bspServer!!.buildInitialize(initialize).thenApply {
+      bspServer!!.onBuildInitialized(OnBuildInitializedParams())
+      InitializeResult(true, null)
+    }).thenApply { result ->
       if (result != null) {
         buildServiceScope.launch {
           try {
@@ -581,134 +588,50 @@ class GradleBuildService :
     * - The implementation below resolves OutOfMemory exceptions seamlessly.
     */
 
-    return performBuildTasks(
-        CompletableFuture.supplyAsync {
-          val buildInfo = BuildInfo(tasksList)
-          prepareBuild(buildInfo)
-
-          try {
-            val projectDir = ProjectManagerImpl.getInstance().projectDir
-            val gradlewPath = File(projectDir, "gradlew").absolutePath
-
-            val command = mutableListOf("sh", gradlewPath)
-            command.addAll(tasks)
-
-            val buildArgs = getBuildArguments().get()
-            command.addAll(buildArgs)
-
-            log.info("Executing command: ${command.joinToString(" ")}")
-
-            val processBuilder = ProcessBuilder(command)
-            processBuilder.directory(projectDir)
-
-            // Get Termux environment
-            val termuxEnv = TermuxShellEnvironment().getEnvironment(this@GradleBuildService, false)
-
-            // Add custom environment variables from Environment class
-            val customEnv = HashMap<String, String>()
-            Environment.putEnvironment(customEnv, false)
-
-            // Merge environments
-            val finalEnv = processBuilder.environment()
-            finalEnv.putAll(termuxEnv)
-            finalEnv.putAll(customEnv)
-
-            // Ensure PATH includes BIN_DIR for clang, python, etc.
-            val currentPath = finalEnv["PATH"] ?: ""
-            val binDirPath = Environment.BIN_DIR.absolutePath
-            val prefixBinPath = File(Environment.PREFIX, "bin").absolutePath
-
-            // Add BIN_DIR and PREFIX/bin to PATH if not already present
-            val pathEntries = mutableListOf<String>()
-            if (!currentPath.contains(binDirPath)) {
-              pathEntries.add(binDirPath)
-            }
-            if (!currentPath.contains(prefixBinPath)) {
-              pathEntries.add(prefixBinPath)
-            }
-            pathEntries.add(currentPath)
-
-            finalEnv["PATH"] = pathEntries.filter { it.isNotEmpty() }.joinToString(":")
-
-            // Add LD_LIBRARY_PATH for native libraries
-            val ldLibraryPath = finalEnv["LD_LIBRARY_PATH"] ?: ""
-            val libDirPath = Environment.LIB_DIR.absolutePath
-            finalEnv["LD_LIBRARY_PATH"] =
-                if (ldLibraryPath.isEmpty()) {
-                  libDirPath
-                } else {
-                  "$libDirPath:$ldLibraryPath"
-                }
-
-            // Set TMPDIR
-            finalEnv["TMPDIR"] = Environment.TMP_DIR.absolutePath
-
-            log.info("PATH set to: ${finalEnv["PATH"]}")
-            log.info("LD_LIBRARY_PATH set to: ${finalEnv["LD_LIBRARY_PATH"]}")
-
-            val process = processBuilder.start()
-            currentBuildProcess = process
-
-            val outputReader = process.inputStream.bufferedReader()
-            val errorReader = process.errorStream.bufferedReader()
-
-            val outputReaderJob =
-                buildServiceScope.launch(Dispatchers.IO) {
-                  try {
-                    outputReader.useLines { lines -> lines.forEach { line -> logOutput(line) } }
-                  } catch (error: Throwable) {
-                    if (shouldIgnoreProcessStreamError(error)) {
-                      log.debug("Ignoring gradle stdout stream close during cancellation/teardown")
-                    } else {
-                      log.error("Failed while reading gradle stdout", error)
-                    }
-                  }
-                }
-
-            val errorReaderJob =
-                buildServiceScope.launch(Dispatchers.IO) {
-                  try {
-                    errorReader.useLines { lines -> lines.forEach { line -> logOutput(line) } }
-                  } catch (error: Throwable) {
-                    if (shouldIgnoreProcessStreamError(error)) {
-                      log.debug("Ignoring gradle stderr stream close during cancellation/teardown")
-                    } else {
-                      log.error("Failed while reading gradle stderr", error)
-                    }
-                  }
-                }
-
-            val exitCode = process.waitFor()
-
-            kotlinx.coroutines.runBlocking {
-              outputReaderJob.join()
-              errorReaderJob.join()
-            }
-            currentBuildProcess = null
-
-            val result =
-                if (exitCode == 0) {
-                  TaskExecutionResult(true, null)
-                } else {
-                  TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
-                }
-
-            if (result.isSuccessful) {
-              onBuildSuccessful(BuildResult(tasksList))
-            } else {
-              onBuildFailed(BuildResult(tasksList))
-            }
-
-            result
-          } catch (e: Exception) {
-            log.error("Failed to execute gradlew with sh", e)
-            val result = TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
-            onBuildFailed(BuildResult(tasksList))
-            currentBuildProcess = null
-            result
-          }
+    return performBuildTasks(CompletableFuture.supplyAsync({
+      prepareBuild(BuildInfo(tasksList))
+      try {
+        val targets = resolveBuildTargets()
+        if (targets.isEmpty()) {
+          return@supplyAsync TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
         }
-    )
+
+        val taskId = TaskId("androidide-${System.currentTimeMillis()}")
+        currentBspTaskId = taskId
+        val runTests = tasksList.any { it.contains("test", true) }
+
+        val statusCode = if (runTests) {
+          val p = TestParams(targets)
+          p.originId = taskId.id
+          bspServer!!.buildTargetTest(p).get().statusCode
+        } else {
+          val p = CompileParams(targets)
+          p.originId = taskId.id
+          p.arguments = getBuildArguments().get()
+          bspServer!!.buildTargetCompile(p).get().statusCode
+        }
+
+        val ok = statusCode == 1 || statusCode == 0
+        val result = if (ok) TaskExecutionResult(true, null)
+          else TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
+        if (result.isSuccessful) onBuildSuccessful(BuildResult(tasksList)) else onBuildFailed(BuildResult(tasksList))
+        result
+      } catch (e: Exception) {
+        log.error("Failed to execute BSP build/test", e)
+        val result = TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
+        onBuildFailed(BuildResult(tasksList))
+        result
+      } finally {
+        currentBspTaskId = null
+      }
+    }, buildExecutor))
+  }
+
+  private fun resolveBuildTargets(): List<BuildTargetIdentifier> {
+    cachedTargets?.let { if (it.isNotEmpty()) return it }
+    val targets = bspServer!!.workspaceBuildTargets(WorkspaceBuildTargetsParams()).get().targets.map { it.id }
+    cachedTargets = targets
+    return targets
   }
 
   /** Kills any running gradlew processes forcefully */
@@ -736,8 +659,12 @@ class GradleBuildService :
 
   override fun cancelCurrentBuild(): CompletableFuture<BuildCancellationRequestResult> {
     checkServerStarted()
-
-    val cancellationFuture = server!!.cancelCurrentBuild()
+    val taskId = currentBspTaskId
+    val cancellationFuture = if (taskId != null) {
+      bspServer!!.buildCancel(taskId).handle { _, _ -> BuildCancellationRequestResult(true, null) }
+    } else {
+      CompletableFuture.completedFuture(BuildCancellationRequestResult(true, BuildCancellationRequestResult.Reason.NO_RUNNING_BUILD))
+    }
 
     buildServiceScope.launch {
       try {
@@ -771,14 +698,15 @@ class GradleBuildService :
         currentBuildProcess = null
 
         try {
-          server?.shutdown()?.get(2, TimeUnit.SECONDS)
+          bspServer?.buildShutdown()?.get(2, TimeUnit.SECONDS)
         } catch (e: Throwable) {
           log.warn("Tooling server shutdown during cleanup failed", e)
         }
 
+        cachedTargets = null
+
         toolingServerRunner?.release()
         toolingServerRunner = null
-        server = null
         isToolingServerStarted = false
 
         Runtime.getRuntime().gc()
@@ -862,19 +790,19 @@ class GradleBuildService :
       null
     } else
         object : EventListener {
-          override fun prepareBuild(buildInfo: BuildInfo) {
+          fun prepareBuild(buildInfo: BuildInfo) {
             runOnUiThread { listener.prepareBuild(buildInfo) }
           }
 
-          override fun onBuildSuccessful(tasks: List<String?>) {
+          fun onBuildSuccessful(tasks: List<String?>) {
             runOnUiThread { listener.onBuildSuccessful(tasks) }
           }
 
-          override fun onProgressEvent(event: ProgressEvent) {
+          fun onProgressEvent(event: ProgressEvent) {
             runOnUiThread { listener.onProgressEvent(event) }
           }
 
-          override fun onBuildFailed(tasks: List<String?>) {
+          fun onBuildFailed(tasks: List<String?>) {
             runOnUiThread { listener.onBuildFailed(tasks) }
           }
 

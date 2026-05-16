@@ -29,16 +29,14 @@ import com.itsaky.androidide.eventbus.events.file.FileEvent
 import com.itsaky.androidide.eventbus.events.file.FileRenameEvent
 import com.itsaky.androidide.eventbus.events.project.ProjectInitializedEvent
 import com.itsaky.androidide.lookup.Lookup
-import com.itsaky.androidide.projects.CachingProject
 import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.projects.IWorkspace
 import com.itsaky.androidide.projects.ModuleProject
 import com.itsaky.androidide.projects.R
 import com.itsaky.androidide.projects.android.AndroidModule
+import com.itsaky.androidide.projects.bsp.ProjectBspRegistry
 import com.itsaky.androidide.projects.builder.BuildService
 import com.itsaky.androidide.tasks.executeAsync
-import com.itsaky.androidide.tooling.api.IAndroidProject
-import com.itsaky.androidide.tooling.api.IProject
 import com.itsaky.androidide.tooling.api.messages.result.InitializeResult
 import com.itsaky.androidide.tooling.api.models.BuildVariantInfo
 import com.itsaky.androidide.utils.DocumentUtils
@@ -107,7 +105,11 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
     }
   }
 
-  override suspend fun setupProject(project: IProject) {
+  override suspend fun setupProject() {
+    val bspService =
+        checkNotNull(ProjectBspRegistry.lookup()) {
+          "BSP build service is unavailable. Project setup now requires BSP workspace/buildTargets."
+        }
     // 缓存插件项目标志
     pluginProjectCached =
         withContext(Dispatchers.IO) {
@@ -117,7 +119,7 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
     this._workspace =
         withStopWatch("Transform project proxy") {
           withContext(Dispatchers.IO) {
-            WorkspaceModelBuilder.build(projectDir, CachingProject(project))
+            BspWorkspaceModelBuilder.build(projectDir, bspService)
           }
         }
 
@@ -410,3 +412,4 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
     fun getInstance(): ProjectManagerImpl = IProjectManager.getInstance() as ProjectManagerImpl
   }
 }
+import com.itsaky.androidide.tooling.api.IAndroidProject

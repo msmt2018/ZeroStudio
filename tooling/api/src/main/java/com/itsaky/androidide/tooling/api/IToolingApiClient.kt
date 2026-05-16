@@ -33,6 +33,7 @@ import org.eclipse.lsp4j.jsonrpc.services.JsonSegment
  * @author Akash Yadav
  */
 @JsonSegment("client")
+@Deprecated("Use BSP notifications/requests via tooling.api.bsp package")
 interface IToolingApiClient {
 
   /**
