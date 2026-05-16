@@ -71,8 +71,6 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
   }
 
   extensions.getByType(CommonExtension::class.java).run {
-    lint { checkDependencies = true }
-
     packaging {
       resources {
         excludes.addAll(
@@ -108,6 +106,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
 
   extensions.getByType(BaseExtension::class.java).run {
     compileSdkVersion(BuildConfig.compileSdk)
+    lintOptions.isCheckDependencies = true
 
     defaultConfig {
       minSdk = BuildConfig.minSdk
