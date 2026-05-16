@@ -1,5 +1,5 @@
 [versions]
-agp = "9.1.0"
+agp = "9.2.0"
 
 #构建系统  >  可以从此获得com.android.tools.build版本信息和source.jar 和javadoc.jar :https://maven.google.com/web/m_index.html?q=aapt#com.android.tools.build
 agp-tooling = "8.13.0"
@@ -638,4 +638,3 @@ com-jaredsburrows-license = { id = "com.jaredsburrows.license", version = "0.8.4
 gradle-publish = { id = "com.gradle.plugin-publish", version = "1.2.1" }
 realm-gradle-plugin = { id = "io.realm:realm-gradle-plugin", version.ref = "iorealm" }
 baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
-

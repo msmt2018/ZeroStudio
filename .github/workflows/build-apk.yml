@@ -35,10 +35,10 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Configuring a Gradle 8.13 environment
+      - name: Configuring a Gradle 9.4.1 environment
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.4.1'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
