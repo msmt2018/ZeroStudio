@@ -27,6 +27,7 @@ import android.text.TextUtils
 import androidx.core.app.NotificationManagerCompat
 import com.blankj.utilcode.util.ResourceUtils
 import com.blankj.utilcode.util.ZipUtils
+import ch.epfl.scala.bsp4j.BuildServer
 import com.itsaky.androidide.BuildConfig
 import com.itsaky.androidide.R.*
 import com.itsaky.androidide.app.BaseApplication
@@ -333,13 +334,14 @@ class GradleBuildService :
   }
 
   override fun onListenerStarted(
-      server: IToolingApiServer,
-      projectProxy: IProject,
+      server: IToolingApiServer?,
+      projectProxy: IProject?,
+      bspServer: BuildServer,
       errorStream: InputStream,
   ) {
     startServerOutputReader(errorStream)
     this.server = server
-    Lookup.getDefault().update(BuildService.KEY_PROJECT_PROXY, projectProxy)
+    projectProxy?.also { Lookup.getDefault().update(BuildService.KEY_PROJECT_PROXY, it) }
     isToolingServerStarted = true
   }
 

@@ -18,12 +18,13 @@
 package com.itsaky.androidide.services.builder
 
 import ch.qos.logback.core.CoreConstants
+import ch.epfl.scala.bsp4j.BuildServer
 import com.itsaky.androidide.shell.executeProcessAsync
 import com.itsaky.androidide.tasks.cancelIfActive
 import com.itsaky.androidide.tooling.api.IProject
 import com.itsaky.androidide.tooling.api.IToolingApiClient
 import com.itsaky.androidide.tooling.api.IToolingApiServer
-import com.itsaky.androidide.tooling.api.util.ToolingApiLauncher
+import com.itsaky.androidide.tooling.api.bsp.BspServerConnection
 import com.itsaky.androidide.utils.Environment
 import com.termux.shared.reflection.ReflectionUtils
 import java.io.InputStream
@@ -129,17 +130,17 @@ internal class ToolingServerRunner(
               val outputStream = process.outputStream
               val errorStream = process.errorStream
 
-              val launcher =
-                  ToolingApiLauncher.newClientLauncher(
+              val bspConnection =
+                  BspServerConnection(
                       observer!!.getClient(),
                       inputStream,
                       outputStream,
                   )
-
-              val future = launcher.startListening()
+              val future = bspConnection.startListening()
               observer?.onListenerStarted(
-                  server = launcher.remoteProxy as IToolingApiServer,
-                  projectProxy = launcher.remoteProxy as IProject,
+                  server = null,
+                  projectProxy = null,
+                  bspServer = bspConnection.server,
                   errorStream = errorStream,
               )
 
@@ -201,8 +202,9 @@ internal class ToolingServerRunner(
   interface Observer {
 
     fun onListenerStarted(
-        server: IToolingApiServer,
-        projectProxy: IProject,
+        server: IToolingApiServer?,
+        projectProxy: IProject?,
+        bspServer: BuildServer,
         errorStream: InputStream,
     )
 
