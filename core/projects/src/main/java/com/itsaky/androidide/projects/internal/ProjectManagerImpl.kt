@@ -107,7 +107,11 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
     }
   }
 
-  override suspend fun setupProject(project: IProject) {
+  override suspend fun setupProject(project: IProject?) {
+    val projectProxy =
+        checkNotNull(project) {
+          "Project proxy is unavailable. Legacy Tooling API project model is not initialized yet."
+        }
     // 缓存插件项目标志
     pluginProjectCached =
         withContext(Dispatchers.IO) {
@@ -117,7 +121,7 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
     this._workspace =
         withStopWatch("Transform project proxy") {
           withContext(Dispatchers.IO) {
-            WorkspaceModelBuilder.build(projectDir, CachingProject(project))
+            WorkspaceModelBuilder.build(projectDir, CachingProject(projectProxy))
           }
         }
 

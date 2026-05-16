@@ -52,7 +52,7 @@ interface IProjectManager {
 
   @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
   suspend fun setupProject(
-      project: IProject = Lookup.getDefault().lookup(BuildService.KEY_PROJECT_PROXY)!!
+      project: IProject? = Lookup.getDefault().lookup(BuildService.KEY_PROJECT_PROXY)
   )
 
   suspend fun isGradleSyncNeeded(projectDir: File): Boolean
