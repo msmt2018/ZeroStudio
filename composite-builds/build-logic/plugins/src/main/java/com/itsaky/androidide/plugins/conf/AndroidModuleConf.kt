@@ -17,7 +17,6 @@
 
 package com.itsaky.androidide.plugins.conf
 
-import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.FilterConfiguration
@@ -70,34 +69,6 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
-  extensions.getByType(CommonExtension::class.java).run {
-    packaging {
-      resources {
-        excludes.addAll(
-            arrayOf(
-                "META-INF/CHANGES",
-                "META-INF/README.md",
-            )
-        )
-        pickFirsts.addAll(
-            arrayOf(
-                "META-INF/eclipse.inf",
-                "META-INF/LICENSE.md",
-                "META-INF/AL2.0",
-                "META-INF/LGPL2.1",
-                "META-INF/INDEX.LIST",
-                "about_files/LICENSE-2.0.txt",
-                "plugin.xml",
-                "plugin.properties",
-                "about.mappings",
-                "about.properties",
-                "about.ini",
-                "modeling32.png",
-            )
-        )
-      }
-    }
-  }
   /** Helper function to get the current date in YYYYMMDD format. */
   fun getCurrentDateVersion(): String {
     val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
@@ -107,6 +78,30 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
   extensions.getByType(BaseExtension::class.java).run {
     compileSdkVersion(BuildConfig.compileSdk)
     lintOptions.isCheckDependencies = true
+    packagingOptions {
+      resources.excludes.addAll(
+          arrayOf(
+              "META-INF/CHANGES",
+              "META-INF/README.md",
+          )
+      )
+      resources.pickFirsts.addAll(
+          arrayOf(
+              "META-INF/eclipse.inf",
+              "META-INF/LICENSE.md",
+              "META-INF/AL2.0",
+              "META-INF/LGPL2.1",
+              "META-INF/INDEX.LIST",
+              "about_files/LICENSE-2.0.txt",
+              "plugin.xml",
+              "plugin.properties",
+              "about.mappings",
+              "about.properties",
+              "about.ini",
+              "modeling32.png",
+          )
+      )
+    }
 
     defaultConfig {
       minSdk = BuildConfig.minSdk
