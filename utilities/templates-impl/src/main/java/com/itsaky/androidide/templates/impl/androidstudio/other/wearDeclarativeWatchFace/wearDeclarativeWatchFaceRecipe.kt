@@ -1,37 +1,27 @@
-/*
- * Copyright (C) 2025 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.itsaky.androidide.templates.impl.androidstudio.other.wearDeclarativeWatchFace
 
-import com.itsaky.androidide.templates.ModuleTemplateData
-import com.itsaky.androidide.templates.RecipeExecutor
-import com.itsaky.androidide.templates.Language
+import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
+import com.itsaky.androidide.templates.base.util.AndroidModuleResManager.ResourceType.VALUES
 import com.itsaky.androidide.templates.impl.androidstudio.other.wearDeclarativeWatchFace.res.raw.rawWatchFaceXml
 import com.itsaky.androidide.templates.impl.androidstudio.other.wearDeclarativeWatchFace.res.values.stringsXml
 import com.itsaky.androidide.templates.impl.androidstudio.other.wearDeclarativeWatchFace.res.xml.watchFaceInfoXml
+import com.itsaky.androidide.templates.impl.base.createRecipe
 import java.io.File
 
-fun RecipeExecutor.wearDeclarativeWatchFaceRecipe(moduleData: ModuleTemplateData) {
-  when (moduleData.language) {
-    Language.Java, Language.Kotlin -> Unit
-  }
-  val (_, _, resOut, manifestOut) = moduleData
+fun AndroidModuleTemplateBuilder.wearDeclarativeWatchFaceRecipe() {
+  recipe = createRecipe {
+    res {
+      writeXmlResource("strings", VALUES, source = ::stringsXml)
 
-  mergeXml(androidManifestXml(), manifestOut.resolve("AndroidManifest.xml"))
-  mergeXml(stringsXml(), resOut.resolve("values/strings.xml"))
-  mergeXml(rawWatchFaceXml(), resOut.resolve("raw/watchface.xml"))
-  mergeXml(watchFaceInfoXml(), resOut.resolve("xml/watch_face_info.xml"))
-  copy(File("wear-watchface").resolve("drawable"), resOut.resolve("drawable"))
+      val rawDir = File(mainResDir(), "raw").also { it.mkdirs() }
+      val xmlDir = File(mainResDir(), "xml").also { it.mkdirs() }
+
+      executor.save(rawWatchFaceXml(), File(rawDir, "watchface.xml"))
+      executor.save(watchFaceInfoXml(), File(xmlDir, "watch_face_info.xml"))
+
+      copyAssetsRecursively("templates/wear-watchface/drawable", File(mainResDir(), "drawable"))
+    }
+
+    executor.save(androidManifestXml(), File(mainManifestDir(), "AndroidManifest.xml"))
+  }
 }
