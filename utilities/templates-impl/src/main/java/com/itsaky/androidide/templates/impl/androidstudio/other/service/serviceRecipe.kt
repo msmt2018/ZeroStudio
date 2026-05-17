@@ -12,7 +12,7 @@ fun RecipeExecutor.serviceRecipe(moduleData: ModuleTemplateData, className: Stri
   val srcOut = moduleData.srcFolder(SrcSet.Main).resolve("java").also { it.mkdirs() }
   val manifestOut = File(moduleData.projectDir, "src/main")
   val packageName = moduleData.packageName
-  val ktOrJavaExt = moduleData.language.extension
+  val ktOrJavaExt = if (moduleData.language == Language.Kotlin) "kt" else "java"
 
   save(androidManifestXml(className, isEnabled, isExported, packageName), manifestOut.resolve("AndroidManifest.xml"))
   val service = when (moduleData.language) {

@@ -22,6 +22,6 @@ fun AndroidModuleTemplateBuilder.wearDeclarativeWatchFaceRecipe() {
       copyAssetsRecursively("templates/wear-watchface/drawable", File(mainResDir(), "drawable"))
     }
 
-    executor.save(androidManifestXml(), File(mainManifestDir(), "AndroidManifest.xml"))
+    executor.save(androidManifestXml(), File(mainSrcDir(), "AndroidManifest.xml"))
   }
 }
