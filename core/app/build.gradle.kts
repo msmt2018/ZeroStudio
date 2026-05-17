@@ -204,7 +204,7 @@ dependencies {
   implementation(projects.core.lspApi)
   implementation(projects.core.projects)
   implementation(projects.core.resources)
-  implementation(projects.core.zeroMcpServer)
+  implementation(projects.modules.zeroMcpServer)
   implementation(projects.editor.impl)
   implementation(projects.editor.lexers)
   implementation(projects.editor.editorLsp)
