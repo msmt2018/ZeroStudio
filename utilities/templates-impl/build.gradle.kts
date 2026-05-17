@@ -23,7 +23,22 @@ plugins {
   id("kotlin-kapt")
 }
 
-android { namespace = "${BuildConfig.packageName}.templates.impl" }
+
+android {
+  namespace = "${BuildConfig.packageName}.templates.impl"
+
+  sourceSets {
+    getByName("main") {
+      java {
+        // Temporary: exclude partially ported Android Studio templates that still depend
+        // on legacy utilities/wizard APIs not available in templates-api.
+        exclude("com/itsaky/androidide/templates/impl/androidstudio/**")
+        exclude("com/itsaky/androidide/templates/impl/lithoClassic/**")
+      }
+    }
+  }
+}
+
 
 dependencies {
   kapt(libs.google.auto.service)
