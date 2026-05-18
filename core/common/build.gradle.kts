@@ -35,6 +35,7 @@ dependencies {
   api(libs.androidx.appcompat)
   api(libs.androidx.collection)
   api(libs.androidx.preference)
+  api(libs.androidx.documentfile)
   api(libs.androidx.vectors)
   api(libs.androidx.animated.vectors)
   api(libs.androidx.nav.ui)
