@@ -20,9 +20,8 @@ import android.view.View;
 
 import androidx.annotation.NonNull;
 
-import com.google.android.material.R;
 import com.google.android.material.color.MaterialColors;
-import android.zero.studio.layouteditor.R.string;
+import android.zero.studio.layouteditor.R;
 import android.zero.studio.layouteditor.vectormaster.VectorMasterDrawable;
 
 import java.io.File;
@@ -99,14 +98,14 @@ public class Utils {
         // Get the directory for the user's public pictures directory.
         File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
         // Create a new directory for your app
-        File appDir = new File(path, context.getString(string.app_name));
+        File appDir = new File(path, context.getString(R.string.app_name));
         if (!appDir.exists()) {
             appDir.mkdir();
         }
 
         // Generate a unique file name for your image
         String fileName =
-            context.getString(string.app_name).concat(" ").concat(title).concat(" ")
+            context.getString(R.string.app_name).concat(" ").concat(title).concat(" ")
                 + new Date().getTime()
                 + ".jpg";
         fileName = fileName.replaceAll(" ", "_").toLowerCase(Locale.getDefault());
@@ -132,7 +131,7 @@ public class Utils {
             values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
             values.put(
                 MediaStore.Images.Media.DESCRIPTION,
-                "Image saved from ".concat(context.getString(string.app_name)));
+                "Image saved from ".concat(context.getString(R.string.app_name)));
             values.put(MediaStore.Images.Media.DATE_ADDED, System.currentTimeMillis());
             values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
             values.put(MediaStore.Images.Media.ORIENTATION, 0);

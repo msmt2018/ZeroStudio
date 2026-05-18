@@ -10,8 +10,6 @@ import com.catpuppyapp.puppygit.utils.Libgit2Helper
 
 object GitAuthConfig {
   private const val PREFS = "git_auth_config"
-  private const val KEY_USERNAME = "username"
-  private const val KEY_EMAIL = "email"
   private const val KEY_TOKEN = "token"
 
   data class Config(val username: String, val email: String, val token: String) {
@@ -19,10 +17,11 @@ object GitAuthConfig {
   }
 
   fun read(context: Context): Config {
+    val (globalUsername, globalEmail) = Libgit2Helper.getGitUsernameAndEmailFromGlobalConfig()
     val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     return Config(
-        username = sp.getString(KEY_USERNAME, "").orEmpty(),
-        email = sp.getString(KEY_EMAIL, "").orEmpty(),
+        username = globalUsername,
+        email = globalEmail,
         token = sp.getString(KEY_TOKEN, "").orEmpty(),
     )
   }
@@ -74,13 +73,11 @@ object GitAuthConfig {
                   emailEt.text.toString().trim(),
                   tokenEt.text.toString().trim(),
               )
+          Libgit2Helper.saveGitUsernameAndEmailForGlobal({}, cfg.username, cfg.email)
           val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
           sp.edit {
-            putString(KEY_USERNAME, cfg.username)
-            putString(KEY_EMAIL, cfg.email)
             putString(KEY_TOKEN, cfg.token)
           }
-          Libgit2Helper.saveGitUsernameAndEmailForGlobal({}, cfg.username, cfg.email)
           onConfigured(cfg)
         }
         .setNegativeButton(android.R.string.cancel, null)
