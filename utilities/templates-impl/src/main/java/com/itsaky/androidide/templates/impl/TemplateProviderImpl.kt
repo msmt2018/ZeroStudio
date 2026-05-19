@@ -23,8 +23,8 @@ import com.itsaky.androidide.templates.Template
 import com.itsaky.androidide.templates.TemplateCategory
 import com.itsaky.androidide.templates.impl.basicActivity.basicActivityProject
 import com.itsaky.androidide.templates.impl.androidstudio.activity.aiGlassesActivity.aiGlassesActivityProject
-import com.itsaky.androidide.templates.impl.androidstudio.activity.aiStarter.aiStarterActivityProject
-import com.itsaky.androidide.templates.impl.androidstudio.activity.androidTVActivity.androidTVActivityProject
+import com.itsaky.androidide.templates.impl.androidstudio.activity.aiStarter.aiStarterTemplate
+import com.itsaky.androidide.templates.impl.androidstudio.activity.androidTVActivity.androidTVActivityTemplate
 import com.itsaky.androidide.templates.impl.androidstudio.activity.archStarterActivity.archStarterActivityProject
 import com.itsaky.androidide.templates.impl.androidstudio.activity.basicActivity.basicActivityProjectAndroidStudio
 import com.itsaky.androidide.templates.impl.basicCpp.basicCppProject
@@ -133,12 +133,12 @@ class TemplateProviderImpl : ITemplateProvider {
     registerSubCategoryTemplate(
         TemplateCategory.Mobile,
         AndroidStudioSubCategories.MobileAI,
-        aiStarterActivityProject(),
+        aiStarterTemplate,
     )
     // Android Studio template：XR 👓
     registerTemplate(TemplateCategory.XR, aiGlassesActivityProject())
     // Android Studio template：television 📺
-    registerTemplate(TemplateCategory.Tv, androidTVActivityProject())
+    registerTemplate(TemplateCategory.Tv, androidTVActivityTemplate)
     
     //Hybrid dev language Frameworks
     registerTemplate(TemplateCategory.HybridFrameworks, chaquopyXmlDemoProject())

@@ -18,11 +18,11 @@ import com.itsaky.androidide.templates.impl.base.createRecipe
 internal fun AndroidModuleTemplateBuilder.aiGlassesActivityRecipe() = createRecipe {
   executor.apply {
     addDependency(Dependency.AndroidX.Core_Ktx)
-    addDependency(Dependency.AndroidX.Activity)
-    addDependency(Dependency.AndroidX.Activity_Compose)
-    addDependency(Dependency.AndroidX.Lifecycle_Runtime_Ktx)
-    addDependency(Dependency.AndroidX.Lifecycle_Runtime_Compose)
-    addDependency(Dependency.AndroidX.Lifecycle_ViewModel_Compose)
+    addDependency(parseDependency("androidx.activity:activity:1.11.0", tomlAlias = "androidx-activity"))
+    addDependency(Dependency.AndroidX.Compose.Activity)
+    addDependency(Dependency.AndroidX.Compose.LifeCycle_Runtime_Ktx)
+    addDependency(parseDependency("androidx.lifecycle:lifecycle-runtime-compose:2.9.2", tomlAlias = "androidx-lifecycle-runtime-compose"))
+    addDependency(parseDependency("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2", tomlAlias = "androidx-lifecycle-viewmodel-compose"))
     addDependency(Dependency.AndroidX.Compose.Material3)
     addDependency(parseDependency("androidx.xr.glimmer:glimmer:1.0.0-alpha02", tomlAlias = "androidx-xr-glimmer"))
     addDependency(parseDependency("androidx.xr.projected:projected:1.0.0-alpha03", tomlAlias = "androidx-xr-projected"))
@@ -40,10 +40,11 @@ internal fun AndroidModuleTemplateBuilder.aiGlassesActivityRecipe() = createReci
         ManifestActivity(
             name = "GlassesMainActivity",
             isExported = true,
-            theme = "@style/${manifest.themeRes}",
             isLauncher = true,
-            attributes = mapOf("android:requiredDisplayCategory" to "@string/display_category_xr_projected"),
-            action = "android.intent.action.MAIN",
+            configureAttrs = {
+              attribute("android:theme", "@style/${manifest.themeRes}")
+              attribute("android:requiredDisplayCategory", "@string/display_category_xr_projected")
+            },
         ))
   }
 }
