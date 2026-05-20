@@ -131,6 +131,21 @@ class RootModelBuilder(initializationParams: InitializeProjectParams) :
   private fun applyAndroidModelBuilderProps(launcher: ConfigurableLauncher<*>) {
     launcher.addProperty(IAndroidProject.PROPERTY_BUILD_MODEL_ONLY, true)
     launcher.addProperty(IAndroidProject.PROPERTY_INVOKED_FROM_IDE, true)
+
+    val androidParams = initializationParams.androidParams
+    androidParams.injectedStudioVersion?.takeIf { it.isNotBlank() }?.let {
+      launcher.addProperty(IAndroidProject.PROPERTY_ANDROID_SUPPORT_VERSION, it)
+    }
+    androidParams.injectedBuildApi?.let { launcher.addProperty(IAndroidProject.PROPERTY_BUILD_API, it) }
+    androidParams.injectedBuildApiCodename?.takeIf { it.isNotBlank() }?.let {
+      launcher.addProperty(IAndroidProject.PROPERTY_BUILD_API_CODENAME, it)
+    }
+    androidParams.injectedBuildAbi?.takeIf { it.isNotBlank() }?.let {
+      launcher.addProperty(IAndroidProject.PROPERTY_BUILD_ABI, it)
+    }
+    androidParams.injectedBuildDensity?.takeIf { it.isNotBlank() }?.let {
+      launcher.addProperty(IAndroidProject.PROPERTY_BUILD_DENSITY, it)
+    }
   }
 
   private fun ConfigurableLauncher<*>.addProperty(property: String, value: Any) {
