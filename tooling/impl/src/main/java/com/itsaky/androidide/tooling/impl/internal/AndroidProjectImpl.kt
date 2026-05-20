@@ -152,7 +152,18 @@ internal class AndroidProjectImpl(
   }
 
   private fun getClassesJar(): File {
-    // TODO(itsaky): this should handle product flavors as well
+    val variant = androidProject.variants.firstOrNull { it.name == configuredVariant }
+    val fromModel =
+        variant
+            ?.mainArtifact
+            ?.classesFolders
+            ?.firstOrNull { it.name.endsWith(".jar") && it.exists() }
+
+    if (fromModel != null) {
+      return fromModel
+    }
+
+    // Fallback for older/partial models where classesFolders might be incomplete.
     return File(
         gradleProject.buildDirectory,
         "${IAndroidProject.FD_INTERMEDIATES}/compile_library_classes_jar/$configuredVariant/classes.jar",
