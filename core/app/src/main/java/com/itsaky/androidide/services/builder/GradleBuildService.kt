@@ -42,9 +42,7 @@ import com.itsaky.androidide.services.builder.ToolingServerRunner.OnServerStartL
 import com.itsaky.androidide.tasks.ifCancelledOrInterrupted
 import com.itsaky.androidide.tasks.runOnUiThread
 import com.itsaky.androidide.tooling.api.ForwardingToolingApiClient
-import com.itsaky.androidide.tooling.api.IProject
 import com.itsaky.androidide.tooling.api.IToolingApiClient
-import com.itsaky.androidide.tooling.api.IToolingApiServer
 import com.itsaky.androidide.tooling.api.LogSenderConfig.PROPERTY_LOGSENDER_ENABLED
 import com.itsaky.androidide.tooling.api.messages.ExecutionRequest
 import com.itsaky.androidide.tooling.api.messages.InitializeProjectParams
@@ -58,7 +56,9 @@ import com.itsaky.androidide.tooling.api.messages.result.InitializeResult
 import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult
 import com.itsaky.androidide.tooling.api.models.ToolingServerMetadata
 import com.itsaky.androidide.tooling.api.transport.ToolingTransportServerEndpoint
-import com.itsaky.androidide.tooling.impl.transport.LegacyToolingServerEndpoint
+import com.itsaky.androidide.tooling.api.transport.ToolingTransportKind
+import com.itsaky.androidide.tooling.api.transport.ToolingTransportObserver
+import com.itsaky.androidide.tooling.impl.transport.LegacyToolingServerEndpointFactory
 import com.itsaky.androidide.tooling.events.ProgressEvent
 import com.itsaky.androidide.utils.Environment
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment
@@ -86,17 +86,7 @@ import org.slf4j.LoggerFactory
  * @author Akash Yadav
  */
 class GradleBuildService :
-    Service(), BuildService, IToolingApiClient, ToolingServerRunner.Observer {
-
-  companion object {
-    private const val PROP_USE_TOOLING_EXECUTE = "androidide.use.tooling.execute"
-    private const val PROP_TOOLING_EXECUTE_JVM_ARGS = "androidide.tooling.execute.jvmArgs"
-  }
-
-  companion object {
-    private const val PROP_USE_TOOLING_EXECUTE = "androidide.use.tooling.execute"
-    private const val PROP_TOOLING_EXECUTE_JVM_ARGS = "androidide.tooling.execute.jvmArgs"
-  }
+    Service(), BuildService, IToolingApiClient, ToolingTransportObserver {
 
   companion object {
     private const val PROP_USE_TOOLING_EXECUTE = "androidide.use.tooling.execute"
@@ -352,14 +342,12 @@ class GradleBuildService :
     System.setProperty("ide.logger.init.script", initScript.absolutePath)
   }
 
-  override fun onListenerStarted(
-      server: IToolingApiServer,
-      projectProxy: IProject,
+  override fun onServerConnected(
+      endpoint: ToolingTransportServerEndpoint,
       errorStream: InputStream,
   ) {
     startServerOutputReader(errorStream)
-    this.serverEndpoint = LegacyToolingServerEndpoint(server)
-    Lookup.getDefault().update(BuildService.KEY_PROJECT_PROXY, projectProxy)
+    this.serverEndpoint = endpoint
     isToolingServerStarted = true
   }
 
@@ -1001,7 +989,14 @@ class GradleBuildService :
 
     if (toolingServerRunner?.isRunningOrStarting != true) {
       val envs = TermuxShellEnvironment().getEnvironment(this, false)
-      toolingServerRunner = ToolingServerRunner(listener, this).also { it.startAsync(envs) }
+      toolingServerRunner =
+          ToolingServerRunner(
+                  listener = listener,
+                  observer = this,
+                  endpointFactory = resolveEndpointFactory(),
+                  clientProvider = { getClient() },
+              )
+              .also { it.startAsync(envs) }
       return
     }
 
@@ -1011,6 +1006,16 @@ class GradleBuildService :
       setServerListener(listener)
     }
   }
+
+
+  private fun resolveTransportKind(): ToolingTransportKind = ToolingTransportKind.LEGACY_LSP4J
+
+  private fun resolveEndpointFactory() =
+      when (resolveTransportKind()) {
+        ToolingTransportKind.LEGACY_LSP4J -> LegacyToolingServerEndpointFactory
+        ToolingTransportKind.AIDL, ToolingTransportKind.GRPC_UDS ->
+            throw UnsupportedOperationException("Transport kind not implemented yet: ${resolveTransportKind()}")
+      }
 
   fun setEventListener(eventListener: EventListener?): GradleBuildService {
     if (eventListener == null) {

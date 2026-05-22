@@ -20,13 +20,12 @@ package com.itsaky.androidide.services.builder
 import ch.qos.logback.core.CoreConstants
 import com.itsaky.androidide.shell.executeProcessAsync
 import com.itsaky.androidide.tasks.cancelIfActive
-import com.itsaky.androidide.tooling.api.IProject
 import com.itsaky.androidide.tooling.api.IToolingApiClient
-import com.itsaky.androidide.tooling.api.IToolingApiServer
+import com.itsaky.androidide.tooling.api.transport.ToolingTransportEndpointFactory
+import com.itsaky.androidide.tooling.api.transport.ToolingTransportObserver
 import com.itsaky.androidide.tooling.api.util.ToolingApiLauncher
 import com.itsaky.androidide.utils.Environment
 import com.termux.shared.reflection.ReflectionUtils
-import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
@@ -44,7 +43,9 @@ import org.slf4j.LoggerFactory
  */
 internal class ToolingServerRunner(
     private var listener: OnServerStartListener?,
-    private var observer: Observer?,
+    private var observer: ToolingTransportObserver?,
+    private val endpointFactory: ToolingTransportEndpointFactory,
+    private val clientProvider: () -> IToolingApiClient,
 ) {
 
   internal var pid: Int? = null
@@ -130,15 +131,14 @@ internal class ToolingServerRunner(
 
               val launcher =
                   ToolingApiLauncher.newClientLauncher(
-                      observer!!.getClient(),
+                      clientProvider(),
                       inputStream,
                       outputStream,
                   )
 
               val future = launcher.startListening()
-              observer?.onListenerStarted(
-                  server = launcher.remoteProxy as IToolingApiServer,
-                  projectProxy = launcher.remoteProxy as IProject,
+              observer?.onServerConnected(
+                  endpoint = endpointFactory.create(launcher.remoteProxy),
                   errorStream = errorStream,
               )
 
@@ -197,18 +197,6 @@ internal class ToolingServerRunner(
         .getOrNull()
   }
 
-  interface Observer {
-
-    fun onListenerStarted(
-        server: IToolingApiServer,
-        projectProxy: IProject,
-        errorStream: InputStream,
-    )
-
-    fun onServerExited(exitCode: Int)
-
-    fun getClient(): IToolingApiClient
-  }
 
   /** Callback to listen for Tooling API server start event. */
   fun interface OnServerStartListener {
