@@ -108,3 +108,25 @@
     - `supportsModelSnapshot`
     - `supportsQueryService`
 - 当前阶段定位：**完成了“能力扩展字段设计/API 草案”这一步，但尚未完成服务端协商逻辑与兼容测试实跑。**  
+
+
+## 8) 第1周剩余任务拆分（可直接执行）
+
+### 8.1 D1-D2（收口 P0）
+1. 完成兼容矩阵 smoke：`new-server+old-client` / `old-server+new-client`。
+2. 事件闭合校验脚本：至少覆盖 TASK、PROJECT_CONFIGURATION。
+3. Capability 协商字段在 client UI 侧显示（只读 debug 面板）。
+
+### 8.2 D3（协议改造预备）
+1. 建立 `lsp4j-rpc` 使用点清单（client/server/serialization）。
+2. 新建 AIDL 控制面接口草案（connect/execute/cancel/subscribe/unsubscribe）。
+3. 新建 proto 服务草案（EventStream、ModelChunkStream、ExecutionSummary）。
+
+### 8.3 D4-D5（风险前置验证）
+1. 在大型项目样本上运行 2 组对照：旧协议 vs 新协议（若新协议未全量完成，先跑 mock stream）。
+2. 记录：峰值 RSS、GC 次数、UI 掉帧、构建总时长。
+3. 输出迭代1周报补充页：性能基线与差异结论。
+
+### 8.4 本周 Definition of Done（更新）
+- 不仅完成 execute 主链路；
+- 还需具备：兼容矩阵实跑结果 + 事件闭合验收 + 协议替换预备文档三件套。

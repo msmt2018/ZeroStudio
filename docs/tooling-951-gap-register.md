@@ -72,3 +72,40 @@
 2. 并行推进 **GAP-P0-02** capability 扩展字段设计。  
 3. 下周初收敛 **GAP-P1-01** requestId 全链路。  
 
+
+
+## P0（协议替换专项：lsp4j-rpc -> AIDL/gRPC/REAPI）
+
+### GAP-P0-04：lsp4j-rpc 依赖与调用链未移除
+- **能力名**：构建服务通信协议迁移。
+- **当前状态**：仍存在 lsp4j-rpc 主链路。
+- **影响范围**：`core/app`、`tooling/api`、`tooling/impl`、`tooling/events`。
+- **风险**：序列化/反序列化高开销导致高内存、高延迟、UI 卡顿与 OOM。
+- **最小实现方案**：
+  1. 盘点并冻结新增 lsp4j-rpc 接口；
+  2. 设计 AIDL 控制面 + gRPC 数据面；
+  3. 加入双栈灰度开关与回退策略；
+  4. 完成旧链路删除计划。
+- **验收标准**：
+  - 构建主流程默认不再经过 lsp4j-rpc；
+  - 保留可控回退开关（发布前可临时启用）。
+
+### GAP-P0-05：缺少 REAPI 远程执行/缓存接入层
+- **能力名**：远程执行与缓存标准化。
+- **当前状态**：未形成 REAPI bridge。
+- **影响范围**：`tooling/impl`、`tooling/model`、`core/projects`。
+- **风险**：大型项目缓存复用不足，构建耗时无法显著下降。
+- **最小实现方案**：
+  1. 新增 `ReapiExecutionBridge` 抽象；
+  2. 打通 Action Cache / CAS 查询与上传下载；
+  3. 增加 capability 协商：是否支持 remote execution。
+- **验收标准**：
+  - 远程缓存命中率可观测；
+  - 失败可自动 fallback 到本地执行。
+
+### GAP-P1-03：大模型/大事件缺少分片传输协议
+- **能力名**：流式传输与分片重组。
+- **当前状态**：协议默认单包模型，不利于超大结果。
+- **影响范围**：`tooling/events`、`tooling/model`、`core/app`。
+- **最小实现方案**：事件与模型新增 `chunkId/sequence/total/hash` 字段，并提供重组校验器。
+- **验收标准**：100MB 级事件/模型流可稳定传输且可校验一致性。

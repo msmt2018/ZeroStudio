@@ -278,3 +278,49 @@
 ## 10. 结论
 
 你当前仓库已经具备升级到 9.5.1 的基础条件（依赖与模块结构都在），但离“全方面功能支持”还差一层**体系化补齐**。建议按“协议 -> 执行 -> 事件 -> 模型 -> 消费 -> 验证”顺序推进，避免先堆模型导致维护成本失控。
+
+
+## 10. 构建服务通信协议重构（强制）：移除 lsp4j-rpc，切换 AIDL + gRPC + REAPI + Proto
+
+> 目标：彻底移除客户端与服务端构建通信中的 lsp4j-rpc 依赖与调用链，构建“设备内 IPC + 远端执行/缓存 + 高效序列化”的双通道架构。
+
+### 10.1 目标架构（分层）
+1. **进程内/同机跨进程控制面**：AIDL（Binder）
+   - 用于 App(UI 进程) <-> 本机构建服务进程的控制命令、状态订阅、生命周期管理。
+2. **数据面/远程执行面**：gRPC + Proto
+   - 用于大体量构建事件、模型快照分片、日志流与远程执行请求。
+3. **远程构建与缓存协议面**：REAPI
+   - 对接 CAS/Action Cache/Execution，支持大项目缓存复用与并发执行。
+
+### 10.2 模块落点（与当前仓库对应）
+- `tooling/api`：
+  - 新增 AIDL 对应 DTO（轻量控制命令）。
+  - 新增 proto DTO 映射层（大对象流式传输，不经 Binder 直接搬运）。
+- `tooling/impl`：
+  - 新增 `TransportFacade`：`AidlControlChannel` + `GrpcDataChannel`。
+  - 新增 `ReapiExecutionBridge`：封装 Action/CAS/Execution 调用与重试。
+- `tooling/events`：
+  - 事件模型新增 chunk/sequence 字段，支持流式分片和断点续传。
+- `tooling/model`：
+  - 模型快照支持 `snapshotId/chunkCount/chunkHash` 元信息。
+- `core/app`：
+  - UI 仅通过 AIDL 控制通道发起请求；大数据流改为 gRPC 订阅。
+- `core/projects`：
+  - 同步流程改为 capability 驱动：优先 REAPI，失败自动 fallback 本地 Gradle。
+
+### 10.3 分阶段迁移（避免一次性切换风险）
+- **阶段A（并行接入）**：保留 lsp4j-rpc，新增 AIDL/gRPC 双栈，默认仍走旧链路。
+- **阶段B（灰度切流）**：按项目大小/开关切 5% -> 25% -> 50% 流量到新协议。
+- **阶段C（全面替换）**：删除 lsp4j-rpc server/client adapter 与序列化模型。
+- **阶段D（清理收口）**：删除遗留配置、文档、依赖与兼容分支。
+
+### 10.4 性能与稳定性验收门槛（必须量化）
+- P95 UI 主线程阻塞时间下降 >= 40%。
+- 构建服务进程峰值内存下降 >= 30%。
+- 超大型项目（`./build` 缓存 5GB~100GB+）连续构建 20 次无 OOM。
+- 同项目构建时长与 Termux 直跑 Gradle 的差距缩小到 <= 1.5x。
+
+### 10.5 与 9.5.1 升级的耦合关系
+- 9.5.1 Tooling API 升级优先解决“能力覆盖”；
+- 协议重构优先解决“传输与性能瓶颈”；
+- 两条线并行，但以 capability 协商统一收敛，确保客户端按能力选择本地/远程执行路径。
