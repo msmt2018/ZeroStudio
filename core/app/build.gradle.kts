@@ -225,6 +225,7 @@ dependencies {
   implementation(projects.xml.lsp)
   implementation(projects.xml.utils)
   implementation(projects.tooling.api)
+  implementation(projects.tooling.buildGrpc)
   implementation(projects.tooling.pluginConfig)
   compileOnly(projects.tooling.impl)
   implementation(projects.utilities.buildInfo)

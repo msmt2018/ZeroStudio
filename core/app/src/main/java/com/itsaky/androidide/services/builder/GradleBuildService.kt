@@ -74,7 +74,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import org.gradle.tooling.events.OperationType
 import org.slf4j.LoggerFactory
 
 /**
@@ -362,7 +361,7 @@ class GradleBuildService :
     }
   }
 
-  override fun logOutput(line: String) {
+  private fun logOutput(line: String) {
     eventListener?.onOutput(line)
   }
 
@@ -435,7 +434,7 @@ class GradleBuildService :
     return CompletableFuture.completedFuture(extraArgs)
   }
 
-  override fun checkGradleWrapperAvailability(): CompletableFuture<GradleWrapperCheckResult> {
+  fun checkGradleWrapperAvailability(): CompletableFuture<GradleWrapperCheckResult> {
     return if (isGradleWrapperAvailable)
         CompletableFuture.completedFuture(GradleWrapperCheckResult(true))
     else installWrapper()
@@ -581,7 +580,7 @@ class GradleBuildService :
     return performBuildTasks(
         CompletableFuture.supplyAsync {
           val buildInfo = BuildInfo(tasksList)
-          prepareBuild(buildInfo)
+          onBuildPrepared(buildInfo)
 
           try {
             val projectDir = ProjectManagerImpl.getInstance().projectDir
@@ -779,7 +778,7 @@ class GradleBuildService :
     return performBuildTasks(requireServerEndpoint().execute(sanitized))
   }
 
-  private fun resolvePreferredOperationTypes(): Set<OperationType> {
+  private fun resolvePreferredOperationTypes(): Set<String> {
     val fromInitialize = lastInitializeResult?.negotiatedOperationTypes.orEmpty()
     if (fromInitialize.isNotEmpty()) {
       return fromInitialize
@@ -791,15 +790,15 @@ class GradleBuildService :
         negotiated
       } else {
         linkedSetOf(
-            OperationType.TASK,
-            OperationType.PROJECT_CONFIGURATION,
+            "TASK",
+            "PROJECT_CONFIGURATION",
         )
       }
     } catch (error: Throwable) {
       log.warn("Unable to load negotiated operation types from tooling metadata", error)
       linkedSetOf(
-          OperationType.TASK,
-          OperationType.PROJECT_CONFIGURATION,
+          "TASK",
+          "PROJECT_CONFIGURATION",
       )
     }
   }
@@ -996,7 +995,7 @@ class GradleBuildService :
       null
     } else
         object : EventListener {
-          override fun onBuildPrepared(buildInfo: BuildInfo) {
+          override fun prepareBuild(buildInfo: BuildInfo) {
             runOnUiThread { listener.prepareBuild(buildInfo) }
           }
 

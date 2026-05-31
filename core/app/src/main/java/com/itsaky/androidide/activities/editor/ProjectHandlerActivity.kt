@@ -75,7 +75,6 @@ import java.util.stream.Collectors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.gradle.tooling.events.OperationType
 
 /** @author Akash Yadav */
 @Suppress("MemberVisibilityCanBePrivate")
@@ -492,13 +491,13 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
         ToolingClientCapabilities(
             requestedOperationTypes =
                 linkedSetOf(
-                    OperationType.TASK,
-                    OperationType.TEST,
-                    OperationType.PROJECT_CONFIGURATION,
-                    OperationType.FILE_DOWNLOAD,
-                    OperationType.TRANSFORM,
-                    OperationType.WORK_ITEM,
-                    OperationType.GENERIC,
+                    "TASK",
+                    "TEST",
+                    "PROJECT_CONFIGURATION",
+                    "FILE_DOWNLOAD",
+                    "TRANSFORM",
+                    "WORK_ITEM",
+                    "GENERIC",
                 ),
             // keep default aligned with DEFAULT_MAX_TOOLING_EVENTS_PER_SECOND
             // so client/server event traffic is bounded on constrained devices
