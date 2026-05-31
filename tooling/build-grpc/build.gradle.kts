@@ -19,7 +19,13 @@ sourceSets {
   main {
     proto {
       srcDir("src/main/proto")
-      include("**/*.proto")
+
+      // The build/bazel protos are kept under this source directory only as imports for
+      // build_service.proto. Generate their Java/Kotlin classes from :tooling:reapi-proto
+      // instead, otherwise Android receives the same build.bazel.* classes from both
+      // modules and D8 fails while merging dex archives.
+      include("binary_protocol.proto")
+      include("build_service.proto")
     }
   }
 }
