@@ -38,7 +38,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.itsaky.androidide.fragments.git.*;
-import android.studio.zero.regular.expression.preview.RegexPreviewFragment;
+import com.itsaky.androidide.fragments.toolbox.EditorToolboxFragment;
 
 public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
 
@@ -65,12 +65,9 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
     this.fragments.add(new Tab(fragmentActivity.getString(R.string.view_apm_panel), 
         EditorProcessApmFragment.class, ++index));
         
-       //正则表达式可视化调试与预览
-    this.fragments.add(new Tab(fragmentActivity.getString(R.string.title_regular_preview), 
-       RegexPreviewFragment.class, ++index));
-       
-    this.fragments.add(new Tab(fragmentActivity.getString(R.string.title_regular_preview), 
-       com.itsaky.androidide.repository.dependencies.analyzer.ui.DependencyUpdateFragment.class, ++index));
+       //多功能工具箱：按需打开正则预览、依赖更新、MCP、AI Chat 等工具。
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.title_editor_toolbox),
+       EditorToolboxFragment.class, ++index));
        
     //诊断
      this.fragments.add(new Tab(fragmentActivity.getString(R.string.view_diags),

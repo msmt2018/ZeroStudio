@@ -140,7 +140,7 @@ class EditorBottomSheet @JvmOverloads constructor(
 
     mediator.attach()
     binding.pager.isUserInputEnabled = false
-    binding.pager.offscreenPageLimit = pagerAdapter.itemCount - 1
+    binding.pager.offscreenPageLimit = 1
 
     binding.tabs.addOnTabSelectedListener(
         object : OnTabSelectedListener {

@@ -45,7 +45,6 @@ import com.itsaky.androidide.actions.sidebar.BuildVariantsSidebarAction
 import com.itsaky.androidide.actions.sidebar.CloseProjectSidebarAction
 import com.itsaky.androidide.actions.sidebar.DataFileTreeSidebarAction
 import com.itsaky.androidide.actions.sidebar.FileTreeSidebarAction
-import com.itsaky.androidide.actions.sidebar.McpFragmentSidebarAction
 import com.itsaky.androidide.actions.sidebar.PreferencesSidebarAction
 import com.itsaky.androidide.actions.sidebar.ProjectMaterialsSidebarAction
 import com.itsaky.androidide.actions.sidebar.TerminalSidebarAction
@@ -71,7 +70,6 @@ internal object EditorSidebarActions {
     registry.registerAction(DataFileTreeSidebarAction(context, ++order))
     registry.registerAction(BuildVariantsSidebarAction(context, ++order))
     registry.registerAction(TerminalSidebarAction(context, ++order))
-    registry.registerAction(McpFragmentSidebarAction(context, ++order))
     registry.registerAction(ProjectMaterialsSidebarAction(context, ++order))
     registry.registerAction(PreferencesSidebarAction(context, ++order))
     registry.registerAction(CloseProjectSidebarAction(context, ++order))

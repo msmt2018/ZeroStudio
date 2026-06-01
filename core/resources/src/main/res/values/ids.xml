@@ -111,6 +111,13 @@
           name="fragment_containers_parent"
           type="id" />
           
+     <item
+          name="editor_toolbox_tabs"
+          type="id" />
+     <item
+          name="editor_toolbox_fragment_container"
+          type="id" />
+
 </resources>
 
 
