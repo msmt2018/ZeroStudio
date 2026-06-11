@@ -1081,7 +1081,10 @@ SHA256：%9$s</string>
   <string name="git_operations_section">Git Operations</string>
   <string name="git_init_title">Initialize Git</string>
   <string name="git_init_subtitle">Create .git repository</string>
-  <string name="git_settings_under_construction">Git settings page is under construction</string>
+  <!-- 2c2: 移除死链字符串 "git_settings_under_construction";新增"快捷设置" + "设置用户名 / 邮箱" -->
+  <string name="git_quick_settings_section">快捷设置</string>
+  <string name="git_set_user_info_title">设置用户名 / 邮箱</string>
+  <string name="git_set_user_info_subtitle">配置全局 git 用户身份</string>
   <string name="git_token_updated">Token credentials updated for Push/Pull.</string>
   <string name="git_no_opened_project">No opened project</string>
   <string name="git_repository_already_initialized">Repository already initialized</string>

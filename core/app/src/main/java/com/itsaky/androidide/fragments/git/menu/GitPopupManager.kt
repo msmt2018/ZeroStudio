@@ -76,13 +76,17 @@ class GitPopupManager(private val context: Context) {
       initRepositoryIfNeeded()
       dismiss()
     }
-    addDivider()
 
-    addMenuItem(iconRes = R.drawable.ic_settings_24, title = context.getString(R.string.settings)) {
-      Msg.requireShowLongDuration(
-          context.getString(com.itsaky.androidide.resources.R.string.git_settings_under_construction)
-      )
-      dismiss()
+    // 2c2: 新增"快捷设置"区段,把"设置用户名 / 邮箱"入口从原 header 点击
+    // 迁出(原 header 是只读的,只显示 + 眼睛切换邮箱可见性)。
+    addDivider()
+    addSectionTitle(context.getString(com.itsaky.androidide.resources.R.string.git_quick_settings_section))
+    addMenuItem(
+        iconRes = com.itsaky.androidide.resources.R.drawable.ic_account,
+        title = context.getString(com.itsaky.androidide.resources.R.string.git_set_user_info_title),
+        subtitle = context.getString(com.itsaky.androidide.resources.R.string.git_set_user_info_subtitle),
+    ) {
+      showSetUserInfoDialog()
     }
 
     val displayMetrics = context.resources.displayMetrics
@@ -117,7 +121,8 @@ class GitPopupManager(private val context: Context) {
       updateEmailDisplay()
     }
 
-    headerView.setOnClickListener { showSetUserInfoDialog() }
+    // 2c2: header 改为只读 — 不再绑点击事件触发 showSetUserInfoDialog;
+    // 该入口已迁到"快捷设置"区段的"设置用户名 / 邮箱"菜单项。
 
     container?.addView(headerView)
   }
