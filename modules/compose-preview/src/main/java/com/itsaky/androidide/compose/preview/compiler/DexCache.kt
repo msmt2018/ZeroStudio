@@ -4,7 +4,14 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.security.MessageDigest
 
-class DexCache(private val cacheDir: File) {
+class DexCache(
+    private val cacheDir: File,
+    /**
+     * SDK 版本标识 (来自 [AssetsComposeBundles.versionTag]).
+     * 当 SDK 升级时, 旧缓存自动失效, 避免类型不兼容.
+     */
+    private val versionTag: () -> String = { "unknown" }
+) {
 
     init {
         cacheDir.mkdirs()
@@ -19,7 +26,16 @@ class DexCache(private val cacheDir: File) {
         }
 
         val meta = metaFile.readLines()
-        if (meta.size < 2) {
+        if (meta.size < 3) {
+            cacheEntry.delete()
+            metaFile.delete()
+            return null
+        }
+
+        // SDK 升级时, 第 3 行 (versionTag) 不匹配 -> 视为失效
+        if (meta[2] != versionTag()) {
+            LOG.info("Cache invalidated due to SDK version change: stored={}, current={}",
+                meta[2], versionTag())
             cacheEntry.delete()
             metaFile.delete()
             return null
@@ -43,9 +59,9 @@ class DexCache(private val cacheDir: File) {
         val metaFile = File(cacheDir, "$sourceHash.meta")
 
         dexFile.copyTo(cacheEntry, overwrite = true)
-        metaFile.writeText("$className\n$functionName")
+        metaFile.writeText("$className\n$functionName\n${versionTag()}")
 
-        LOG.debug("Cached DEX for hash: {}", sourceHash)
+        LOG.debug("Cached DEX for hash: {} (sdkVer={})", sourceHash, versionTag())
         cleanOldEntries()
     }
 
