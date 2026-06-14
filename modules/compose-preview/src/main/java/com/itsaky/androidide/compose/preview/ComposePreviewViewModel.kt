@@ -29,7 +29,10 @@ import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepos
 import com.itsaky.androidide.compose.preview.data.repository.InitializationResult
 import com.itsaky.androidide.compose.preview.domain.PreviewSourceParser
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
+import com.itsaky.androidide.compose.preview.ui.BuildPhaseTimings
+import com.itsaky.androidide.compose.preview.ui.BuildStats
 import com.itsaky.androidide.compose.preview.ui.DeviceProfile
+import com.itsaky.androidide.compose.preview.ui.NodeInfo
 import com.itsaky.androidide.compose.preview.ui.SystemBarsTheme
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -169,6 +172,16 @@ class ComposePreviewViewModel(
     private val _debugEnabled = MutableStateFlow(false)
     val debugEnabled: StateFlow<Boolean> = _debugEnabled.asStateFlow()
 
+    // v2.1 调试面板状态
+
+    /** 当前构建统计 (phase timing + cache hit rate). */
+    private val _buildStats = MutableStateFlow(BuildStats.EMPTY)
+    val buildStats: StateFlow<BuildStats> = _buildStats.asStateFlow()
+
+    /** Inspector 节点列表 (由 ComposableRenderer 推上来). */
+    private val _inspectorNodes = MutableStateFlow<List<NodeInfo>>(emptyList())
+    val inspectorNodes: StateFlow<List<NodeInfo>> = _inspectorNodes.asStateFlow()
+
     private val sourceChanges = MutableSharedFlow<SourceUpdate>()
 
     private var currentSource: String = ""
@@ -303,8 +316,28 @@ class ComposePreviewViewModel(
 
         _previewState.value = PreviewState.Compiling
 
+        // v2.1: 测量 build 耗时 (粗粒度, 后续由 repository 暴露更细分 phase)
+        val compileStart = System.currentTimeMillis()
+
         repository.compilePreview(source, parsed)
             .onSuccess { result ->
+                val totalMs = System.currentTimeMillis() - compileStart
+                // 粗略分配: 总耗时归到 compile phase (等 repository 暴露细分 phase 后再切)
+                LOG.info("compilePreview success in {}ms", totalMs)
+
+                // 累计 compile 时间
+                val prev = _buildStats.value
+                _buildStats.value = prev.copy(
+                    phaseTimings = BuildPhaseTimings(
+                        init = prev.phaseTimings.init,
+                        compile = totalMs,
+                        dex = prev.phaseTimings.dex,
+                        load = prev.phaseTimings.load,
+                    ),
+                    lastCompileMs = totalMs,
+                    totalCompileMs = prev.totalCompileMs + totalMs,
+                )
+
                 _previewState.value = PreviewState.Ready(
                     dexFile = result.dexFile,
                     className = result.className,
@@ -449,6 +482,70 @@ class ComposePreviewViewModel(
 
     fun toggleDebug() {
         _debugEnabled.value = !_debugEnabled.value
+    }
+
+    // === v2.1 调试面板 setter (供 ComposableRenderer / 外部调用) ===
+
+    /**
+     * 更新 BuildStats (覆盖). ComposableRenderer 在每次 loadClass / phase 完成时调用.
+     */
+    fun updateBuildStats(stats: BuildStats) {
+        _buildStats.value = stats
+    }
+
+    /**
+     * 增量更新 BuildStats 的某部分 (用于实时刷新).
+     */
+    fun patchBuildStats(
+        classCacheSize: Int? = null,
+        activeLoaderCount: Int? = null,
+        loadedClassCount: Long? = null,
+        cacheHitCount: Long? = null,
+        cacheMissCount: Long? = null,
+        phaseInit: Long? = null,
+        phaseCompile: Long? = null,
+        phaseDex: Long? = null,
+        phaseLoad: Long? = null,
+        lastRenderMs: Long? = null,
+    ) {
+        val prev = _buildStats.value
+        val timings = prev.phaseTimings
+        _buildStats.value = prev.copy(
+            phaseTimings = BuildPhaseTimings(
+                init = phaseInit ?: timings.init,
+                compile = phaseCompile ?: timings.compile,
+                dex = phaseDex ?: timings.dex,
+                load = phaseLoad ?: timings.load,
+            ),
+            classCacheSize = classCacheSize ?: prev.classCacheSize,
+            activeLoaderCount = activeLoaderCount ?: prev.activeLoaderCount,
+            loadedClassCount = loadedClassCount ?: prev.loadedClassCount,
+            cacheHitCount = cacheHitCount ?: prev.cacheHitCount,
+            cacheMissCount = cacheMissCount ?: prev.cacheMissCount,
+            lastRenderMs = lastRenderMs ?: prev.lastRenderMs,
+        )
+    }
+
+    /**
+     * 提交一组 Inspector 节点 (供 ComposableRenderer 推上来).
+     */
+    fun setInspectorNodes(nodes: List<NodeInfo>) {
+        _inspectorNodes.value = nodes
+    }
+
+    fun clearInspectorNodes() {
+        _inspectorNodes.value = emptyList()
+    }
+
+    /**
+     * 记录一次 render 耗时.
+     */
+    fun recordRender(elapsedMs: Long) {
+        val prev = _buildStats.value
+        _buildStats.value = prev.copy(
+            lastRenderMs = elapsedMs,
+            totalRenderMs = prev.totalRenderMs + elapsedMs,
+        )
     }
 
     override fun onCleared() {

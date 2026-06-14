@@ -56,11 +56,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.itsaky.androidide.compose.preview.ui.BuildStats
+import com.itsaky.androidide.compose.preview.ui.DebugDrawer
 import com.itsaky.androidide.compose.preview.ui.DeviceFrame
 import com.itsaky.androidide.compose.preview.ui.DeviceProfileSheet
+import com.itsaky.androidide.compose.preview.ui.PreviewLog
+import com.itsaky.androidide.compose.preview.ui.PreviewLogcatSink
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbar
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarActions
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarState
+import com.itsaky.androidide.compose.preview.ui.RecomposeTracker
 import com.itsaky.androidide.compose.preview.ui.ResolutionEditor
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -108,6 +113,12 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // 卸载 logcat sink, 恢复原始 System.out / System.err
+        PreviewLog.sink.uninstall()
+    }
+
     companion object {
         private val LOG = LoggerFactory.getLogger(ComposePreviewActivity::class.java)
 
@@ -139,11 +150,19 @@ fun ComposePreviewScreen(
     val theme by viewModel.theme.collectAsStateWithLifecycle()
     val debugEnabled by viewModel.debugEnabled.collectAsStateWithLifecycle()
 
+    // v2.1 调试面板状态
+    val inspectorNodes by viewModel.inspectorNodes.collectAsStateWithLifecycle()
+    val buildStats by viewModel.buildStats.collectAsStateWithLifecycle()
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showDeviceSheet by remember { mutableStateOf(false) }
     var showResolutionEditor by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
+
+    // v2.1 调试面板: 单例 per-Activity (跨 recompose 保持状态)
+    val logcatSink = remember { PreviewLog.sink.also { it.install() } }
+    val recomposeTracker = remember { RecomposeTracker() }
 
     // 应用主题
     val colorScheme = when (theme) {
@@ -243,6 +262,21 @@ fun ComposePreviewScreen(
             onDismiss = {
                 showResolutionEditor = false
             }
+        )
+    }
+
+    // v2.1 调试面板 (4 tabs: Inspector / Recompose / Logcat / Stats)
+    if (debugEnabled) {
+        val debugSheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+        )
+        DebugDrawer(
+            sheetState = debugSheetState,
+            onDismiss = { viewModel.toggleDebug() },
+            inspectorNodes = inspectorNodes,
+            recomposeTracker = recomposeTracker,
+            logcat = logcatSink,
+            stats = buildStats,
         )
     }
 }
