@@ -239,6 +239,14 @@ android {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
   }
+
+  // v2.2 P5: unit test 启用 (junit + kotlin-test)
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = false
+      isReturnDefaultValues = true
+    }
+  }
 }
 
 dependencies {
@@ -275,4 +283,9 @@ dependencies {
   compileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22")
   // 反射读取 LayoutNode 等需要 kotlin-reflect
   implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.22")
+
+  // v2.2 P5: 单元测试 (P3 Live Edit + P4 Codec + Persistence)
+  testImplementation("junit:junit:4.13.2")
+  testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.22")
+  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 }
