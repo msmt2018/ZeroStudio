@@ -22,37 +22,48 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * LiveLiteral 编辑器 v2.2 (P0).
+ * LiveLiteral 编辑器 v2.2 (P0 + P1).
  *
- * 负责把 [LiveLiteral] 的 int 编码值翻译成业务值 (Dp/Sp/Color/Int/...) 并回写.
+ * 负责把 [LiveLiteralValue] / [LiveLiteralGroup] 翻译成 int 编码, 写回 LiveLiterals 字段.
+ *
+ * ## v2.2 P1 升级
+ *
+ * - 接收 [LiveLiteralEncoder] 注入, 支持 Color / Dp / Sp / Float / Long 完整编码
+ * - 接收 density / fontScale 用于 Dp / Sp 编码
+ * - 新 API: [updateValue] 接受 [LiveLiteralValue] (类型安全)
+ * - 新 API: [attach] 返回 [LiveLiteralGroup] 列表 (配对后), 替代 P0 的 [LiveLiteral] 列表
+ * - 保留 [LiveLiteral]-based P0 API 以便向后兼容
  *
  * ## 用法
  *
  * ```kotlin
- * val editor = LiveLiteralEditor(scanner, recomposeTrigger = { ... })
+ * val encoder = LiveLiteralEncoder.fromResources(density = 2.75f, fontScale = 1.0f)
+ * val editor = LiveLiteralEditor(scanner, encoder) { composeView.invalidate() }
  * editor.attach(composableClass, functionName)
- * val literals = editor.currentLiterals()
- * literals.find { it.fieldName == "Dp$arg-0$callSite-3" }?.let { lit ->
- *     editor.updateDp(lit, 16.dp)  // 自动编码成 int, 写回
+ *
+ * // 列出当前可热替换字面量
+ * val groups = editor.currentGroups()
+ *
+ * // 修改 Color
+ * groups.find { it.type == LiveLiteralType.COLOR }?.let { group ->
+ *     editor.updateValue(group, LiveLiteralValue.ColorValue(Color.Red))
+ * }
+ *
+ * // 修改 Int
+ * groups.find { it.type == LiveLiteralType.INT }?.let { group ->
+ *     editor.updateValue(group, LiveLiteralValue.IntValue(42))
  * }
  * ```
  *
- * ## 编码规则 (与 Compose Compiler 对齐)
- *
- * - [LiveLiteralType.INT]      — 直接 int
- * - [LiveLiteralType.LONG]     — high 32 + low 32, 通常跨 2 个字段
- * - [LiveLiteralType.FLOAT]    — `Float.toRawBits`
- * - [LiveLiteralType.BOOLEAN]  — 0/1
- * - [LiveLiteralType.DP]       — `Dp.value * density`, 这里只用 Dp.value 简化
- * - [LiveLiteralType.SP]       — `TextUnit.value * fontScale * density`, 这里只用 .value
- * - [LiveLiteralType.COLOR]    — ULong packed (ARGB), 跨 2 个字段
- *
- * **注意**: 真实场景下应该根据 Composable 调用点的语义编码, 这里是**最简化**实现.
- *
  * @see LiveLiteralsScanner
+ * @see LiveLiteralEncoder
  */
 class LiveLiteralEditor(
     private val scanner: LiveLiteralsScanner,
+    /**
+     * v2.2 P1 新增: 类型安全编码器.
+     */
+    private val encoder: LiveLiteralEncoder = LiveLiteralEncoder(),
     /**
      * 重组触发回调. 改完字面量后, 调用 [recompose] 通知 Composable 重新执行.
      */
@@ -61,25 +72,27 @@ class LiveLiteralEditor(
     private val LOG = LoggerFactory.getLogger(LiveLiteralEditor::class.java)
 
     private val attached = AtomicReference<AttachInfo?>(null)
-    private val listeners = CopyOnWriteArrayList<(List<LiveLiteral>) -> Unit>()
+    private val listeners = CopyOnWriteArrayList<(List<LiveLiteralGroup>) -> Unit>()
+
+    // =============== v2.2 P1: 配对组 (推荐) ===============
 
     /**
-     * 关联一个 Composable, 扫描其字面量.
+     * 关联 Composable 并扫描配对字面量组.
      */
     fun attach(composableClass: Class<*>, functionName: String) {
         LOG.info("Attaching LiveLiteralEditor to {}#{}", composableClass.name, functionName)
-        val literals = scanner.scanAll(composableClass, functionName)
-        attached.set(AttachInfo(composableClass, functionName, literals))
-        notify(literals)
+        val groups = scanner.scanAllGroups(composableClass, functionName)
+        attached.set(AttachInfo(composableClass, functionName, groups))
+        notify(groups)
     }
 
     /**
-     * 获取当前 Composable 的字面量列表.
+     * 当前 Composable 的字面量组.
      */
-    fun currentLiterals(): List<LiveLiteral> = attached.get()?.literals ?: emptyList()
+    fun currentGroups(): List<LiveLiteralGroup> = attached.get()?.groups ?: emptyList()
 
     /**
-     * 重新扫描 (例如 LiveLiterals 失效后).
+     * 重新扫描 (LiveLiterals 失效后).
      */
     fun rescan() {
         val info = attached.get() ?: return
@@ -87,60 +100,19 @@ class LiveLiteralEditor(
     }
 
     /**
-     * 修改一个 Int 字面量.
-     */
-    fun updateInt(literal: LiveLiteral, value: Int) {
-        writeField(literal, value)
-    }
-
-    /**
-     * 修改一个 Float 字面量.
-     */
-    fun updateFloat(literal: LiveLiteral, value: Float) {
-        writeField(literal, java.lang.Float.floatToRawIntBits(value))
-    }
-
-    /**
-     * 修改一个 Boolean 字面量.
-     */
-    fun updateBoolean(literal: LiveLiteral, value: Boolean) {
-        writeField(literal, if (value) 1 else 0)
-    }
-
-    /**
-     * 修改一个 Dp 字面量.
+     * v2.2 P1: 类型安全更新.
      *
-     * 简化: 写为 `Dp.value` 的 int 形式 (调用方需要按其 Composable 实际预期调整).
+     * 接受 [LiveLiteralValue], 内部用 [encoder] 编码, 写回 (含配对字段).
      */
-    fun updateDpValue(literal: LiveLiteral, dpValue: Float) {
-        writeField(literal, dpValue.toRawBits().let { bits ->
-            // Dp 在 Compose runtime 是 Dp(value: Float) → packed long
-            // 这里我们用 bits 简化, 用户界面提示实际效果需要 recompile
-            java.lang.Float.floatToRawIntBits(dpValue)
-        })
+    fun updateValue(group: LiveLiteralGroup, value: LiveLiteralValue) {
+        val encoded = encoder.encode(value)
+        writeGroup(group, encoded)
     }
 
     /**
-     * 修改一个 Sp 字面量 (简化, 同 Dp).
+     * v2.2 P1: 写编码后的字面量.
      */
-    fun updateSpValue(literal: LiveLiteral, spValue: Float) {
-        updateDpValue(literal, spValue)
-    }
-
-    /**
-     * 修改一个 Color 字面量 (ARGB int).
-     *
-     * 注意: Compose 中 Color 是 ULong, 编译为两个 int 字段.
-     * 本函数只更新 first (high 32) 字段, 假设字段已按 `Color$arg-i$callSite-j` 配对.
-     */
-    fun updateColorArgb(literal: LiveLiteral, argb: Int) {
-        writeField(literal, argb)
-    }
-
-    /**
-     * 写入字面量 + 触发重组.
-     */
-    private fun writeField(literal: LiveLiteral, encodedValue: Int) {
+    private fun writeGroup(group: LiveLiteralGroup, encoded: EncodedLiteral) {
         val info = attached.get() ?: run {
             LOG.warn("LiveLiteralEditor not attached, dropping write")
             return
@@ -151,14 +123,20 @@ class LiveLiteralEditor(
             LOG.warn("LiveLiterals class not resolved, dropping write")
             return
         }
-        scanner.setIntValue(literal, liveLiteralsClass, encodedValue)
-
-        // 更新本地缓存
-        val updated = info.literals.map {
-            if (it.fieldName == literal.fieldName) it.copy(currentEncodedValue = encodedValue) else it
+        when (encoded) {
+            is EncodedLiteral.Single -> {
+                scanner.setEncodedValueOnGroup(group, liveLiteralsClass, encoded.intValue)
+                updateGroupInList(group, encoded.intValue, pairedValue = null)
+            }
+            is EncodedLiteral.Pair -> {
+                scanner.setEncodedValueOnGroup(
+                    group, liveLiteralsClass,
+                    primaryValue = encoded.high,
+                    pairedValue = encoded.low,
+                )
+                updateGroupInList(group, encoded.high, encoded.low)
+            }
         }
-        attached.set(info.copy(literals = updated))
-        notify(updated)
 
         // 触发 Composable 重组
         try {
@@ -168,20 +146,120 @@ class LiveLiteralEditor(
         }
     }
 
+    private fun updateGroupInList(
+        group: LiveLiteralGroup,
+        primaryValue: Int,
+        pairedValue: Int?,
+    ) {
+        val info = attached.get() ?: return
+        val updated = info.groups.map {
+            if (it.primaryFieldName == group.primaryFieldName) {
+                it.copy(
+                    primaryEncodedValue = primaryValue,
+                    pairedEncodedValue = pairedValue ?: it.pairedEncodedValue,
+                )
+            } else it
+        }
+        attached.set(info.copy(groups = updated))
+        notify(updated)
+    }
+
+    // =============== v2.2 P0 旧 API (保留) ===============
+
     /**
-     * 注册字面量变更监听器 (DebugDrawer 用).
+     * v2.2 P0: 列出原始字面量 (未配对, 仅供向后兼容).
      */
-    fun addListener(listener: (List<LiveLiteral>) -> Unit) {
+    @Deprecated("Use currentGroups() for v2.2 P1 paired groups", ReplaceWith("currentGroups()"))
+    fun currentLiterals(): List<LiveLiteral> {
+        // 降级: 把 group 拆成 primary field
+        return currentGroups().map { group ->
+            LiveLiteral(
+                fieldName = group.primaryFieldName,
+                type = group.type,
+                currentEncodedValue = group.primaryEncodedValue,
+            )
+        }
+    }
+
+    /**
+     * v2.2 P0: 修改 Int 字面量.
+     */
+    @Deprecated("Use updateValue with LiveLiteralValue.IntValue", ReplaceWith("updateValue(group, LiveLiteralValue.IntValue(value))"))
+    fun updateInt(literal: LiveLiteral, value: Int) {
+        val group = currentGroups().find { it.primaryFieldName == literal.fieldName }
+        if (group != null) {
+            updateValue(group, LiveLiteralValue.IntValue(value))
+        }
+    }
+
+    /**
+     * v2.2 P0: 修改 Float 字面量.
+     */
+    @Deprecated("Use updateValue with LiveLiteralValue.FloatValue")
+    fun updateFloat(literal: LiveLiteral, value: Float) {
+        val group = currentGroups().find { it.primaryFieldName == literal.fieldName }
+        if (group != null) {
+            updateValue(group, LiveLiteralValue.FloatValue(value))
+        }
+    }
+
+    /**
+     * v2.2 P0: 修改 Boolean 字面量.
+     */
+    @Deprecated("Use updateValue with LiveLiteralValue.BooleanValue")
+    fun updateBoolean(literal: LiveLiteral, value: Boolean) {
+        val group = currentGroups().find { it.primaryFieldName == literal.fieldName }
+        if (group != null) {
+            updateValue(group, LiveLiteralValue.BooleanValue(value))
+        }
+    }
+
+    /**
+     * v2.2 P0: 修改 Dp 字面量 (简化).
+     */
+    @Deprecated("Use updateValue with LiveLiteralValue.DpValue")
+    fun updateDpValue(literal: LiveLiteral, dpValue: Float) {
+        val group = currentGroups().find { it.primaryFieldName == literal.fieldName }
+        if (group != null) {
+            updateValue(group, LiveLiteralValue.DpValue(dpValue))
+        }
+    }
+
+    /**
+     * v2.2 P0: 修改 Sp 字面量 (简化).
+     */
+    @Deprecated("Use updateValue with LiveLiteralValue.SpValue")
+    fun updateSpValue(literal: LiveLiteral, spValue: Float) {
+        val group = currentGroups().find { it.primaryFieldName == literal.fieldName }
+        if (group != null) {
+            updateValue(group, LiveLiteralValue.SpValue(spValue))
+        }
+    }
+
+    /**
+     * v2.2 P0: 修改 Color 字面量 (ARGB int).
+     */
+    @Deprecated("Use updateValue with LiveLiteralValue.ColorValue")
+    fun updateColorArgb(literal: LiveLiteral, argb: Int) {
+        val group = currentGroups().find { it.primaryFieldName == literal.fieldName }
+        if (group != null) {
+            updateValue(group, LiveLiteralValue.ColorValue(androidx.compose.ui.graphics.Color(argb)))
+        }
+    }
+
+    // =============== Listeners ===============
+
+    fun addListener(listener: (List<LiveLiteralGroup>) -> Unit) {
         listeners.add(listener)
     }
 
-    fun removeListener(listener: (List<LiveLiteral>) -> Unit) {
+    fun removeListener(listener: (List<LiveLiteralGroup>) -> Unit) {
         listeners.remove(listener)
     }
 
-    private fun notify(literals: List<LiveLiteral>) {
+    private fun notify(groups: List<LiveLiteralGroup>) {
         for (l in listeners) {
-            runCatching { l(literals) }
+            runCatching { l(groups) }
                 .onFailure { LOG.debug("listener failed: {}", it.message) }
         }
     }
@@ -192,6 +270,6 @@ class LiveLiteralEditor(
     private data class AttachInfo(
         val composableClass: Class<*>,
         val functionName: String,
-        val literals: List<LiveLiteral>,
+        val groups: List<LiveLiteralGroup>,
     )
 }

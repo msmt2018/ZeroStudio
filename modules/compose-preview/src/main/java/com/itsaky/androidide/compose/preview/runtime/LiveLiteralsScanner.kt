@@ -176,6 +176,174 @@ class LiveLiteralsScanner(
         return out.sortedBy { it.fieldName }
     }
 
+    // =============== v2.2 P1: 字段配对 + Group ===============
+
+    /**
+     * 扫描 Composable 的字面量, 按 callSite hash 配对.
+     *
+     * 配对规则: Compose Compiler 跨字段类型 (LONG / COLOR) 会生成
+     * `Int$arg-0$callSite-<hash>` + `Int$arg-1$callSite-<hash>` 两个字段,
+     * **同 hash** 表明来自同一 call site.
+     *
+     * @param composableClass Composable 所在类
+     * @param functionName Composable 函数名
+     * @param groupIndex LiveLiterals group index (默认 1)
+     * @return 配对后的字面量列表
+     */
+    fun scanGroups(
+        composableClass: Class<*>,
+        functionName: String,
+        groupIndex: Int = 1,
+    ): List<LiveLiteralGroup> {
+        val literals = scan(composableClass, functionName, groupIndex)
+        return pairLiterals(literals)
+    }
+
+    /**
+     * 扫描所有 group index 的字面量, 配对后返回.
+     */
+    fun scanAllGroups(
+        composableClass: Class<*>,
+        functionName: String,
+        maxGroup: Int = 8,
+    ): List<LiveLiteralGroup> {
+        val out = ArrayList<LiveLiteralGroup>()
+        for (g in 1..maxGroup) {
+            out.addAll(scanGroups(composableClass, functionName, g))
+        }
+        return out
+    }
+
+    /**
+     * 把字面量按 callSite hash 配对.
+     *
+     * 配对前:
+     * - `Int$arg-0$callSite-3` (high 32, 类型推断为 LONG/COLOR)
+     * - `Int$arg-1$callSite-3` (low 32)
+     *
+     * 配对后:
+     * - `LiveLiteralGroup(primary, paired, type=LONG, primaryValue, pairedValue)`
+     */
+    private fun pairLiterals(literals: List<LiveLiteral>): List<LiveLiteralGroup> {
+        // 按 callSite hash 分组
+        val byCallSite = LinkedHashMap<String, MutableList<LiveLiteral>>()
+        val singles = ArrayList<LiveLiteral>()
+
+        for (lit in literals) {
+            val hash = extractCallSiteHash(lit.fieldName)
+            if (hash != null && (lit.type == LiveLiteralType.LONG || lit.type == LiveLiteralType.COLOR)) {
+                byCallSite.getOrPut(hash) { ArrayList() }.add(lit)
+            } else {
+                singles.add(lit)
+            }
+        }
+
+        val out = ArrayList<LiveLiteralGroup>(literals.size)
+
+        // 配对组: 配成 PairedField, 单个变 SingleField
+        for ((hash, group) in byCallSite) {
+            if (group.size >= 2) {
+                // 按 arg-N 排序, arg-0 是 high 32
+                group.sortBy { extractArgIndex(it.fieldName) ?: 0 }
+                val primary = group[0]
+                val secondary = group[1]
+                out.add(
+                    LiveLiteralGroup(
+                        primaryFieldName = primary.fieldName,
+                        pairedFieldName = secondary.fieldName,
+                        type = primary.type,
+                        primaryEncodedValue = primary.currentEncodedValue,
+                        pairedEncodedValue = secondary.currentEncodedValue,
+                        callSiteHash = hash,
+                    ),
+                )
+            } else {
+                // 仅一个, 退化
+                val single = group[0]
+                out.add(
+                    LiveLiteralGroup(
+                        primaryFieldName = single.fieldName,
+                        type = single.type,
+                        primaryEncodedValue = single.currentEncodedValue,
+                        callSiteHash = hash,
+                    ),
+                )
+            }
+        }
+
+        // 单字段组
+        for (s in singles) {
+            out.add(
+                LiveLiteralGroup(
+                    primaryFieldName = s.fieldName,
+                    type = s.type,
+                    primaryEncodedValue = s.currentEncodedValue,
+                ),
+            )
+        }
+
+        return out.sortedBy { it.primaryFieldName }
+    }
+
+    /**
+     * 从字段名提取 callSite hash.
+     *
+     * 例: `Int$arg-0$callSite-3a7b9c2d` -> `"3a7b9c2d"`
+     */
+    private fun extractCallSiteHash(name: String): String? {
+        val marker = "$"
+        val callSiteIdx = name.indexOf("callSite-")
+        if (callSiteIdx < 0) return null
+        val hashStart = callSiteIdx + "callSite-".length
+        // 截到字符串末尾或下一个 $
+        var hashEnd = name.length
+        for (i in hashStart until name.length) {
+            if (name[i] == '$') {
+                hashEnd = i
+                break
+            }
+        }
+        return name.substring(hashStart, hashEnd).takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * 从字段名提取 arg index.
+     *
+     * 例: `Int$arg-0$callSite-3` -> `0`
+     */
+    private fun extractArgIndex(name: String): Int? {
+        val marker = "arg-"
+        val idx = name.indexOf(marker)
+        if (idx < 0) return null
+        val argStart = idx + marker.length
+        val sb = StringBuilder()
+        for (i in argStart until name.length) {
+            val c = name[i]
+            if (c.isDigit()) {
+                sb.append(c)
+            } else {
+                break
+            }
+        }
+        return sb.toString().toIntOrNull()
+    }
+
+    /**
+     * 写入配对字段值 (LONG / COLOR 需要写 2 个字段).
+     */
+    fun setEncodedValueOnGroup(
+        group: LiveLiteralGroup,
+        clazz: Class<*>,
+        primaryValue: Int,
+        pairedValue: Int? = null,
+    ) {
+        fieldForField(clazz, group.primaryFieldName).set(null, primaryValue)
+        if (group.pairedFieldName != null && pairedValue != null) {
+            fieldForField(clazz, group.pairedFieldName).set(null, pairedValue)
+        }
+        setCount.incrementAndGet()
+    }
+
     /**
      * 修改一个字段的 int 值 (在 LiveLiterals 类的 static int 字段上).
      *
@@ -289,4 +457,35 @@ enum class LiveLiteralType(val displayName: String) {
     SP("Sp"),
     COLOR("Color"),
     UNKNOWN("Unknown");
+}
+
+/**
+ * 配对后的字面量组 v2.2 (P1).
+ *
+ * 跨字段类型 (LONG / COLOR) 需要 2 个 int 字段, Compose Compiler 生成:
+ * - `Int$arg-0$callSite-<hash>` (primary / high 32)
+ * - `Int$arg-1$callSite-<hash>` (paired / low 32)
+ *
+ * **同 callSiteHash** 配对, [pairedFieldName] / [pairedEncodedValue] 填齐.
+ * 单字段类型 (INT / FLOAT / ...) 只填 primary, paired 字段为 null.
+ *
+ * @property primaryFieldName 主字段名 (通常 arg-0)
+ * @property pairedFieldName 配对字段名 (通常 arg-1), null 表示单字段
+ * @property type 字面量类型 (单/配对都用)
+ * @property primaryEncodedValue 主字段当前 int 值
+ * @property pairedEncodedValue 配对字段当前 int 值, null 表示单字段
+ * @property callSiteHash 来自字段名的 callSite 标识, 用于调试
+ */
+data class LiveLiteralGroup(
+    val primaryFieldName: String,
+    val type: LiveLiteralType,
+    val primaryEncodedValue: Int,
+    val pairedFieldName: String? = null,
+    val pairedEncodedValue: Int? = null,
+    val callSiteHash: String? = null,
+) {
+    /**
+     * 是否跨字段 (LONG / COLOR 等).
+     */
+    val isPaired: Boolean get() = pairedFieldName != null
 }

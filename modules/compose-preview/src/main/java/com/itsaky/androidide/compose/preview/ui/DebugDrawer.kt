@@ -18,6 +18,7 @@
 package com.itsaky.androidide.compose.preview.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,9 @@ import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,7 +51,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -60,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -71,8 +80,11 @@ import com.itsaky.androidide.compose.preview.compiler.CompilationCacheHolder
 import com.itsaky.androidide.compose.preview.compiler.CompilationCacheStats
 import com.itsaky.androidide.compose.preview.compiler.DexCacheHolder
 import com.itsaky.androidide.compose.preview.compiler.DexCacheStats
-import com.itsaky.androidide.compose.preview.runtime.LiveLiteral
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralEditor
+import com.itsaky.androidide.compose.preview.runtime.LiveLiteralEncoder
+import com.itsaky.androidide.compose.preview.runtime.LiveLiteralGroup
+import com.itsaky.androidide.compose.preview.runtime.LiveLiteralType
+import com.itsaky.androidide.compose.preview.runtime.LiveLiteralValue
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralsHolder
 import kotlinx.coroutines.delay
 
@@ -803,13 +815,17 @@ private fun String.padEnd(width: Int): String =
     if (length >= width) this else this + " ".repeat(width - length)
 
 /**
- * LiveLiterals 调试面板 v2.2 (P0).
+ * LiveLiterals 调试面板 v2.2 (P0 + P1).
  *
- * 展示当前 Composable 的字面量, 支持滑动改值, 触发 recompose.
+ * 展示当前 Composable 的字面量组, 支持:
+ * - INT / LONG: 整数输入
+ * - FLOAT: 小数输入
+ * - BOOLEAN: 开关
+ * - COLOR: 颜色块 + ColorPicker (弹窗)
+ * - DP / SP: 数值输入 (density 注入)
  *
+ * - 配对字段 (LONG / COLOR) 一次写 2 字段
  * - 字段名过长省略前后缀
- * - INT / FLOAT 可直接改
- * - COLOR / DP / SP 简化展示原始 int
  * - 无 editor 时显示提示
  */
 @Composable
@@ -817,15 +833,15 @@ fun LiveLiteralsPanel(
     editor: LiveLiteralEditor?,
     modifier: Modifier = Modifier,
 ) {
-    var literals by remember { mutableStateOf<List<LiveLiteral>>(emptyList()) }
+    var groups by remember { mutableStateOf<List<LiveLiteralGroup>>(emptyList()) }
 
     LaunchedEffect(editor) {
         if (editor == null) {
-            literals = emptyList()
+            groups = emptyList()
             return@LaunchedEffect
         }
-        editor.addListener { newLiterals -> literals = newLiterals }
-        literals = editor.currentLiterals()
+        editor.addListener { newGroups -> groups = newGroups }
+        groups = editor.currentGroups()
     }
 
     LazyColumn(
@@ -852,7 +868,7 @@ fun LiveLiteralsPanel(
         }
 
         item {
-            StatsSection(title = "LiveLiterals · 热替换字面量") {
+            StatsSection(title = "LiveLiterals · 热替换字面量 (v2.2 P1)") {
                 val stats = LiveLiteralsHolder.statsOrEmpty()
                 StatsKeyValue("扫描次数", "${stats.scanCount}")
                 StatsKeyValue("缓存命中", "${stats.cacheHits}")
@@ -862,9 +878,10 @@ fun LiveLiteralsPanel(
                 StatsKeyValue("已缓存字段", "${stats.cachedFields}")
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "• 改值后会自动触发 Composable 重组\n" +
-                        "• 字面量类型由字段名推断, 实际语义取决于 Composable 调用点\n" +
-                        "• 需要 Compose Compiler ≥ 1.5.x + liveLiterals = true",
+                    text = "• v2.2 P1: 字段配对 (LONG/COLOR 跨 2 字段) + 类型安全编码\n" +
+                        "• COLOR 字面量支持 ColorPicker\n" +
+                        "• Dp/Sp 注入 density 正确编码\n" +
+                        "• 改值后自动触发 Composable 重组",
                     color = Color(0xFF888888),
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -872,9 +889,9 @@ fun LiveLiteralsPanel(
             }
         }
 
-        if (literals.isEmpty()) {
+        if (groups.isEmpty()) {
             item {
-                StatsSection(title = "字面量列表") {
+                StatsSection(title = "字面量组列表") {
                     Text(
                         text = "(空) 当前 Composable 没有可热替换的字面量.\n" +
                             "可能原因:\n" +
@@ -889,10 +906,10 @@ fun LiveLiteralsPanel(
             }
         } else {
             item {
-                StatsSection(title = "字面量列表 (${literals.size})") {
-                    literals.forEach { literal ->
-                        LiveLiteralRow(
-                            literal = literal,
+                StatsSection(title = "字面量组 (${groups.size})") {
+                    groups.forEach { group ->
+                        LiveLiteralGroupRow(
+                            group = group,
                             editor = editor,
                         )
                     }
@@ -903,70 +920,328 @@ fun LiveLiteralsPanel(
 }
 
 /**
- * 单个字面量行: 字段名 / 类型 / 当前值 / 滑块 (INT/FLOAT) 或纯文本 (其他).
+ * 单个字面量组行: 类型 / 字段名 / 当前解码值 / 编辑控件.
  */
 @Composable
-private fun LiveLiteralRow(
-    literal: LiveLiteral,
+private fun LiveLiteralGroupRow(
+    group: LiveLiteralGroup,
     editor: LiveLiteralEditor,
 ) {
-    var sliderValue by remember(literal.fieldName) {
-        mutableStateOf(literal.currentEncodedValue.toFloat())
-    }
-    LaunchedEffect(literal.currentEncodedValue) {
-        sliderValue = literal.currentEncodedValue.toFloat()
+    val typeColor = when (group.type) {
+        LiveLiteralType.INT -> Color(0xFF80CBC4)
+        LiveLiteralType.LONG -> Color(0xFFB39DDB)
+        LiveLiteralType.FLOAT -> Color(0xFFFFCC80)
+        LiveLiteralType.BOOLEAN -> Color(0xFFA5D6A7)
+        LiveLiteralType.DP -> Color(0xFF90CAF9)
+        LiveLiteralType.SP -> Color(0xFF9FA8DA)
+        LiveLiteralType.COLOR -> Color(0xFFF48FB1)
+        LiveLiteralType.UNKNOWN -> Color(0xFF888888)
     }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = literal.type.displayName,
-                color = Color(0xFF80CBC4),
-                fontSize = 10.sp,
+                text = group.type.displayName + if (group.isPaired) " (paired)" else "",
+                color = typeColor,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(end = 8.dp),
             )
             Text(
-                text = literal.fieldName,
-                color = Color(0xFF888888),
+                text = group.callSiteHash?.let { "#$it" } ?: "—",
+                color = Color(0xFF555555),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
-                maxLines = 1,
             )
         }
+        Text(
+            text = group.primaryFieldName + (group.pairedFieldName?.let { " + $it" } ?: ""),
+            color = Color(0xFF888888),
+            fontSize = 9.sp,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(4.dp))
+        LiveLiteralGroupEditor(
+            group = group,
+            editor = editor,
+        )
+    }
+}
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // 滑块 (-1000 .. 1000, 简化)
-            Slider(
-                value = sliderValue.coerceIn(-1000f, 1000f),
-                onValueChange = { sliderValue = it },
-                valueRange = -1000f..1000f,
-                onValueChangeFinished = {
-                    editor.updateInt(literal, sliderValue.toInt())
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(20.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "${literal.currentEncodedValue}",
-                color = Color(0xFFE0E0E0),
-                fontSize = 11.sp,
+/**
+ * 类型特化的编辑控件.
+ */
+@Composable
+private fun LiveLiteralGroupEditor(
+    group: LiveLiteralGroup,
+    editor: LiveLiteralEditor,
+) {
+    when (group.type) {
+        LiveLiteralType.COLOR -> ColorLiteralRow(group, editor)
+        LiveLiteralType.BOOLEAN -> BooleanLiteralRow(group, editor)
+        LiveLiteralType.INT, LiveLiteralType.LONG -> IntLiteralRow(group, editor)
+        LiveLiteralType.FLOAT -> FloatLiteralRow(group, editor)
+        LiveLiteralType.DP -> DpLiteralRow(group, editor)
+        LiveLiteralType.SP -> SpLiteralRow(group, editor)
+        LiveLiteralType.UNKNOWN -> IntLiteralRow(group, editor)
+    }
+}
+
+@Composable
+private fun IntLiteralRow(group: LiveLiteralGroup, editor: LiveLiteralEditor) {
+    val initial = group.primaryEncodedValue
+    var text by remember(group.primaryFieldName) { mutableStateOf(initial.toString()) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it.filter { c -> c.isDigit() || c == '-' } },
+            label = { Text("Int", color = Color(0xFF80CBC4), fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f).height(48.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
-                modifier = Modifier.width(64.dp),
-            )
-        }
+            ),
+        )
+        Spacer(Modifier.width(4.dp))
+        Button(
+            onClick = {
+                val v = text.toIntOrNull() ?: return@Button
+                editor.updateValue(group, LiveLiteralValue.IntValue(v))
+            },
+            modifier = Modifier.height(40.dp),
+        ) { Text("set", fontSize = 11.sp) }
+    }
+}
+
+@Composable
+private fun FloatLiteralRow(group: LiveLiteralGroup, editor: LiveLiteralEditor) {
+    val encoder = LiveLiteralEncoder()
+    val decoded = encoder.decode(group.type, group.primaryEncodedValue) as? LiveLiteralValue.FloatValue
+    var text by remember(group.primaryFieldName) { mutableStateOf(decoded?.value?.toString() ?: "0.0") }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
+            label = { Text("Float", color = Color(0xFFFFCC80), fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f).height(48.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+            ),
+        )
+        Spacer(Modifier.width(4.dp))
+        Button(
+            onClick = {
+                val v = text.toFloatOrNull() ?: return@Button
+                editor.updateValue(group, LiveLiteralValue.FloatValue(v))
+            },
+            modifier = Modifier.height(40.dp),
+        ) { Text("set", fontSize = 11.sp) }
+    }
+}
+
+@Composable
+private fun BooleanLiteralRow(group: LiveLiteralGroup, editor: LiveLiteralEditor) {
+    val current = group.primaryEncodedValue != 0
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = if (current) "true" else "false",
+            color = Color(0xFFA5D6A7),
+            fontSize = 12.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = current,
+            onCheckedChange = { editor.updateValue(group, LiveLiteralValue.BooleanValue(it)) },
+        )
+    }
+}
+
+@Composable
+private fun DpLiteralRow(group: LiveLiteralGroup, editor: LiveLiteralEditor) {
+    val encoder = LiveLiteralEncoder()
+    val decoded = encoder.decode(group.type, group.primaryEncodedValue) as? LiveLiteralValue.DpValue
+    var text by remember(group.primaryFieldName) { mutableStateOf(decoded?.value?.toString() ?: "0.0") }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
+            label = { Text("Dp", color = Color(0xFF90CAF9), fontSize = 10.sp) },
+            suffix = { Text("dp", color = Color(0xFF90CAF9), fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f).height(48.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+            ),
+        )
+        Spacer(Modifier.width(4.dp))
+        Button(
+            onClick = {
+                val v = text.toFloatOrNull() ?: return@Button
+                editor.updateValue(group, LiveLiteralValue.DpValue(v))
+            },
+            modifier = Modifier.height(40.dp),
+        ) { Text("set", fontSize = 11.sp) }
+    }
+}
+
+@Composable
+private fun SpLiteralRow(group: LiveLiteralGroup, editor: LiveLiteralEditor) {
+    val encoder = LiveLiteralEncoder()
+    val decoded = encoder.decode(group.type, group.primaryEncodedValue) as? LiveLiteralValue.SpValue
+    var text by remember(group.primaryFieldName) { mutableStateOf(decoded?.value?.toString() ?: "0.0") }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
+            label = { Text("Sp", color = Color(0xFF9FA8DA), fontSize = 10.sp) },
+            suffix = { Text("sp", color = Color(0xFF9FA8DA), fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f).height(48.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+            ),
+        )
+        Spacer(Modifier.width(4.dp))
+        Button(
+            onClick = {
+                val v = text.toFloatOrNull() ?: return@Button
+                editor.updateValue(group, LiveLiteralValue.SpValue(v))
+            },
+            modifier = Modifier.height(40.dp),
+        ) { Text("set", fontSize = 11.sp) }
+    }
+}
+
+@Composable
+private fun ColorLiteralRow(group: LiveLiteralGroup, editor: LiveLiteralEditor) {
+    val encoder = LiveLiteralEncoder()
+    val decoded = encoder.decode(
+        group.type, group.primaryEncodedValue, group.pairedEncodedValue,
+    ) as? LiveLiteralValue.ColorValue
+    val currentColor = decoded?.value ?: androidx.compose.ui.graphics.Color.Black
+    var showPicker by remember { mutableStateOf(false) }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(currentColor)
+                .clickable { showPicker = true },
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "#%08X".format(currentColor.toArgb()),
+            color = Color(0xFFF48FB1),
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.weight(1f),
+        )
+        Button(
+            onClick = { showPicker = true },
+            modifier = Modifier.height(40.dp),
+        ) { Text("pick", fontSize = 11.sp) }
+    }
+
+    if (showPicker) {
+        ColorPickerDialog(
+            initial = currentColor,
+            onDismiss = { showPicker = false },
+            onConfirm = { newColor ->
+                editor.updateValue(group, LiveLiteralValue.ColorValue(newColor))
+                showPicker = false
+            },
+        )
+    }
+}
+
+/**
+ * 简易 ColorPicker 弹窗 (v2.2 P1): 4 个 Slider 控制 ARGB.
+ *
+ * 完整版可换成 ColorPicker 库, 这里只做基础控件.
+ */
+@Composable
+private fun ColorPickerDialog(
+    initial: androidx.compose.ui.graphics.Color,
+    onDismiss: () -> Unit,
+    onConfirm: (androidx.compose.ui.graphics.Color) -> Unit,
+) {
+    var a by remember { mutableStateOf((initial.alpha * 255).toInt()) }
+    var r by remember { mutableStateOf((initial.red * 255).toInt()) }
+    var g by remember { mutableStateOf((initial.green * 255).toInt()) }
+    var b by remember { mutableStateOf((initial.blue * 255).toInt()) }
+    val current = androidx.compose.ui.graphics.Color(a, r, g, b)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Color Picker", color = Color(0xFFF48FB1)) },
+        text = {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(current),
+                )
+                Spacer(Modifier.height(8.dp))
+                ChannelSlider("A", a) { a = it }
+                ChannelSlider("R", r) { r = it }
+                ChannelSlider("G", g) { g = it }
+                ChannelSlider("B", b) { b = it }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(current) }) { Text("set") }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text("cancel") }
+        },
+    )
+}
+
+@Composable
+private fun ChannelSlider(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            color = Color(0xFFAAAAAA),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.width(16.dp),
+        )
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValueChange(it.toInt()) },
+            valueRange = 0f..255f,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value.toString(),
+            color = Color(0xFFE0E0E0),
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.width(36.dp),
+        )
     }
 }
