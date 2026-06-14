@@ -102,6 +102,8 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
     val pss = ArrayDeque<Long>(SAMPLE_WINDOW)
     val gc = ArrayDeque<Long>(SAMPLE_WINDOW)
     val anrs = ArrayList<PerfEvent.Instant>()
+    val strict = ArrayList<PerfEvent.Instant>()
+    val net = ArrayList<PerfEvent.Instant>() // PR #9: 网络事件
 
     // 启动 phase 列表: 只取前 18 条 + end_boot (PR #2 设计)
     val bootEvents =
@@ -127,6 +129,8 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             ev.name.substring(15).toLongOrNull()?.let { gc.addLast(it) }
           }
           ev.name.startsWith("anr_") -> anrs.add(ev)
+          ev.name.startsWith("strict_") -> strict.add(ev)
+          ev.name.startsWith("net_") -> net.add(ev) // PR #9
         }
       }
     }
@@ -151,6 +155,8 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             recentPssKb = pss.toList(),
             recentGcDelta = gc.toList(),
             anrEvents = anrs,
+            strictViolations = strict,
+            networkEvents = net, // PR #9
             totalBootMs = totalBootMs,
         )
   }
@@ -172,6 +178,8 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             "mem_",
             "gc_",
             "anr_",
+            "strict_", // PR #8
+            "net_", // PR #9
         )
 
     /** IDEApplication.onCreate 末端的 instant. */

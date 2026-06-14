@@ -195,6 +195,7 @@ val dataSourceModule = module {
             }
             .addNetworkInterceptor(RequestLoggingInterceptor())
             .addInterceptor(AIRequestInterceptor(remoteConfig = get()))
+            .addInterceptor(OkHttpPerfInterceptor()) // PR #9: 上报 net_* events
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.HEADERS
             })

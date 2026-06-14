@@ -43,6 +43,10 @@ data class PerfUiState(
     val recentPssKb: List<Long> = emptyList(),
     val recentGcDelta: List<Long> = emptyList(),
     val anrEvents: List<PerfEvent.Instant> = emptyList(),
+    /** PR #8: StrictMode 违规 (含抽样). 列表可能含多个相同 hash, 反映违规次数. */
+    val strictViolations: List<PerfEvent.Instant> = emptyList(),
+    /** PR #9: 网络事件 (OkHttp interceptor 上报 `net_<method>_<host>_<code>_<latencyMs>ms`). */
+    val networkEvents: List<PerfEvent.Instant> = emptyList(),
     val totalBootMs: Long = 0L,
 ) {
   companion object {

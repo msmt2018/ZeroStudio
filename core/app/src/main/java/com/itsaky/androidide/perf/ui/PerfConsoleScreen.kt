@@ -199,6 +199,7 @@ fun PerfConsoleScreen(viewModel: PerfConsoleViewModel) {
         1 -> FrameTab(state = state)
         2 -> MemoryTab(state = state)
         3 -> ThreadsTab(state = state)
+        4 -> NetworkTab(state = state) // PR #9
       }
     }
   }
@@ -277,4 +278,4 @@ private fun shareFile(context: android.content.Context, file: java.io.File, mime
   }
 }
 
-private val TABS = listOf("Boot", "Frame", "Memory", "Threads")
+private val TABS = listOf("Boot", "Frame", "Memory", "Threads", "Network")

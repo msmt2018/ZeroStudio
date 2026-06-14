@@ -55,6 +55,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import me.rerere.common.http.NetworkEventSink
 import me.rerere.rikkahub.RikkaHubRuntime
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
@@ -95,6 +96,11 @@ class IDEApplication : TermuxApplication() {
     PerfTracer.tryAttach(this)
     PerfTracer.trace("super_on_create") { super.onCreate() }
     PerfTracer.trace("init_koin") { RikkaHubRuntime.ensureKoinStarted(this) }
+
+    // PR #9: 装网络事件 sink.
+    // chatai/app 的 OkHttp interceptor 会通过 NetworkEventSink.report 上报,
+    // 我们把它桥接到 PerfTracer, 让 :perf 进程能收到 net_* events.
+    NetworkEventSink.report = { name -> PerfTracer.reportInstant(name) }
 
     PerfTracer.trace("apply_persisted_locale") { applyPersistedLocale() }
 
