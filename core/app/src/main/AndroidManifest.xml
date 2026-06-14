@@ -47,6 +47,34 @@
                     <category android:name="android.intent.category.LAUNCHER" />
                </intent-filter>
           </activity>
+
+          <!--
+            Perf Console (性能监控调试控制台).
+            跑在独立进程 ":perf", 不受主 application 初始化阻塞.
+            桌面启动图标, 用户可从桌面独立启动, 即使主 application
+            启动崩溃, 此 Activity 仍能显示并继续记录.
+
+            - process=":perf"        : 独立进程, fork 时只跑 BaseApplication
+            - taskAffinity=""        : 不与主进程共享任务栈, 避免回主进程
+            - launchMode="singleInstance" : 多次从桌面点击只产生一个实例
+            - excludeFromRecents="true"   : 不出现在最近任务列表
+            - icon / label           : 桌面图标 / 标题
+          -->
+          <activity
+               android:name=".perf.PerfConsoleActivity"
+               android:exported="true"
+               android:process=":perf"
+               android:taskAffinity=""
+               android:launchMode="singleInstance"
+               android:excludeFromRecents="true"
+               android:theme="@style/Theme.AndroidIDE"
+               android:icon="@mipmap/ic_perf_console"
+               android:label="@string/perf_console_title">
+               <intent-filter>
+                    <action android:name="android.intent.action.MAIN" />
+                    <category android:name="android.intent.category.LAUNCHER" />
+               </intent-filter>
+          </activity>
           
           <activity
                android:exported="false"

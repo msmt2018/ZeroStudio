@@ -1,4 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?><!--
+<?xml version="1.0" encoding="utf-8"?>
+<!--
   ~  This file is part of AndroidIDE.
   ~
   ~  AndroidIDE is free software: you can redistribute it and/or modify
@@ -14,12 +15,7 @@
   ~  You should have received a copy of the GNU General Public License
   ~   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
   -->
-
 <resources>
-  <!--  Required by F-Droid-->
-  <string name="app_name" translatable="false">ZeroStudio</string>
-
-  <!-- Perf Console (性能监控调试控制台) — 桌面启动图标 + 通知标签 -->
-  <string name="perf_console_title" translatable="false">Perf Console</string>
-  <string name="perf_console_label">Perf Console</string>
+    <!-- Perf Console 图标背景色: 浅紫, 与 launcher (#FFFFFF) 区分 -->
+    <color name="ic_perf_console_background">#EDE7F6</color>
 </resources>
