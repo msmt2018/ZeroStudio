@@ -102,6 +102,9 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
     val pss = ArrayDeque<Long>(SAMPLE_WINDOW)
     val gc = ArrayDeque<Long>(SAMPLE_WINDOW)
     val anrs = ArrayList<PerfEvent.Instant>()
+    val jank = ArrayList<PerfEvent.Instant>() // PR #10: 慢帧
+    val jankPct = ArrayDeque<Int>(SAMPLE_WINDOW) // PR #10: 慢帧 % 滚动
+    var slowestMs: Int = 0 // PR #10: 最慢单帧
 
     // 启动 phase 列表: 只取前 18 条 + end_boot (PR #2 设计)
     val bootEvents =
@@ -127,6 +130,21 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             ev.name.substring(15).toLongOrNull()?.let { gc.addLast(it) }
           }
           ev.name.startsWith("anr_") -> anrs.add(ev)
+          ev.name.startsWith("jank_pct_") && ev.name.length > 9 -> {
+            // PR #10: jank_pct_<n>
+            ev.name.substring(9).toIntOrNull()?.let { jankPct.addLast(it) }
+          }
+          ev.name.startsWith("jank_max_") && ev.name.endsWith("ms") -> {
+            // PR #10: jank_max_<n>ms
+            val ms = ev.name.removePrefix("jank_max_").removeSuffix("ms").toIntOrNull() ?: 0
+            if (ms > slowestMs) slowestMs = ms
+          }
+          ev.name.startsWith("jank_") && ev.name.endsWith("ms") -> {
+            // PR #10: jank_<n>ms (排除 jank_max_)
+            val ms = ev.name.removePrefix("jank_").removeSuffix("ms").toIntOrNull() ?: 0
+            if (ms > slowestMs) slowestMs = ms
+            jank.add(ev)
+          }
         }
       }
     }
@@ -135,6 +153,7 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
     while (fps.size > SAMPLE_WINDOW) fps.removeFirst()
     while (pss.size > SAMPLE_WINDOW) pss.removeFirst()
     while (gc.size > SAMPLE_WINDOW) gc.removeFirst()
+    while (jankPct.size > SAMPLE_WINDOW) jankPct.removeFirst()
 
     val startMs = collector.startElapsedMs()
     val totalBootMs =
@@ -151,6 +170,9 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             recentPssKb = pss.toList(),
             recentGcDelta = gc.toList(),
             anrEvents = anrs,
+            jankEvents = jank, // PR #10
+            recentJankPct = jankPct.toList(), // PR #10
+            slowestFrameMs = slowestMs, // PR #10
             totalBootMs = totalBootMs,
         )
   }
@@ -172,6 +194,7 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             "mem_",
             "gc_",
             "anr_",
+            "jank_", // PR #10: jank_pct_*, jank_max_*ms, jank_*ms
         )
 
     /** IDEApplication.onCreate 末端的 instant. */

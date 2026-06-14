@@ -52,6 +52,7 @@ object MonitorCoordinator {
   private val monitors =
       listOf<PerfMonitor>(
           FrameRateMonitor(),
+          JankMonitor(), // PR #10: 慢帧检测
           MemoryMonitor(),
           GcMonitor(),
           AnrMonitor(),

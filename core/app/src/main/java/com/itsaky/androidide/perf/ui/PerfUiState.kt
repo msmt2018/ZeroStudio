@@ -43,6 +43,12 @@ data class PerfUiState(
     val recentPssKb: List<Long> = emptyList(),
     val recentGcDelta: List<Long> = emptyList(),
     val anrEvents: List<PerfEvent.Instant> = emptyList(),
+    /** PR #10: 慢帧事件 (JankMonitor 上报 `jank_<deltaMs>ms`, >50ms 单独上报). */
+    val jankEvents: List<PerfEvent.Instant> = emptyList(),
+    /** PR #10: 慢帧百分比滚动窗口 (JankMonitor 1Hz 上报 `jank_pct_<n>`). */
+    val recentJankPct: List<Int> = emptyList(),
+    /** PR #10: 上报过的最慢单帧 (ms). */
+    val slowestFrameMs: Int = 0,
     val totalBootMs: Long = 0L,
 ) {
   companion object {

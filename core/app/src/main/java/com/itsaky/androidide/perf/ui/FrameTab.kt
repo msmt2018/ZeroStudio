@@ -18,6 +18,7 @@ package com.itsaky.androidide.perf.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,6 +57,14 @@ fun FrameTab(state: PerfUiState, modifier: Modifier = Modifier) {
       FpsCard(
           currentFps = state.recentFps.lastOrNull() ?: 0,
           values = state.recentFps,
+      )
+    }
+    item {
+      JankCard(
+          currentPct = state.recentJankPct.lastOrNull() ?: 0,
+          values = state.recentJankPct,
+          slowestMs = state.slowestFrameMs,
+          jankCount = state.jankEvents.size,
       )
     }
     item {
@@ -144,6 +153,77 @@ private fun AnrRow(anr: PerfEvent.Instant) {
           fontFamily = FontFamily.Monospace,
           color = MaterialTheme.colorScheme.onSurface,
       )
+    }
+  }
+}
+
+/**
+ * 慢帧 / Jank Card (PR #10/N).
+ *
+ * 显示:
+ * - 当前 jank 占比 (%, 大字)
+ * - jank% sparkline (60 秒窗口)
+ * - 最慢单帧 (ms)
+ * - 严重 jank 事件数 (>50ms)
+ */
+@Composable
+private fun JankCard(
+    currentPct: Int,
+    values: List<Int>,
+    slowestMs: Int,
+    jankCount: Int,
+) {
+  // 颜色: 0% 绿, 1-10% 黄, >10% 红
+  val color =
+      when {
+        currentPct == 0 -> MaterialTheme.colorScheme.primary
+        currentPct < 10 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.error
+      }
+  Card(
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+  ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+      Text(
+          text = "慢帧 / Jank (主进程)",
+          fontWeight = FontWeight.SemiBold,
+          fontSize = 12.sp,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Spacer(modifier = Modifier.size(4.dp))
+      Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(
+            text = if (values.isEmpty()) "—" else "$currentPct%",
+            fontSize = 36.sp,
+            fontWeight = FontWeight.Bold,
+            color = color,
+        )
+        Spacer(modifier = Modifier.size(12.dp))
+        Column {
+          Text(
+              text = "最慢单帧: ${if (slowestMs == 0) "—" else "$slowestMs ms"}",
+              fontSize = 11.sp,
+              fontFamily = FontFamily.Monospace,
+              color = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+              text = "严重 jank (>50ms): $jankCount",
+              fontSize = 11.sp,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      }
+      Spacer(modifier = Modifier.size(8.dp))
+      if (values.isNotEmpty()) {
+        Sparkline(values = values, height = 60.dp)
+      } else {
+        Text(
+            text = "等待数据 (60 秒后可见趋势)",
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.outline,
+        )
+      }
     }
   }
 }
