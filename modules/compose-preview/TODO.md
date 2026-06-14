@@ -478,3 +478,42 @@ v2.5 P0 推进 3 个 P3-FE 子项,共 7 文件 / +1085 / -13。
 | PreviewServer 端到端 (mock) | < 5ms | 127.0.0.1 loopback |
 | AdbForwardTunnel 命令超时 | 5s | 强制 destroyForcibly |
 | RemoteProfileRepository fetch | < 5s | 5s HttpURLConnection |
+
+---
+
+## v2.5 P1 完成总结 (PR #354)
+
+v2.5 P1 把 v2.5 P0 引入的 `DexMmapPool` 接入 `ComposeClassLoader`,共 1 文件 / +77/-2。
+
+### P1 DexMmapPool 集成 (PR #354)
+
+- [x] `v25P1-RT-01` `ComposeClassLoader.kt` — DexMmapPool 注入构造器
+- [x] `v25P1-RT-02` `getOrCreateLoader` 流程加 mmap acquire + dex magic 校验
+- [x] `v25P1-RT-03` `invalidateAll` 增强 — 归还所有 loader 关联的 mmap 引用
+- [x] `v25P1-RT-04` `mmapStats()` / `mmapBytes` 暴露 getter
+- [x] `v25P1-RT-05` `DEX_MAGIC` 常量 = `dex\n` 4 字节
+
+集成测试推迟 (依赖 Android Context, 沙箱无 Robolectric, CI 跑 instrumented test)。
+
+---
+
+## v2.5 P2 完成总结 (PR #355)
+
+v2.5 P2 推进 3 个子项,共 5 文件 / +337/-1。
+
+### P2 PerfPanel mmap 集成 (PR #355)
+
+- [x] `v25P2-RT-01` `DexMmapPoolRegistry.kt` — 全局单例, AtomicReference + getOrCreate + install + stats + evictStale + reset
+- [x] `v25P2-RT-02` `DexMmapPoolEvictor.kt` — 协程定时 evict (默认 10 分钟) + 累计计数
+- [x] `v25P2-RT-03` `ComposeClassLoader.kt` — 默认 mmapPool 改为 `DexMmapPoolRegistry.getOrCreate()` + init 注册
+- [x] `v25P2-UI-01` `PerfPanel.kt` 加 `MmapPoolSection` 卡片 — active / hit / acq / rel + Evict 按钮
+- [x] `v25P2-TS-01` `DexMmapPoolRegistryTest.kt` — 7 case (install / lazy / stats / evict / reset / 替换)
+- [x] `v25P2-TS-02` `DexMmapPoolEvictorTest.kt` — 5 case (start / 幂等 / stop / 定时触发 / 初始 0)
+
+### 性能 / evict 基线
+
+| 指标 | 目标 | 备注 |
+| --- | --- | --- |
+| DexMmapPoolRegistry stats 拉取 | < 1µs | AtomicReference.get |
+| DexMmapPoolEvictor 启动开销 | < 5ms | SupervisorJob + Dispatchers.Default |
+| Evict 单次 (5 stale entry) | < 10ms | ConcurrentHashMap iter + Cleaner |

@@ -33,7 +33,16 @@ import java.util.concurrent.ConcurrentHashMap
  *   不会触发优化, 直接走 system classloader.
  * - **可监控**: 暴露 [loadedClassCount] / [activeLoaderCount] 给上层做监控.
  */
-class ComposeClassLoader(private val context: Context) {
+class ComposeClassLoader(
+    private val context: Context,
+    // v2.5 P1: DexMmapPool 集成, 零拷贝共享 dex 字节
+    private val mmapPool: DexMmapPool = DexMmapPoolRegistry.getOrCreate(),
+) {
+
+    init {
+        // v2.5 P2: 把构造时使用的 mmapPool 注册到全局 Registry (供 UI 端 PerfPanel 访问)
+        DexMmapPoolRegistry.install(mmapPool)
+    }
 
     private val LOG = LoggerFactory.getLogger(ComposeClassLoader::class.java)
 

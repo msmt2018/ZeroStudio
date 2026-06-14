@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AssistChip
@@ -56,6 +57,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itsaky.androidide.compose.preview.runtime.DexMmapPool
+import com.itsaky.androidide.compose.preview.runtime.DexMmapPoolEvictor
+import com.itsaky.androidide.compose.preview.runtime.DexMmapPoolRegistry
 import com.itsaky.androidide.compose.preview.runtime.TimingRegistry
 import kotlinx.coroutines.delay
 
@@ -70,10 +74,13 @@ import kotlinx.coroutines.delay
 @Composable
 fun PerfPanel(modifier: Modifier = Modifier) {
     var snapshot by remember { mutableStateOf(TimingRegistry.snapshot()) }
+    var mmapStats by remember { mutableStateOf(DexMmapPoolRegistry.stats()) }
+    var evictTrigger by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         while (true) {
             snapshot = TimingRegistry.snapshot()
+            mmapStats = DexMmapPoolRegistry.stats()
             delay(REFRESH_INTERVAL_MS)
         }
     }
@@ -103,7 +110,10 @@ fun PerfPanel(modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.width(8.dp))
             AssistChip(
-                onClick = { TimingRegistry.reset(); snapshot = TimingRegistry.snapshot() },
+                onClick = {
+                    TimingRegistry.reset()
+                    snapshot = TimingRegistry.snapshot()
+                },
                 label = { Text("Reset", fontSize = 11.sp) },
                 leadingIcon = {
                     Icon(Icons.Filled.Refresh, null, modifier = Modifier.size(14.dp))
@@ -112,6 +122,16 @@ fun PerfPanel(modifier: Modifier = Modifier) {
             )
         }
         Spacer(Modifier.height(12.dp))
+
+        // v2.5 P2: mmap 池子状态卡片
+        MmapPoolSection(
+            stats = mmapStats,
+            onEvict = {
+                val n = DexMmapPoolRegistry.evictStale(maxAgeMs = 0L)  // 立即 evict 所有 refCount=0
+                evictTrigger += n
+            },
+        )
+        Spacer(Modifier.height(8.dp))
 
         if (snapshot.phases.values.all { it.count == 0L }) {
             EmptyState()
@@ -125,6 +145,62 @@ fun PerfPanel(modifier: Modifier = Modifier) {
             items(TimingRegistry.Phase.values().toList(), key = { it.name }) { phase ->
                 val stats = snapshot.phases[phase] ?: TimingRegistry.PhaseStats.EMPTY
                 PhaseCard(phase = phase, stats = stats)
+            }
+        }
+    }
+}
+
+/**
+ * v2.5 P2: mmap pool 状态卡片.
+ *
+ * 显示: activeEntries / hitRate / totalAcquires-Releases / 立即 evict 按钮.
+ */
+@Composable
+private fun MmapPoolSection(
+    stats: DexMmapPool.PoolStats,
+    onEvict: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+            .padding(12.dp),
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Memory,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Dex MMap Pool",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.weight(1f))
+                AssistChip(
+                    onClick = onEvict,
+                    label = { Text("Evict", fontSize = 11.sp) },
+                    leadingIcon = {
+                        Icon(Icons.Filled.Refresh, null, modifier = Modifier.size(12.dp))
+                    },
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+
+            // 4 个指标
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                MetricCell("active", stats.activeEntries.toString())
+                MetricCell("hit", "${(stats.hitRate * 100).toInt()}%")
+                MetricCell("acq", stats.totalAcquires.toString())
+                MetricCell("rel", stats.totalReleases.toString())
             }
         }
     }
