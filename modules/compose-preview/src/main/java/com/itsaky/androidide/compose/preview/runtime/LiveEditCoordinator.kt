@@ -182,12 +182,18 @@ class LiveEditCoordinator(
             _state.value = LiveEditState.Compiling
             val parsed = cb.parseSource(sourceText)
             if (parsed == null) {
-                LiveEditResult.Error("No @Preview function found in source")
+                LiveEditResult.Error(
+                    message = "No @Preview function found in source",
+                    info = PreviewErrorInfo.fromMessage("No @Preview function found", sourceHash),
+                )
             } else {
                 _state.value = LiveEditState.Dexing
                 val compileResult = cb.recompile(sourceText, parsed)
                 if (compileResult == null) {
-                    LiveEditResult.Error("Recompile returned null")
+                    LiveEditResult.Error(
+                        message = "Recompile returned null",
+                        info = PreviewErrorInfo.fromMessage("Recompile returned null", sourceHash),
+                    )
                 } else {
                     _state.value = LiveEditState.Swapping
                     cb.swapClassLoader(compileResult.dexFile, compileResult.className)
@@ -198,13 +204,16 @@ class LiveEditCoordinator(
             }
         } catch (e: Throwable) {
             LOG.error("Hot reload failed", e)
-            LiveEditResult.Error(e.message ?: e::class.java.simpleName)
+            val info = cb.classifyError(e, sourceHash)
+                ?: PreviewErrorInfo.fromMessage(e.message, sourceHash)
+            LiveEditResult.Error(e.message ?: e::class.java.simpleName, info)
         }
 
         when (result) {
             is LiveEditResult.Success -> {
                 _state.value = LiveEditState.Idle
                 LiveEditStatsRegistry.recordSuccess(result.elapsedMs, sourceHash)
+                ErrorAggregatorRegistry.clear()  // 成功 reload → 清旧错
                 _lastResult.set(
                     LiveEditSnapshot(
                         sourceText = sourceText,
@@ -218,6 +227,7 @@ class LiveEditCoordinator(
             is LiveEditResult.Error -> {
                 _state.value = LiveEditState.Error(result.message)
                 LiveEditStatsRegistry.recordError(result.message, sourceHash)
+                result.info?.let { ErrorAggregatorRegistry.add(it) }  // P7 聚合
                 _lastResult.set(
                     LiveEditSnapshot(
                         sourceText = sourceText,
@@ -254,7 +264,11 @@ class LiveEditCoordinator(
          */
         fun getOrCreate(): LiveEditCoordinator {
             return instance ?: synchronized(this) {
-                instance ?: LiveEditCoordinator().also { instance = it }
+                instance ?: LiveEditCoordinator().also {
+                    instance = it
+                    // v2.2 P7: 注册全局 ErrorAggregator (lazy install).
+                    ErrorAggregatorRegistry.install(ErrorAggregator())
+                }
             }
         }
     }
@@ -282,7 +296,11 @@ sealed class LiveEditResult {
         val elapsedMs: Long,
     ) : LiveEditResult()
 
-    data class Error(val message: String) : LiveEditResult()
+    data class Error(
+        val message: String,
+        val info: PreviewErrorInfo? = null,
+    ) : LiveEditResult()
+
     data object Cancelled : LiveEditResult()
 }
 
@@ -323,4 +341,13 @@ interface LiveEditCallback {
      * 触发 ComposableRenderer 重新渲染.
      */
     fun reRender(compilation: Any)
+
+    /**
+     * v2.2 P7: 把异常分类为 [PreviewErrorInfo]. 返回 null 时 Coordinator 用
+     * [PreviewErrorInfo.fromMessage] 降级到 message 嗅探.
+     *
+     * 默认实现: 返回 null (调用方无结构化错误时).
+     * Repository 端实现: catch [CompilationException] 把 [CompileDiagnostic] 转为 [PreviewErrorInfo].
+     */
+    fun classifyError(e: Throwable, sourceHash: Int): PreviewErrorInfo? = null
 }

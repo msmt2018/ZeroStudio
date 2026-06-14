@@ -40,7 +40,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -91,12 +93,17 @@ import com.itsaky.androidide.compose.preview.runtime.LiveLiteralGroup
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralType
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralValue
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralsHolder
+import com.itsaky.androidide.compose.preview.runtime.AggregatedError
+import com.itsaky.androidide.compose.preview.runtime.ErrorAggregatorRegistry
+import com.itsaky.androidide.compose.preview.runtime.ErrorCategory
+import com.itsaky.androidide.compose.preview.runtime.ErrorSeverity
 import com.itsaky.androidide.compose.preview.runtime.LiveEditCoordinator
 import com.itsaky.androidide.compose.preview.runtime.LiveEditState
 import com.itsaky.androidide.compose.preview.runtime.LiveEditStatsRegistry
 import com.itsaky.androidide.compose.preview.runtime.MultiPreviewRegistry
 import com.itsaky.androidide.compose.preview.runtime.PreviewDisplayMode
 import com.itsaky.androidide.compose.preview.runtime.PreviewSlot
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -199,6 +206,7 @@ fun DebugDrawer(
                     )
                     DebugTab.Gallery -> GalleryPanel(modifier = Modifier.fillMaxSize())
                     DebugTab.LiveEdit -> LiveEditPanel(modifier = Modifier.fillMaxSize())
+                    DebugTab.Errors -> ErrorsPanel(modifier = Modifier.fillMaxSize())
                 }
             }
 
@@ -213,7 +221,7 @@ fun DebugDrawer(
     }
 }
 
-/** 7 个 tab 枚举. */
+/** 8 个 tab 枚举. */
 enum class DebugTab(
     val label: String,
     val icon: ImageVector,
@@ -225,6 +233,7 @@ enum class DebugTab(
     LiveLiterals("LiveLit", Icons.Filled.Tune),
     Gallery("Gallery", Icons.Filled.GridView),
     LiveEdit("LiveEdit", Icons.Filled.Bolt),
+    Errors("Errors", Icons.Filled.ErrorOutline),
 }
 
 /**
@@ -1585,4 +1594,210 @@ private fun formatRelativeTime(ts: Long): String {
         deltaMs < 3_600_000 -> "${deltaMs / 60_000}m ago"
         else -> "${deltaMs / 3_600_000}h ago"
     }
+}
+
+// =====================================================================
+// v2.2 P7 错误聚合面板
+// =====================================================================
+
+/**
+ * v2.2 P7 错误聚合 DebugDrawer 面板.
+ *
+ * 顶部 summary: 总错误数 + 按 category 分组计数.
+ * 中部列表: 折叠后的 [AggregatedError] (按 category 升序, lastTs 降序).
+ * 每条: 分类 chip + severity + file:line + message + count + 跳转 IDE 按钮.
+ *
+ * 500ms 拉取一次 [ErrorAggregatorRegistry.snapshotOrEmpty] (与 [LiveEditPanel] 一致).
+ */
+@Composable
+fun ErrorsPanel(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var errors by remember { mutableStateOf<List<AggregatedError>>(emptyList()) }
+    var summary by remember { mutableStateOf<Map<ErrorCategory, Int>>(emptyMap()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            errors = ErrorAggregatorRegistry.snapshotOrEmpty()
+            summary = ErrorAggregatorRegistry.summaryOrEmpty()
+            delay(500L)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Summary
+        Text(
+            text = "Errors (v2.2 P7)",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "${errors.size} unique · ${summary.values.sum()} total occurrences",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        // Category breakdown
+        if (summary.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ErrorCategory.values().forEach { cat ->
+                    val count = summary[cat] ?: 0
+                    if (count > 0) {
+                        CategoryChip(category = cat, count = count)
+                    }
+                }
+            }
+        }
+
+        // 操作按钮
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { ErrorAggregatorRegistry.clear() }) {
+                Text("Clear all")
+            }
+        }
+
+        HorizontalDivider()
+
+        // 错误列表
+        if (errors.isEmpty()) {
+            Text(
+                text = "No errors. ✓",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 24.dp),
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(errors, key = { "${it.category}:${it.file ?: ""}:${it.line ?: -1}" }) { err ->
+                    ErrorRow(error = err, onJump = { file, line, col ->
+                        JumpToIde.jumpToFile(context, file, line, col)
+                    })
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 单条错误行. 显示 category chip + severity + file:line + msg + count + 跳转按钮.
+ */
+@Composable
+private fun ErrorRow(
+    error: AggregatedError,
+    onJump: (file: String, line: Int?, col: Int?) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CategoryChip(category = error.category, count = error.count)
+            Spacer(Modifier.width(6.dp))
+            SeverityChip(severity = error.severity)
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = formatRelativeTime(error.lastTs),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // file:line
+        if (error.file != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = fileLabel(error.file, error.line, error.column),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                if (error.line != null) {
+                    Icon(
+                        imageVector = Icons.Filled.OpenInNew,
+                        contentDescription = "Jump to IDE",
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                onJump(error.file, error.line, error.column)
+                            }
+                            .padding(2.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+        // message (最多 3 行, 截断)
+        Text(
+            text = error.message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 3,
+        )
+    }
+}
+
+private fun fileLabel(file: String, line: Int?, column: Int?): String {
+    // 仅显示文件名, 不显示完整路径 (节省空间)
+    val name = file.substringAfterLast('/')
+    val sb = StringBuilder(name)
+    if (line != null) {
+        sb.append(":").append(line)
+        if (column != null) sb.append(":").append(column)
+    }
+    return sb.toString()
+}
+
+@Composable
+private fun CategoryChip(category: ErrorCategory, count: Int) {
+    val (label, color) = when (category) {
+        ErrorCategory.K2_COMPILE -> "K2" to Color(0xFFEF5350)
+        ErrorCategory.D8_DEX -> "D8" to Color(0xFFFFA726)
+        ErrorCategory.CLASSLOADER_SWAP -> "SWAP" to Color(0xFFAB47BC)
+        ErrorCategory.OTHER -> "?" to Color(0xFF78909C)
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(color.copy(alpha = 0.18f))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = "$label×$count",
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun SeverityChip(severity: ErrorSeverity) {
+    val (label, color) = when (severity) {
+        ErrorSeverity.ERROR -> "ERROR" to Color(0xFFD32F2F)
+        ErrorSeverity.WARNING -> "WARN" to Color(0xFFF9A825)
+    }
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+        modifier = Modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+    )
 }
