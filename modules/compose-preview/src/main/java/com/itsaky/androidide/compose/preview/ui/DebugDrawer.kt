@@ -71,6 +71,9 @@ import com.itsaky.androidide.compose.preview.compiler.CompilationCacheHolder
 import com.itsaky.androidide.compose.preview.compiler.CompilationCacheStats
 import com.itsaky.androidide.compose.preview.compiler.DexCacheHolder
 import com.itsaky.androidide.compose.preview.compiler.DexCacheStats
+import com.itsaky.androidide.compose.preview.runtime.LiveLiteral
+import com.itsaky.androidide.compose.preview.runtime.LiveLiteralEditor
+import com.itsaky.androidide.compose.preview.runtime.LiveLiteralsHolder
 import kotlinx.coroutines.delay
 
 /**
@@ -166,6 +169,10 @@ fun DebugDrawer(
                         stats = stats,
                         modifier = Modifier.fillMaxSize(),
                     )
+                    DebugTab.LiveLiterals -> LiveLiteralsPanel(
+                        editor = LiveLiteralsHolder.currentEditor(),
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
 
@@ -189,6 +196,7 @@ enum class DebugTab(
     Recompose("Recomp", Icons.Filled.BugReport),
     Logcat("Log", Icons.Filled.Terminal),
     Stats("Stats", Icons.Filled.Analytics),
+    LiveLiterals("LiveLit", Icons.Filled.Tune),
 }
 
 /**
@@ -793,3 +801,172 @@ private fun StatsKeyValue(key: String, value: String) {
  */
 private fun String.padEnd(width: Int): String =
     if (length >= width) this else this + " ".repeat(width - length)
+
+/**
+ * LiveLiterals 调试面板 v2.2 (P0).
+ *
+ * 展示当前 Composable 的字面量, 支持滑动改值, 触发 recompose.
+ *
+ * - 字段名过长省略前后缀
+ * - INT / FLOAT 可直接改
+ * - COLOR / DP / SP 简化展示原始 int
+ * - 无 editor 时显示提示
+ */
+@Composable
+fun LiveLiteralsPanel(
+    editor: LiveLiteralEditor?,
+    modifier: Modifier = Modifier,
+) {
+    var literals by remember { mutableStateOf<List<LiveLiteral>>(emptyList()) }
+
+    LaunchedEffect(editor) {
+        if (editor == null) {
+            literals = emptyList()
+            return@LaunchedEffect
+        }
+        editor.addListener { newLiterals -> literals = newLiterals }
+        literals = editor.currentLiterals()
+    }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFF101015)),
+    ) {
+        if (editor == null) {
+            item {
+                StatsSection(title = "LiveLiterals · 热替换字面量") {
+                    Text(
+                        text = "未启用: 请先调用 LiveLiteralsHolder.install(scanner, editor)\n" +
+                            "并 attach 到当前 Composable.\n\n" +
+                            "前置条件:\n" +
+                            "• compose-compiler liveLiterals = true\n" +
+                            "• Compose Compiler ≥ 1.5.x",
+                        color = Color(0xFF888888),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+            return@LazyColumn
+        }
+
+        item {
+            StatsSection(title = "LiveLiterals · 热替换字面量") {
+                val stats = LiveLiteralsHolder.statsOrEmpty()
+                StatsKeyValue("扫描次数", "${stats.scanCount}")
+                StatsKeyValue("缓存命中", "${stats.cacheHits}")
+                StatsKeyValue("缓存未命中", "${stats.cacheMisses}")
+                StatsKeyValue("写入次数", "${stats.setCount}")
+                StatsKeyValue("已缓存类", "${stats.cachedClasses}")
+                StatsKeyValue("已缓存字段", "${stats.cachedFields}")
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "• 改值后会自动触发 Composable 重组\n" +
+                        "• 字面量类型由字段名推断, 实际语义取决于 Composable 调用点\n" +
+                        "• 需要 Compose Compiler ≥ 1.5.x + liveLiterals = true",
+                    color = Color(0xFF888888),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
+
+        if (literals.isEmpty()) {
+            item {
+                StatsSection(title = "字面量列表") {
+                    Text(
+                        text = "(空) 当前 Composable 没有可热替换的字面量.\n" +
+                            "可能原因:\n" +
+                            "• compose-compiler liveLiterals 未开启\n" +
+                            "• Composable 内无字面量常量\n" +
+                            "• LiveLiterals 类名命名空间不匹配",
+                        color = Color(0xFFE57373),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+        } else {
+            item {
+                StatsSection(title = "字面量列表 (${literals.size})") {
+                    literals.forEach { literal ->
+                        LiveLiteralRow(
+                            literal = literal,
+                            editor = editor,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 单个字面量行: 字段名 / 类型 / 当前值 / 滑块 (INT/FLOAT) 或纯文本 (其他).
+ */
+@Composable
+private fun LiveLiteralRow(
+    literal: LiveLiteral,
+    editor: LiveLiteralEditor,
+) {
+    var sliderValue by remember(literal.fieldName) {
+        mutableStateOf(literal.currentEncodedValue.toFloat())
+    }
+    LaunchedEffect(literal.currentEncodedValue) {
+        sliderValue = literal.currentEncodedValue.toFloat()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = literal.type.displayName,
+                color = Color(0xFF80CBC4),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            Text(
+                text = literal.fieldName,
+                color = Color(0xFF888888),
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 滑块 (-1000 .. 1000, 简化)
+            Slider(
+                value = sliderValue.coerceIn(-1000f, 1000f),
+                onValueChange = { sliderValue = it },
+                valueRange = -1000f..1000f,
+                onValueChangeFinished = {
+                    editor.updateInt(literal, sliderValue.toInt())
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "${literal.currentEncodedValue}",
+                color = Color(0xFFE0E0E0),
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.width(64.dp),
+            )
+        }
+    }
+}
