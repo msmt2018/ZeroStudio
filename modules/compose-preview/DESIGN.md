@@ -86,15 +86,154 @@ modules/compose-preview/src/main/java/.../compose/preview/
 │   └── ...原有
 ```
 
-### 0.5 后续 v2.2+ 规划
+### 0.5 v2.2 规划（历史快照，已交付 → 见 0.6 节）
 
 | 阶段 | 范围 | 优先级 |
 | --- | --- | --- |
-| v2.2 | 远程预览 (adb forward) + LiveLiterals 实验 | 中 |
-| v2.3 | Multi-module 项目跨模块 preview | 低 |
-| v2.4 | Live Edit (Hot Reload) 增量模式 | 中 |
-| v2.5 | ProGuard / R8 优化集成 | 低 |
-| v2.6 | 设备 profile 远程同步 (用户共享) | 低 |
+| v2.2 | LiveLiterals 实验 → LiveLiterals 完整版 → Gallery → **Live Edit (Hot Reload)** → 持久化 → 测试 | **中** |
+
+> 2026-06-14 v2.2 已全部交付（7 PR ready-for-review,#339~#345），详见 [0.6 节](#06-v22-实际交付状态2026-06-14)。
+
+### 0.6 后续 v2.3+ 规划（2026-06-14 更新）
+
+| 阶段 | 范围 | 优先级 | 备注 |
+| --- | --- | --- | --- |
+| v2.2 P7 | 错误聚合（按 file:line 去重 + 分类 K2/D8/Swap） | 中 | Live Edit 调试体验 |
+| v2.2 P8 | Resource 资源监听（drawable/string/color XML 变化触发 Live Edit） | 中 | 补 P3 只看 .kt 的盲点 |
+| v2.3 P0 | Multi-module 跨模块 preview | 低 | ClassLoader 链 + Compose 产物跨 module |
+| v2.3 P1 | `@PreviewParameter` DataSet 切换 | 中 | 反射 Provider 实例化 + Gallery 集成 |
+| v2.3 P2 | 设备 profile 矩阵 | 低 | Gallery 自动网格化 (w, h) 组合 |
+| v2.3 P3 | Snapshot / Image Diff | 低 | PixelCopy + 基线对比 + CI 集成 |
+| v2.3 P4 | Recomposition 计数增强 | 低 | 重组次数 + 耗时 + 高亮高频节点 |
+| v2.4 P0 | ProGuard / R8 优化集成 | 低 | Release preview minify |
+| v2.5 P0 | 性能 + 远程 + 共享（v2.1 P3-FE-01/03/05 收尾） | 中 | Dex mmap + 性能埋点 + 远程预览 + 设备 profile 共享 |
+
+---
+
+## 0.6 v2.2 实际交付状态（2026-06-14）
+
+> v2.2 聚焦 **LiveLiterals + Live Edit** 双主线,目标对标 IDEA / Android Studio 的 Hot Reload 体验。
+> 7 个 PR 链式提交（#339 ~ #345），全部 ready-for-review。
+
+### 0.6.1 PR 链总览
+
+| PR | 阶段 | 标题 | commit | 文件改动 | 关键产物 |
+| --- | --- | --- | --- | --- | --- |
+| #339 | P0 | **LiveLiterals 实验**（反射改 `LiveLiterals$*` 静态 int 字段） | — | +N | LiveLiteralEditor / LiveLiteralScanner / LiveLiteralValue / LiveLiteralGroup / LiveLiterals 反射 helper |
+| #340 | P1 | **LiveLiterals 完整版**（按 group + LiveLiteralValue 类型 + 7 种基本类型 + LiveLiteralEditor.attach） | — | +N | LiveLiteralEditor 完整 API + ComposePreviewRepository 集成 + DebugDrawer LiveLiterals tab |
+| #341 | P2 | **Gallery 多 Preview 网格**（AS 风格卡片网格 + 单击切换 SINGLE） | — | +N | GalleryLayout / GalleryCard / DisplayMode + ComposePreviewRepository 接入 |
+| **#342** | **P3** | **Live Edit (Hot Reload)**（WatchService + 7 态状态机 + Debounce + LiveEditIndicator） | — | **+1244** | LiveEditStats / SourceChangeWatcher / LiveEditCoordinator / LiveEditIndicator + ComposeClassLoader.swapProjectDex + ComposePreviewRepository.recompile |
+| **#343** | **P4** | **LiveLiterals 持久化**（`<project>/.androidide/live-state.json` 原子写 + 1s debounce + 损坏容错） | — | **+838** | LiveStateJsonCodec / PersistenceScheduler / LiveStatePersistenceManager + LiveLiteralEditor.restorePersistedLiterals |
+| **#344** | **P5** | **测试 + 稳定化**（50 个 unit test case + build.gradle.kts 测试依赖） | — | **+966**（0 改生产代码） | LiveStateJsonCodecTest / SourceChangeWatcherTest / LiveEditCoordinatorTest / LiveStatePersistenceManagerTest |
+| **#345** | **P6** | **文档收尾**（本节 + TODO.md 同步 v2.2 实际交付） | (本 PR) | md only | DESIGN.md / TODO.md 同步 |
+
+### 0.6.2 关键架构增量（v2.1 → v2.2 新增模块）
+
+```
+modules/compose-preview/src/main/java/.../compose/preview/
+├── runtime/                                                    ← v2.2 大幅扩展
+│   ├── LiveLiteralEditor.kt                                    ← P0 + P1 + P4 持续增强
+│   ├── LiveLiteralScanner.kt                                   ← P0 反射扫描 @Preview Composable
+│   ├── LiveLiteralValue.kt                                     ← P0 7 种基本类型 + 配对 (LONG/COLOR)
+│   ├── LiveLiteralGroup.kt                                     ← P0 group 封装
+│   ├── LiveLiteralsReflection.kt                               ← P0 反射 helper
+│   ├── SourceChangeWatcher.kt                                  ← P3 WatchService + FNV-1a hash
+│   ├── LiveEditCoordinator.kt                                  ← P3 7 态状态机 (Idle/Debouncing/Compiling/Dexing/Swapping/Rendering/Error)
+│   ├── LiveEditStats.kt                                        ← P3 stats snapshot + registry
+│   ├── LiveStateJsonCodec.kt                                   ← P4 手写 JSON 编解码 (零依赖)
+│   ├── PersistenceScheduler.kt                                 ← P4 单线程 daemon + 1s debounce flush
+│   └── LiveStatePersistenceManager.kt                          ← P4 per-projectDir 单例 + atomic write + 损坏容错
+├── ui/
+│   ├── LiveEditIndicator.kt                                    ← P3 顶栏 pill (Live/Reloading/Error/Paused)
+│   ├── GalleryLayout.kt                                        ← P2 AS 风格多 Preview 网格
+│   ├── GalleryCard.kt                                          ← P2 卡片
+│   └── DebugDrawer.kt                                          ← +LiveEdit tab (P3) + LiveLiterals tab (P1) + Gallery (P2)
+├── data/repository/
+│   ├── ComposePreviewRepository.kt                             ← +recompile / +installLiveStatePersistence / +computeSourceFnvHash
+│   └── ComposePreviewRepositoryImpl.kt                         ← +Live Edit 独立路径（跳过 DexCache, 独立 output dir）
+├── runtime/ComposeClassLoader.kt                               ← +swapProjectDex(newDexFile, newClassName) + swapCount
+└── runtime/ComposableRenderer.kt                               ← +reRender() + 提取 doRender(..., log: Boolean)
+```
+
+### 0.6.3 Live Edit 状态机时序（P3 核心）
+
+```
+save(.kt) → WatchService 事件
+  → SourceChangeWatcher 触发 SharedFlow<SourceChangeEvent>
+  → LiveEditCoordinator 状态机
+       Idle ──source change──> Debouncing (300ms timer)
+       Debouncing ──timer fired / new change──> Compiling (Mutex 上锁,串行)
+       Compiling ──K2JVMCompiler 成功──> Dexing
+       Compiling ──失败──> Error (保留旧 preview,error 写入 LiveEditStats.lastError)
+       Dexing ──D8 成功──> Swapping
+       Swapping ──ClassLoader swapProjectDex──> Rendering
+       Rendering ──ComposableRenderer.reRender──> Idle
+       任意态 ──forceReload──> 跳过 Debouncing,直接 Compiling
+       任意态 ──paused = true──> 不消费 source change 事件
+       任意态 ──失败 N 次连续──> 仍保留旧 preview,error 累积到 LiveEditStats
+```
+
+### 0.6.4 持久化存储格式（P4）
+
+文件路径：`<projectDir>/.androidide/live-state.json`
+
+```json
+{
+  "schemaVersion": 1,
+  "lastUpdated": "2026-06-14T12:34:56.789Z",
+  "literals": {
+    "com.example.MyKt": {
+      "<fnv1a_source_hash>": {
+        "padding": 16,
+        "color": -16776961,
+        "label": "Hello"
+      }
+    }
+  },
+  "deviceProfile": {
+    "widthDp": 360, "heightDp": 640, "dpi": 480, "isRound": false, "chinHeight": 0
+  },
+  "theme": "DARK",
+  "debugEnabled": true,
+  "displayMode": "GALLERY"
+}
+```
+
+- **schemaVersion = 1**：损坏 / 不匹配 → 备份 `.bak` + 内存清空（不抛）
+- **原子写**：`tmp` + `rename`（POSIX 保证）
+- **sourceHash stale check**：加载时 `currentSourceHash != stored sourceHash` → 该字段视为过期
+- **1s debounce flush**：连续改 → 合并为单次 fsync
+
+### 0.6.5 测试覆盖（P5）
+
+| 测试类 | case 数 | 覆盖范围 |
+| --- | --- | --- |
+| `LiveStateJsonCodecTest` | 15 | round-trip / 损坏输入 / schema 不匹配 / 数字格式 / 特殊字符 / null / boolean / 嵌套 |
+| `SourceChangeWatcherTest` | 8 | FNV-1a hash 一致性（同字同 hash / unicode / 空串=0x811c9dc5） / 手动 notifySourceChanged API / WatchService 生命周期 |
+| `LiveEditCoordinatorTest` | 10 | 7 态状态机迁移 / 300ms debounce 合并 5 事件→1 编译 / paused 跳过 / forceReload 优先级 / 失败保留旧 preview / Mutex 串行化 |
+| `LiveStatePersistenceManagerTest` | 17 | set/get / sourceHash stale check（0x100≠0x200 返回 null） / atomic write（无半文件） / 损坏容错（schema=999 备份 .bak + 内存清空） / per-project 隔离 |
+| **合计** | **50** | **0 改生产代码** |
+
+build.gradle.kts 新增：
+
+```kotlin
+testOptions { unitTests {
+  isIncludeAndroidResources = false
+  isReturnDefaultValues = true
+}}
+testImplementation("junit:junit:4.13.2")
+testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.22")
+testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+```
+
+### 0.6.6 关键设计决策
+
+1. **FNV-1a 32-bit 跨模块统一**：`SourceChangeWatcher` / `LiveStatePersistenceManager` / `ComposePreviewRepository.computeSourceFnvHash` 用同一 hash 算法，避免重复实现 + 跨 module 对齐。
+2. **Mutex 串行化 + StateFlow 状态机**：7 态状态机用 `MutableStateFlow<LiveEditState>` 暴露，串行化用 `Mutex.withLock`，保证任意时刻最多 1 个 Live Edit 任务在跑。
+3. **失败保留旧 preview**：`LiveEditCoordinator` 在 K2 编译失败 / D8 dex 失败 / ClassLoader swap 失败时,`lastError` 写入 `LiveEditStats` + 状态切到 Error，但 **不卸载当前 preview**，用户可继续调试。
+4. **per-projectDir 单例**：`LiveStatePersistenceManager.install(projectDir)` 全局最多 1 个 active，切换 project 时 `uninstall()` 释放。
+5. **损坏容错**：JSON 解析失败 / schema 不匹配 → 备份 `.bak` + 内存清空 + 不抛，启动永远成功。
+6. **0 改生产代码**（P5）：5 个测试文件 + build.gradle.kts 测试依赖,不动任何生产代码,纯稳定性 + 文档化保证。
 
 ---
 
@@ -406,7 +545,9 @@ render(state):
 
 ## 8. 后续 PR 拆分
 
-> v2.1 实际拆分与完成情况见 [第 0 节](#0-v21-实际交付状态2026-06-14)。下方为原始规划,作为 v2.2+ 拆分参考。
+> v2.1 实际拆分与完成情况见 [第 0 节](#0-v21-实际交付状态2026-06-14)。
+> v2.2 实际拆分与完成情况见 [第 0.6 节](#06-v22-实际交付状态2026-06-14)。
+> 下方为原始规划,作为 v2.3+ 拆分参考。
 
 ### v2.1 实际拆分（已交付）
 
@@ -422,6 +563,18 @@ render(state):
 | #336 | 增量编译缓存（CompilationCache LRU + TTL） | ✅ ready | #335 |
 | #337 | DexCache 升级（stats + LRU/TTL + holder） | ✅ ready | #336 |
 | #338 | 文档收尾（本文件 + TODO.md 同步） | ✅ ready | #337 |
+
+### v2.2 实际拆分（已交付，2026-06-14）
+
+| PR | 阶段 | 范围 | 状态 | 依赖 |
+| --- | --- | --- | --- | --- |
+| #339 | P0 | LiveLiterals 实验（反射 `LiveLiterals$*` 静态 int + 7 种基本类型） | ✅ ready | #338 |
+| #340 | P1 | LiveLiterals 完整版（按 group + LiveLiteralValue + DebugDrawer tab） | ✅ ready | #339 |
+| #341 | P2 | Gallery 多 Preview 网格（AS 风格卡片 + DisplayMode） | ✅ ready | #340 |
+| #342 | P3 | Live Edit (Hot Reload)（WatchService + 7 态状态机 + Debounce） | ✅ ready | #341 |
+| #343 | P4 | LiveLiterals 持久化（`live-state.json` 原子写 + 1s debounce + 损坏容错） | ✅ ready | #342 |
+| #344 | P5 | 测试 + 稳定化（50 个 unit test case + 0 改生产代码） | ✅ ready | #343 |
+| #345 | P6 | 文档收尾（本文件 + TODO.md 同步） | ✅ ready（本 PR） | #344 |
 
 ### v2.1 原始规划
 
@@ -447,4 +600,4 @@ render(state):
 ---
 
 文档维护者：AndroidIDE
-最后更新：2026-06-14（v2.1 全部交付,8 PR ready-for-review）
+最后更新：2026-06-14（v2.1 全部交付 8 PR + v2.2 全部交付 7 PR #339~#345 ready-for-review）

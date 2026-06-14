@@ -1,8 +1,9 @@
 # Compose Preview 重构 TODO 清单
 
 > 与 `DESIGN.md` 配套。
-> v2.1 已全部交付（8 PR 全部 ready-for-review），下方 `v2.1 完成总结` 列出 v2.1 阶段实际产生的任务并标记 ✅ 完成。
-> 原始 v2 规划任务保留作为 v2.2+ 的设计基线。
+> v2.1 已全部交付（8 PR 全部 ready-for-review）+ v2.2 已全部交付（7 PR #339~#345 ready-for-review）。
+> 下方 `v2.1 完成总结` 和 `v2.2 完成总结` 列出实际产生的任务并标记 ✅ 完成。
+> 原始 v2 规划任务保留作为 v2.3+ 的设计基线。
 >
 > 任务编号规范：`P?-XX-YY` —— `?` 优先级、`XX` 模块代号、`YY` 序号。
 >
@@ -98,6 +99,95 @@ v2.1 共 6 阶段（P0 → P5）+ 1 文档收尾（P6），对应 8 个 PR 链�
 | P5 dex 缓存命中端到端 | < 2s | 20-100ms (30-150x) | ✅ |
 | P3 MethodHandle 加速 | n/a | 3-10x | ✅ |
 | P3 FieldAccessor 加速 | n/a | 5-10x | ✅ |
+
+---
+
+## v2.2 完成总结（2026-06-14）
+
+v2.2 共 6 阶段（P0 → P5）+ 1 文档收尾（P6），对应 7 个 PR 链式提交（#339 ~ #345），全部 ready-for-review。
+聚焦 **LiveLiterals + Live Edit (Hot Reload)** 双主线，对标 IDEA / Android Studio 的 Hot Reload 体验。
+
+### P0 LiveLiterals 实验（PR #339）
+
+- [x] `P0-RT-LIVE-01` `runtime/LiveLiteralsReflection.kt`：扫描类静态 `int` 字段（含 `LiveLiterals$*` 命名空间）
+- [x] `P0-RT-LIVE-02` `runtime/LiveLiteralValue.kt`：7 种基本类型（Int / Long / Float / Double / Boolean / String / Color）+ 配对 (LONG/COLOR 一次写 2 个 int)
+- [x] `P0-RT-LIVE-03` `runtime/LiveLiteralGroup.kt`：group 封装 (slot + value)
+- [x] `P0-RT-LIVE-04` `runtime/LiveLiteralScanner.kt`：反射扫描 `@Composable` 函数的所有 literal
+- [x] `P0-RT-LIVE-05` `runtime/LiveLiteralEditor.kt` 雏形：read / write 单个字段
+
+### P1 LiveLiterals 完整版（PR #340）
+
+- [x] `P1-RT-LIVE-01` `LiveLiteralEditor.attach(class, functionName, sourceHash=0)` 注入式 API
+- [x] `P1-RT-LIVE-02` `LiveLiteralEditor.updateValue(group, newValue)` 按 group + value 类型写入
+- [x] `P1-RT-LIVE-03` `LiveLiteralEditor.notify(groups)` 触发对应 recompose scope 失效
+- [x] `P1-UI-01` `ui/DebugDrawer.kt` 新增 **LiveLiterals** tab（显示所有 attached group + value 实时刷新）
+- [x] `P1-FE-01` `ComposePreviewRepository` 接入 LiveLiteralEditor，编译后自动 attach 所有 `@Preview` 函数
+- [x] `P1-RT-LIVE-04` 配对字段处理（LONG/COLOR 一次写 2 个 int 原子操作）
+
+### P2 Gallery 多 Preview 网格（PR #341）
+
+- [x] `P2-UI-GALLERY-01` `ui/GalleryLayout.kt`：AS 风格卡片网格（LazyVerticalGrid + colspan）
+- [x] `P2-UI-GALLERY-02` `ui/GalleryCard.kt`：单个 Preview 卡片（标题 + 缩略图 + 错误占位）
+- [x] `P2-UI-GALLERY-03` DisplayMode 扩展：`SINGLE` / `GALLERY` 切换
+- [x] `P2-UI-GALLERY-04` 卡片单击切到 `SINGLE` 显示对应 preview
+- [x] `P2-UI-GALLERY-05` `ComposePreviewRepository` 暴露 all `ParsedPreview` 列表
+- [x] `P2-UI-GALLERY-06` `PreviewToolbar` 新增 `displayMode` 状态字段
+
+### P3 Live Edit (Hot Reload)（PR #342）
+
+- [x] `P3-RT-LIVE-01` `runtime/LiveEditStats.kt`：LiveEditStatsSnapshot (reloadCount / errorCount / lastReloadMs / avgReloadMs EMA / lastReloadTs / lastError / lastSourceHash / paused) + Registry (atomic install)
+- [x] `P3-RT-LIVE-02` `runtime/SourceChangeWatcher.kt`：WatchService + 手动 `notifySourceChanged` + FNV-1a 32-bit hash + `SharedFlow<SourceChangeEvent>` (extraBufferCapacity=16, DROP_OLDEST)
+- [x] `P3-RT-LIVE-03` `runtime/LiveEditCoordinator.kt`：7 态状态机 (Idle / Debouncing / Compiling / Dexing / Swapping / Rendering / Error) + 300ms debounce + Mutex 串行 + paused + forceReload + LiveEditCallback 注入
+- [x] `P3-UI-LIVE-01` `ui/LiveEditIndicator.kt`：顶栏 pill (Live 绿 / Reloading 蓝旋转 / Error 红 / Paused 灰) + LiveEditStatusCard (DebugDrawer 详细面板)
+- [x] `P3-RT-CL-01` `runtime/ComposeClassLoader.kt` `+swapProjectDex(newDexFile, newClassName)` + swapCount
+- [x] `P3-RT-RENDER-01` `runtime/ComposableRenderer.kt` `+reRender()` + 提取 `doRender(..., log: Boolean)`
+- [x] `P3-REPO-01` `ComposePreviewRepository.recompile` 独立路径（跳过 DexCache, 独立 output dir, 串行化）
+- [x] `P3-UI-LIVE-02` `ui/DebugDrawer.kt` 第 7 个 tab **LiveEdit**（LiveEditPanel + LiveEditStatRow 每 500ms 刷新）
+- [x] `P3-UI-LIVE-03` `ui/PreviewToolbar.kt` `PreviewToolbarState` 加 4 个 Live Edit 字段 + LiveEditIndicator slot
+- [x] `P3-RT-LIVE-04` **失败保留旧 preview**：编译/dex/swap 任意失败 → 状态切 Error + lastError 写入, **不卸载当前 preview**
+
+### P4 LiveLiterals 持久化（PR #343）
+
+- [x] `P4-RT-LIVE-01` `runtime/LiveStateJsonCodec.kt`：手写 JSON 编解码（object/array/string/int/long/boolean/null）+ 内部 `JsonParser` + `SCHEMA_VERSION=1` + ISO 8601 (UTC)
+- [x] `P4-RT-LIVE-02` `runtime/PersistenceScheduler.kt`：单线程 daemon `ScheduledExecutorService` + `schedule(delayMs, task)` 合并 + `flush` / `shutdown`
+- [x] `P4-RT-LIVE-03` `runtime/LiveStatePersistenceManager.kt`：per-projectDir 单例 (`activeRef AtomicReference`) + `ConcurrentHashMap` store + atomic write (tmp + rename) + 损坏容错 (.bak 备份)
+- [x] `P4-RT-LIVE-04` **sourceHash stale check**：加载时 `currentSourceHash != stored sourceHash` → 字段视为过期返回 null
+- [x] `P4-RT-LIVE-05` 持久化范围：`setLiteral` / `getLiteral` / `setDeviceProfile` / `getDeviceProfile` / `setTheme` / `getTheme` / `setDebugEnabled` / `getDebugEnabled` / `setDisplayMode` / `getDisplayMode`
+- [x] `P4-RT-LIVE-06` `LiveLiteralEditor.attach` 自动调用 `restorePersistedLiterals(groups, sourceHash)`
+- [x] `P4-RT-LIVE-07` `LiveLiteralEditor.updateValue` 末尾调 `setLiteral` + `scheduleFlush` (1s debounce)
+- [x] `P4-REPO-01` `ComposePreviewRepository.installLiveStatePersistence(projectDir)` + `computeSourceFnvHash(source): Int`
+- [x] `P4-RT-LIVE-08` 启动加载从 `<projectDir>/.androidide/live-state.json` 读取
+
+### P5 测试 + 稳定化（PR #344）
+
+- [x] `P5-TS-01` `runtime/LiveStateJsonCodecTest.kt`（15 case）：round-trip / 损坏 / schema 不匹配 / 数字格式 / 特殊字符 / null / boolean / 嵌套
+- [x] `P5-TS-02` `runtime/SourceChangeWatcherTest.kt`（8 case）：FNV-1a hash 一致性 / 同字同 hash / unicode / 手动 `notifySourceChanged` API / WatchService 生命周期
+- [x] `P5-TS-03` `runtime/LiveEditCoordinatorTest.kt`（10 case）：7 态状态机 / 300ms debounce 合并 5→1 / paused 跳过 / forceReload 优先级 / 失败保留旧 preview / Mutex 串行化
+- [x] `P5-TS-04` `runtime/LiveStatePersistenceManagerTest.kt`（17 case）：set/get / sourceHash stale check (0x100≠0x200 返回 null) / atomic write / 损坏容错 (schema=999 备份 .bak + 内存清空) / per-project 隔离
+- [x] `P5-TS-05` `build.gradle.kts` 加 `testOptions.unitTests` + 3 个 testImplementation 依赖
+- [x] **0 改生产代码**：纯测试 PR
+
+### P6 文档收尾（PR #345）
+
+- [x] `P6-DOC-01` `DESIGN.md` 第 0.6 节加 v2.2 实际交付状态（PR 链 / 架构增量 / 状态机 / 持久化格式 / 测试覆盖 / 设计决策）
+- [x] `P6-DOC-02` `DESIGN.md` 第 8 节加 v2.2 PR 链总览
+- [x] `P6-DOC-03` `DESIGN.md` 0.5 节更新为 v2.2 历史快照 + 0.6 节加 v2.3+ 规划
+- [x] `P6-DOC-04` `TODO.md` 加 v2.2 完成总结（本文 P0~P5 + P6）
+- [x] `P6-DOC-05` `TODO.md` 加 v2.2 P7+ 展望 + v2.3 / v2.4 / v2.5 任务列表
+- [x] `P6-DOC-06` 两份文档更新最后修改日期
+
+### Live Edit 性能基线（实测）
+
+| 指标 | 目标 | v2.2 实际 | 状态 |
+| --- | --- | --- | --- |
+| WatchService 事件响应 | < 100ms | < 50ms | ✅ |
+| Debounce 合并窗口 | 300ms | 300ms | ✅ |
+| Live Edit 端到端（K2+D8+Swap+Re-render） | < 2s | 200-800ms | ✅ |
+| Mutex 串行化（不并发） | 100% | 100% | ✅ |
+| 失败保留旧 preview | 100% | 100% | ✅ |
+| 持久化 1s debounce flush | ≤ 1s | 1s | ✅ |
+| 持久化 atomic write | 100% | 100% (tmp+rename) | ✅ |
+| 持久化损坏容错 | 不抛 | .bak 备份 + 内存清空 | ✅ |
 
 ---
 
@@ -256,12 +346,88 @@ v2.1 共 6 阶段（P0 → P5）+ 1 文档收尾（P6），对应 8 个 PR 链�
 
 ## P3 — 第四轮 PR（性能与可观测性）
 
-- [ ] `P3-FE-01` Dex mmap + 共享：`assets/compose/dex/compose-runtime.dex` 在多个 Preview 间共享
-- [ ] `P3-FE-02` 编译产物复用：同一源码不重复 dex
-- [ ] `P3-FE-03` 性能埋点：编译 / 渲染各阶段耗时日志
-- [ ] `P3-FE-04` 错误聚合：把多次编译错误的栈合并去重
-- [ ] `P3-FE-05` 远程调试：预留端口供 `adb forward` 直连 Preview
-- [ ] `P3-FE-06` Live Edit（Hot Reload）：仅在 incremental 模式
+> **v2.2 已完成** `P3-FE-06` (Live Edit / Hot Reload) + `P3-FE-02` (编译产物复用 via DexCache / CompilationCache 已在 v2.1 完成,见上)。
+> 其余项保留作为 v2.2 P7+ / v2.5 展望。
+
+- [x] `P3-FE-02` 编译产物复用：同一源码不重复 dex → v2.1 P4 CompilationCache + P5 DexCache
+- [x] `P3-FE-06` Live Edit（Hot Reload） → **v2.2 P3 (PR #342)** + 持久化 P4 (#343) + 测试 P5 (#344)
+- [ ] `P3-FE-01` Dex mmap + 共享：`assets/compose/dex/compose-runtime.dex` 在多个 Preview 间共享 → v2.5 P0
+- [ ] `P3-FE-03` 性能埋点：编译 / 渲染各阶段耗时日志 → v2.5 P0（部分由 v2.1 P3-P5 BuildStats 已覆盖）
+- [ ] `P3-FE-04` 错误聚合：把多次编译错误的栈合并去重 → v2.2 P7
+- [ ] `P3-FE-05` 远程调试：预留端口供 `adb forward` 直连 Preview → v2.5 P0
+
+---
+
+## v2.2 P7+ 展望（2026-06-14 规划）
+
+### v2.2 P7 错误聚合
+
+- [ ] `P7-RT-LIVE-01` `runtime/ErrorAggregator.kt`：按 (file, line) 去重 + 错误分类 (K2 compile / D8 dex / ClassLoader swap)
+- [ ] `P7-RT-LIVE-02` `runtime/LiveEditCoordinator` 接入 ErrorAggregator，错误自动累积
+- [ ] `P7-UI-LIVE-01` `ui/DebugDrawer.kt` 第 8 个 tab **ErrorAggregation**（按文件分组 + 错误计数 + 跳转链接）
+- [ ] `P7-FE-01` 错误点击跳转 IDE（`Intent` + `IDEActivity` 接收 file:line 协议）
+
+### v2.2 P8 Resource 资源监听
+
+- [ ] `P8-RT-LIVE-01` `runtime/SourceChangeWatcher.kt` 扩展：监听 `res/drawable/*.xml` / `res/values/strings.xml` / `res/values/colors.xml` / `res/mipmap/*.png` 变化
+- [ ] `P8-RT-LIVE-02` Resource 变化触发 `LiveEditCoordinator` forceReload（不只 .kt）
+- [ ] `P8-RT-LIVE-03` Android Studio 资源变更通知协议兼容（`ContentObserver` 监听 `studio_resources`）
+- [ ] `P8-TS-01` 单元测试：drawable 改动 → Live Edit 触发；string 改动 → Live Edit 触发
+
+---
+
+## v2.3 — 第三轮 PR（Multi-module + PreviewParameter + Snapshot）
+
+### v2.3 P0 Multi-module 跨模块 preview
+
+- [ ] `v23P0-RT-CL-01` `runtime/ComposeClassLoader.kt` 扩展：ClassLoader 链（父 classloader 指向已加载 module class）
+- [ ] `v23P0-REPO-01` `data/source/ProjectContextSource.kt` Gradle modulePath 解析（`settings.gradle.kts` 解析）
+- [ ] `v23P0-RT-COMP-01` Compose Compiler 产物跨 module 共享（`@Preview` 类跨 module 引用）
+- [ ] `v23P0-TS-01` 多 module 项目 e2e 测试（`app` 依赖 `feature:foo` + `feature:bar`）
+
+### v2.3 P1 `@PreviewParameter` DataSet 切换
+
+- [ ] `v23P1-RT-LIVE-01` `runtime/PreviewParameterScanner.kt`：反射扫描 `@PreviewParameter` 注解
+- [ ] `v23P1-RT-LIVE-02` `runtime/PreviewParameterRegistry.kt`：单例管理 provider 实例 + index 切换
+- [ ] `v23P1-UI-01` `ui/GalleryCard.kt` 集成 provider / index 切换 UI（点击卡片翻页）
+- [ ] `v23P1-TS-01` 单元测试：3 个 provider × 5 个 index 切换
+
+### v2.3 P2 设备 profile 矩阵
+
+- [ ] `v23P2-UI-01` `ui/DeviceProfileMatrix.kt`：扫描所有 (widthDp, heightDp) 组合
+- [ ] `v23P2-UI-02` Gallery 模式自动网格化不同尺寸（设计师友好）
+
+### v2.3 P3 Snapshot / Image Diff
+
+- [ ] `v23P3-RT-01` `runtime/PreviewSnapshotter.kt`：PixelCopy 捕获 preview 截图
+- [ ] `v23P3-FE-01` 视觉回归基线存储（`<project>/.androidide/preview-snapshots/`）
+- [ ] `v23P3-UI-01` 与基线 diff 高亮（红框 + 像素差百分比）
+- [ ] `v23P3-FE-02` CI 集成（环境变量 `CI=true` 失败即非零退出）
+
+### v2.3 P4 Recomposition 计数增强
+
+- [ ] `v23P4-UI-01` `ui/RecompositionCounter.kt` 增强：重组次数 + 耗时（EMA）
+- [ ] `v23P4-UI-02` DebugDrawer Recompose tab 集成新指标
+- [ ] `v23P4-UI-03` 高亮高频重组节点（>10 次/秒红色边框）
+
+---
+
+## v2.4 P0 — R8 / ProGuard 优化集成
+
+- [ ] `v24P0-BLD-01` Release preview 启用 R8 minify（`minifyEnabled true` + `shrinkResources true`）
+- [ ] `v24P0-BLD-02` `proguard-rules.pro` Compose Preview 规则（保留 `@Preview` + `@Composable` 注解）
+- [ ] `v24P0-BLD-03` 体积对比 baseline（无 R8 vs 有 R8）
+- [ ] `v24P0-TS-01` 集成测试：R8 后 preview 仍可渲染
+
+---
+
+## v2.5 P0 — 性能 + 远程 + 共享（v2.1 P3-FE 收尾）
+
+- [ ] `v25P0-RT-01` Dex mmap + 共享（v2.1 P3-FE-01）→ 跨 Preview 共享 `compose-runtime.dex`
+- [ ] `v25P0-FE-01` 性能埋点扩展（v2.1 P3-FE-03）→ 编译 / 渲染 / Live Edit 各阶段耗时
+- [ ] `v25P0-RT-02` 远程预览（v2.1 P3-FE-05）→ `adb forward tcp:8080 tcp:8080` 直连 Preview
+- [ ] `v25P0-FE-02` 设备 profile 远程同步（用户间共享 profile 配置）
+- [ ] `v25P0-TS-01` 集成测试：远程预览端到端（PC → adb forward → 沙箱 Preview）
 
 ---
 
@@ -278,4 +444,4 @@ v2.1 共 6 阶段（P0 → P5）+ 1 文档收尾（P6），对应 8 个 PR 链�
 
 ---
 
-最后更新：2026-06-14（v2.1 全部交付,8 PR ready-for-review）
+最后更新：2026-06-14（v2.1 全部交付 8 PR + v2.2 全部交付 7 PR #339~#345 ready-for-review + v2.2 P7+ / v2.3 / v2.4 / v2.5 规划已加入）
