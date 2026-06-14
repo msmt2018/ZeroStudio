@@ -39,6 +39,7 @@ import com.itsaky.androidide.events.LspKotlinEventsIndex
 import com.itsaky.androidide.perf.PerfApplication
 import com.itsaky.androidide.perf.monitor.ColdStartTracker
 import com.itsaky.androidide.perf.monitor.CrashHandler
+import com.itsaky.androidide.perf.monitor.ForegroundTracker
 import com.itsaky.androidide.perf.monitor.MonitorCoordinator
 import com.itsaky.androidide.perf.tracer.PerfTracer
 import com.itsaky.androidide.preferences.internal.DevOpsPreferences
@@ -151,6 +152,7 @@ class IDEApplication : TermuxApplication() {
     PerfTracer.reportInstant("ide_on_create_end")
     ColdStartTracker.markAppReady() // PR (advanced): 冷启动第二段
     ColdStartTracker.registerFirstActivityTracker(this) // PR (advanced): 等首 Activity
+    ForegroundTracker.install() // PR (advanced): 监听前后台切换
     PerfTracer.endBoot()
     MonitorCoordinator.start(this)
   }

@@ -60,6 +60,20 @@ data class PerfUiState(
      * [com.itsaky.androidide.perf.monitor.CrashHandler].
      */
     val crashEvents: List<PerfEvent.Instant> = emptyList(),
+    /**
+     * Advanced/Lifecycle: 累计前台时长 (ms). 来源
+     * [com.itsaky.androidide.perf.monitor.ForegroundTracker] 上报的
+     * `lifecycle_fg_total_<ms>ms`. 0 表示还没切过后台.
+     */
+    val foregroundTotalMs: Long = 0L,
+    /**
+     * Advanced/Lifecycle: 累计进入后台的次数. 0 表示启动后一直在前台.
+     */
+    val backgroundCount: Int = 0,
+    /**
+     * Advanced/Lifecycle: 进程当前是否在前台. UI 用来显示 badge.
+     */
+    val isInForeground: Boolean = true,
     val totalBootMs: Long = 0L,
 ) {
   companion object {

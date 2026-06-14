@@ -77,6 +77,13 @@ fun BootTab(state: PerfUiState, modifier: Modifier = Modifier) {
       CrashListCard(crashes = state.crashEvents)
     }
     item {
+      ForegroundCard(
+          foregroundMs = state.foregroundTotalMs,
+          backgroundCount = state.backgroundCount,
+          isInForeground = state.isInForeground,
+      )
+    }
+    item {
       BootTimelineCard(bootEvents = state.bootEvents)
     }
     item {
@@ -288,6 +295,70 @@ private fun ColdStartRow(label: String, ms: Long, total: Long) {
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.fillMaxWidth(),
     )
+  }
+}
+
+/**
+ * 前后台状态 (Advanced / Commit 3).
+ *
+ * 来源: [com.itsaky.androidide.perf.monitor.ForegroundTracker] 用
+ * [androidx.lifecycle.ProcessLifecycleOwner] 监听整个 app process 的前
+ * 后台切换, 每次切换上报 `lifecycle_foreground` / `lifecycle_background`
+ * instant, 同时上报累计前台时长 `lifecycle_fg_total_<ms>ms`.
+ *
+ * 卡片里:
+ * - 大字显示**累计前台时长** (自启动以来, 累计进入前台 segment 的总毫秒)
+ * - 右上角 badge 显示**当前是否在前台**
+ * - 底部统计**进入后台的次数** (0 表示启动后一直在前台)
+ *
+ * 用 ProcessLifecycleOwner 而非 ActivityLifecycleCallbacks 不会被屏幕
+ * 旋转或临时跳设置页误报.
+ */
+@Composable
+private fun ForegroundCard(foregroundMs: Long, backgroundCount: Int, isInForeground: Boolean) {
+  Card(
+      shape = RoundedCornerShape(12.dp),
+      colors =
+          CardDefaults.cardColors(
+              containerColor =
+                  if (isInForeground) MaterialTheme.colorScheme.surface
+                  else MaterialTheme.colorScheme.surfaceVariant
+          ),
+  ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+      Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+            text = "前台累计 / 后台次数",
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = if (isInForeground) "● 前台" else "○ 后台",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color =
+                if (isInForeground) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      Spacer(modifier = Modifier.size(6.dp))
+      Text(
+          text = formatMs(foregroundMs),
+          fontSize = 24.sp,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.onSurface,
+      )
+      Spacer(modifier = Modifier.size(4.dp))
+      Text(
+          text = "进入后台: ${backgroundCount} 次",
+          fontSize = 12.sp,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
   }
 }
 

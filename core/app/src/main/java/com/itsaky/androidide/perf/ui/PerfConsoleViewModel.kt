@@ -104,6 +104,10 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
     val anrs = ArrayList<PerfEvent.Instant>()
     val crashes = ArrayList<PerfEvent.Instant>()
 
+    // Advanced/Lifecycle
+    var fgTotalMs: Long = 0L
+    var bgCount: Int = 0
+
     // Advanced/ColdStart: 4 段 ms
     var coldProc2App: Long = 0L
     var coldAppDur: Long = 0L
@@ -120,7 +124,8 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
                 e.name !in MONITOR_PREFIXES &&
                     e.name != END_BOOT_MARKER &&
                     !e.name.startsWith("coldstart_") &&
-                    !e.name.startsWith("crash_")
+                    !e.name.startsWith("crash_") &&
+                    !e.name.startsWith("lifecycle_")
             PerfEvent.EndBoot -> true
           }
         }
@@ -138,6 +143,14 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             ev.name.substring(15).toLongOrNull()?.let { gc.addLast(it) }
           }
           ev.name.startsWith("anr_") -> anrs.add(ev)
+          // Advanced/Crash
+          ev.name.startsWith("crash_") -> crashes.add(ev)
+          // Advanced/Lifecycle: 累计前台时长 + 后台次数
+          ev.name.startsWith("lifecycle_fg_total_") && ev.name.endsWith("ms") -> {
+            fgTotalMs =
+                ev.name.removePrefix("lifecycle_fg_total_").removeSuffix("ms").toLongOrNull() ?: 0L
+          }
+          ev.name == "lifecycle_background" -> bgCount += 1
           // Advanced/ColdStart
           ev.name.startsWith("coldstart_proc2app_") && ev.name.endsWith("ms") -> {
             coldProc2App =
@@ -191,6 +204,9 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             coldStartAct2FrameMs = coldAct2Frame,
             coldStartTotalMs = coldTotal,
             crashEvents = crashes,
+            foregroundTotalMs = fgTotalMs,
+            backgroundCount = bgCount,
+            isInForeground = com.itsaky.androidide.perf.monitor.ForegroundTracker.isInForeground,
             totalBootMs = totalBootMs,
         )
   }

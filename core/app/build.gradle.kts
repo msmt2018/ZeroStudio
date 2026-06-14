@@ -173,6 +173,8 @@ dependencies {
   implementation(libs.androidx.nav.fragment)
   implementation(libs.androidx.nav.ui)
   implementation(libs.androidx.preference)
+  // PR (advanced): DataStore Preferences 持久化自定义阈值 (Advanced / Commit 4)
+  implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.recyclerview)
   implementation(libs.androidx.transition)
   implementation(libs.androidx.vectors)
@@ -187,6 +189,8 @@ dependencies {
   implementation(libs.firebase.crashlytics)
   implementation(libs.firebase.config)
   implementation(libs.androidx.compose.material.icons.extended)
+  // PR (advanced): ProcessLifecycleOwner 监听前后台切换 (Advanced / Commit 3)
+  implementation(libs.androidx.lifecycle.process)
 
   // UI/UX
   implementation(libs.bundles.compose) // androidx compose
