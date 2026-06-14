@@ -122,6 +122,20 @@
                     android:resource="@xml/ide_file_provider_paths" />
           </provider>
 
+          <!--
+            Perf Console (PR #7) — FileProvider for sharing exported JSON / thread dumps.
+            独立 authority, 不与 IDEFileProvider 冲突.
+          -->
+          <provider
+               android:authorities="${applicationId}.perf.fileprovider"
+               android:exported="false"
+               android:grantUriPermissions="true"
+               android:name="androidx.core.content.FileProvider">
+               <meta-data
+                    android:name="android.support.FILE_PROVIDER_PATHS"
+                    android:resource="@xml/perf_file_provider_paths" />
+          </provider>
+
           <receiver
                android:enabled="true"
                android:exported="true"

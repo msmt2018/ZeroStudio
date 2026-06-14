@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itsaky.androidide.perf.export.PhaseThresholds
 import com.itsaky.androidide.perf.proto.PerfEvent
 import com.itsaky.androidide.perf.store.BootHistoryStore
 
@@ -124,10 +125,19 @@ private fun BootTimelineCard(bootEvents: List<PerfEvent>) {
       // 计算 phase 最长耗时用于比例尺
       val phases = bootEvents.filterIsInstance<PerfEvent.Phase>()
       val maxMs = phases.maxOfOrNull { it.elapsedMs }?.coerceAtLeast(1L) ?: 1L
-      val color = MaterialTheme.colorScheme.primary
+      val totalMs = phases.sumOf { it.elapsedMs }.coerceAtLeast(1L)
 
+      // PR #7: 用 PhaseThresholds 决定颜色 (替代固定 primary)
       phases.forEach { phase ->
-        BootTimelineRow(name = phase.name, ms = phase.elapsedMs, maxMs = maxMs, color = color)
+        val severity = PhaseThresholds.maxSeverity(phase.elapsedMs, totalMs)
+        val color = severity.toColor()
+        BootTimelineRow(
+            name = phase.name,
+            ms = phase.elapsedMs,
+            maxMs = maxMs,
+            color = color,
+            severityLabel = severity.label(),
+        )
         Spacer(modifier = Modifier.size(4.dp))
       }
     }
@@ -135,7 +145,13 @@ private fun BootTimelineCard(bootEvents: List<PerfEvent>) {
 }
 
 @Composable
-private fun BootTimelineRow(name: String, ms: Long, maxMs: Long, color: androidx.compose.ui.graphics.Color) {
+private fun BootTimelineRow(
+    name: String,
+    ms: Long,
+    maxMs: Long,
+    color: androidx.compose.ui.graphics.Color,
+    severityLabel: String,
+) {
   val ratio = (ms.toFloat() / maxMs.toFloat()).coerceIn(0f, 1f)
   Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
     Text(
@@ -163,14 +179,34 @@ private fun BootTimelineRow(name: String, ms: Long, maxMs: Long, color: androidx
     }
     Spacer(modifier = Modifier.size(8.dp))
     Text(
-        text = "${ms}ms",
+        text = "${ms}ms $severityLabel",
         fontSize = 11.sp,
         fontFamily = FontFamily.Monospace,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = color,
         modifier = Modifier.fillMaxWidth(),
     )
   }
 }
+
+/**
+ * 把 [PhaseThresholds.Severity] 映射到 Material color.
+ */
+@Composable
+private fun PhaseThresholds.Severity.toColor(): androidx.compose.ui.graphics.Color =
+    when (this) {
+      PhaseThresholds.Severity.OK -> MaterialTheme.colorScheme.primary
+      PhaseThresholds.Severity.WARN -> MaterialTheme.colorScheme.tertiary
+      PhaseThresholds.Severity.SLOW -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f)
+      PhaseThresholds.Severity.CRITICAL -> MaterialTheme.colorScheme.error
+    }
+
+private fun PhaseThresholds.Severity.label(): String =
+    when (this) {
+      PhaseThresholds.Severity.OK -> ""
+      PhaseThresholds.Severity.WARN -> "⚠"
+      PhaseThresholds.Severity.SLOW -> "⚠⚠"
+      PhaseThresholds.Severity.CRITICAL -> "⛔"
+    }
 
 @Composable
 private fun BootHistoryCard(history: List<BootHistoryStore.BootSession>) {
