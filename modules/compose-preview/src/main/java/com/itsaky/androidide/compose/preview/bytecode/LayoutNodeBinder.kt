@@ -156,6 +156,21 @@ class LayoutNodeBinder private constructor(
         @JvmStatic
         fun clearCache() = cache.clear()
 
+        /**
+         * 当前已缓存的 LayoutNodeBinder 实例数.
+         */
+        @JvmStatic
+        fun binderCount(): Int = cache.size
+
+        /**
+         * 累计所有缓存实例成功绑定的字段数.
+         *
+         * 期望 ≈ 9 × binderCount (9 = LayoutNode 关注的字段数).
+         * 如果远低于这个值, 说明运行时 Compose 版本字段命名有变.
+         */
+        @JvmStatic
+        fun totalBoundFields(): Int = cache.values.sumOf { it.boundCount() }
+
         private fun createOrFallback(classLoader: ClassLoader): LayoutNodeBinder {
             val klass: Class<*> = try {
                 classLoader.loadClass("androidx.compose.ui.node.LayoutNode")

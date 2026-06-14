@@ -51,6 +51,7 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itsaky.androidide.compose.preview.bytecode.BinderStats
+import com.itsaky.androidide.compose.preview.bytecode.BinderStatsRegistry
+import kotlinx.coroutines.delay
 
 /**
  * 调试面板 v2.1.
@@ -284,6 +288,13 @@ data class BuildStats(
     val totalCompileMs: Long = 0,
     val lastRenderMs: Long = 0,
     val totalRenderMs: Long = 0,
+    /**
+     * 字节码 binder 统计 (P3 字节码加速).
+     *
+     * 默认 [BinderStats.EMPTY], 调用方可传入 [BinderStatsRegistry.snapshot] 的结果.
+     * 留空时 [StatsPanel] 内部会自行周期性采集.
+     */
+    val binderStats: BinderStats = BinderStats.EMPTY,
 ) {
     /**
      * 缓存命中率, 范围 [0f, 1f]. 0 当 loadedClassCount == 0.
@@ -318,10 +329,13 @@ data class BuildPhaseTimings(
  * 统计面板 (Stats tab) v2.1.
  *
  * 展示 [BuildStats] 内的数字:
- * - 缓存命中率 (LinearProgressIndicator + 百分比)
+ * - ClassLoader 缓存命中率 (LinearProgressIndicator + 百分比)
  * - 4 个 build phase 的耗时条
  * - ClassLoader pool / cache 状态
  * - 上次 / 累计 compile / render 耗时
+ * - 字节码 binder 统计 (P3) — FieldAccessor / K2 / LayoutNode binder 命中率
+ *
+ * binder 统计每 [BINDER_STATS_POLL_MS] ms 刷新一次, 反映实时 MethodHandle 命中率.
  */
 @Composable
 fun StatsPanel(
@@ -333,6 +347,15 @@ fun StatsPanel(
         hitRatePercent >= 80f -> Color(0xFF81C784)
         hitRatePercent >= 50f -> Color(0xFFFFB74D)
         else -> Color(0xFFE57373)
+    }
+
+    // P3 字节码 binder 统计: 每 500ms 采集一次
+    var binderStats by remember { mutableStateOf(stats.binderStats) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            binderStats = BinderStatsRegistry.snapshot()
+            delay(BINDER_STATS_POLL_MS)
+        }
     }
 
     LazyColumn(
@@ -368,6 +391,11 @@ fun StatsPanel(
                     fontFamily = FontFamily.Monospace,
                 )
             }
+        }
+
+        // P3 字节码 binder 统计
+        item {
+            BinderStatsSection(binderStats = binderStats)
         }
 
         // 4 个 build phase
@@ -427,13 +455,94 @@ fun StatsPanel(
                     text = "• 缓存命中率 = cacheHit / loadedClassCount\n" +
                         "• 命中率 <50% 表示冷启动; 持续走低考虑加 LRU 上限\n" +
                         "• 4 个 phase 总和 = 一次完整 build 耗时\n" +
-                        "• 累计数据从应用启动开始",
+                        "• 累计数据从应用启动开始\n" +
+                        "• P3 binder 命中率应稳定 > 90% (FieldAccessor 缓存命中)",
                     color = Color(0xFF888888),
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                 )
             }
         }
+    }
+}
+
+/** P3 binder 统计刷新周期 (ms). */
+private const val BINDER_STATS_POLL_MS = 500L
+
+/**
+ * P3 binder 统计展示区.
+ *
+ * 内部包含 3 个子区:
+ * 1. FieldAccessor 缓存 (singleton)
+ * 2. K2StaticBinder (per-classloader)
+ * 3. LayoutNodeBinder (per-classloader)
+ */
+@Composable
+private fun BinderStatsSection(binderStats: BinderStats) {
+    val hitPercent = (binderStats.fieldAccessorHitRate * 100).coerceIn(0.0, 100.0)
+    val hitColor = when {
+        hitPercent >= 90.0 -> Color(0xFF81C784)  // 优秀
+        hitPercent >= 70.0 -> Color(0xFFFFB74D)  // 可接受
+        else -> Color(0xFFE57373)                 // 冷启动或异常
+    }
+
+    StatsSection(title = "P3 Binder · 字节码加速") {
+        // 头部: 命中率 + 进度条
+        Text(
+            text = String.format("FieldAccessor 命中率 %.1f%%", hitPercent),
+            color = hitColor,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+        )
+        Spacer(Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { (binderStats.fieldAccessorHitRate).coerceIn(0.0, 1.0).toFloat() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp)),
+            color = hitColor,
+            trackColor = Color(0xFF2A2A35),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "${binderStats.fieldAccessorHits} 命中 / ${binderStats.fieldAccessorMisses} 未命中 / 缓存 ${binderStats.fieldAccessorSize} 条",
+            color = Color(0xFF888888),
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+
+        Spacer(Modifier.height(6.dp))
+        HorizontalDivider(color = Color(0x15FFFFFF))
+        Spacer(Modifier.height(6.dp))
+
+        // K2StaticBinder
+        Text(
+            text = "K2StaticBinder",
+            color = Color(0xFFAAAAAA),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+        )
+        Spacer(Modifier.height(2.dp))
+        StatsKeyValue("实例数", "${binderStats.k2BinderCount}")
+        StatsKeyValue("累计 exec", "${binderStats.k2CumulativeExecs}")
+        StatsKeyValue("累计 newInstance", "${binderStats.k2CumulativeNewInstances}")
+
+        Spacer(Modifier.height(6.dp))
+
+        // LayoutNodeBinder
+        Text(
+            text = "LayoutNodeBinder",
+            color = Color(0xFFAAAAAA),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+        )
+        Spacer(Modifier.height(2.dp))
+        StatsKeyValue("实例数", "${binderStats.layoutBinderCount}")
+        StatsKeyValue("累计绑定字段", "${binderStats.layoutBinderTotalBoundFields}")
     }
 }
 

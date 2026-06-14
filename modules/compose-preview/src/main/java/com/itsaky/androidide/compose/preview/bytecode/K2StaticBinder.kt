@@ -74,6 +74,7 @@ class K2StaticBinder private constructor(
      * 创建一个新的 K2JVMCompiler 实例.
      */
     fun newK2Instance(): Any {
+        BinderStatsRegistry.recordK2NewInstance()
         return ctorHandle.invoke()
     }
 
@@ -94,6 +95,7 @@ class K2StaticBinder private constructor(
         fileOps: Any?,
         msgCollector: MessageCollector?,
     ): Any {
+        BinderStatsRegistry.recordK2Exec()
         return execHandle.invoke(instance, args, printingCollector, fileOps, msgCollector)
     }
 
@@ -211,5 +213,13 @@ class K2StaticBinder private constructor(
          */
         @JvmStatic
         fun clearCache() = cache.clear()
+
+        /**
+         * 当前已缓存的 K2StaticBinder 实例数 (≈ 不同 classloader 的数量).
+         *
+         * 供 [BinderStatsRegistry] 聚合.
+         */
+        @JvmStatic
+        fun binderCount(): Int = cache.size()
     }
 }
