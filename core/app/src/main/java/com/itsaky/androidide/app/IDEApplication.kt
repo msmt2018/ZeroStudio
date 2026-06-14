@@ -78,11 +78,13 @@ class IDEApplication : TermuxApplication() {
     val bootStart = System.currentTimeMillis()
 
     // :perf 进程: 只跑 super.onCreate (BaseApplication + TermuxApplication 必要初始化),
+    // 然后调 PerfApplication.init 启动 server / PhaseCollector, 再 return.
     // 完全跳过 IDE 特有的初始化 (Koin/EventBus/StrictMode/ColorScheme 等).
     // 让 Perf Console 在 :perf 进程极轻量, 不被主 application 的任何阻塞影响.
     if (isPerfProcess()) {
       super.onCreate()
       log.info("IDEApplication onCreate skipped (running in :perf process)")
+      PerfApplication.init(this)
       return
     }
 
