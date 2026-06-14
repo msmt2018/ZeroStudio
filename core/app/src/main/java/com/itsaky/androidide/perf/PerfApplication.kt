@@ -16,56 +16,107 @@
  */
 package com.itsaky.androidide.perf
 
-import android.app.Application
+import android.content.Context
+import com.itsaky.androidide.perf.server.PerfServerSocket
+import com.itsaky.androidide.perf.server.PhaseCollector
+import java.io.File
+import java.util.concurrent.Executors
 import org.slf4j.LoggerFactory
 
 /**
- * :perf 进程的 [Application].
+ * :perf 进程的"逻辑 Application" (PR #3/5).
  *
- * 跑在独立进程 `android:process=":perf"`, 不会被主 application
- * (`com.itsaky.androidide`) 任何初始化阻塞. 主 application 启动
- * 崩溃时, 此 Application 仍可用, 性能监控 UI 仍能显示.
+ * ## 重要: 本类 **不是** 系统加载的 Application 类
+ *
+ * Android 一个 APK 只能有一个 Application 类, 当前 manifest 用的是
+ * `com.itsaky.androidide.app.IDEApplication`. 系统在 fork `:perf` 进程时
+ * 会加载 IDEApplication, [IDEApplication.onCreate] 通过 [isPerfProcess] 判断
+ * 提前 return 后, **显式调 [init]** 把本类的逻辑跑起来.
+ *
+ * 这种设计的好处:
+ * 1. 保持 :perf 进程所有初始化代码集中在一个文件 ([init]), 易维护
+ * 2. 主进程 manifest 改动最小 (不需要 `tools:replace` 之类的 manifest merger 黑魔法)
+ * 3. IDEApplication 主进程代码完全不变, 只是在 :perf 进程多了一个 init 入口
  *
  * ## 启动后做的事 (按 PR 顺序)
  *
- * - PR #1 (本 PR): 仅 log, 不启动任何后台任务
- * - PR #3: 创建 `LocalServerSocket` ([PERF_SOCKET_PATH]) 等主进程 connect
- * - PR #4: 启动 4 个 Monitor (FrameRate / Memory / Gc / Anr)
+ * - **PR #1**: 骨架 — 仅 log 占位
+ * - **PR #3 (本 PR)**: 启动 [PerfServerSocket] + [PhaseCollector],
+ *   把 socket 路径写到 [PERF_SOCKET_PATH_FILE] 供主进程连接
+ * - **PR #4**: 启动 4 个 Monitor (FrameRate / Memory / Gc / Anr)
  *
- * 主进程的 `PerfTracer.tryAttach(...)` 通过读 [PERF_SOCKET_PATH_FILE] 文件
- * 获得 socket 完整路径, 实现两进程解耦.
+ * ## 进程模型
+ *
+ * ```
+ *  ┌──────────────────┐  LocalSocket (filesystem)  ┌──────────────────┐
+ *  │  Main process    │ ────────────────────────▶ │  :perf process   │
+ *  │  (IDEApplication)│   {"type":"phase",...}    │  PerfServerSocket│
+ *  │  PerfTracer      │                           │  → PhaseCollector│
+ *  │  PerfClientSocket│ ◀─────── (无返回) ──────── │  → UI (PR #5)    │
+ *  └──────────────────┘                            └──────────────────┘
+ * ```
  *
  * @author android_zero
  */
-class PerfApplication : Application() {
+object PerfApplication {
 
-  override fun onCreate() {
-    super.onCreate()
-    log.info("PerfApplication onCreate (PR #1 骨架, 无 socket server / monitor)")
+  private val log = LoggerFactory.getLogger(PerfApplication::class.java)
+
+  /**
+   * 后台 executor, 用于跑 server accept loop.
+   *
+   * 单线程足够 (server.start 内部用 cached pool 处理多 client).
+   * daemon = true 保证不阻止 JVM 退出.
+   */
+  private val serverExecutor = Executors.newSingleThreadExecutor { r ->
+    Thread(r, "perf-app-server").apply { isDaemon = true }
   }
 
-  companion object {
-    private val log = LoggerFactory.getLogger(PerfApplication::class.java)
+  /**
+   * 初始化 :perf 进程.
+   *
+   * 由 [com.itsaky.androidide.app.IDEApplication.onCreate] 在 `isPerfProcess()` 分支调.
+   * 幂等: 二次调用 no-op.
+   */
+  @JvmStatic
+  fun init(context: Context) {
+    if (PhaseStore.isReady()) {
+      log.info("PerfApplication.init already done, skip")
+      return
+    }
+    log.info("PerfApplication.init (PR #3 启动 server + PhaseCollector)")
 
-    /**
-     * LocalServerSocket 路径 (相对 app cacheDir).
-     *
-     * 放在 app cacheDir 而不是 filesDir, 因为:
-     * - cacheDir 在低存储时可被系统清理, 但 perf.sock 是运行时 socket,
-     *   app 退出后不需要保留, 清理无害
-     * - cacheDir 路径短, 减少 socket path 长度 (Linux AF_UNIX path ≤ 108 chars)
-     * - 与 TermuxAmSocketServer 路径隔离, 避免冲突
-     */
-    const val PERF_SOCKET_PATH = "perf/perf.sock"
+    val cacheDir = context.cacheDir
+    val socketPath = File(cacheDir, PERF_SOCKET_PATH).absolutePath
+    val pathFile = File(cacheDir, PERF_SOCKET_PATH_FILE)
 
-    /**
-     * Socket 路径信息文件.
-     *
-     * 主进程的 [com.itsaky.androidide.perf.tracer.PerfTracer] 通过
-     * ContentProvider / 直读此文件得到 socket 完整路径. 替代硬编码路径,
-     * 让 :perf 与主进程解耦.
-     */
-    const val PERF_SOCKET_PATH_FILE = "perf/socket-path.txt"
+    val collector = PhaseCollector()
+    val server = PerfServerSocket(socketPath, pathFile, collector)
+
+    // 标记 server 状态供 UI (PR #5) 读
+    PhaseStore.bind(collector, server)
+
+    // server 启动放后台线程, 不阻塞 IDEApplication.onCreate
+    serverExecutor.submit { server.start() }
   }
+
+  /**
+   * LocalServerSocket 路径 (相对 app cacheDir).
+   *
+   * 放在 app cacheDir 而不是 filesDir, 因为:
+   * - cacheDir 在低存储时可被系统清理, 但 perf.sock 是运行时 socket,
+   *   app 退出后不需要保留, 清理无害
+   * - cacheDir 路径短, 减少 socket path 长度 (Linux AF_UNIX path ≤ 108 chars)
+   * - 与 TermuxAmSocketServer 路径隔离, 避免冲突
+   */
+  const val PERF_SOCKET_PATH = "perf/perf.sock"
+
+  /**
+   * Socket 路径信息文件.
+   *
+   * 主进程的 [com.itsaky.androidide.perf.tracer.PerfTracer] 通过
+   * ContentProvider / 直读此文件得到 socket 完整路径. 替代硬编码路径,
+   * 让 :perf 与主进程解耦.
+   */
+  const val PERF_SOCKET_PATH_FILE = "perf/socket-path.txt"
 }
-
