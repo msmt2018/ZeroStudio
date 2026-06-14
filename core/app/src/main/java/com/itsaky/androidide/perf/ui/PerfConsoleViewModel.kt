@@ -102,6 +102,7 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
     val pss = ArrayDeque<Long>(SAMPLE_WINDOW)
     val gc = ArrayDeque<Long>(SAMPLE_WINDOW)
     val anrs = ArrayList<PerfEvent.Instant>()
+    val strict = ArrayList<PerfEvent.Instant>()
 
     // 启动 phase 列表: 只取前 18 条 + end_boot (PR #2 设计)
     val bootEvents =
@@ -151,6 +152,7 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             recentPssKb = pss.toList(),
             recentGcDelta = gc.toList(),
             anrEvents = anrs,
+            strictViolations = strict,
             totalBootMs = totalBootMs,
         )
   }

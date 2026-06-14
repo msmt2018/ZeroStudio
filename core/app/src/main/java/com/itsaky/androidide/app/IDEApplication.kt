@@ -148,6 +148,7 @@ class IDEApplication : TermuxApplication() {
     PerfTracer.reportInstant("ide_on_create_end")
     PerfTracer.endBoot()
     MonitorCoordinator.start(this)
+    StrictModeViolationMonitor.install()
   }
 
   /**
