@@ -15,6 +15,20 @@ interface ComposePreviewRepository {
         parsedSource: ParsedPreviewSource
     ): Result<CompilationResult>
 
+    /**
+     * v2.2 P3 Live Edit: 重新编译.
+     *
+     * 与 [compilePreview] 行为一致, 但:
+     * - 强制走完整 K2 + D8 路径 (即使 source 命中 DexCache 也重新 dex)
+     *   → 编译缓存 (CompilationCache) 仍然命中
+     * - 不修改 DexCache (新 dex 不写回)
+     * - 用于 hot reload; 上层拿到 dex 后调用 [ComposeClassLoader.swapProjectDex]
+     */
+    suspend fun recompile(
+        source: String,
+        parsedSource: ParsedPreviewSource
+    ): Result<CompilationResult>
+
     fun computeSourceHash(source: String): String
 
     fun reset()

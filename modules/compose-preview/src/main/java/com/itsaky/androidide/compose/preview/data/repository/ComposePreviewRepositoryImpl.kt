@@ -225,6 +225,79 @@ class ComposePreviewRepositoryImpl(
         }
     }
 
+    /**
+     * v2.2 P3 Live Edit 重新编译.
+     *
+     * 与 [compilePreview] 行为差异:
+     * - **跳过 DexCache**: 不读不写 — 每次都走完整 K2 + D8 路径
+     * - **独立 output dir**: `workDir/recompile-classes` + `workDir/recompile-dex`, 不污染
+     *   普通编译产物
+     * - **CompilationCache 仍然命中**: 源码未变 + classpath 未变时 K2 走 cache, < 100ms 返回
+     * - 失败抛 [CompilationException] (与 [compilePreview] 一致)
+     */
+    override suspend fun recompile(
+        source: String,
+        parsedSource: ParsedPreviewSource
+    ): Result<CompilationResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val compiler = requireInitialized(this@ComposePreviewRepositoryImpl.compiler, "compiler")
+            val dexer = requireInitialized(this@ComposePreviewRepositoryImpl.dexer, "dexer")
+            val workDir = requireInitialized(this@ComposePreviewRepositoryImpl.workDir, "workDir")
+            val context = requireInitialized(projectContext, "projectContext")
+
+            val fileName = parsedSource.className?.removeSuffix("Kt") ?: "Preview"
+            val generatedClassName = "${fileName}Kt"
+            val fullClassName = "${parsedSource.packageName}.$generatedClassName"
+
+            // 1) 写源到独立目录 (不复用 src/, 避免和普通编译交叉污染)
+            val sourceDir = File(workDir, "recompile-src")
+            val packageDir = File(sourceDir, parsedSource.packageName.replace('.', '/'))
+            packageDir.mkdirs()
+            val sourceFile = File(packageDir, "$fileName.kt")
+            sourceFile.writeText(source)
+
+            // 2) 独立 output dirs
+            val classesDir = File(workDir, "recompile-classes").apply {
+                deleteRecursively()
+                mkdirs()
+            }
+            val dexDir = File(workDir, "recompile-dex").apply { mkdirs() }
+
+            // 3) 编译 (CompilationCache 仍命中, K2 跳过实际编译)
+            val classpath = cachedClasspath ?: context.compileClasspaths.also { cachedClasspath = it }
+            val compileResult = compiler.compile(
+                sourceFiles = listOf(sourceFile),
+                outputDir = classesDir,
+                extraClasspath = classpath,
+            )
+            if (!compileResult.success) {
+                LOG.error("Recompile failed: {}", compileResult.errorOutput)
+                throw CompilationException(
+                    message = compileResult.errorOutput.ifEmpty { "Recompile failed" },
+                    diagnostics = compileResult.diagnostics
+                )
+            }
+
+            // 4) Dex
+            val dexResult = dexer.dexToDex(classesDir, dexDir)
+            if (!dexResult.success || dexResult.dexFile == null) {
+                LOG.error("Recompile DEX failed: {}", dexResult.errorMessage)
+                throw CompilationException(
+                    message = dexResult.errorMessage.ifEmpty { "Recompile DEX failed" }
+                )
+            }
+
+            LOG.info("Hot-reload ready: {} ({} previews)", fullClassName, parsedSource.previewConfigs.size)
+
+            CompilationResult(
+                dexFile = dexResult.dexFile,
+                className = fullClassName,
+                runtimeDex = runtimeDex,
+                projectDexFiles = context.projectDexFiles
+            )
+        }
+    }
+
     fun cancel() {
         compiler?.cancel()
     }

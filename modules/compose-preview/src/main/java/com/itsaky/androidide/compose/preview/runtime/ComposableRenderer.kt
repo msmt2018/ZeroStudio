@@ -55,6 +55,21 @@ class ComposableRenderer(
      * 渲染 [dexFile] 中 [className] 的 [functionName] Composable.
      */
     fun render(dexFile: File, className: String, functionName: String) {
+        doRender(dexFile, className, functionName, log = true)
+    }
+
+    /**
+     * v2.2 P3 Live Edit: 重新渲染.
+     *
+     * 与 [render] 行为一致, 但:
+     * 1. 默认不打印 "Rendered composable" 日志 (会刷屏)
+     * 2. 不影响 [render] 的普通调用
+     */
+    fun reRender(dexFile: File, className: String, functionName: String) {
+        doRender(dexFile, className, functionName, log = false)
+    }
+
+    private fun doRender(dexFile: File, className: String, functionName: String, log: Boolean) {
         val clazz = classLoader.loadClass(dexFile, className)
         if (clazz == null) {
             showError("Failed to load class: $className")
@@ -74,7 +89,11 @@ class ComposableRenderer(
                 }
             }
         }
-        LOG.debug("Rendered composable: {}#{}", className, functionName)
+        if (log) {
+            LOG.debug("Rendered composable: {}#{}", className, functionName)
+        } else {
+            LOG.debug("Hot-reloaded composable: {}#{}", className, functionName)
+        }
     }
 
     @Composable

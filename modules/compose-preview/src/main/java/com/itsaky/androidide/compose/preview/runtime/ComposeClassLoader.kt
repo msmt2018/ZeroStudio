@@ -103,6 +103,40 @@ class ComposeClassLoader(private val context: Context) {
         }
     }
 
+    /**
+     * v2.2 P3 Live Edit: 切换当前主 dex.
+     *
+     * 与 [invalidateAll] 不同, 本方法:
+     * 1. 仅清除 `classCache` (不重建 loader 池)
+     * 2. 记录 [newDexFile] / [newClassName] 为"当前主 dex", 后续 [loadClass] 会优先加载
+     * 3. 旧 dex 对应的 loader 仍保留在 pool 中 (供其他用途或回滚), 直到下次 [invalidateAll]
+     *
+     * @return 是否成功 (false 通常意味着 newDexFile 不存在)
+     */
+    fun swapProjectDex(newDexFile: File, newClassName: String): Boolean {
+        if (!newDexFile.exists()) {
+            LOG.error("swapProjectDex: dex file not found: {}", newDexFile.absolutePath)
+            return false
+        }
+        // 1) 清空 classCache — 因为同一个 className 现在指向新 dex
+        classCache.clear()
+        // 2) 替换主 dex 列表 (单 dex 模式)
+        projectDexFiles = listOf(newDexFile)
+        // 3) 预热主类 (避免第一次 render 走 loadClass 慢路径)
+        runCatching {
+            val loader = getOrCreateLoader(newDexFile)
+            loader.loadClass(newClassName)
+        }
+        swapCount++
+        LOG.info("swapProjectDex: {} -> {}", newClassName, newDexFile.absolutePath)
+        return true
+    }
+
+    /** Hot-reload swap 次数, 配合 LiveEditStats 显示. */
+    @Volatile
+    var swapCount: Long = 0
+        private set
+
     fun invalidateAll() {
         classCache.clear()
         loaderPool.values.forEach { loader ->

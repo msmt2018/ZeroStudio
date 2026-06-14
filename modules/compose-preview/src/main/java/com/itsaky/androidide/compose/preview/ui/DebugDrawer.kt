@@ -38,8 +38,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -63,6 +67,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,10 +91,14 @@ import com.itsaky.androidide.compose.preview.runtime.LiveLiteralGroup
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralType
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralValue
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralsHolder
+import com.itsaky.androidide.compose.preview.runtime.LiveEditCoordinator
+import com.itsaky.androidide.compose.preview.runtime.LiveEditState
+import com.itsaky.androidide.compose.preview.runtime.LiveEditStatsRegistry
 import com.itsaky.androidide.compose.preview.runtime.MultiPreviewRegistry
 import com.itsaky.androidide.compose.preview.runtime.PreviewDisplayMode
 import com.itsaky.androidide.compose.preview.runtime.PreviewSlot
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * 调试面板 v2.1.
@@ -189,6 +198,7 @@ fun DebugDrawer(
                         modifier = Modifier.fillMaxSize(),
                     )
                     DebugTab.Gallery -> GalleryPanel(modifier = Modifier.fillMaxSize())
+                    DebugTab.LiveEdit -> LiveEditPanel(modifier = Modifier.fillMaxSize())
                 }
             }
 
@@ -203,7 +213,7 @@ fun DebugDrawer(
     }
 }
 
-/** 4 个 tab 枚举. */
+/** 7 个 tab 枚举. */
 enum class DebugTab(
     val label: String,
     val icon: ImageVector,
@@ -214,6 +224,7 @@ enum class DebugTab(
     Stats("Stats", Icons.Filled.Analytics),
     LiveLiterals("LiveLit", Icons.Filled.Tune),
     Gallery("Gallery", Icons.Filled.GridView),
+    LiveEdit("LiveEdit", Icons.Filled.Bolt),
 }
 
 /**
@@ -1431,5 +1442,147 @@ private fun ChannelSlider(
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(36.dp),
         )
+    }
+}
+
+// =====================================================================
+// v2.2 P3 Live Edit Panel
+// =====================================================================
+
+/**
+ * v2.2 P3 Live Edit 调试面板.
+ *
+ * 显示 [LiveEditStatsRegistry] 的实时快照:
+ * - 累计 reload / error 次数
+ * - 上次 reload 耗时 + 滚动平均
+ * - 当前 state (Idle / Debouncing / Compiling / Dexing / Swapping / Rendering / Error)
+ * - Paused 状态
+ *
+ * 操作:
+ * - **Force Reload**: 立刻触发一次 reload (即使 paused)
+ * - **Pause / Resume**: 临时禁用 hot reload (暂停时 source change 事件被忽略)
+ * - 状态 pill: 复用 [LiveEditIndicator] 颜色 / 图标
+ */
+@Composable
+fun LiveEditPanel(modifier: Modifier = Modifier) {
+    val coordinator = remember { LiveEditCoordinator.getOrCreate() }
+    val scope = rememberCoroutineScope()
+    // 500ms 拉取一次 stats (与 BinderStatsSection / DexCacheSection 一致)
+    var stats by remember { mutableStateOf(LiveEditStatsRegistry.snapshotOrEmpty()) }
+    var state by remember { mutableStateOf<LiveEditState>(coordinator.state.value) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            stats = LiveEditStatsRegistry.snapshotOrEmpty()
+            state = coordinator.state.value
+            delay(500L)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // 状态卡 (复用 LiveEditStatusCard)
+        LiveEditStatusCard(
+            state = state,
+            paused = stats.paused,
+            reloadCount = stats.reloadCount,
+            errorCount = stats.errorCount,
+            lastReloadMs = stats.lastReloadMs,
+            avgReloadMs = stats.avgReloadMs,
+            lastError = stats.lastError,
+        )
+
+        // 操作行
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(onClick = {
+                coordinator.setPaused(!stats.paused)
+                stats = LiveEditStatsRegistry.snapshotOrEmpty()
+            }) {
+                Icon(
+                    imageVector = if (stats.paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(if (stats.paused) "Resume" else "Pause")
+            }
+
+            Button(onClick = {
+                // 触发 force reload (沿用最近一次 source)
+                scope.launch { coordinator.forceReload() }
+            }) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("Force Reload")
+            }
+        }
+
+        HorizontalDivider()
+
+        // Stats 表格
+        Text(
+            text = "Statistics",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        LiveEditStatRow("Status", liveEditStateLabel(state, stats.paused))
+        LiveEditStatRow("Source hash", "0x%08X".format(stats.lastSourceHash))
+        LiveEditStatRow("Last reload ts",
+            if (stats.lastReloadTs > 0) formatRelativeTime(stats.lastReloadTs) else "—")
+    }
+}
+
+@Composable
+private fun LiveEditStatRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(120.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+private fun liveEditStateLabel(state: LiveEditState, paused: Boolean): String {
+    if (paused) return "Paused"
+    return when (state) {
+        is LiveEditState.Idle -> "Idle"
+        is LiveEditState.Debouncing -> "Debouncing"
+        is LiveEditState.Compiling -> "Compiling"
+        is LiveEditState.Dexing -> "Dexing"
+        is LiveEditState.Swapping -> "Swapping"
+        is LiveEditState.Rendering -> "Rendering"
+        is LiveEditState.Error -> "Error: ${state.message}"
+    }
+}
+
+private fun formatRelativeTime(ts: Long): String {
+    val deltaMs = System.currentTimeMillis() - ts
+    return when {
+        deltaMs < 1000 -> "just now"
+        deltaMs < 60_000 -> "${deltaMs / 1000}s ago"
+        deltaMs < 3_600_000 -> "${deltaMs / 60_000}m ago"
+        else -> "${deltaMs / 3_600_000}h ago"
     }
 }

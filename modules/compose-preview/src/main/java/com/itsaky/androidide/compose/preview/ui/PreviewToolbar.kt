@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.itsaky.androidide.compose.preview.runtime.LiveEditState
 
 /**
  * 预览顶栏工具 v2.1.
@@ -183,6 +184,14 @@ fun PreviewToolbar(
             },
         )
 
+        // v2.2 P3 Live Edit indicator (状态 pill)
+        LiveEditIndicator(
+            state = state.liveEditState,
+            paused = state.liveEditPaused,
+            lastReloadMs = state.liveEditLastReloadMs,
+            errorCount = state.liveEditErrorCount,
+        )
+
         Spacer(modifier = Modifier.width(8.dp))
 
         // 关闭
@@ -193,7 +202,12 @@ fun PreviewToolbar(
 }
 
 /**
- * 顶栏状态 (Snapshot).
+ * v2.2 P3 Live Edit 状态快照 (顶栏展示用).
+ *
+ * @param state [LiveEditState] 当前协调器状态
+ * @param paused 用户是否暂停 hot reload
+ * @param lastReloadMs 上次 reload 耗时 (ms), 用于显示
+ * @param errorCount 累计错误次数, 0 时 indicator 显示 "Live" 绿
  */
 data class PreviewToolbarState(
     val deviceName: String = "Pixel 7",
@@ -202,6 +216,11 @@ data class PreviewToolbarState(
     val showSystemBars: Boolean = true,
     val debugEnabled: Boolean = false,
     val editorEnabled: Boolean = false,
+    // v2.2 P3 Live Edit
+    val liveEditState: LiveEditState = LiveEditState.Idle,
+    val liveEditPaused: Boolean = false,
+    val liveEditLastReloadMs: Long = 0L,
+    val liveEditErrorCount: Long = 0L,
 )
 
 /**
