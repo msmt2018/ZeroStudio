@@ -162,6 +162,7 @@ class MainActivity : EdgeToEdgeIDEActivity() {
     }
 
     onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
+    }
   }
 
   private fun askProjectOpenPermission(root: File) {
