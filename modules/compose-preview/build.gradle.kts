@@ -36,6 +36,16 @@ val composeAarsForPreview: Configuration by configurations.creating {
     isTransitive = false
 }
 
+// 进程内 K2JVMCompiler 需要的全部 jar (Kotlin 编译器 + 内嵌依赖)
+val kotlinCompilerJars: Configuration by configurations.creating {
+    isTransitive = true
+}
+
+// D8 (来自 R8 制品, R8 内置 D8 入口类 com.android.tools.r8.D8)
+val bundledD8Jars: Configuration by configurations.creating {
+    isTransitive = true
+}
+
 dependencies {
     composeCompilerJars("androidx.compose.compiler:compiler:$composeCompilerVersion")
 
@@ -63,6 +73,13 @@ dependencies {
     composeAarsForPreview("androidx.core:core-ktx:1.12.0")
     composeAarsForPreview("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.7.3")
     composeAarsForPreview("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // === Build phase 自包含所需 ===
+    // Kotlin embeddable 编译器 (含 stdlib / reflect / script-runtime 等所有依赖)
+    // 版本需与 compose-compiler 1.5.10 兼容, 即 Kotlin 1.9.22
+    kotlinCompilerJars("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22")
+    // R8 制品内置 D8 入口 com.android.tools.r8.D8
+    bundledD8Jars("com.android.tools:r8:8.5.35")
 }
 
 val copyComposeCompilerPlugin by tasks.registering(Copy::class) {
@@ -111,6 +128,18 @@ val extractComposeClasses by tasks.registering {
             }
         }
     }
+}
+
+// === 进程内 K2JVMCompiler 依赖: 把 kotlin-compiler-embeddable 等所有 jar 拷到 build/compose-jars/kotlin/ ===
+val copyKotlinCompilerJars by tasks.registering(Copy::class) {
+    from(kotlinCompilerJars)
+    into(layout.buildDirectory.dir("compose-jars/kotlin"))
+}
+
+// === 进程内 D8 依赖: 把 r8 (内置 D8 入口) 拷到 build/compose-jars/dex/ ===
+val copyBundledD8Jars by tasks.registering(Copy::class) {
+    from(bundledD8Jars)
+    into(layout.buildDirectory.dir("compose-jars/dex"))
 }
 
 fun resolveD8Jar(): File {
@@ -163,7 +192,7 @@ val compileRuntimeDex by tasks.registering {
 }
 
 val packageComposeJars by tasks.registering(Zip::class) {
-    dependsOn(compileRuntimeDex)
+    dependsOn(compileRuntimeDex, copyKotlinCompilerJars, copyBundledD8Jars)
 
     from(layout.buildDirectory.dir("compose-jars"))
     archiveFileName.set("compose-jars.zip")
@@ -223,4 +252,9 @@ dependencies {
   implementation(projects.core.resources)
   implementation(projects.logging.logger)
   implementation(projects.core.projects)
+
+  // 进程内 K2JVMCompiler (仅 build 阶段使用; 体积大, 用 compileOnly 避免打包进 APK)
+  compileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22")
+  // 反射读取 LayoutNode 等需要 kotlin-reflect
+  implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.22")
 }
