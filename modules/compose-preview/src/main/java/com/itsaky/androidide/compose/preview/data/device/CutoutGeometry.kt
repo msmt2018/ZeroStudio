@@ -119,6 +119,7 @@ sealed class CutoutGeometry {
         val side: Anchor = Anchor.LEFT_CENTER,
         val angleDeg: Float = 88f,
         val edgeWidthDp: Float = 4f,
+        override val anchor: Anchor = side,
     ) : CutoutGeometry() {
         // 为保持接口一致
         val widthDp: Float get() = edgeWidthDp

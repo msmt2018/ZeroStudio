@@ -23,13 +23,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ScaleFactor
-import androidx.compose.ui.layout.TransformedLine
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Constraints
-import kotlin.math.max
-import kotlin.math.min
 
 /**
  * 缩放控制器: pinch 双指缩放 + Ctrl+Wheel 缩放 + 双击切 Fit/100%.
@@ -98,22 +93,19 @@ class ZoomController(
 /**
  * 接受 [ZoomController] 状态, 把 [content] 缩放后绘制.
  * 双指 pinch / 双击 / pan 都通过 [ZoomController] 同步.
+ *
+ * 使用 [Modifier.graphicsLayer] 而非 [Modifier.layout] 缩放:
+ * - content 按原始尺寸 measure, 不会因为 [ZoomController.scale] 反复触发重新 measure
+ * - 缩放/平移由 GPU layer 应用, 性能更好
+ * - offsetX/offsetY 累积, pan 时不会"回到 0"
  */
 fun Modifier.zoomable(zoom: ZoomController): Modifier = this
-    .layout { measurable, constraints ->
-        val placeable = measurable.measure(constraints)
-        val scale = zoom.scale
-        val scaledWidth = (placeable.width * scale).toInt()
-        val scaledHeight = (placeable.height * scale).toInt()
-        layout(constraints.maxWidth, constraints.maxHeight) {
-            placeable.placeRelativeWithLayer(
-                (constraints.maxWidth - scaledWidth) / 2 + zoom.offsetX.toInt(),
-                (constraints.maxHeight - scaledHeight) / 2 + zoom.offsetY.toInt()
-            )
-            placeable.layer.scaleX = scale
-            placeable.layer.scaleY = scale
-        }
-    }
+    .graphicsLayer(
+        scaleX = zoom.scale,
+        scaleY = zoom.scale,
+        translationX = zoom.offsetX,
+        translationY = zoom.offsetY,
+    )
     .pointerInput(zoom) {
         detectTransformGestures { _, pan, gestureZoom, _ ->
             zoom.applyTransform(gestureZoom, pan)
