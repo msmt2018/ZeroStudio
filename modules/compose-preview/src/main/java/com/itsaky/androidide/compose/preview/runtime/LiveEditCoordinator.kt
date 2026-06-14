@@ -72,6 +72,7 @@ class LiveEditCoordinator(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val collectJobRef = AtomicReference<Job?>(null)
+    private val resourceCollectJobRef = AtomicReference<Job?>(null)  // v2.2 P8
     private val reloadMutex = Mutex()
 
     private val pausedRef = AtomicBoolean(false)
@@ -115,7 +116,37 @@ class LiveEditCoordinator(
             }
         })
 
+        // v2.2 P8: 资源事件订阅 — 触发 forceReload() 沿用最近 sourceText
+        resourceCollectJobRef.set(scope.launch {
+            watcher.resourceEvents.collectLatest { event ->
+                if (pausedRef.get()) {
+                    LOG.debug("Paused, ignoring resource change (path={})", event.filePath)
+                    return@collectLatest
+                }
+                handleResourceChange(event)
+            }
+        })
+
         LOG.info("LiveEditCoordinator started (debounce={}ms)", debounceMs)
+    }
+
+    /**
+     * v2.2 P8: 启动对资源目录的 WatchService 监听.
+     * 资源变化时, 沿用最近一次 sourceText 重新 reload (force reload).
+     */
+    fun startWatchingResources(resourcesDir: File): Boolean {
+        val ok = watcher.startWatchResources(resourcesDir)
+        if (!ok) {
+            LOG.warn("Resource WatchService failed to start: {}", resourcesDir.absolutePath)
+        }
+        return ok
+    }
+
+    /**
+     * 停止资源监听. UI destroy 时调用.
+     */
+    fun stopWatchingResources() {
+        watcher.stopWatchResources()
     }
 
     /**
@@ -125,6 +156,7 @@ class LiveEditCoordinator(
         activeRef.set(false)
         watcher.stopWatch()
         collectJobRef.getAndSet(null)?.cancel()
+        resourceCollectJobRef.getAndSet(null)?.cancel()  // v2.2 P8
         callback = null
         _state.value = LiveEditState.Idle
         LOG.info("LiveEditCoordinator stopped")
@@ -165,6 +197,23 @@ class LiveEditCoordinator(
         if (!activeRef.get()) return
         val cb = callback ?: return
         reload(cb, event.sourceText, event.sourceHash, event.sourcePath)
+    }
+
+    /**
+     * v2.2 P8: 处理资源变化事件. 沿用最近一次 sourceText 重新 reload.
+     */
+    private suspend fun handleResourceChange(event: ResourceChangeEvent) {
+        if (!activeRef.get()) return
+        val cb = callback ?: return
+        val last = _lastResult.get()
+        if (last == null) {
+            LOG.debug("Resource change but no last source; ignoring (path={})", event.filePath)
+            return
+        }
+        LOG.info("Resource change detected (path={}, hash=0x{}), force-reloading with last source",
+            event.filePath, event.pathHash.toUInt().toString(16))
+        // 沿用最近 sourceText 重新 reload
+        reload(cb, last.sourceText, last.sourceHash, last.sourcePath)
     }
 
     private suspend fun reload(

@@ -67,7 +67,15 @@ class SourceChangeWatcher {
     )
     val events: SharedFlow<SourceChangeEvent> = _events.asSharedFlow()
 
+    private val _resourceEvents = MutableSharedFlow<ResourceChangeEvent>(
+        replay = 0,
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val resourceEvents: SharedFlow<ResourceChangeEvent> = _resourceEvents.asSharedFlow()
+
     private val watchingRef = AtomicReference<WatchSession?>(null)
+    private val resourceWatchRef = AtomicReference<ResourceWatchSession?>(null)
     private val running = AtomicBoolean(false)
 
     /**
@@ -158,7 +166,203 @@ class SourceChangeWatcher {
         _events.tryEmit(SourceChangeEvent(sourceText = sourceText, sourcePath = path, sourceHash = hash, manual = true))
     }
 
+    // ===================================================================
+    // v2.2 P8 资源监听
+    // ===================================================================
+
+    /**
+     * v2.2 P8: 启动对资源目录的 WatchService 监听.
+     *
+     * 递归注册 [resourcesDir] 下所有子目录, 只 emit 4 个标准资源子目录的事件:
+     * - `drawable/` (xml 矢量/selector)
+     * - `values/` (xml string/color/style/dimen/...)
+     * - `color/` (xml color selector)
+     * - `mipmap/` (png launcher icon)
+     *
+     * 文件过滤: `*.xml` 和 `*.png`. 其他文件被忽略.
+     *
+     * 多次调用会停止上一个 session, 只保留最新. 与 [startWatch] 互不影响.
+     *
+     * @return true 成功, false 失败 (WatchService 不可用 / 目录不存在).
+     */
+    fun startWatchResources(resourcesDir: File): Boolean {
+        stopWatchResources()
+
+        if (!resourcesDir.exists() || !resourcesDir.isDirectory) {
+            LOG.warn("startWatchResources: dir does not exist: {}", resourcesDir.absolutePath)
+            return false
+        }
+
+        val watchService: WatchService = try {
+            FileSystems.getDefault().newWatchService()
+        } catch (e: Throwable) {
+            LOG.warn("WatchService unavailable for resources: {}", e.message)
+            return false
+        }
+
+        val registered = mutableListOf<WatchKey>()
+        val ok = walkAndRegister(resourcesDir.toPath(), watchService, registered)
+        if (registered.isEmpty()) {
+            LOG.warn("No standard resource subdirs found under {}", resourcesDir.absolutePath)
+            runCatching { watchService.close() }
+            return false
+        }
+        if (!ok) {
+            registered.forEach { runCatching { it.cancel() } }
+            runCatching { watchService.close() }
+            return false
+        }
+
+        val session = ResourceWatchSession(watchService, registered.toList(), resourcesDir.absolutePath)
+        resourceWatchRef.set(session)
+        val localRunning = AtomicBoolean(true)
+        session.runningRef.set(localRunning)
+
+        val thread = Thread({
+            try {
+                while (localRunning.get()) {
+                    val polled = watchService.take() // blocks
+                    if (!localRunning.get()) break
+                    for (event in polled.pollEvents()) {
+                        if (!localRunning.get()) break
+                        handleResourceEvent(event, resourcesDir)
+                    }
+                    if (!polled.reset()) {
+                        LOG.warn("Resource WatchKey no longer valid, stopping watch")
+                        break
+                    }
+                }
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } catch (e: Throwable) {
+                LOG.warn("Resource WatchService loop failed: {}", e.message)
+            } finally {
+                runCatching { watchService.close() }
+            }
+        }, "SourceChangeWatcher-Resources").apply {
+            isDaemon = true
+            start()
+        }
+        session.threadRef.set(thread)
+
+        LOG.info("Watching resources: {} ({} subdirs)", resourcesDir.absolutePath, registered.size)
+        return true
+    }
+
+    /**
+     * 停止资源 WatchService. 已经 stop 后再次调用 no-op.
+     */
+    fun stopWatchResources() {
+        val session = resourceWatchRef.getAndSet(null) ?: return
+        session.runningRef.set(false)
+        runCatching { session.watchService.close() }
+        session.keys.forEach { runCatching { it.cancel() } }
+        session.threadRef.get()?.interrupt()
+        LOG.info("Stopped watching resources: {}", session.resourcesDir)
+    }
+
+    /**
+     * v2.2 P8: 手动推送资源变更事件. 不依赖 WatchService.
+     *
+     * 用于 IDE 编辑器直接修改 res/ 下的资源 (无 fs watch).
+     */
+    fun notifyResourceChanged(file: File) {
+        val pathHash = fnv1aHash(file.absolutePath)
+        _resourceEvents.tryEmit(
+            ResourceChangeEvent(
+                filePath = file.absolutePath,
+                pathHash = pathHash,
+                manual = true,
+            )
+        )
+    }
+
+    private fun walkAndRegister(
+        dir: Path,
+        watchService: WatchService,
+        registered: MutableList<WatchKey>,
+    ): Boolean {
+        // 先注册当前 dir (如果不是根)
+        val isStandardSubdir = isStandardResourceSubdir(dir)
+        if (isStandardSubdir) {
+            try {
+                val key = dir.register(
+                    watchService,
+                    StandardWatchEventKinds.ENTRY_MODIFY,
+                    StandardWatchEventKinds.ENTRY_CREATE,
+                )
+                registered.add(key)
+            } catch (e: Throwable) {
+                LOG.warn("Failed to register {}: {}", dir, e.message)
+                return false
+            }
+        }
+        // 递归子目录
+        return try {
+            val stream = java.nio.file.Files.list(dir)
+            stream.use { paths ->
+                paths.forEach { child ->
+                    if (java.nio.file.Files.isDirectory(child)) {
+                        if (!walkAndRegister(child, watchService, registered)) {
+                            return false
+                        }
+                    }
+                }
+            }
+            true
+        } catch (e: Throwable) {
+            LOG.warn("walkAndRegister failed for {}: {}", dir, e.message)
+            false
+        }
+    }
+
+    private fun isStandardResourceSubdir(path: Path): Boolean {
+        val name = path.fileName?.toString()?.lowercase() ?: return false
+        return name in STANDARD_RESOURCE_SUBDIRS
+    }
+
+    private fun isResourceFile(filename: String): Boolean {
+        val lower = filename.lowercase()
+        return lower.endsWith(".xml") || lower.endsWith(".png")
+    }
+
+    private fun handleResourceEvent(event: WatchEvent<*>, resourcesRoot: File) {
+        val changed = event.context() as? Path ?: return
+        val changedName = changed.toString()
+
+        if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+            LOG.debug("Resource WatchService overflow, skipping")
+            return
+        }
+
+        if (!isResourceFile(changedName)) {
+            return
+        }
+
+        val file = File(resourcesRoot, changed.toString())
+        if (!file.exists()) return
+
+        val pathHash = fnv1aHash(file.absolutePath)
+        _resourceEvents.tryEmit(
+            ResourceChangeEvent(
+                filePath = file.absolutePath,
+                pathHash = pathHash,
+                manual = false,
+            )
+        )
+    }
+
+    private data class ResourceWatchSession(
+        val watchService: WatchService,
+        val keys: List<WatchKey>,
+        val resourcesDir: String,
+    ) {
+        val threadRef = AtomicReference<Thread?>(null)
+        val runningRef = AtomicReference<AtomicBoolean>(null)
+    }
+
     val isWatching: Boolean get() = watchingRef.get() != null
+    val isWatchingResources: Boolean get() = resourceWatchRef.get() != null
 
     private fun handleEvent(event: WatchEvent<*>, targetPath: String) {
         val changed = event.context() as? Path ?: return
@@ -188,6 +392,11 @@ class SourceChangeWatcher {
 
     companion object {
         /**
+         * v2.2 P8 监听的标准资源子目录. 大小写不敏感.
+         */
+        val STANDARD_RESOURCE_SUBDIRS = setOf("drawable", "values", "color", "mipmap")
+
+        /**
          * 32-bit FNV-1a hash. 用于把 source text 映射到 32-bit int (与 stats 一致).
          */
         fun fnv1aHash(text: String): Int {
@@ -214,5 +423,21 @@ data class SourceChangeEvent(
     val sourceText: String,
     val sourcePath: String?,
     val sourceHash: Int,
+    val manual: Boolean,
+)
+
+/**
+ * v2.2 P8 资源变更事件.
+ *
+ * 与 [SourceChangeEvent] 不同: 资源没有"源文本",只有文件路径.
+ * 资源变化后 [LiveEditCoordinator] 调 [LiveEditCoordinator.forceReload] 沿用最近一次 sourceText 重编.
+ *
+ * @param filePath 资源文件的绝对路径
+ * @param pathHash FNV-1a hash of filePath, 用于 300ms debounce 期间去重
+ * @param manual true 表示来自 [SourceChangeWatcher.notifyResourceChanged] 手动 API
+ */
+data class ResourceChangeEvent(
+    val filePath: String,
+    val pathHash: Int,
     val manual: Boolean,
 )
