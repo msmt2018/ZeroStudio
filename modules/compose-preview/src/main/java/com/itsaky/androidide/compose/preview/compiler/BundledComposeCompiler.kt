@@ -125,14 +125,20 @@ class BundledComposeCompiler(
         jvmTarget: String,
         pluginJar: File,
     ): CompileResult {
-        // 全部从 isolated loader 加载关键类, 避免 classloader 不一致
+        // v2.1 P3 字节码加速: 用 K2StaticBinder 替代反射调用
+        val binder = com.itsaky.androidide.compose.preview.bytecode.K2StaticBinder.getOrCreate(loader)
+            ?: run {
+                // 退路: 没有 binder (ClassNotFoundException), 用旧反射逻辑
+                return invokeK2ReflectionFallback(loader, sourceFiles, classpath, outputDir, jvmTarget, pluginJar)
+            }
+        LOG.debug("K2StaticBinder ready, exec sig={}", binder.execType)
+
         val compilerClazz = loader.loadClass("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler")
         val argsClazz = loader.loadClass("org.jetbrains.kotlin.cli.jvm.compiler.K2JVMCompilerArguments")
         val collectorClazz = loader.loadClass("org.jetbrains.kotlin.cli.common.messages.MessageCollector")
 
-        val compilerInstance = compilerClazz.getDeclaredConstructor().newInstance()
-
-        // 构造 K2JVMCompilerArguments
+        // P3: 用 binder 一次性创建 instance (替代 newInstance)
+        val compilerInstance = binder.newK2Instance()
         val argsInstance = argsClazz.getDeclaredConstructor().newInstance()
         callSetter(argsClazz, argsInstance, "freeArgs", sourceFiles.map { it.absolutePath })
         callSetter(argsClazz, argsInstance, "classpath", classpath)
@@ -144,10 +150,69 @@ class BundledComposeCompiler(
         callSetter(argsClazz, argsInstance, "suppressVersionWarnings", true)
         callSetter(argsClazz, argsInstance, "allWarnings", false)
 
-        // 构造 MessageCollector (使用 MessageCollector.NONE 或者自定义)
         val collectorInstance = collectorClazz.getField("NONE").get(null)
 
-        // 找 exec(PrintStream, K2JVMCompilerArguments, MessageCollector) 方法
+        // P3: 关键优化 - exec 调用走 MethodHandle (binder)
+        val errStream = PrintStream(ByteArrayOutputStream())
+        val exitCode = try {
+            @Suppress("UNCHECKED_CAST")
+            val exitObj = when (binder.execType.parameterCount()) {
+                3 -> binder.exec(compilerInstance, argsInstance as Any, errStream, collectorInstance)
+                4 -> binder.exec(compilerInstance, argsInstance as Any, errStream, collectorInstance, null!!)
+                else -> {
+                    // 5+ 参数, 走 fallback
+                    val execMethod = compilerClazz.methods.first { it.name == "exec" }
+                    execMethod.invoke(compilerInstance, argsInstance, errStream, collectorInstance) as? Number
+                }
+            }
+            (exitObj as? Number)?.toInt() ?: -1
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            LOG.error("K2JVMCompiler exec failed", e.targetException)
+            return CompileResult.failure(
+                "K2JVMCompiler exec failed: ${e.targetException?.message}",
+                emptyList()
+            )
+        } catch (e: Throwable) {
+            LOG.error("K2StaticBinder.exec failed", e)
+            return CompileResult.failure(
+                "K2StaticBinder.exec failed: ${e.message}",
+                emptyList()
+            )
+        }
+
+        return finalizeCompileResult(exitCode, outputDir, emptyList())
+    }
+
+    /**
+     * K2StaticBinder 不可用时的退路: 旧反射路径.
+     *
+     * 与 P3 之前行为一致, 仅当 binder 初始化失败时使用.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun invokeK2ReflectionFallback(
+        loader: URLClassLoader,
+        sourceFiles: List<File>,
+        classpath: String,
+        outputDir: File,
+        jvmTarget: String,
+        pluginJar: File,
+    ): CompileResult {
+        val compilerClazz = loader.loadClass("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler")
+        val argsClazz = loader.loadClass("org.jetbrains.kotlin.cli.jvm.compiler.K2JVMCompilerArguments")
+        val collectorClazz = loader.loadClass("org.jetbrains.kotlin.cli.common.messages.MessageCollector")
+
+        val compilerInstance = compilerClazz.getDeclaredConstructor().newInstance()
+        val argsInstance = argsClazz.getDeclaredConstructor().newInstance()
+        callSetter(argsClazz, argsInstance, "freeArgs", sourceFiles.map { it.absolutePath })
+        callSetter(argsClazz, argsInstance, "classpath", classpath)
+        callSetter(argsClazz, argsInstance, "destination", outputDir.absolutePath)
+        callSetter(argsClazz, argsInstance, "jvmTarget", jvmTarget)
+        callSetter(argsClazz, argsInstance, "pluginClasspaths", arrayOf(pluginJar.absolutePath))
+        callSetter(argsClazz, argsInstance, "noStdlib", false)
+        callSetter(argsClazz, argsInstance, "noReflect", false)
+        callSetter(argsClazz, argsInstance, "suppressVersionWarnings", true)
+        callSetter(argsClazz, argsInstance, "allWarnings", false)
+        val collectorInstance = collectorClazz.getField("NONE").get(null)
         val printStreamClazz = loader.loadClass("java.io.PrintStream")
         val execMethod = compilerClazz.methods.firstOrNull { m ->
             m.name == "exec" && m.parameterCount == 3 &&
@@ -155,7 +220,6 @@ class BundledComposeCompiler(
                 argsClazz.isAssignableFrom(m.parameterTypes[1]) &&
                 collectorClazz.isAssignableFrom(m.parameterTypes[2])
         } ?: error("K2JVMCompiler.exec(PrintStream, args, collector) not found")
-
         val errStream = PrintStream(ByteArrayOutputStream())
         val exitCode = try {
             (execMethod.invoke(compilerInstance, errStream, argsInstance, collectorInstance) as? Number)?.toInt() ?: -1
@@ -166,8 +230,17 @@ class BundledComposeCompiler(
                 emptyList()
             )
         }
+        return finalizeCompileResult(exitCode, outputDir, emptyList())
+    }
 
-        val diagnostics = emptyList<CompileDiagnostic>()
+    /**
+     * 公共结果收尾 (成功 / 失败包装).
+     */
+    private fun finalizeCompileResult(
+        exitCode: Int,
+        outputDir: File,
+        diagnostics: List<CompileDiagnostic>,
+    ): CompileResult {
         val success = exitCode == 0 && !cancelled.get()
         return if (success) {
             CompileResult(
@@ -176,7 +249,7 @@ class BundledComposeCompiler(
                 exitCode = exitCode,
                 diagnostics = diagnostics,
                 cancelled = false,
-                errorOutput = ""
+                errorOutput = "",
             )
         } else {
             CompileResult(
