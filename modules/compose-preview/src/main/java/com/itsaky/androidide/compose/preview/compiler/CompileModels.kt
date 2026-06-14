@@ -32,7 +32,20 @@ data class CompileResult(
     val exitCode: Int = 0,
     val diagnostics: List<CompileDiagnostic> = emptyList(),
     val cancelled: Boolean = false,
-    val errorOutput: String = ""
+    val errorOutput: String = "",
+    /**
+     * P4: 增量编译缓存命中.
+     *
+     * true = 跳过 K2JVMCompiler, 直接拷贝缓存的 .class 文件.
+     * false = 实际跑了 K2.
+     */
+    val cacheHit: Boolean = false,
+    /**
+     * P4: 缓存命中时跳过的编译时间 (ms).
+     *
+     * 仅当 [cacheHit] = true 时有意义, 表示预估的 compile 时间.
+     */
+    val savedCompileMs: Long = 0,
 ) {
     companion object {
         fun failure(message: String, diagnostics: List<CompileDiagnostic> = emptyList()) =

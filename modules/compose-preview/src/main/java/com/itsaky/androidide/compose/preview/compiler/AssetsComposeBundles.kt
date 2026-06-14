@@ -42,6 +42,9 @@ class AssetsComposeBundles(private val context: Context) {
 
     private val LOG = LoggerFactory.getLogger(AssetsComposeBundles::class.java)
 
+    /** 应用 cacheDir (给编译缓存等使用). */
+    val cacheDir: File get() = context.cacheDir
+
     /** 解压根目录, 在 `cacheDir/compose-sdk/`. */
     val workDir: File by lazy { File(context.cacheDir, "compose-sdk").apply { mkdirs() } }
 

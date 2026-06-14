@@ -50,6 +50,26 @@ class BundledComposeCompiler(
 
     private val cancelled = AtomicBoolean(false)
 
+    /**
+     * v2.1 P4 增量编译缓存.
+     *
+     * 命中时跳过 K2JVMCompiler.exec, 节省 1-4s 编译时间.
+     * key = SHA-256(源文件 + classpath + plugin + jvmTarget).
+     */
+    private val cache: CompilationCache? = try {
+        val cacheDir = java.io.File(bundles.cacheDir, "compose-compile-cache")
+        val cc = CompilationCache(
+            cacheDir = cacheDir,
+            versionTag = { bundles.versionTag },
+        )
+        CompilationCacheHolder.install(cc)
+        LOG.info("CompilationCache enabled: dir={}", cacheDir.absolutePath)
+        cc
+    } catch (e: Throwable) {
+        LOG.warn("CompilationCache disabled: {}", e.message)
+        null
+    }
+
     fun cancel() {
         cancelled.set(true)
         LOG.info("BundledComposeCompiler cancel requested")
@@ -86,16 +106,39 @@ class BundledComposeCompiler(
             )
         }
 
-        outputDir.mkdirs()
-        outputDir.deleteRecursively()
-        outputDir.mkdirs()
-
         // 拼装 classpath
         val cp = buildList {
             addAll(extraClasspath)
             add(androidJar)
             addAll(runtimeJars)
         }.joinToString(File.pathSeparator) { it.absolutePath }
+
+        // ============ P4 增量编译缓存检查 ============
+        if (cache != null) {
+            val key = CompilationCacheKey.of(
+                sourceFiles = sourceFiles,
+                classpath = cp,
+                pluginJar = pluginJar,
+                jvmTarget = jvmTarget,
+            )
+            val cached = cache.get(key, outputDir)
+            if (cached != null) {
+                return CompileResult(
+                    success = true,
+                    outputDir = outputDir,
+                    exitCode = 0,
+                    diagnostics = emptyList(),
+                    cancelled = false,
+                    errorOutput = "",
+                    cacheHit = true,
+                    savedCompileMs = cached.compileMs,
+                )
+            }
+        }
+
+        // outputDir 在 K2 调用前清空 (命中分支会重新创建)
+        outputDir.deleteRecursively()
+        outputDir.mkdirs()
 
         // 加载 K2 及其依赖类到隔离的 URLClassLoader
         val compilerClasspath = bundles.kotlinCompilerClasspath.map { it.toURI().toURL() }
@@ -114,6 +157,22 @@ class BundledComposeCompiler(
 
         val elapsed = System.currentTimeMillis() - start
         LOG.info("K2JVMCompiler exit={} elapsed={}ms", result.exitCode, elapsed)
+
+        // ============ P4 写入缓存 (成功才写) ============
+        if (cache != null && result.success && !cancelled.get()) {
+            try {
+                val key = CompilationCacheKey.of(
+                    sourceFiles = sourceFiles,
+                    classpath = cp,
+                    pluginJar = pluginJar,
+                    jvmTarget = jvmTarget,
+                )
+                cache.put(key, outputDir, compileMs = elapsed)
+            } catch (e: Throwable) {
+                LOG.warn("Failed to populate compilation cache: {}", e.message)
+            }
+        }
+
         return result.copy(errorOutput = if (result.success) "" else result.errorOutput)
     }
 
