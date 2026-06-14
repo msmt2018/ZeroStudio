@@ -517,3 +517,24 @@ v2.5 P2 推进 3 个子项,共 5 文件 / +337/-1。
 | DexMmapPoolRegistry stats 拉取 | < 1µs | AtomicReference.get |
 | DexMmapPoolEvictor 启动开销 | < 5ms | SupervisorJob + Dispatchers.Default |
 | Evict 单次 (5 stale entry) | < 10ms | ConcurrentHashMap iter + Cleaner |
+
+---
+
+## v2.5 P3 完成总结 (PR #356)
+
+v2.5 P3 推进 Evictor 生命周期集成,共 3 文件 / +91/-2。
+
+### P3 Evictor 生命周期 (PR #356)
+
+- [x] `v25P3-RT-01` `ComposePreviewFragment.kt` — `mmapEvictor: DexMmapPoolEvictor?` 字段
+- [x] `v25P3-RT-02` `onViewCreated` 启动 evictor (idempotent 检查)
+- [x] `v25P3-RT-03` `onDestroyView` 停止 evictor (合并到既有清理逻辑)
+- [x] `v25P3-TS-01` `EvictorLifecycleTest.kt` — 4 case (lifecycle host / 幂等 / 顺序无关 / 实际 evict)
+
+### 生命周期 / 资源基线
+
+| 指标 | 目标 | 备注 |
+| --- | --- | --- |
+| Evictor start 延迟 | < 5ms | 仅启动后台 coroutine |
+| Evictor stop 延迟 | < 10ms | cancel + scope shutdown |
+| 视图销毁 → evict 停止 | 0 leak | onDestroyView 立即清引用 |
