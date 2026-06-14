@@ -61,10 +61,11 @@ class OnboardingActivity : AppIntro2() {
 
   @SuppressLint("SourceLockedOrientationActivity")
   override fun onCreate(savedInstanceState: Bundle?) {
-    IThemeManager.getInstance().applyTheme(this)
-    try {
-      requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-    } catch (e: Exception) {}
+    PerfTracer.trace("onboarding_activity_oncreate") {
+      IThemeManager.getInstance().applyTheme(this)
+      try {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+      } catch (e: Exception) {}
 
     super.onCreate(savedInstanceState)
 
@@ -142,6 +143,7 @@ class OnboardingActivity : AppIntro2() {
 
     if (!SdkChecker.isEnvironmentReadySync()) {
       addSlide(OdSdkToolInstallFragment.newInstance(this))
+    }
     }
   }
 
