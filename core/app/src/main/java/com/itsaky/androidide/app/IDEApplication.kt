@@ -38,6 +38,7 @@ import com.itsaky.androidide.events.LspJavaEventsIndex
 import com.itsaky.androidide.events.LspKotlinEventsIndex
 import com.itsaky.androidide.perf.PerfApplication
 import com.itsaky.androidide.perf.monitor.ColdStartTracker
+import com.itsaky.androidide.perf.monitor.CrashHandler
 import com.itsaky.androidide.perf.monitor.MonitorCoordinator
 import com.itsaky.androidide.perf.tracer.PerfTracer
 import com.itsaky.androidide.preferences.internal.DevOpsPreferences
@@ -213,6 +214,9 @@ class IDEApplication : TermuxApplication() {
     writeException(th)
 
     try {
+      // PR (advanced): 先 dump 现场到 cacheDir, 再走原来的 crash UI
+      CrashHandler.dumpCrashContext(this, thread, th)
+
       val intent = Intent()
       intent.action = CrashHandlerActivity.REPORT_ACTION
       intent.putExtra(CrashHandlerActivity.TRACE_KEY, getFullStackTrace(th))

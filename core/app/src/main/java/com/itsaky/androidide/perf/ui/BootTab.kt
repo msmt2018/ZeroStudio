@@ -74,6 +74,9 @@ fun BootTab(state: PerfUiState, modifier: Modifier = Modifier) {
       )
     }
     item {
+      CrashListCard(crashes = state.crashEvents)
+    }
+    item {
       BootTimelineCard(bootEvents = state.bootEvents)
     }
     item {
@@ -197,35 +200,6 @@ private fun BootTimelineRow(
   }
 }
 
-@Composable
-private fun TotalBootCard(totalBootMs: Long, isEnded: Boolean) {
-  Card(
-      shape = RoundedCornerShape(12.dp),
-      colors =
-          CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-  ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
-      Text(
-          text = "启动总耗时",
-          fontSize = 12.sp,
-          color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-      )
-      Spacer(modifier = Modifier.size(4.dp))
-      Text(
-          text = formatMs(totalBootMs),
-          fontSize = 36.sp,
-          fontWeight = FontWeight.Bold,
-          color = MaterialTheme.colorScheme.onPrimaryContainer,
-      )
-      Text(
-          text = if (isEnded) "启动完成" else "启动中…",
-          fontSize = 11.sp,
-          color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-      )
-    }
-  }
-}
-
 /**
  * 冷启动分段时间 (Advanced / Commit 1).
  *
@@ -314,6 +288,96 @@ private fun ColdStartRow(label: String, ms: Long, total: Long) {
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.fillMaxWidth(),
     )
+  }
+}
+
+/**
+ * Crash 事件列表 (Advanced / Commit 2).
+ *
+ * 来源: [com.itsaky.androidide.perf.monitor.CrashHandler] 在
+ * [com.itsaky.androidide.app.IDEApplication.handleCrash] 调
+ * `dumpCrashContext` 时会上报 `crash_<ExceptionClass>` instant, 并把
+ * 完整现场 (含全线程 dump + 最近 perf events) 写到
+ * `cacheDir/perf/crashes/*.txt` 供后续 Export 工具打包.
+ *
+ * 这里按 exception class 聚合, 显示每个异常类出现的次数. 详细堆栈
+ * 看 cacheDir 下的 dump 文件 — 这张卡片只用来**一眼知道有没有崩**和
+ * **崩在哪个类**.
+ */
+@Composable
+private fun CrashListCard(crashes: List<PerfEvent.Instant>) {
+  Card(
+      shape = RoundedCornerShape(12.dp),
+      colors =
+          CardDefaults.cardColors(
+              containerColor =
+                  if (crashes.isEmpty()) MaterialTheme.colorScheme.surface
+                  else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+          ),
+  ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+      Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+            text = "Crash 历史 (本进程)",
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = if (crashes.isEmpty()) "0" else "${crashes.size} 次",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color =
+                if (crashes.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.error,
+        )
+      }
+      Spacer(modifier = Modifier.size(6.dp))
+      if (crashes.isEmpty()) {
+        Text(
+            text = "无 crash — 本进程运行平稳 ✓",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return@Column
+      }
+      // 按 exception class 聚合
+      val grouped =
+          crashes
+              .groupingBy { it.name.removePrefix("crash_") }
+              .eachCount()
+              .toList()
+              .sortedByDescending { it.second }
+      grouped.forEach { (exceptionClass, count) ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(
+              text = "• $exceptionClass",
+              fontSize = 12.sp,
+              fontFamily = FontFamily.Monospace,
+              color = MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier.fillMaxWidth(0.75f),
+          )
+          Text(
+              text = "×$count",
+              fontSize = 12.sp,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.error,
+          )
+        }
+      }
+      Spacer(modifier = Modifier.size(4.dp))
+      Text(
+          text = "详细堆栈: cacheDir/perf/crashes/*.txt",
+          fontSize = 10.sp,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
   }
 }
 

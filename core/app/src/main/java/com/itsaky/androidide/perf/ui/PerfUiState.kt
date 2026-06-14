@@ -53,6 +53,13 @@ data class PerfUiState(
     val coldStartAct2FrameMs: Long = 0L,
     /** Advanced/ColdStart: 进程启动到首帧 (ms), 即整冷启动. */
     val coldStartTotalMs: Long = 0L,
+    /**
+     * Advanced/Crash: 本次启动至今的 crash 事件列表 (按时间倒序).
+     *
+     * 来源: CrashHandler 上报 `crash_<ExceptionClass>` instant, 详见
+     * [com.itsaky.androidide.perf.monitor.CrashHandler].
+     */
+    val crashEvents: List<PerfEvent.Instant> = emptyList(),
     val totalBootMs: Long = 0L,
 ) {
   companion object {

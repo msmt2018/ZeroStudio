@@ -102,6 +102,7 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
     val pss = ArrayDeque<Long>(SAMPLE_WINDOW)
     val gc = ArrayDeque<Long>(SAMPLE_WINDOW)
     val anrs = ArrayList<PerfEvent.Instant>()
+    val crashes = ArrayList<PerfEvent.Instant>()
 
     // Advanced/ColdStart: 4 段 ms
     var coldProc2App: Long = 0L
@@ -118,7 +119,8 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             is PerfEvent.Instant ->
                 e.name !in MONITOR_PREFIXES &&
                     e.name != END_BOOT_MARKER &&
-                    !e.name.startsWith("coldstart_")
+                    !e.name.startsWith("coldstart_") &&
+                    !e.name.startsWith("crash_")
             PerfEvent.EndBoot -> true
           }
         }
@@ -188,6 +190,7 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             coldStartApp2ActMs = coldApp2Act,
             coldStartAct2FrameMs = coldAct2Frame,
             coldStartTotalMs = coldTotal,
+            crashEvents = crashes,
             totalBootMs = totalBootMs,
         )
   }
