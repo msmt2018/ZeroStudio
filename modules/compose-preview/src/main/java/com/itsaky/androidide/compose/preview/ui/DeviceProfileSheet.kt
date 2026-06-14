@@ -53,13 +53,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.itsaky.androidide.compose.preview.data.device.CutoutGeometry
+import com.itsaky.androidide.compose.preview.data.device.DeviceCatalog
+import com.itsaky.androidide.compose.preview.ui.DeviceProfile.FormFactor
 
 /**
- * 设备选择底部 Sheet.
+ * 设备选择底部 Sheet v2.1.
  *
- * 用户在预览时点击 "设备" 按钮, 弹出此 Sheet, 从 [DeviceProfiles.builtins] 选中一台.
+ * 按 [FormFactor] 分组显示内置 30+ 真实设备, 每行带:
+ * - 设备缩略图 (含 cutout 标识)
+ * - 设备名 / 厂商 / 型号
+ * - 分辨率 (px × px @ dpi)
+ * - 屏幕宽 (dp)
+ *
+ * 分组顺序: Phone → Foldable → Tablet → Watch → Desktop.
  *
  * @param onSelect 用户选中设备, 回调; selectedId 用于高亮当前选中.
+ * @param onCustom 跳转到 ResolutionEditor
+ * @param onDismiss 关闭 sheet
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,20 +96,42 @@ fun DeviceProfileSheet(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(vertical = 12.dp)
             )
-            HorizontalDivider()
+            Text(
+                text = "${DeviceCatalog.builtinProfiles.size} 个真实设备 · 按形态分组",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                items(DeviceProfiles.builtins) { profile ->
-                    DeviceProfileRow(
-                        profile = profile,
-                        selected = profile.id == selectedId,
-                        onClick = {
-                            onSelect(profile)
-                            onDismiss()
+                // 按 formFactor 顺序
+                val order = listOf(
+                    FormFactor.PHONE,
+                    FormFactor.FOLDABLE_OUTER,
+                    FormFactor.FOLDABLE_INNER,
+                    FormFactor.TABLET,
+                    FormFactor.WATCH,
+                    FormFactor.DESKTOP,
+                )
+                order.forEach { ff ->
+                    val list = DeviceCatalog.byFormFactor(ff)
+                    if (list.isNotEmpty()) {
+                        item(key = "header_${ff.name}") {
+                            FormFactorHeader(ff = ff, count = list.size)
                         }
-                    )
+                        items(list, key = { it.id }) { profile ->
+                            DeviceProfileRow(
+                                profile = profile,
+                                selected = profile.id == selectedId,
+                                onClick = {
+                                    onSelect(profile)
+                                    onDismiss()
+                                }
+                            )
+                        }
+                    }
                 }
-                item {
+                item(key = "custom_btn") {
                     TextButton(
                         onClick = {
                             onCustom()
@@ -118,35 +151,48 @@ fun DeviceProfileSheet(
 }
 
 @Composable
+private fun FormFactorHeader(ff: FormFactor, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = iconForFormFactor(ff),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = labelForFormFactor(ff) + " · $count",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
 private fun DeviceProfileRow(
     profile: DeviceProfile,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val bg = if (selected) MaterialTheme.colorScheme.primaryContainer
+    else androidx.compose.ui.graphics.Color.Transparent
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 4.dp),
+            .padding(vertical = 8.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceVariant
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = iconForStyle(profile.frameStyle),
-                contentDescription = null,
-                tint = if (selected) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        // 缩略图
+        DeviceThumbnail(profile = profile, maxHeight = 48.dp)
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -155,23 +201,47 @@ private fun DeviceProfileRow(
                 fontWeight = FontWeight.Medium,
             )
             Text(
-                text = "${profile.widthPx} × ${profile.heightPx} @ ${profile.densityDpi}dpi",
+                text = "${profile.manufacturer} · ${profile.widthPx}×${profile.heightPx} @ ${profile.densityDpi}dpi",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val cutoutText = when (profile.cutout) {
+                is CutoutGeometry.Notch -> "Notch"
+                is CutoutGeometry.PunchHole -> "Punch-hole"
+                is CutoutGeometry.WaterfallCurve -> "Waterfall"
+                null -> "No cutout"
+            }
+            Text(
+                text = "%.0f dp · %s · %s".format(profile.widthDp, profile.osVersion, cutoutText),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(
-            text = "%.0f dp".format(profile.widthDp),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (selected) {
+            Icon(
+                imageVector = Icons.Filled.Smartphone,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 
-private fun iconForStyle(style: DeviceProfile.FrameStyle): ImageVector = when (style) {
-    DeviceProfile.FrameStyle.PHONE -> Icons.Filled.Smartphone
-    DeviceProfile.FrameStyle.TABLET -> Icons.Filled.Tablet
-    DeviceProfile.FrameStyle.FOLDABLE -> Icons.Filled.Phone
-    DeviceProfile.FrameStyle.WATCH -> Icons.Filled.Watch
-    DeviceProfile.FrameStyle.NONE -> Icons.Filled.Smartphone
+private fun iconForFormFactor(ff: FormFactor): ImageVector = when (ff) {
+    FormFactor.PHONE -> Icons.Filled.Smartphone
+    FormFactor.FOLDABLE_INNER, FormFactor.FOLDABLE_OUTER -> Icons.Filled.Phone
+    FormFactor.TABLET -> Icons.Filled.Tablet
+    FormFactor.WATCH -> Icons.Filled.Watch
+    FormFactor.DESKTOP -> Icons.Filled.Phone
+    FormFactor.NONE -> Icons.Filled.Smartphone
+}
+
+private fun labelForFormFactor(ff: FormFactor): String = when (ff) {
+    FormFactor.PHONE -> "Phone"
+    FormFactor.FOLDABLE_INNER -> "Foldable (Inner)"
+    FormFactor.FOLDABLE_OUTER -> "Foldable (Outer)"
+    FormFactor.TABLET -> "Tablet"
+    FormFactor.WATCH -> "Watch"
+    FormFactor.DESKTOP -> "Desktop"
+    FormFactor.NONE -> "Custom"
 }

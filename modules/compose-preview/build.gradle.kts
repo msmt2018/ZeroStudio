@@ -46,6 +46,11 @@ val bundledD8Jars: Configuration by configurations.creating {
     isTransitive = true
 }
 
+// 字节码加速 (P2-BLD-01: AsmComposeBinder)
+val bytecodeAcceleratorJars: Configuration by configurations.creating {
+    isTransitive = false
+}
+
 dependencies {
     composeCompilerJars("androidx.compose.compiler:compiler:$composeCompilerVersion")
 
@@ -80,6 +85,13 @@ dependencies {
     kotlinCompilerJars("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.22")
     // R8 制品内置 D8 入口 com.android.tools.r8.D8
     bundledD8Jars("com.android.tools:r8:8.5.35")
+
+    // === 字节码加速 (P2-BLD-01: AsmComposeBinder 所需) ===
+    // ASM 9.7: 用于生成静态 binder / dead code strip / dex layout
+    // 注意: 实际 ASM 入口在运行时由 P2-BLD-01 加载, 这里只声明依赖
+    bytecodeAcceleratorJars("org.ow2.asm:asm:9.7")
+    bytecodeAcceleratorJars("org.ow2.asm:asm-commons:9.7")
+    bytecodeAcceleratorJars("org.ow2.asm:asm-tree:9.7")
 }
 
 val copyComposeCompilerPlugin by tasks.registering(Copy::class) {
@@ -142,6 +154,12 @@ val copyBundledD8Jars by tasks.registering(Copy::class) {
     into(layout.buildDirectory.dir("compose-jars/dex"))
 }
 
+// === 字节码加速 (P2-BLD-01): 把 ASM jar 拷到 build/compose-jars/asm/ ===
+val copyBytecodeAcceleratorJars by tasks.registering(Copy::class) {
+    from(bytecodeAcceleratorJars)
+    into(layout.buildDirectory.dir("compose-jars/asm"))
+}
+
 fun resolveD8Jar(): File {
     val buildToolsDir = File(android.sdkDirectory, "build-tools")
     return buildToolsDir.listFiles()
@@ -192,7 +210,7 @@ val compileRuntimeDex by tasks.registering {
 }
 
 val packageComposeJars by tasks.registering(Zip::class) {
-    dependsOn(compileRuntimeDex, copyKotlinCompilerJars, copyBundledD8Jars)
+    dependsOn(compileRuntimeDex, copyKotlinCompilerJars, copyBundledD8Jars, copyBytecodeAcceleratorJars)
 
     from(layout.buildDirectory.dir("compose-jars"))
     archiveFileName.set("compose-jars.zip")
