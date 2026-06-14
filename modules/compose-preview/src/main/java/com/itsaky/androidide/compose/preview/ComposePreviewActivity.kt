@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,9 +58,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.itsaky.androidide.compose.preview.ui.BuildStats
+import com.itsaky.androidide.compose.preview.ui.ColorEyedropper
 import com.itsaky.androidide.compose.preview.ui.DebugDrawer
 import com.itsaky.androidide.compose.preview.ui.DeviceFrame
 import com.itsaky.androidide.compose.preview.ui.DeviceProfileSheet
+import com.itsaky.androidide.compose.preview.ui.EditorState
+import com.itsaky.androidide.compose.preview.ui.EditorStatusBar
+import com.itsaky.androidide.compose.preview.ui.EditorToolbar
+import com.itsaky.androidide.compose.preview.ui.EditorTool
 import com.itsaky.androidide.compose.preview.ui.PreviewLog
 import com.itsaky.androidide.compose.preview.ui.PreviewLogcatSink
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbar
@@ -67,6 +73,9 @@ import com.itsaky.androidide.compose.preview.ui.PreviewToolbarActions
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarState
 import com.itsaky.androidide.compose.preview.ui.RecomposeTracker
 import com.itsaky.androidide.compose.preview.ui.ResolutionEditor
+import com.itsaky.androidide.compose.preview.ui.Selection
+import com.itsaky.androidide.compose.preview.ui.SelectionOverlay
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import com.itsaky.androidide.lookup.Lookup
@@ -154,6 +163,10 @@ fun ComposePreviewScreen(
     val inspectorNodes by viewModel.inspectorNodes.collectAsStateWithLifecycle()
     val buildStats by viewModel.buildStats.collectAsStateWithLifecycle()
 
+    // v2.1 可视化编辑器状态
+    val editorEnabled by viewModel.editorEnabled.collectAsStateWithLifecycle()
+    val editorState by viewModel.editorState.collectAsStateWithLifecycle()
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showDeviceSheet by remember { mutableStateOf(false) }
@@ -184,6 +197,7 @@ fun ComposePreviewScreen(
                         zoom = viewport.zoom,
                         showSystemBars = deviceConfig.showStatusBar,
                         debugEnabled = debugEnabled,
+                        editorEnabled = editorEnabled,
                     ),
                     actions = PreviewToolbarActions(
                         onOpenDeviceSheet = { showDeviceSheet = true },
@@ -192,11 +206,22 @@ fun ComposePreviewScreen(
                         onFitZoom = { viewModel.fitZoom() },
                         onToggleSystemBars = { viewModel.toggleSystemBars() },
                         onToggleDebug = { viewModel.toggleDebug() },
+                        onToggleEditor = { viewModel.toggleEditor() },
                         onClose = onClose,
                     ),
                 )
 
                 HorizontalDivider()
+
+                // v2.1 编辑器工具栏 (二级)
+                if (editorEnabled) {
+                    EditorToolbar(
+                        tool = editorState.tool,
+                        onToolChange = { viewModel.setEditorTool(it) },
+                        onClose = { viewModel.toggleEditor() },
+                    )
+                    EditorStatusBar(state = editorState)
+                }
 
                 // 主体
                 Box(
@@ -227,6 +252,40 @@ fun ComposePreviewScreen(
                             onBuildFailed = {
                                 viewModel.setBuildFailed()
                             }
+                        )
+                    }
+
+                    // v2.1 编辑器: 选中覆盖层 + 点击响应
+                    if (editorEnabled) {
+                        EditorInteractionLayer(
+                            editorState = editorState,
+                            inspectorNodes = inspectorNodes,
+                            onSelectAt = { offset, node ->
+                                if (editorState.tool == EditorTool.Select ||
+                                    editorState.tool == EditorTool.Drag) {
+                                    viewModel.setSelection(
+                                        Selection(
+                                            nodeId = node.id,
+                                            composableName = node.composableName,
+                                            bounds = node.bounds,
+                                        )
+                                    )
+                                } else if (editorState.tool == EditorTool.Eyedropper) {
+                                    val color = ColorEyedropper.estimateColor(node)
+                                    viewModel.setSelection(
+                                        Selection(
+                                            nodeId = node.id,
+                                            composableName = node.composableName,
+                                            bounds = node.bounds,
+                                            sampledColor = color,
+                                        )
+                                    )
+                                }
+                            },
+                            onClearSelection = { viewModel.clearSelection() },
+                            onTranslate = { dx, dy ->
+                                viewModel.translateSelection(dx, dy)
+                            },
                         )
                     }
                 }
@@ -466,6 +525,72 @@ private fun triggerBuild(
                 viewModel.refreshAfterBuild(context)
             }
         }
+    }
+}
+
+/**
+ * v2.1 编辑器交互层 (P2).
+ *
+ * 叠在预览内容之上, 提供:
+ * 1. 点击响应: 根据 [EditorState.tool] 选择 / 取色 / 清除选中
+ * 2. 选中框绘制: 包裹 [SelectionOverlay] (8 手柄 + 拖动)
+ *
+ * @param editorState 当前 editor state
+ * @param inspectorNodes 全部节点 (hit-test 用)
+ * @param onSelectAt 命中节点回调 (offset + 命中的 NodeInfo)
+ * @param onClearSelection 清除选中回调
+ * @param onTranslate 拖动选中元素回调 (Drag 工具)
+ */
+@Composable
+private fun EditorInteractionLayer(
+    editorState: EditorState,
+    inspectorNodes: List<NodeInfo>,
+    onSelectAt: (androidx.compose.ui.geometry.Offset, NodeInfo) -> Unit,
+    onClearSelection: () -> Unit,
+    onTranslate: (Float, Float) -> Unit,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 点击响应层
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(editorState.tool, inspectorNodes) {
+                    detectTapGestures(
+                        onTap = { offset ->
+                            if (editorState.tool == EditorTool.Select ||
+                                editorState.tool == EditorTool.Eyedropper
+                            ) {
+                                val node = ColorEyedropper.findNodeAt(inspectorNodes, offset)
+                                if (node != null) {
+                                    onSelectAt(offset, node)
+                                } else {
+                                    onClearSelection()
+                                }
+                            }
+                        },
+                        onLongPress = {
+                            // 长按 = 清除选中
+                            onClearSelection()
+                        },
+                    )
+                }
+        )
+
+        // 选中覆盖层 (含 8 手柄 + 拖动响应)
+        SelectionOverlay(
+            selection = editorState.selection,
+            tool = editorState.tool,
+            onSelectionChange = { newSel ->
+                if (editorState.tool == EditorTool.Drag) {
+                    val old = editorState.selection
+                    if (old != null) {
+                        val dx = newSel.translationX - old.translationX
+                        val dy = newSel.translationY - old.translationY
+                        onTranslate(dx, dy)
+                    }
+                }
+            },
+        )
     }
 }
 

@@ -32,7 +32,10 @@ import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
 import com.itsaky.androidide.compose.preview.ui.BuildPhaseTimings
 import com.itsaky.androidide.compose.preview.ui.BuildStats
 import com.itsaky.androidide.compose.preview.ui.DeviceProfile
+import com.itsaky.androidide.compose.preview.ui.EditorState
+import com.itsaky.androidide.compose.preview.ui.EditorTool
 import com.itsaky.androidide.compose.preview.ui.NodeInfo
+import com.itsaky.androidide.compose.preview.ui.Selection
 import com.itsaky.androidide.compose.preview.ui.SystemBarsTheme
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -181,6 +184,16 @@ class ComposePreviewViewModel(
     /** Inspector 节点列表 (由 ComposableRenderer 推上来). */
     private val _inspectorNodes = MutableStateFlow<List<NodeInfo>>(emptyList())
     val inspectorNodes: StateFlow<List<NodeInfo>> = _inspectorNodes.asStateFlow()
+
+    // v2.1 可视化编辑器状态
+
+    /** 编辑器开关 (显示 EditorToolbar). */
+    private val _editorEnabled = MutableStateFlow(false)
+    val editorEnabled: StateFlow<Boolean> = _editorEnabled.asStateFlow()
+
+    /** 编辑器状态 (工具 + 选中). */
+    private val _editorState = MutableStateFlow(EditorState())
+    val editorState: StateFlow<EditorState> = _editorState.asStateFlow()
 
     private val sourceChanges = MutableSharedFlow<SourceUpdate>()
 
@@ -545,6 +558,61 @@ class ComposePreviewViewModel(
         _buildStats.value = prev.copy(
             lastRenderMs = elapsedMs,
             totalRenderMs = prev.totalRenderMs + elapsedMs,
+        )
+    }
+
+    // === v2.1 可视化编辑器 setter ===
+
+    /** 开关编辑器 (顶部 EditorToolbar 显示/隐藏). */
+    fun toggleEditor() {
+        _editorEnabled.value = !_editorEnabled.value
+        // 关闭时清空选中
+        if (!_editorEnabled.value) {
+            _editorState.value = EditorState()
+        }
+    }
+
+    fun setEditorEnabled(enabled: Boolean) {
+        _editorEnabled.value = enabled
+        if (!enabled) {
+            _editorState.value = EditorState()
+        }
+    }
+
+    /** 切换工具. */
+    fun setEditorTool(tool: EditorTool) {
+        _editorState.value = _editorState.value.copy(
+            tool = tool,
+            eyedropperActive = tool == EditorTool.Eyedropper,
+        )
+    }
+
+    /** 选中 / 更新选中. */
+    fun setSelection(selection: Selection?) {
+        _editorState.value = _editorState.value.copy(selection = selection)
+    }
+
+    /** 清除选中. */
+    fun clearSelection() {
+        _editorState.value = _editorState.value.copy(selection = null)
+    }
+
+    /** 更新 translation (Drag 工具拖动期间调用). */
+    fun translateSelection(dx: Float, dy: Float) {
+        val s = _editorState.value.selection ?: return
+        _editorState.value = _editorState.value.copy(
+            selection = s.copy(
+                translationX = s.translationX + dx,
+                translationY = s.translationY + dy,
+            )
+        )
+    }
+
+    /** 重置 translation (回到原始位置). */
+    fun resetTranslation() {
+        val s = _editorState.value.selection ?: return
+        _editorState.value = _editorState.value.copy(
+            selection = s.copy(translationX = 0f, translationY = 0f)
         )
     }
 

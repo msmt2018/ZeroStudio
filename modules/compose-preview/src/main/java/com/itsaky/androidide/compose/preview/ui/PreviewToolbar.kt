@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Brightness6
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Smartphone
@@ -168,6 +169,20 @@ fun PreviewToolbar(
             },
         )
 
+        // 可视化编辑器开关 (P2)
+        FilterChip(
+            selected = state.editorEnabled,
+            onClick = actions.onToggleEditor,
+            label = { Text("Editor") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Filled.Brush,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+            },
+        )
+
         Spacer(modifier = Modifier.width(8.dp))
 
         // 关闭
@@ -186,6 +201,7 @@ data class PreviewToolbarState(
     val zoom: Float = 1.0f,
     val showSystemBars: Boolean = true,
     val debugEnabled: Boolean = false,
+    val editorEnabled: Boolean = false,
 )
 
 /**
@@ -198,5 +214,6 @@ data class PreviewToolbarActions(
     val onFitZoom: () -> Unit,
     val onToggleSystemBars: () -> Unit,
     val onToggleDebug: () -> Unit,
+    val onToggleEditor: () -> Unit,
     val onClose: () -> Unit,
 )
