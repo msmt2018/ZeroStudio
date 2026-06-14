@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp.Companion.toPx
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -318,8 +319,9 @@ private fun NavigationBarContent(
         }
         if (useGestureNav) {
             // 手势导航: 中央一条 108dp × 4dp 横杠
-            val barW = 108f.dp.toPx()
-            val barH = 4f.dp.toPx()
+            val density = LocalDensity.current
+            val barW = with(density) { 108f.dp.toPx() }
+            val barH = with(density) { 4f.dp.toPx() }
             Canvas(
                 modifier = Modifier
                     .align(Alignment.Center)
