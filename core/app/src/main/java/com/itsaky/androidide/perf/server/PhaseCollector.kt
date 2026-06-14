@@ -50,6 +50,9 @@ class PhaseCollector {
 
   @Volatile private var bootEnded: Boolean = false
 
+  /** EndBoot 监听器列表. [BootHistoryStore] 用此 hook 在启动结束时持久化. */
+  private val endBootListeners = java.util.concurrent.CopyOnWriteArrayList<(List<PerfEvent>, Long) -> Unit>()
+
   /**
    * 收集一个事件.
    *
@@ -63,8 +66,23 @@ class PhaseCollector {
     }
     if (event is PerfEvent.EndBoot) {
       bootEnded = true
+      // 通知所有 listener (BootHistoryStore 等)
+      val snapshot = events.toList()
+      endBootListeners.forEach { listener ->
+        runCatching { listener(snapshot, startElapsedMs) }
+      }
     }
     events.add(event)
+  }
+
+  /**
+   * 注册 EndBoot 监听器.
+   *
+   * 监听器签名 `(events, startElapsedMs) -> Unit`, 在 [collect] 收到
+   * [PerfEvent.EndBoot] 时同步调用 (监听器抛异常被吞掉, 不影响 collect 主流程).
+   */
+  fun addEndBootListener(listener: (List<PerfEvent>, Long) -> Unit) {
+    endBootListeners.add(listener)
   }
 
   /** 启动是否已结束 (用于 UI 切换 tab 颜色 / 显示 banner). */

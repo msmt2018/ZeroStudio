@@ -19,6 +19,7 @@ package com.itsaky.androidide.perf
 import android.content.Context
 import com.itsaky.androidide.perf.server.PerfServerSocket
 import com.itsaky.androidide.perf.server.PhaseCollector
+import com.itsaky.androidide.perf.store.BootHistoryStore
 import java.io.File
 import java.util.concurrent.Executors
 import org.slf4j.LoggerFactory
@@ -92,6 +93,12 @@ object PerfApplication {
 
     val collector = PhaseCollector()
     val server = PerfServerSocket(socketPath, pathFile, collector)
+
+    // 启动期结束 (PerfTracer.endBoot) 时持久化 phase 列表到历史
+    val historyStore = BootHistoryStore(context)
+    collector.addEndBootListener { events, startElapsedMs ->
+      historyStore.append(events, startElapsedMs)
+    }
 
     // 标记 server 状态供 UI (PR #5) 读
     PhaseStore.bind(collector, server)

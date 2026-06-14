@@ -36,6 +36,8 @@ import com.itsaky.androidide.events.EditorEventsIndex
 import com.itsaky.androidide.events.LspApiEventsIndex
 import com.itsaky.androidide.events.LspJavaEventsIndex
 import com.itsaky.androidide.events.LspKotlinEventsIndex
+import com.itsaky.androidide.perf.PerfApplication
+import com.itsaky.androidide.perf.monitor.MonitorCoordinator
 import com.itsaky.androidide.perf.tracer.PerfTracer
 import com.itsaky.androidide.preferences.internal.DevOpsPreferences
 import com.itsaky.androidide.preferences.internal.GeneralPreferences
@@ -145,6 +147,7 @@ class IDEApplication : TermuxApplication() {
 
     PerfTracer.reportInstant("ide_on_create_end")
     PerfTracer.endBoot()
+    MonitorCoordinator.start(this)
   }
 
   /**
