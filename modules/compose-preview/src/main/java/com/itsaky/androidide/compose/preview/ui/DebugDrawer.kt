@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -211,6 +212,7 @@ fun DebugDrawer(
                     DebugTab.Gallery -> GalleryPanel(modifier = Modifier.fillMaxSize())
                     DebugTab.LiveEdit -> LiveEditPanel(modifier = Modifier.fillMaxSize())
                     DebugTab.Errors -> ErrorsPanel(modifier = Modifier.fillMaxSize())
+                    DebugTab.Perf -> PerfPanel(modifier = Modifier.fillMaxSize())
                 }
             }
 
@@ -225,7 +227,7 @@ fun DebugDrawer(
     }
 }
 
-/** 8 个 tab 枚举. */
+/** 9 个 tab 枚举. */
 enum class DebugTab(
     val label: String,
     val icon: ImageVector,
@@ -238,6 +240,7 @@ enum class DebugTab(
     Gallery("Gallery", Icons.Filled.GridView),
     LiveEdit("LiveEdit", Icons.Filled.Bolt),
     Errors("Errors", Icons.Filled.ErrorOutline),
+    Perf("Perf", Icons.Filled.Speed),
 }
 
 /**

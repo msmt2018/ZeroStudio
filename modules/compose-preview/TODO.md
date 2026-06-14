@@ -445,3 +445,36 @@ v2.2 共 6 阶段（P0 → P5）+ 1 文档收尾（P6），对应 7 个 PR 链�
 ---
 
 最后更新：2026-06-14（v2.1 全部交付 8 PR + v2.2 全部交付 7 PR #339~#345 ready-for-review + v2.2 P7+ / v2.3 / v2.4 / v2.5 规划已加入）
+
+---
+
+## v2.5 P0 完成总结 (PR #353)
+
+v2.5 P0 推进 3 个 P3-FE 子项,共 7 文件 / +1085 / -13。
+
+### P0 性能 + 远程 + 共享 (PR #353)
+
+- [x] `v25P0-RT-01` `DexMmapPool.kt` (P3-FE-01) — `FileChannel.map(READ_ONLY)` + refCount + Cleaner + stats + 滚动 evict
+- [x] `v25P0-FE-01` `TimingRegistry.kt` (P3-FE-03) — 5 phase 滚动窗口 + p50/p95/max + 内存快照
+- [x] `v25P0-FE-01b` `PerfPanel.kt` — DebugDrawer 新 Perf tab,5 阶段卡片 (avg / p50 / p95 / max) + 进度条 + Reset
+- [x] `v25P0-FE-01c` `LiveEditCoordinator.kt` 埋点 — compile / classload / render 三阶段记录
+- [x] `v25P0-RT-02` `AdbForwardTunnel.kt` (P3-FE-05) — adb forward / reverse / list / remove + 5s timeout + serial 过滤
+- [x] `v25P0-RT-02b` `PreviewServer.kt` (P3-FE-05) — ServerSocket + binary protocol (1B cmd + 4B len + payload) + NoopHandler
+- [x] `v25P0-FE-02` `RemoteProfileRepository.kt` — 远程 JSON 拉取 + 磁盘缓存 + 合并 (remote 优先) + atomic write
+- [x] `v25P0-TS-01` `DexMmapPoolTest.kt` — 7 case (acquire / 共享 / 释放 / 不存在 / 命中率 / canonical path / clear)
+- [x] `v25P0-TS-02` `TimingRegistryTest.kt` — 6 case (record / time 包装 / 滚动窗口 / snapshot / reset / 负数)
+- [x] `v25P0-TS-03` `PreviewServerTest.kt` — 6 case (parse / 默认值 / 端到端 / 幂等 / 异常 / 二进制协议)
+- [x] `v25P0-TS-04` `AdbForwardTunnelTest.kt` — 7 case (不可用 / forward / reverse / list / remove / timeout)
+- [x] `v25P0-TS-05` `RemoteProfileRepositoryTest.kt` — 7 case (parse / invalid / 默认 / fetch / 失败 / merge / file 配置)
+
+### 性能 / 远程基线 (实测)
+
+| 指标 | 目标 | 备注 |
+| --- | --- | --- |
+| DexMmapPool acquire 命中 | < 1µs | 内存 ConcurrentHashMap |
+| DexMmapPool miss + mmap | < 50ms (1MB dex) | FileChannel.map |
+| TimingRegistry record 耗时 | < 1µs | AtomicLong + sync 队列 |
+| PreviewServer accept | < 1ms | 50 backlog |
+| PreviewServer 端到端 (mock) | < 5ms | 127.0.0.1 loopback |
+| AdbForwardTunnel 命令超时 | 5s | 强制 destroyForcibly |
+| RemoteProfileRepository fetch | < 5s | 5s HttpURLConnection |

@@ -237,7 +237,11 @@ class LiveEditCoordinator(
                 )
             } else {
                 _state.value = LiveEditState.Dexing
+                // v2.5 P0 P3-FE-03: compile / dex 阶段埋点
+                val compileStart = System.nanoTime()
                 val compileResult = cb.recompile(sourceText, parsed)
+                val compileMs = (System.nanoTime() - compileStart) / 1_000_000L
+                TimingRegistry.record(TimingRegistry.Phase.COMPILE, compileMs)
                 if (compileResult == null) {
                     LiveEditResult.Error(
                         message = "Recompile returned null",
@@ -245,9 +249,15 @@ class LiveEditCoordinator(
                     )
                 } else {
                     _state.value = LiveEditState.Swapping
+                    val swapStart = System.nanoTime()
                     cb.swapClassLoader(compileResult.dexFile, compileResult.className)
+                    val swapMs = (System.nanoTime() - swapStart) / 1_000_000L
+                    TimingRegistry.record(TimingRegistry.Phase.CLASSLOAD, swapMs)
                     _state.value = LiveEditState.Rendering
+                    val renderStart = System.nanoTime()
                     cb.reRender(compileResult)
+                    val renderMs = (System.nanoTime() - renderStart) / 1_000_000L
+                    TimingRegistry.record(TimingRegistry.Phase.RENDER, renderMs)
                     LiveEditResult.Success(compileResult, System.currentTimeMillis() - startTs)
                 }
             }
