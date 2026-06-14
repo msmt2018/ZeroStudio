@@ -235,6 +235,158 @@ testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 5. **损坏容错**：JSON 解析失败 / schema 不匹配 → 备份 `.bak` + 内存清空 + 不抛，启动永远成功。
 6. **0 改生产代码**（P5）：5 个测试文件 + build.gradle.kts 测试依赖,不动任何生产代码,纯稳定性 + 文档化保证。
 
+### 0.7 v2.3+ 实际交付状态（2026-06-14）
+
+> v2.3 / v2.4 / v2.5 三个大版本,共 **11 个 PR** 链式提交（#346 ~ #356），全部 ready-for-review。
+> 覆盖:多 module / DataSet / 设备矩阵 / Snapshot 验证 / R8 / Dex mmap / 性能埋点 / 远程预览 / Evictor 调度。
+
+#### 0.7.1 PR 链总览
+
+| PR | 阶段 | 标题 | 关键产物 |
+| --- | --- | --- | --- |
+| **#346** | v2.2 P7 | **错误聚合** | ErrorAggregator / JumpToIde / ErrorsPanel (DebugDrawer 第 8 tab) |
+| **#347** | v2.2 P8 | **Resource 资源监听** | SourceChangeWatcher.resourceEvents + watchResources + STANDARD_RESOURCE_SUBDIRS |
+| **#348** | v2.3 P0 | **Multi-module 跨模块** | MultiModuleContextResolver / ModuleClassLoaderRegistry / ModuleInfo data class |
+| **#349** | v2.3 P1 | **@PreviewParameter DataSet** | PreviewParameterRegistry + Gallery ChevronLeft/Right 切换 |
+| **#350** | v2.3 P2 | **设备 profile 矩阵** | DeviceProfileMatrix (20+ 设备) / ProfileMatrixPanel (LazyVerticalGrid) |
+| **#351** | v2.3 P3 | **Snapshot / Image Diff** | ImageDiffer (30 RGB diff) / BaselineStore (.androidide/preview-snapshots) / SnapshotDiffService (CI=true) |
+| **#352** | v2.4 P0 | **R8 / ProGuard 集成** | buildTypes.release minify + shrinkResources + proguard-preview-rules.pro (10 类规则) + report-release-size.py |
+| **#353** | v2.5 P0 | **性能 + 远程 + 共享** | DexMmapPool / TimingRegistry / PerfPanel / AdbForwardTunnel / PreviewServer / RemoteProfileRepository (6 大新类) |
+| **#354** | v2.5 P1 | **DexMmapPool 集成到 ComposeClassLoader** | mmapPool 注入 + dex magic 校验 + invalidateAll 归还 mmap 引用 |
+| **#355** | v2.5 P2 | **PerfPanel mmap 集成** | DexMmapPoolRegistry 全局单例 / DexMmapPoolEvictor 协程定时 / MmapPoolSection 卡片 |
+| **#356** | v2.5 P3 | **Evictor 生命周期** | ComposePreviewFragment.onViewCreated 启, onDestroyView 停, 4 case 测试 |
+
+#### 0.7.2 关键架构增量（v2.2 → v2.3+ 新增模块）
+
+```
+modules/compose-preview/src/main/java/.../compose/preview/
+├── runtime/                                                    ← 持续扩展
+│   ├── ErrorAggregator.kt                                      ← v2.2 P7 同 (file,line) 折叠 + 4 类 classifier
+│   ├── JumpToIde.kt                                            ← v2.2 P7 Intent: androidide://open?file=...&line=...
+│   ├── SourceChangeWatcher.kt                                  ← v2.2 P8 +resourceEvents +watchResources
+│   ├── ModuleClassLoaderRegistry.kt                            ← v2.3 P0 BFS parent chain
+│   ├── MultiModuleContextResolver.kt                           ← v2.3 P0 1 跳依赖解析
+│   ├── PreviewParameterRegistry.kt                             ← v2.3 P1 反射 PreviewParameterProvider
+│   ├── DeviceProfileMatrix.kt                                  ← v2.3 P2 包装 DeviceCatalog
+│   ├── ImageDiffer.kt                                          ← v2.3 P3 30 RGB diff + 区域标记
+│   ├── BaselineStore.kt                                        ← v2.3 P3 atomic write (tmp+rename)
+│   ├── SnapshotDiffService.kt                                  ← v2.3 P3 CI=true env var 集成
+│   ├── DexMmapPool.kt                                          ← v2.5 P0 FileChannel.map + Cleaner
+│   ├── DexMmapPoolRegistry.kt                                  ← v2.5 P2 AtomicReference 单例
+│   ├── DexMmapPoolEvictor.kt                                   ← v2.5 P2 协程 10 分钟定时
+│   ├── TimingRegistry.kt                                       ← v2.5 P0 5 phase 滚动窗口
+│   ├── AdbForwardTunnel.kt                                     ← v2.5 P0 adb forward/reverse + 5s timeout
+│   └── PreviewServer.kt                                        ← v2.5 P0 ServerSocket + 二进制协议
+├── data/
+│   ├── device/DeviceCatalog.kt                                 ← v2.3 P2 集成
+│   └── repository/
+│       └── RemoteProfileRepository.kt                          ← v2.5 P0 HTTP 拉取 + 磁盘缓存
+├── ui/
+│   ├── ProfileMatrixPanel.kt                                   ← v2.3 P2 LazyVerticalGrid 缩略图
+│   ├── PerfPanel.kt                                            ← v2.5 P0 + 5 phase 卡片
+│   ├── DebugDrawer.kt                                          ← v2.2 P7 Errors / v2.5 P0 Perf (第 9 tab)
+│   └── ...
+├── ComposePreviewFragment.kt                                   ← v2.5 P3 mmapEvictor 生命周期
+└── build.gradle.kts                                            ← v2.4 P0 release minify + shrinkResources
+```
+
+#### 0.7.3 v2.5 性能架构 (P0 / P1 / P2 / P3)
+
+```
+                       ┌─────────────────────────────────────┐
+                       │       ComposePreviewFragment        │
+                       │   onViewCreated / onDestroyView     │
+                       └────────────────┬────────────────────┘
+                                        │ start / stop
+                                        ▼
+                       ┌─────────────────────────────────────┐
+                       │       DexMmapPoolEvictor            │
+                       │   intervalMs=10min maxAgeMs=5min   │
+                       └────────────────┬────────────────────┘
+                                        │ evictStale
+                                        ▼
+                       ┌─────────────────────────────────────┐
+                       │   DexMmapPoolRegistry (全局单例)   │
+                       │   AtomicReference<DexMmapPool?>     │
+                       └────────────────┬────────────────────┘
+                                        │ getOrCreate
+                                        ▼
+                       ┌─────────────────────────────────────┐
+                       │           DexMmapPool               │
+                       │   ConcurrentHashMap<path,MmapEntry> │
+                       │   + Cleaner 释放 + 命中率统计       │
+                       └────────────────┬────────────────────┘
+                                        │ acquire / release
+                                        ▼
+                       ┌─────────────────────────────────────┐
+                       │       ComposeClassLoader            │
+                       │   getOrCreateLoader → validateMagic │
+                       └────────────────┬────────────────────┘
+                                        │
+                                        ▼
+                       ┌─────────────────────────────────────┐
+                       │            PerfPanel                │
+                       │   ┌─ Phase Cards (compile/dex/...)  │
+                       │   └─ MmapPoolSection (active/hit%)  │
+                       └─────────────────────────────────────┘
+```
+
+#### 0.7.4 远程预览协议 (v2.5 P0 P3-FE-05)
+
+二进制协议 (Big-endian):
+```
+Client → Server:
+  1B  CMD_RENDER (0x01)
+  4B  payload length (N)
+  N B  JSON: {"function": "...", "profileId": "...", "theme": "..."}
+
+Server → Client:
+  4B  status (0=OK, 1=ERR)
+  4B  body length (M)
+  M B  body (PNG bytes if OK, UTF-8 message if ERR)
+```
+
+链路:`adb forward tcp:9876 localabstract:androidide_preview` → 设备通过 local socket 访问 IDE 端 ServerSocket.
+
+#### 0.7.5 关键设计决策 (v2.3+ 阶段)
+
+1. **DexMmapPool 用 RO map + Cleaner** — 不写回磁盘, 避免 sun.misc.Cleaner 反射, java.lang.ref.Cleaner 跨 JVM 兼容
+2. **PreviewServer 127.0.0.1 loopback** — 仅 adb forward 转接, 不暴露外部端口
+3. **RemoteProfileRepository remote 优先合并** — 同 id 远程覆盖本地, 反之保留
+4. **Snapshot CI=true 5% 阈值** — `isCiMode()` 检测环境变量, CI 比对失败即报错
+5. **ComposeClassLoader mmap 集成 + dex magic 校验** — 仅 WARN 日志, 不抛, 异常 dex 仍能走 DexClassLoader
+6. **DexMmapPoolEvictor SupervisorJob** — 异常不 crash, 自动重试下一轮
+7. **ComposePreviewFragment 级别 Evictor** — 与视图同生命周期, 离开预览即停止
+
+#### 0.7.6 测试覆盖 (v2.3+ 阶段, 累计)
+
+| 测试类 | case 数 | 覆盖范围 |
+| --- | --- | --- |
+| ErrorAggregatorTest | 15 | 折叠 / classifier / 并发 / clear / snapshot 排序 |
+| ResourceWatcherTest | 9 | walkAndRegister / 标准子目录过滤 / 手动 notify |
+| ModuleClassLoaderRegistryTest | 10 | BFS 1 跳 / parent chain / cache / invalidateAll |
+| PreviewParameterRegistryTest | 15 | 反射 / 7 种类型 / setIndex clamp / 切换 |
+| DeviceProfileMatrixTest | 9 | byFormFactor / byId / default factories |
+| SnapshotDiffTest | 14 | 30 阈值 / 尺寸不匹配 / CI=true / baseline atomic write |
+| R8ConfigTest | 3 | 文件存在 / 10 类规则 / build.gradle.kts minify 配置 |
+| DexMmapPoolTest | 7 | acquire / 共享 / 释放 / 命中率 / canonical path |
+| TimingRegistryTest | 6 | record / time / 滚动 / snapshot / reset |
+| PreviewServerTest | 6 | parse / 默认 / 端到端 / 幂等 / 异常 |
+| AdbForwardTunnelTest | 7 | 不可用 / forward / reverse / list / remove / timeout |
+| RemoteProfileRepositoryTest | 7 | parse / invalid / 默认 / fetch / 失败 / merge |
+| DexMmapPoolRegistryTest | 7 | install / lazy / stats / evict / reset / 替换 |
+| DexMmapPoolEvictorTest | 5 | start / 幂等 / stop / 定时 / 初始 0 |
+| EvictorLifecycleTest | 4 | fragment 生命周期 / 幂等 / 顺序 / 实际 evict |
+| **合计 (本阶段新增)** | **124** | **v2.3+ 全量** |
+
+加上 v2.1 (80) + v2.2 (50) = **254 个单元测试 case**。
+
+#### 0.7.7 后续 (v2.3 P4 / v2.5 P5+)
+
+- **v2.3 P4 Recompose 计数增强** — Compose recompose counter + 耗时 + 高亮高频重组节点 (待办)
+- **v2.5 P4 文档收尾** — 本节 (0.7) 已交付, 后续只需补 README quickstart
+- **v2.5 P5 集成测试** — instrumented test 覆盖 mmap + evictor + perfpanel 全链路 (需要 adb 设备)
+
 ---
 
 ## 1. 背景与现状问题
