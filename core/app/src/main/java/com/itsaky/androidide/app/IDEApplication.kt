@@ -37,6 +37,7 @@ import com.itsaky.androidide.events.LspApiEventsIndex
 import com.itsaky.androidide.events.LspJavaEventsIndex
 import com.itsaky.androidide.events.LspKotlinEventsIndex
 import com.itsaky.androidide.perf.PerfApplication
+import com.itsaky.androidide.perf.monitor.ColdStartTracker
 import com.itsaky.androidide.perf.monitor.MonitorCoordinator
 import com.itsaky.androidide.perf.tracer.PerfTracer
 import com.itsaky.androidide.preferences.internal.DevOpsPreferences
@@ -92,6 +93,7 @@ class IDEApplication : TermuxApplication() {
 
     instance = this
     PerfTracer.reportInstant("ide_on_create_begin")
+    ColdStartTracker.markAppStart() // PR (advanced): 冷启动第一段
     PerfTracer.tryAttach(this)
     PerfTracer.trace("super_on_create") { super.onCreate() }
     PerfTracer.trace("init_koin") { RikkaHubRuntime.ensureKoinStarted(this) }
@@ -146,6 +148,8 @@ class IDEApplication : TermuxApplication() {
     }
 
     PerfTracer.reportInstant("ide_on_create_end")
+    ColdStartTracker.markAppReady() // PR (advanced): 冷启动第二段
+    ColdStartTracker.registerFirstActivityTracker(this) // PR (advanced): 等首 Activity
     PerfTracer.endBoot()
     MonitorCoordinator.start(this)
   }

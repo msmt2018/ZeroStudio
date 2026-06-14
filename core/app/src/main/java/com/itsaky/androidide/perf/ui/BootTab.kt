@@ -65,6 +65,15 @@ fun BootTab(state: PerfUiState, modifier: Modifier = Modifier) {
       TotalBootCard(totalBootMs = state.totalBootMs, isEnded = state.isBootEnded)
     }
     item {
+      ColdStartCard(
+          proc2App = state.coldStartProc2AppMs,
+          appDur = state.coldStartAppDurMs,
+          app2Act = state.coldStartApp2ActMs,
+          act2Frame = state.coldStartAct2FrameMs,
+          total = state.coldStartTotalMs,
+      )
+    }
+    item {
       BootTimelineCard(bootEvents = state.bootEvents)
     }
     item {
@@ -183,6 +192,126 @@ private fun BootTimelineRow(
         fontSize = 11.sp,
         fontFamily = FontFamily.Monospace,
         color = color,
+        modifier = Modifier.fillMaxWidth(),
+    )
+  }
+}
+
+@Composable
+private fun TotalBootCard(totalBootMs: Long, isEnded: Boolean) {
+  Card(
+      shape = RoundedCornerShape(12.dp),
+      colors =
+          CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+  ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+      Text(
+          text = "启动总耗时",
+          fontSize = 12.sp,
+          color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+      )
+      Spacer(modifier = Modifier.size(4.dp))
+      Text(
+          text = formatMs(totalBootMs),
+          fontSize = 36.sp,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.onPrimaryContainer,
+      )
+      Text(
+          text = if (isEnded) "启动完成" else "启动中…",
+          fontSize = 11.sp,
+          color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+      )
+    }
+  }
+}
+
+/**
+ * 冷启动分段时间 (Advanced / Commit 1).
+ *
+ * 把从"进程启动"到"首帧渲染"的全链路分 4 段显示, 帮助定位冷启动瓶颈:
+ * - proc2app — 进程启动到 App.onCreate 第一行 (fork / class load 耗时)
+ * - appDur   — App.onCreate 总耗时 (Koin DI / 主题 / 颜色方案等)
+ * - app2act  — App.onCreate 结束到首 Activity onResume (MainActivity 启动)
+ * - act2frm  — 首 Activity onResume 到首帧 (首次 layout + draw)
+ *
+ * 任一段缺失显示 "—", 表示该阶段还没上报 (启动还没跑到).
+ */
+@Composable
+private fun ColdStartCard(
+    proc2App: Long,
+    appDur: Long,
+    app2Act: Long,
+    act2Frame: Long,
+    total: Long,
+) {
+  Card(shape = RoundedCornerShape(12.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+      Text(
+          text = "冷启动分段 (Cold Start Breakdown)",
+          fontWeight = FontWeight.SemiBold,
+          color = MaterialTheme.colorScheme.onSurface,
+      )
+      Spacer(modifier = Modifier.size(8.dp))
+      ColdStartRow("进程 → App.onCreate", proc2App, total)
+      ColdStartRow("App.onCreate 耗时", appDur, total)
+      ColdStartRow("App → 首 Activity", app2Act, total)
+      ColdStartRow("Activity → 首帧", act2Frame, total)
+      Spacer(modifier = Modifier.size(6.dp))
+      // 大字总数
+      Text(
+          text = if (total == 0L) "总冷启动: —" else "总冷启动: ${formatMs(total)}",
+          fontSize = 18.sp,
+          fontWeight = FontWeight.Bold,
+          color =
+              if (total == 0L) MaterialTheme.colorScheme.onSurfaceVariant
+              else MaterialTheme.colorScheme.primary,
+      )
+    }
+  }
+}
+
+@Composable
+private fun ColdStartRow(label: String, ms: Long, total: Long) {
+  Row(
+      modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Text(
+        text = label,
+        fontSize = 11.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(0.55f),
+    )
+    // 比例条
+    val ratio =
+        if (total <= 0L || ms <= 0L) 0f
+        else (ms.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(0.85f)
+            .height(10.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(5.dp),
+            ),
+    ) {
+      Box(
+          modifier = Modifier
+              .fillMaxWidth(ratio)
+              .height(10.dp)
+              .background(
+                  color = MaterialTheme.colorScheme.tertiary,
+                  shape = RoundedCornerShape(5.dp),
+              ),
+      )
+    }
+    Spacer(modifier = Modifier.size(6.dp))
+    Text(
+        text = if (ms == 0L) "—" else "${ms}ms",
+        fontSize = 11.sp,
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.fillMaxWidth(),
     )
   }

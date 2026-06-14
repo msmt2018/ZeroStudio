@@ -103,13 +103,22 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
     val gc = ArrayDeque<Long>(SAMPLE_WINDOW)
     val anrs = ArrayList<PerfEvent.Instant>()
 
+    // Advanced/ColdStart: 4 段 ms
+    var coldProc2App: Long = 0L
+    var coldAppDur: Long = 0L
+    var coldApp2Act: Long = 0L
+    var coldAct2Frame: Long = 0L
+    var coldTotal: Long = 0L
+
     // 启动 phase 列表: 只取前 18 条 + end_boot (PR #2 设计)
     val bootEvents =
         snapshot.filter { e ->
           when (e) {
             is PerfEvent.Phase -> true
             is PerfEvent.Instant ->
-                e.name !in MONITOR_PREFIXES && e.name != END_BOOT_MARKER
+                e.name !in MONITOR_PREFIXES &&
+                    e.name != END_BOOT_MARKER &&
+                    !e.name.startsWith("coldstart_")
             PerfEvent.EndBoot -> true
           }
         }
@@ -127,6 +136,29 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             ev.name.substring(15).toLongOrNull()?.let { gc.addLast(it) }
           }
           ev.name.startsWith("anr_") -> anrs.add(ev)
+          // Advanced/ColdStart
+          ev.name.startsWith("coldstart_proc2app_") && ev.name.endsWith("ms") -> {
+            coldProc2App =
+                ev.name.removePrefix("coldstart_proc2app_").removeSuffix("ms").toLongOrNull() ?: 0L
+          }
+          ev.name.startsWith("coldstart_app_dur_") && ev.name.endsWith("ms") -> {
+            coldAppDur =
+                ev.name.removePrefix("coldstart_app_dur_").removeSuffix("ms").toLongOrNull() ?: 0L
+          }
+          ev.name.startsWith("coldstart_app2act_") && ev.name.endsWith("ms") -> {
+            coldApp2Act =
+                ev.name.removePrefix("coldstart_app2act_").removeSuffix("ms").toLongOrNull() ?: 0L
+          }
+          ev.name.startsWith("coldstart_act2frame_") && ev.name.endsWith("ms") -> {
+            coldAct2Frame =
+                ev.name.removePrefix("coldstart_act2frame_")
+                    .removeSuffix("ms")
+                    .toLongOrNull() ?: 0L
+          }
+          ev.name.startsWith("coldstart_total_") && ev.name.endsWith("ms") -> {
+            coldTotal =
+                ev.name.removePrefix("coldstart_total_").removeSuffix("ms").toLongOrNull() ?: 0L
+          }
         }
       }
     }
@@ -151,6 +183,11 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
             recentPssKb = pss.toList(),
             recentGcDelta = gc.toList(),
             anrEvents = anrs,
+            coldStartProc2AppMs = coldProc2App,
+            coldStartAppDurMs = coldAppDur,
+            coldStartApp2ActMs = coldApp2Act,
+            coldStartAct2FrameMs = coldAct2Frame,
+            coldStartTotalMs = coldTotal,
             totalBootMs = totalBootMs,
         )
   }

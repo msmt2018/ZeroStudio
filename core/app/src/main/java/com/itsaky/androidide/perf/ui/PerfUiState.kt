@@ -43,6 +43,16 @@ data class PerfUiState(
     val recentPssKb: List<Long> = emptyList(),
     val recentGcDelta: List<Long> = emptyList(),
     val anrEvents: List<PerfEvent.Instant> = emptyList(),
+    /** Advanced/ColdStart: 进程启动到 App.onCreate 开始 (ms). */
+    val coldStartProc2AppMs: Long = 0L,
+    /** Advanced/ColdStart: App.onCreate 耗时 (ms). */
+    val coldStartAppDurMs: Long = 0L,
+    /** Advanced/ColdStart: App.onCreate 结束到首 Activity onResume (ms). */
+    val coldStartApp2ActMs: Long = 0L,
+    /** Advanced/ColdStart: 首 Activity onResume 到首帧 (ms). */
+    val coldStartAct2FrameMs: Long = 0L,
+    /** Advanced/ColdStart: 进程启动到首帧 (ms), 即整冷启动. */
+    val coldStartTotalMs: Long = 0L,
     val totalBootMs: Long = 0L,
 ) {
   companion object {

@@ -17,6 +17,7 @@
 package com.itsaky.androidide.perf.tracer
 
 import android.content.Context
+import android.os.Process
 import android.os.SystemClock
 import com.itsaky.androidide.BuildConfig
 import com.itsaky.androidide.perf.PerfApplication
@@ -65,8 +66,21 @@ object PerfTracer {
   private var socket: PerfClientSocket? = null
 
   /** :perf 进程是否已 attach 成功. 仅用于日志, 不影响行为. */
-  @Volatile
-  private var attached: Boolean = false
+  @Volatile private var attached: Boolean = false
+
+  /**
+   * 进程启动时间 (elapsedRealtime ns), 在 class load 时一次性记录.
+   *
+   * 用 [Process.getStartElapsedRealtime] (API 24+) 拿系统记录的进程真实启动时间,
+   * 后续所有 cold start 阶段都以这个为基准算差值.
+   *
+   * 这是冷启动分析的"零点", 不能用 SystemClock.elapsedRealtime() 因为它在 process
+   * 启动时调用时机不可控, [Process.getStartElapsedRealtime] 是内核记录的绝对值.
+   *
+   * 静态初始化 — 第一次访问 PerfTracer 类时执行, 在 IDEApplication.onCreate 之前.
+   */
+  @JvmStatic
+  val processStartElapsedMs: Long by lazy { Process.getStartElapsedRealtime() }
 
   /**
    * 尝试连接 :perf 进程.
