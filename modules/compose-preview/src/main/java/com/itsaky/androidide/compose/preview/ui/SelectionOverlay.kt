@@ -59,32 +59,45 @@ import androidx.compose.ui.unit.sp
  * - 尺寸 / 颜色 工具提示 (顶部)
  *
  * 行为:
- * - 当 [tool] == [EditorTool.Drag] 时, 手势拖动整个框 → 调整 [Selection.translationX/Y]
+ * - 当 [tool] == [EditorTool.Drag] 时, 在框内部拖动 → 调整 [Selection.translationX/Y]
+ * - 当 [tool] == [EditorTool.Drag] 时, 在 8 个手柄上拖动 → 调用 [onResize]
+ *   (配合 [aspectLock] 锁定纵横比)
+ * - 当 [tool] == [EditorTool.Pan] 时, 外部拖动由调用方处理 (视口平移)
  *
  * @param selection 当前选中
  * @param tool 当前工具
- * @param onSelectionChange 拖动结果回调
+ * @param onSelectionChange 拖动平移回调 (整 Selection 替换)
+ * @param onResize resize 回调 (handle + 增量 px)
  * @param modifier modifier
+ * @param handleSizeDp 手柄视觉尺寸
+ * @param minSizeDp 最小尺寸 (resize 时不小于此值)
+ * @param aspectLock 锁定纵横比
  */
 @Composable
 fun SelectionOverlay(
     selection: Selection?,
     tool: EditorTool,
     onSelectionChange: (Selection) -> Unit,
+    onResize: (HandlePosition, Float, Float) -> Unit,
     modifier: Modifier = Modifier,
     handleSizeDp: Float = 10f,
+    minSizeDp: Float = 8f,
+    aspectLock: Boolean = false,
 ) {
     if (selection == null) return
 
     val density = LocalDensity.current
     val handleSizePx = with(density) { handleSizeDp.dp.toPx() }
+    val minSizePx = with(density) { minSizeDp.dp.toPx() }
 
     Box(modifier = modifier.fillMaxSize()) {
         // 选中框 + 手柄
         SelectionBox(
             selection = selection,
             handleSizePx = handleSizePx,
+            minSizePx = minSizePx,
             tool = tool,
+            aspectLock = aspectLock,
             onTranslate = { dx, dy ->
                 onSelectionChange(
                     selection.copy(
@@ -92,6 +105,9 @@ fun SelectionOverlay(
                         translationY = selection.translationY + dy,
                     )
                 )
+            },
+            onResize = { handle, dx, dy ->
+                onResize(handle, dx, dy)
             },
         )
 
@@ -118,14 +134,17 @@ fun SelectionOverlay(
 }
 
 /**
- * 选中框本体 (8 个手柄 + 拖动响应).
+ * 选中框本体 (8 个手柄 + 拖动响应 + 手柄拖动响应).
  */
 @Composable
 private fun SelectionBox(
     selection: Selection,
     handleSizePx: Float,
+    minSizePx: Float,
     tool: EditorTool,
+    aspectLock: Boolean,
     onTranslate: (Float, Float) -> Unit,
+    onResize: (HandlePosition, Float, Float) -> Unit,
 ) {
     val strokeColor = MaterialTheme.colorScheme.primary
     val handleColor = Color.White
@@ -172,20 +191,55 @@ private fun SelectionBox(
                     )
                 }
             }
-            .pointerInput(selection.nodeId, tool) {
+            .pointerInput(selection.nodeId, tool, aspectLock) {
                 if (tool == EditorTool.Drag) {
+                    var activeHandle: HandlePosition? = null
                     detectDragGestures(
-                        onDragStart = { },
-                        onDragEnd = { },
-                        onDragCancel = { },
+                        onDragStart = { offset ->
+                            val b = Rect(
+                                left = selection.bounds.left + selection.translationX,
+                                top = selection.bounds.top + selection.translationY,
+                                right = selection.bounds.right + selection.translationX,
+                                bottom = selection.bounds.bottom + selection.translationY,
+                            )
+                            val handles = buildHandles(b, handleSizePx)
+                            activeHandle = hitTestHandle(handles, offset, handleSizePx)
+                        },
+                        onDragEnd = { activeHandle = null },
+                        onDragCancel = { activeHandle = null },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            onTranslate(dragAmount.x, dragAmount.y)
+                            val h = activeHandle
+                            if (h == null) {
+                                onTranslate(dragAmount.x, dragAmount.y)
+                            } else {
+                                onResize(h, dragAmount.x, dragAmount.y)
+                            }
                         },
                     )
                 }
             }
     )
+}
+
+/**
+ * 给定 8 个手柄 + 点击点, 找命中的手柄.
+ * 若点击在手柄 hit-region 之外 → null (表示平移).
+ */
+private fun hitTestHandle(
+    handles: List<HandleInfo>,
+    point: Offset,
+    handleSizePx: Float,
+): HandlePosition? {
+    val r = handleSizePx * 1.5f  // 稍微放大命中区
+    handles.forEach { h ->
+        val dx = kotlin.math.abs(point.x - h.center.x)
+        val dy = kotlin.math.abs(point.y - h.center.y)
+        if (dx <= r / 2f && dy <= r / 2f) {
+            return h.position
+        }
+    }
+    return null
 }
 
 /**

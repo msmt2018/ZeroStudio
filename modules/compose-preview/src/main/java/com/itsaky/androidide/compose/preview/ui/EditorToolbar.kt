@@ -31,11 +31,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Adjust
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Colorize
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.PanTool
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,6 +59,7 @@ import androidx.compose.ui.unit.sp
  *
  * 4 个工具按钮 (Select / Pan / Drag / Eyedropper) + 关闭按钮.
  * 当前选中工具高亮 (蓝色背景 + 圆角).
+ * 附: 纵横比锁定切换 + 重置位移 / 视口按钮.
  *
  * 接入方式 (在 [ComposePreviewScreen] 中):
  * ```kotlin
@@ -72,6 +75,10 @@ import androidx.compose.ui.unit.sp
  * @param tool 当前工具
  * @param onToolChange 工具切换回调
  * @param onClose 关闭编辑模式回调
+ * @param aspectLock 纵横比锁定状态
+ * @param onToggleAspectLock 切换纵横比锁定回调
+ * @param onReset 重置编辑结果回调
+ * @param hasSelection 是否当前有选中 (决定 reset 是否可点)
  * @param modifier modifier
  */
 @Composable
@@ -79,6 +86,10 @@ fun EditorToolbar(
     tool: EditorTool,
     onToolChange: (EditorTool) -> Unit,
     onClose: () -> Unit,
+    aspectLock: Boolean = false,
+    onToggleAspectLock: () -> Unit = {},
+    onReset: () -> Unit = {},
+    hasSelection: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -123,6 +134,26 @@ fun EditorToolbar(
             Spacer(Modifier.width(4.dp))
         }
 
+        Spacer(Modifier.width(4.dp))
+
+        // 纵横比锁定 (P2-Resize)
+        EditorIconToggle(
+            icon = Icons.Filled.AspectRatio,
+            label = "Lock",
+            selected = aspectLock,
+            onClick = onToggleAspectLock,
+        )
+        Spacer(Modifier.width(4.dp))
+
+        // 重置
+        EditorIconToggle(
+            icon = Icons.Filled.Refresh,
+            label = "Reset",
+            selected = false,
+            onClick = onReset,
+            enabled = hasSelection,
+        )
+
         Spacer(Modifier.weight(1f))
 
         // 工具描述
@@ -143,6 +174,54 @@ fun EditorToolbar(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/**
+ * 单个图标切换按钮 (用于 AspectRatio / Refresh 等小工具).
+ */
+@Composable
+private fun EditorIconToggle(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    val tint = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+        selected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+             else Color.Transparent
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(bg)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(28.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = tint,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Text(
+            text = label,
+            color = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 9.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            fontFamily = FontFamily.Monospace,
+        )
     }
 }
 

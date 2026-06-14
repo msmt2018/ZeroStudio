@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -166,6 +167,7 @@ fun ComposePreviewScreen(
     // v2.1 可视化编辑器状态
     val editorEnabled by viewModel.editorEnabled.collectAsStateWithLifecycle()
     val editorState by viewModel.editorState.collectAsStateWithLifecycle()
+    val aspectLock by viewModel.aspectLock.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -219,6 +221,13 @@ fun ComposePreviewScreen(
                         tool = editorState.tool,
                         onToolChange = { viewModel.setEditorTool(it) },
                         onClose = { viewModel.toggleEditor() },
+                        aspectLock = aspectLock,
+                        onToggleAspectLock = { viewModel.toggleAspectLock() },
+                        onReset = {
+                            viewModel.resetTranslation()
+                            viewModel.resetViewportOffset()
+                        },
+                        hasSelection = editorState.selection != null,
                     )
                     EditorStatusBar(state = editorState)
                 }
@@ -260,6 +269,7 @@ fun ComposePreviewScreen(
                         EditorInteractionLayer(
                             editorState = editorState,
                             inspectorNodes = inspectorNodes,
+                            aspectLock = aspectLock,
                             onSelectAt = { offset, node ->
                                 if (editorState.tool == EditorTool.Select ||
                                     editorState.tool == EditorTool.Drag) {
@@ -285,6 +295,12 @@ fun ComposePreviewScreen(
                             onClearSelection = { viewModel.clearSelection() },
                             onTranslate = { dx, dy ->
                                 viewModel.translateSelection(dx, dy)
+                            },
+                            onResize = { handle, dx, dy ->
+                                viewModel.resizeSelection(handle, dx, dy)
+                            },
+                            onPan = { dxDp, dyDp ->
+                                viewModel.panViewport(dxDp, dyDp)
                             },
                         )
                     }
@@ -439,16 +455,23 @@ private fun ReadyPanel(
             .padding(16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // 用 DeviceFrame 包裹实际预览 ComposeView
-        DeviceFrame(
-            profile = deviceConfig.profile,
-            systemBarsTheme = deviceConfig.systemBarsTheme,
-            showStatusBar = deviceConfig.showStatusBar,
-            showNavigationBar = deviceConfig.showNavigationBar,
-            showCutout = deviceConfig.showCutout,
-            showChassis = deviceConfig.showChassis,
-            useGestureNav = deviceConfig.useGestureNav,
+        // v2.1 视口平移 (Pan 工具): 用 offset 包裹 DeviceFrame
+        val panOffsetX = viewport.offsetXdp.dp
+        val panOffsetY = viewport.offsetYdp.dp
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .offset(x = panOffsetX, y = panOffsetY)
         ) {
+            // 用 DeviceFrame 包裹实际预览 ComposeView
+            DeviceFrame(
+                profile = deviceConfig.profile,
+                systemBarsTheme = deviceConfig.systemBarsTheme,
+                showStatusBar = deviceConfig.showStatusBar,
+                showNavigationBar = deviceConfig.showNavigationBar,
+                showCutout = deviceConfig.showCutout,
+                showChassis = deviceConfig.showChassis,
+                useGestureNav = deviceConfig.useGestureNav,
+            ) {
             // 实际渲染由 ComposableRenderer 负责
             // 这里放置一个标记 Box
             RenderTargetMarker(
@@ -529,67 +552,90 @@ private fun triggerBuild(
 }
 
 /**
- * v2.1 编辑器交互层 (P2).
+ * v2.1 编辑器交互层 (P2 + Resize + Pan).
  *
  * 叠在预览内容之上, 提供:
  * 1. 点击响应: 根据 [EditorState.tool] 选择 / 取色 / 清除选中
- * 2. 选中框绘制: 包裹 [SelectionOverlay] (8 手柄 + 拖动)
+ * 2. 选中框绘制: 包裹 [SelectionOverlay] (8 手柄 + 拖动 + Resize)
+ * 3. Pan 工具: 在空白处拖动 → 视口平移
  *
  * @param editorState 当前 editor state
  * @param inspectorNodes 全部节点 (hit-test 用)
+ * @param aspectLock 纵横比锁定状态 (传给 SelectionOverlay)
  * @param onSelectAt 命中节点回调 (offset + 命中的 NodeInfo)
  * @param onClearSelection 清除选中回调
- * @param onTranslate 拖动选中元素回调 (Drag 工具)
+ * @param onTranslate 拖动选中元素回调 (Drag 工具 - 平移)
+ * @param onResize resize 选中元素回调 (Drag 工具 - 8 手柄)
+ * @param onPan 视口平移回调 (Pan 工具, 单位 dp)
  */
 @Composable
 private fun EditorInteractionLayer(
     editorState: EditorState,
     inspectorNodes: List<NodeInfo>,
+    aspectLock: Boolean,
     onSelectAt: (androidx.compose.ui.geometry.Offset, NodeInfo) -> Unit,
     onClearSelection: () -> Unit,
     onTranslate: (Float, Float) -> Unit,
+    onResize: (com.itsaky.androidide.compose.preview.ui.HandlePosition, Float, Float) -> Unit,
+    onPan: (Float, Float) -> Unit,
 ) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
     Box(modifier = Modifier.fillMaxSize()) {
-        // 点击响应层
+        // 点击 + Pan 响应层
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(editorState.tool, inspectorNodes) {
                     detectTapGestures(
                         onTap = { offset ->
-                            if (editorState.tool == EditorTool.Select ||
-                                editorState.tool == EditorTool.Eyedropper
-                            ) {
-                                val node = ColorEyedropper.findNodeAt(inspectorNodes, offset)
-                                if (node != null) {
-                                    onSelectAt(offset, node)
-                                } else {
-                                    onClearSelection()
+                            when (editorState.tool) {
+                                EditorTool.Select, EditorTool.Drag -> {
+                                    val node = ColorEyedropper.findNodeAt(inspectorNodes, offset)
+                                    if (node != null) onSelectAt(offset, node)
+                                    else onClearSelection()
                                 }
+                                EditorTool.Eyedropper -> {
+                                    val node = ColorEyedropper.findNodeAt(inspectorNodes, offset)
+                                    if (node != null) onSelectAt(offset, node)
+                                }
+                                EditorTool.Pan -> { /* pan 由 drag 处理 */ }
                             }
                         },
-                        onLongPress = {
-                            // 长按 = 清除选中
-                            onClearSelection()
-                        },
+                        onLongPress = { onClearSelection() },
                     )
+                }
+                .pointerInput(editorState.tool) {
+                    if (editorState.tool == EditorTool.Pan) {
+                        androidx.compose.foundation.gestures.detectDragGestures(
+                            onDragStart = { },
+                            onDragEnd = { },
+                            onDragCancel = { },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                val dxDp = dragAmount.x / density.density
+                                val dyDp = dragAmount.y / density.density
+                                onPan(dxDp, dyDp)
+                            },
+                        )
+                    }
                 }
         )
 
-        // 选中覆盖层 (含 8 手柄 + 拖动响应)
+        // 选中覆盖层 (含 8 手柄 + 拖动 + resize 响应)
         SelectionOverlay(
             selection = editorState.selection,
             tool = editorState.tool,
+            aspectLock = aspectLock,
             onSelectionChange = { newSel ->
-                if (editorState.tool == EditorTool.Drag) {
-                    val old = editorState.selection
-                    if (old != null) {
-                        val dx = newSel.translationX - old.translationX
-                        val dy = newSel.translationY - old.translationY
-                        onTranslate(dx, dy)
-                    }
+                val old = editorState.selection
+                if (old == null) return@SelectionOverlay
+                val dx = newSel.translationX - old.translationX
+                val dy = newSel.translationY - old.translationY
+                if (dx != 0f || dy != 0f) {
+                    onTranslate(dx, dy)
                 }
             },
+            onResize = onResize,
         )
     }
 }

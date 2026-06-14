@@ -195,6 +195,10 @@ class ComposePreviewViewModel(
     private val _editorState = MutableStateFlow(EditorState())
     val editorState: StateFlow<EditorState> = _editorState.asStateFlow()
 
+    /** 纵横比锁定 (Shift 行为). */
+    private val _aspectLock = MutableStateFlow(false)
+    val aspectLock: StateFlow<Boolean> = _aspectLock.asStateFlow()
+
     private val sourceChanges = MutableSharedFlow<SourceUpdate>()
 
     private var currentSource: String = ""
@@ -614,6 +618,46 @@ class ComposePreviewViewModel(
         _editorState.value = _editorState.value.copy(
             selection = s.copy(translationX = 0f, translationY = 0f)
         )
+    }
+
+    /** Resize 选中 (8 个手柄拖动期间调用). */
+    fun resizeSelection(
+        handle: com.itsaky.androidide.compose.preview.ui.HandlePosition,
+        dx: Float,
+        dy: Float,
+    ) {
+        val s = _editorState.value.selection ?: return
+        _editorState.value = _editorState.value.copy(
+            selection = s.resizeBy(handle, dx, dy, minSize = 8f, aspectLock = _aspectLock.value)
+        )
+    }
+
+    /** 直接替换 selection (用于 SelectionOverlay 回调的整对象替换). */
+    fun replaceSelection(newSelection: Selection) {
+        _editorState.value = _editorState.value.copy(selection = newSelection)
+    }
+
+    /** 切换 / 设置纵横比锁定 (Shift 行为). */
+    fun setAspectLock(locked: Boolean) {
+        _aspectLock.value = locked
+    }
+
+    fun toggleAspectLock() {
+        _aspectLock.value = !_aspectLock.value
+    }
+
+    /** Pan 工具: 移动视口 (单位 dp). */
+    fun panViewport(dxDp: Float, dyDp: Float) {
+        val v = _viewport.value
+        _viewport.value = v.copy(
+            offsetXdp = v.offsetXdp + dxDp,
+            offsetYdp = v.offsetYdp + dyDp,
+        )
+    }
+
+    /** 重置视口偏移. */
+    fun resetViewportOffset() {
+        _viewport.value = _viewport.value.copy(offsetXdp = 0f, offsetYdp = 0f)
     }
 
     override fun onCleared() {

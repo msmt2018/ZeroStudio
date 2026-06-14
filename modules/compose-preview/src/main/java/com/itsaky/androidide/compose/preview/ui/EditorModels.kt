@@ -21,6 +21,8 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * 可视化编辑工具枚举 v2.1.
@@ -35,7 +37,7 @@ import androidx.compose.ui.graphics.Color
 enum class EditorTool(val label: String, val description: String) {
     Select("Select", "点击选中元素"),
     Pan("Pan", "拖动视口"),
-    Drag("Drag", "拖动选中元素"),
+    Drag("Drag", "拖动 / Resize 选中元素"),
     Eyedropper("Eyedropper", "点击取色"),
 }
 
@@ -62,6 +64,128 @@ data class Selection(
     val width: Float get() = bounds.width
     val height: Float get() = bounds.height
     val isTranslated: Boolean get() = translationX != 0f || translationY != 0f
+
+    /**
+     * 按某个手柄方向 resize 此选中.
+     *
+     * @param handle 8 个方向之一
+     * @param dx / dy 拖动增量 (px)
+     * @param minSize 最小尺寸 (px), 默认不低于
+     * @param aspectLock 锁定纵横比 (Shift 行为)
+     * @return 新 Selection, bounds 已更新, translation 不变
+     */
+    fun resizeBy(
+        handle: HandlePosition,
+        dx: Float,
+        dy: Float,
+        minSize: Float = 8f,
+        aspectLock: Boolean = false,
+    ): Selection {
+        val b = bounds
+        var newLeft = b.left
+        var newTop = b.top
+        var newRight = b.right
+        var newBottom = b.bottom
+
+        when (handle) {
+            HandlePosition.TopLeft -> {
+                newLeft = b.left + dx
+                newTop = b.top + dy
+            }
+            HandlePosition.TopCenter -> {
+                newTop = b.top + dy
+            }
+            HandlePosition.TopRight -> {
+                newRight = b.right + dx
+                newTop = b.top + dy
+            }
+            HandlePosition.MiddleLeft -> {
+                newLeft = b.left + dx
+            }
+            HandlePosition.MiddleRight -> {
+                newRight = b.right + dx
+            }
+            HandlePosition.BottomLeft -> {
+                newLeft = b.left + dx
+                newBottom = b.bottom + dy
+            }
+            HandlePosition.BottomCenter -> {
+                newBottom = b.bottom + dy
+            }
+            HandlePosition.BottomRight -> {
+                newRight = b.right + dx
+                newBottom = b.bottom + dy
+            }
+        }
+
+        // 最小尺寸
+        if (newRight - newLeft < minSize) {
+            // 拖左 / 拖右时, 固定另一边
+            if (handle == HandlePosition.TopLeft || handle == HandlePosition.MiddleLeft || handle == HandlePosition.BottomLeft) {
+                newLeft = newRight - minSize
+            } else {
+                newRight = newLeft + minSize
+            }
+        }
+        if (newBottom - newTop < minSize) {
+            if (handle == HandlePosition.TopLeft || handle == HandlePosition.TopCenter || handle == HandlePosition.TopRight) {
+                newTop = newBottom - minSize
+            } else {
+                newBottom = newTop + minSize
+            }
+        }
+
+        // 纵横比锁定 (角部 handle 生效)
+        if (aspectLock && handle in setOf(
+                HandlePosition.TopLeft, HandlePosition.TopRight,
+                HandlePosition.BottomLeft, HandlePosition.BottomRight,
+            )
+        ) {
+            val aspect = b.width / b.height
+            val curAspect = (newRight - newLeft) / max(1f, (newBottom - newTop))
+            if (kotlin.math.abs(curAspect - aspect) > 0.01f) {
+                // 取主导方向, 推算另一边
+                when (handle) {
+                    HandlePosition.BottomRight -> {
+                        // 保持左 / 上不动, 调整 width
+                        val newW = max(minSize, newRight - newLeft)
+                        val newH = newW / aspect
+                        newRight = newLeft + newW
+                        newBottom = newTop + newH
+                    }
+                    HandlePosition.TopLeft -> {
+                        // 保持右 / 下不动
+                        val newW = max(minSize, newRight - newLeft)
+                        val newH = newW / aspect
+                        newLeft = newRight - newW
+                        newTop = newBottom - newH
+                    }
+                    HandlePosition.TopRight -> {
+                        val newW = max(minSize, newRight - newLeft)
+                        val newH = newW / aspect
+                        newRight = newLeft + newW
+                        newTop = newBottom - newH
+                    }
+                    HandlePosition.BottomLeft -> {
+                        val newW = max(minSize, newRight - newLeft)
+                        val newH = newW / aspect
+                        newLeft = newRight - newW
+                        newBottom = newTop + newH
+                    }
+                    else -> { /* edge */ }
+                }
+            }
+        }
+
+        return this.copy(
+            bounds = Rect(
+                left = min(newLeft, newRight),
+                top = min(newTop, newBottom),
+                right = max(newLeft, newRight),
+                bottom = max(newTop, newBottom),
+            )
+        )
+    }
 }
 
 /**
