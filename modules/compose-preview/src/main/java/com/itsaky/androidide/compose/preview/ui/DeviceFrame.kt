@@ -241,11 +241,11 @@ private fun WatchFrame(
     systemBarsTheme: SystemBarsTheme,
     content: @Composable () -> Unit,
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
-        val size = minOf(maxWidth, maxHeight)
+        val size = if (maxWidth < maxHeight) maxWidth else maxHeight
         Box(
             modifier = Modifier
                 .size(size)

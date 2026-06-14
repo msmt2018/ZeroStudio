@@ -250,6 +250,11 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.foundation)
   implementation(libs.androidx.compose.material3)
+  // Material Icons Extended: v2.1 工具栏/设备选择器需要 Smartphone/Tablet/Watch/
+  // Visibility/VisibilityOff/BugReport/AspectRatio/Brightness6/ZoomIn/ZoomOut
+  // 等 extended-only icon, 这些不在 material-icons-core (49 个核心 icon) 中.
+  // 版本由 compose-bom 1.6.0 统一管理, 与 compose 1.6.0 一致.
+  implementation("androidx.compose.material:material-icons-extended")
   implementation(libs.androidx.activity.compose)
   debugImplementation(libs.androidx.compose.ui.tooling)
 
