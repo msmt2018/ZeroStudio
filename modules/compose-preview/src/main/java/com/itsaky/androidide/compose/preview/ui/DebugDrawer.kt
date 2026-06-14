@@ -86,6 +86,9 @@ import com.itsaky.androidide.compose.preview.runtime.LiveLiteralGroup
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralType
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralValue
 import com.itsaky.androidide.compose.preview.runtime.LiveLiteralsHolder
+import com.itsaky.androidide.compose.preview.runtime.MultiPreviewRegistry
+import com.itsaky.androidide.compose.preview.runtime.PreviewDisplayMode
+import com.itsaky.androidide.compose.preview.runtime.PreviewSlot
 import kotlinx.coroutines.delay
 
 /**
@@ -185,6 +188,7 @@ fun DebugDrawer(
                         editor = LiveLiteralsHolder.currentEditor(),
                         modifier = Modifier.fillMaxSize(),
                     )
+                    DebugTab.Gallery -> GalleryPanel(modifier = Modifier.fillMaxSize())
                 }
             }
 
@@ -209,6 +213,7 @@ enum class DebugTab(
     Logcat("Log", Icons.Filled.Terminal),
     Stats("Stats", Icons.Filled.Analytics),
     LiveLiterals("LiveLit", Icons.Filled.Tune),
+    Gallery("Gallery", Icons.Filled.GridView),
 }
 
 /**
@@ -813,6 +818,189 @@ private fun StatsKeyValue(key: String, value: String) {
  */
 private fun String.padEnd(width: Int): String =
     if (length >= width) this else this + " ".repeat(width - length)
+
+/**
+ * Gallery 调试面板 v2.2 (P2).
+ *
+ * 展示当前源文件的所有 `@Preview` Composable, 支持:
+ * - 模式切换 (Single / Gallery)
+ * - SINGLE 模式下选 slot
+ * - 切换每个 slot 的 visible
+ * - 状态统计
+ */
+@Composable
+fun GalleryPanel(
+    modifier: Modifier = Modifier,
+) {
+    var slots by remember { mutableStateOf(MultiPreviewRegistry.slots()) }
+    var mode by remember { mutableStateOf(MultiPreviewRegistry.displayMode()) }
+    var selectedIndex by remember { mutableStateOf(MultiPreviewRegistry.selectedIndex()) }
+
+    LaunchedEffect(Unit) {
+        MultiPreviewRegistry.addListener {
+            slots = MultiPreviewRegistry.slots()
+            mode = MultiPreviewRegistry.displayMode()
+            selectedIndex = MultiPreviewRegistry.selectedIndex()
+        }
+    }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFF101015)),
+    ) {
+        // 模式 + 计数
+        item {
+            StatsSection(title = "Gallery · 多 Preview 容器") {
+                StatsKeyValue("总 preview 数", "${slots.size}")
+                StatsKeyValue("可见数", "${slots.count { it.visible }}")
+                StatsKeyValue("当前模式", mode.displayName)
+                if (mode == PreviewDisplayMode.SINGLE) {
+                    StatsKeyValue("选中索引", "$selectedIndex")
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "• Single: 渲染选中 1 个 Composable (默认)\n" +
+                        "• Gallery: 同时渲染所有 visible 的 Composable\n" +
+                        "• 切换 visible: 在 Gallery 模式用于过滤\n" +
+                        "• SINGLE/GALLERY 切换由调用方触发",
+                    color = Color(0xFF888888),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
+
+        // 模式切换按钮
+        item {
+            StatsSection(title = "切换模式") {
+                Row {
+                    ModePill(
+                        text = "Single",
+                        selected = mode == PreviewDisplayMode.SINGLE,
+                    ) { MultiPreviewRegistry.setDisplayMode(PreviewDisplayMode.SINGLE) }
+                    Spacer(Modifier.width(4.dp))
+                    ModePill(
+                        text = "Gallery",
+                        selected = mode == PreviewDisplayMode.GALLERY,
+                    ) { MultiPreviewRegistry.setDisplayMode(PreviewDisplayMode.GALLERY) }
+                }
+            }
+        }
+
+        // 单选 slot 列表 (SINGLE 模式下可选)
+        if (slots.isEmpty()) {
+            item {
+                StatsSection(title = "Slot 列表") {
+                    Text(
+                        text = "(空) 当前源文件没有 @Preview 标注的 Composable",
+                        color = Color(0xFFE57373),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+        } else {
+            item {
+                StatsSection(title = "Slot 列表 (${slots.size})") {
+                    slots.forEach { slot ->
+                        GallerySlotRow(
+                            slot = slot,
+                            isSelected = slot.index == selectedIndex,
+                            mode = mode,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GallerySlotRow(
+    slot: PreviewSlot,
+    isSelected: Boolean,
+    mode: PreviewDisplayMode,
+) {
+    val bgColor = when {
+        isSelected && mode == PreviewDisplayMode.SINGLE -> Color(0xFF3F51B5).copy(alpha = 0.2f)
+        !slot.visible -> Color(0xFF1A1A22)
+        else -> Color(0xFF1E1E26)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .background(bgColor)
+            .clickable {
+                if (mode == PreviewDisplayMode.SINGLE) {
+                    MultiPreviewRegistry.select(slot.index)
+                }
+                // 切换 visible
+                val updated = MultiPreviewRegistry.slots().map {
+                    if (it.functionName == slot.functionName) it.copy(visible = !it.visible)
+                    else it
+                }
+                MultiPreviewRegistry.bind(updated)
+            }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "#${slot.index + 1}",
+            color = if (isSelected) Color(0xFF80CBC4) else Color(0xFF888888),
+            fontSize = 11.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            modifier = Modifier.width(32.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = slot.functionName,
+                color = Color(0xFFE0E0E0),
+                fontSize = 11.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            )
+            if (slot.widthDp != null || slot.heightDp != null) {
+                Text(
+                    text = "w=${slot.widthDp ?: "—"} h=${slot.heightDp ?: "—"}",
+                    color = Color(0xFF666666),
+                    fontSize = 9.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                )
+            }
+        }
+        Text(
+            text = if (slot.visible) "ON" else "OFF",
+            color = if (slot.visible) Color(0xFFA5D6A7) else Color(0xFF555555),
+            fontSize = 10.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+        )
+    }
+}
+
+@Composable
+private fun ModePill(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (selected) Color(0xFF3F51B5) else Color(0xFF2A2A35))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text = text,
+            color = if (selected) Color.White else Color(0xFFAAAAAA),
+            fontSize = 11.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+        )
+    }
+}
 
 /**
  * LiveLiterals 调试面板 v2.2 (P0 + P1).
