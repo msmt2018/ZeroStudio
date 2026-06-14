@@ -32,6 +32,17 @@ import java.io.File
  */
 class EditorFeatures(var editor: IDEEditor? = null) : IEditor {
 
+  /**
+   * 短延迟, 等待 sora-editor LineBreakLayout 的异步 `measureAllLines` 完成.
+   *
+   * 经验值 50ms:
+   * - sora-editor 0.23.6 的 LayoutTask 在内部线程池上跑, 测量一行约 0.1~2ms,
+   *   几十行的 build output 累计 < 30ms.
+   * - 50ms 在 UI 感知上几乎无延迟, 但给 layout task 足够完成时间.
+   * - 太短 (< 20ms) 可能重试仍失败, 太长 (> 200ms) 用户会看到"延迟显示".
+   */
+  private val RETRY_DELAY_MS = 50L
+
   override fun getFile(): File? = withEditor { _file }
 
   override fun isModified(): Boolean = withEditor { this.isModified } ?: false
@@ -134,8 +145,49 @@ class EditorFeatures(var editor: IDEEditor? = null) : IEditor {
         if (col < 0) {
           col = 0
         }
-        content.insert(line, col, text)
-        return@withEditor line
+        // capture by value so the retry below uses the same insert site
+        val safeText = text
+        try {
+          content.insert(line, col, safeText)
+          return@withEditor line
+        } catch (e: ArrayIndexOutOfBoundsException) {
+          // sora-editor 0.23.6 race condition (upstream bug):
+          //   CodeEditor.afterInsert -> LineBreakLayout.afterInsert
+          //   -> LineBreakLayout.measureLineAndUpdateInlineWidths
+          //   -> BlockIntList.set (index=0, length=0)
+          //
+          // When the layout is still doing its asynchronous `measureAllLines`
+          // (triggered by setText() or by a large batch replace), the
+          // `inlineElementsWidths` and `widthMaintainer` BlockIntList instances
+          // are still empty. The first `insert()` after the layout is created
+          // (e.g. the very first build output appended to a freshly-created
+          // BuildOutputFragment) crashes here.
+          //
+          // sora-editor 0.23.6 is the latest published version on Maven Central
+          // (2025-06-22), so we cannot upgrade. Defensive retry after a short
+          // delay: the layout task will have completed by then and the second
+          // `insert()` succeeds.
+          log.warn(
+              "EditorFeatures.append race condition, deferring retry: {}",
+              e.message)
+          postDelayedInLifecycle(
+              {
+                try {
+                  val currentLine = lineCount - 1
+                  val currentCol =
+                      getText().getColumnCount(currentLine).coerceAtLeast(0)
+                  getText().insert(currentLine, currentCol, safeText)
+                } catch (retryError: Throwable) {
+                  // Give up after one retry. The next user-driven append will
+                  // succeed once the layout has settled.
+                  log.error(
+                      "EditorFeatures.append retry failed, dropping this append",
+                      retryError)
+                }
+              },
+              RETRY_DELAY_MS)
+          return@withEditor line
+        }
       } ?: -1
 
   override fun replaceContent(newContent: CharSequence?) {
