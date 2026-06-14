@@ -37,6 +37,7 @@ import com.itsaky.androidide.events.LspApiEventsIndex
 import com.itsaky.androidide.events.LspJavaEventsIndex
 import com.itsaky.androidide.events.LspKotlinEventsIndex
 import com.itsaky.androidide.perf.PerfApplication
+import com.itsaky.androidide.perf.export.ThresholdPreferences
 import com.itsaky.androidide.perf.monitor.ColdStartTracker
 import com.itsaky.androidide.perf.monitor.CrashHandler
 import com.itsaky.androidide.perf.monitor.ForegroundTracker
@@ -153,6 +154,8 @@ class IDEApplication : TermuxApplication() {
     ColdStartTracker.markAppReady() // PR (advanced): 冷启动第二段
     ColdStartTracker.registerFirstActivityTracker(this) // PR (advanced): 等首 Activity
     ForegroundTracker.install() // PR (advanced): 监听前后台切换
+    // PR (advanced): 启动时从 DataStore 加载用户自定义的 phase 告警阈值
+    ThresholdPreferences.loadIntoThresholds(this)
     PerfTracer.endBoot()
     MonitorCoordinator.start(this)
   }

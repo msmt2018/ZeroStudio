@@ -16,8 +16,10 @@
  */
 package com.itsaky.androidide.perf.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -204,7 +207,10 @@ fun PerfConsoleScreen(viewModel: PerfConsoleViewModel) {
   }
 
   if (thresholdsDialogVisible) {
-    ThresholdsDialog(onDismiss = { thresholdsDialogVisible = false })
+    ThresholdsEditorDialog(
+        onDismiss = { thresholdsDialogVisible = false },
+        onSaved = { thresholdsDialogVisible = false },
+    )
   }
 }
 
@@ -253,6 +259,117 @@ private fun ThresholdsDialog(onDismiss: () -> Unit) {
       },
       confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
   )
+}
+
+/**
+ * 可编辑的阈值 dialog (Advanced / Commit 4).
+ *
+ * 3 个 Slider 调 WARN / SLOW / CRITICAL 三个 ms 边界. OK 上限由 0 到
+ * WARN 自动定义. 调完按"保存" → 调 [ThresholdPreferences.save] 写
+ * DataStore + 立即应用到 [PhaseThresholds] (UI 下次 collectAsState 自动
+ * 重染). "重置" → 调 [ThresholdPreferences.resetToDefault] 恢复默认值.
+ *
+ * 三个 slider 用 step=50ms 限制 (避免拖到 137ms 这种没意义的值).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ThresholdsEditorDialog(onDismiss: () -> Unit, onSaved: () -> Unit) {
+  val context = LocalContext.current
+  val initial = PhaseThresholds.thresholds
+  var warnMs by remember { mutableStateOf(initial[0].toFloat()) }
+  var slowMs by remember { mutableStateOf(initial[1].toFloat()) }
+  var critMs by remember { mutableStateOf(initial[2].toFloat()) }
+
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("Phase 告警阈值 (ms)") },
+      text = {
+        Column {
+          ThresholdSlider(
+              label = "WARN 上限 (ms)",
+              value = warnMs,
+              valueRange = 10f..(slowMs - 10f),
+              onValueChange = { warnMs = it },
+              color = MaterialTheme.colorScheme.tertiary,
+          )
+          ThresholdSlider(
+              label = "SLOW 上限 (ms)",
+              value = slowMs,
+              valueRange = (warnMs + 10f)..(critMs - 10f),
+              onValueChange = { slowMs = it },
+              color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+          )
+          ThresholdSlider(
+              label = "CRITICAL 上限 (ms)",
+              value = critMs,
+              valueRange = (slowMs + 10f)..10000f,
+              onValueChange = { critMs = it },
+              color = MaterialTheme.colorScheme.error,
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(
+              "比例告警固定 5% / 15% / 30% — 暂不开放自定义",
+              fontSize = 10.sp,
+              color = MaterialTheme.colorScheme.outline,
+          )
+        }
+      },
+      confirmButton = {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          TextButton(
+              onClick = {
+                ThresholdPreferences.resetToDefault(context)
+                onSaved()
+              }
+          ) { Text("重置") }
+          TextButton(
+              onClick = {
+                ThresholdPreferences.save(
+                    context,
+                    longArrayOf(
+                        warnMs.toLong().coerceAtLeast(1),
+                        slowMs.toLong().coerceAtLeast(warnMs.toLong() + 1),
+                        critMs.toLong().coerceAtLeast(slowMs.toLong() + 1),
+                        Long.MAX_VALUE,
+                    ),
+                )
+                onSaved()
+              }
+          ) { Text("保存") }
+        }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+  )
+}
+
+@Composable
+private fun ThresholdSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+    color: androidx.compose.ui.graphics.Color,
+) {
+  Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+      Text(label, fontSize = 12.sp)
+      Text(
+          "${value.toLong()} ms",
+          fontSize = 12.sp,
+          fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+          color = color,
+      )
+    }
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = valueRange,
+        steps = ((valueRange.endInclusive - valueRange.start) / 50f).toInt().coerceAtLeast(0),
+    )
+  }
 }
 
 /**
