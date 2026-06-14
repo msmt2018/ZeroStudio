@@ -40,6 +40,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.OpenInNew
@@ -102,6 +104,8 @@ import com.itsaky.androidide.compose.preview.runtime.LiveEditState
 import com.itsaky.androidide.compose.preview.runtime.LiveEditStatsRegistry
 import com.itsaky.androidide.compose.preview.runtime.MultiPreviewRegistry
 import com.itsaky.androidide.compose.preview.runtime.PreviewDisplayMode
+import com.itsaky.androidide.compose.preview.runtime.PreviewParameterEntry
+import com.itsaky.androidide.compose.preview.runtime.PreviewParameterRegistry
 import com.itsaky.androidide.compose.preview.runtime.PreviewSlot
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
@@ -933,6 +937,131 @@ fun GalleryPanel(
                 }
             }
         }
+
+        // v2.3 P1: @PreviewParameter Provider 状态
+        item {
+            PreviewParameterSection()
+        }
+    }
+}
+
+// =====================================================================
+// v2.3 P1 @PreviewParameter Provider UI
+// =====================================================================
+
+/**
+ * v2.3 P1: 在 GalleryPanel 显示已注册的 @PreviewParameter providers.
+ *
+ * 启动时 [PreviewParameterRegistry] 一次性 loadAll. 这里展示:
+ * - 总 functions / 总 entries
+ * - 每个 function 的所有 provider entries (providerClassName 截断 + 当前 index + size)
+ *
+ * 切换 index 由 ComposableRenderer 端的 [PreviewParameterIndexBar] 触发, 这里只显示状态.
+ */
+@Composable
+private fun PreviewParameterSection() {
+    val reg = PreviewParameterRegistry.get()
+    var tick by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500L)
+            tick++
+        }
+    }
+    @Suppress("UNUSED_EXPRESSION")
+    tick // 触发重组
+
+    val functionCount = reg.functionCount()
+    val totalEntries = reg.totalEntryCount()
+
+    StatsSection(title = "PreviewParameter (v2.3 P1)") {
+        StatsKeyValue("Functions", "$functionCount")
+        StatsKeyValue("Total entries", "$totalEntries")
+        if (functionCount == 0) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "  (无 provider 注册) @PreviewParameter(provider = X::class) 在 @Preview 函数上.",
+                color = Color(0xFF666666),
+                fontSize = 10.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            )
+        } else {
+            Spacer(Modifier.height(2.dp))
+            reg.functionNames().forEach { fnName ->
+                val entries = reg.get(fnName)
+                entries.forEach { (providerClassName, entry) ->
+                    ParameterProviderRow(
+                        functionName = fnName,
+                        providerClassName = providerClassName,
+                        entry = entry,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 单个 provider row. 包含: 函数名 + provider 简短名 + 上页/下页箭头 + index 计数.
+ */
+@Composable
+private fun ParameterProviderRow(
+    functionName: String,
+    providerClassName: String,
+    entry: PreviewParameterEntry,
+) {
+    val simpleProviderName = providerClassName.substringAfterLast('.')
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .background(Color(0xFF1A1A22))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "$functionName · $simpleProviderName",
+                color = Color(0xFFE0E0E0),
+                fontSize = 10.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            )
+            Text(
+                text = "${entry.currentIndex + 1}/${entry.size}  ${entry.currentValue()?.toString()?.take(30) ?: "(empty)"}",
+                color = Color(0xFF80CBC4),
+                fontSize = 9.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            )
+        }
+        // Prev / Next 按钮
+        Icon(
+            imageVector = Icons.Filled.ChevronLeft,
+            contentDescription = "Prev",
+            modifier = Modifier
+                .size(20.dp)
+                .clickable {
+                    PreviewParameterRegistry.get().setIndex(
+                        functionName, providerClassName, entry.currentIndex - 1
+                    )
+                }
+                .padding(2.dp),
+            tint = if (entry.currentIndex > 0) Color(0xFF80CBC4) else Color(0xFF444444),
+        )
+        Icon(
+            imageVector = Icons.Filled.ChevronRight,
+            contentDescription = "Next",
+            modifier = Modifier
+                .size(20.dp)
+                .clickable {
+                    PreviewParameterRegistry.get().setIndex(
+                        functionName, providerClassName, entry.currentIndex + 1
+                    )
+                }
+                .padding(2.dp),
+            tint = if (entry.currentIndex < entry.size - 1) Color(0xFF80CBC4) else Color(0xFF444444),
+        )
     }
 }
 
