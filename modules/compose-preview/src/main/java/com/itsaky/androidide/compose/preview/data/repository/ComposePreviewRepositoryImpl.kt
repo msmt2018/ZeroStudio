@@ -113,6 +113,7 @@ class ComposePreviewRepositoryImpl(
 
         val assetBundles = AssetsComposeBundles(context).also { bundles = it }
         dexCache = DexCache(File(cacheDir, "compose_dex_cache")) { assetBundles.versionTag }
+            .also { DexCacheHolder.install(it) }
         compiler = BundledComposeCompiler(assetBundles)
         dexer = BundledD8Dexer(assetBundles)
         return assetBundles
@@ -189,7 +190,9 @@ class ComposePreviewRepositoryImpl(
             }
 
             // 4) Dex
+            val dexStart = System.currentTimeMillis()
             val dexResult = dexer.dexToDex(classesDir, dexDir)
+            val dexMs = System.currentTimeMillis() - dexStart
             if (!dexResult.success || dexResult.dexFile == null) {
                 LOG.error("DEX compilation failed: {}", dexResult.errorMessage)
                 throw CompilationException(
@@ -203,7 +206,8 @@ class ComposePreviewRepositoryImpl(
                     sourceHash,
                     dexResult.dexFile,
                     fullClassName,
-                    parsedSource.previewConfigs.firstOrNull()?.functionName ?: ""
+                    parsedSource.previewConfigs.firstOrNull()?.functionName ?: "",
+                    dexMs = dexMs,
                 )
             } catch (e: Exception) {
                 LOG.warn("Failed to cache DEX (non-fatal): {}", e.message)
@@ -312,6 +316,7 @@ class ComposePreviewRepositoryImpl(
         projectContext = null
         openedFilePath = null
         runtimeDex = null
+        DexCacheHolder.reset()
         LOG.debug("Repository reset")
     }
 }

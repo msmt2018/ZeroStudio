@@ -69,6 +69,8 @@ import com.itsaky.androidide.compose.preview.bytecode.BinderStats
 import com.itsaky.androidide.compose.preview.bytecode.BinderStatsRegistry
 import com.itsaky.androidide.compose.preview.compiler.CompilationCacheHolder
 import com.itsaky.androidide.compose.preview.compiler.CompilationCacheStats
+import com.itsaky.androidide.compose.preview.compiler.DexCacheHolder
+import com.itsaky.androidide.compose.preview.compiler.DexCacheStats
 import kotlinx.coroutines.delay
 
 /**
@@ -362,10 +364,13 @@ fun StatsPanel(
     var binderStats by remember { mutableStateOf(stats.binderStats) }
     // P4 编译缓存统计: 每 500ms 采集一次
     var compileCacheStats by remember { mutableStateOf(stats.compileCacheStats) }
+    // P5 dex 缓存统计: 每 500ms 采集一次
+    var dexCacheStats by remember { mutableStateOf(stats.dexCacheStats) }
     LaunchedEffect(Unit) {
         while (true) {
             binderStats = BinderStatsRegistry.snapshot()
             compileCacheStats = CompilationCacheHolder.statsOrEmpty()
+            dexCacheStats = DexCacheHolder.statsOrEmpty()
             delay(BINDER_STATS_POLL_MS)
         }
     }
@@ -413,6 +418,11 @@ fun StatsPanel(
         // P4 编译缓存统计
         item {
             CompilationCacheSection(cacheStats = compileCacheStats)
+        }
+
+        // P5 dex 缓存统计
+        item {
+            DexCacheSection(dexStats = dexCacheStats)
         }
 
         // 4 个 build phase
@@ -474,7 +484,8 @@ fun StatsPanel(
                         "• 4 个 phase 总和 = 一次完整 build 耗时\n" +
                         "• 累计数据从应用启动开始\n" +
                         "• P3 binder 命中率应稳定 > 90% (FieldAccessor 缓存命中)\n" +
-                        "• P4 编译缓存命中时跳过 K2JVMCompiler, 单次省 1-4s",
+                        "• P4 编译缓存命中时跳过 K2JVMCompiler, 单次省 1-4s\n" +
+                        "• P5 dex 缓存命中时跳过 K2 + D8, 单次省 1.5-5s",
                     color = Color(0xFF888888),
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -619,6 +630,59 @@ private fun CompilationCacheSection(cacheStats: CompilationCacheStats) {
         StatsKeyValue("总占用", String.format("%.2f MB", totalMb))
         StatsKeyValue("淘汰数", "${cacheStats.evictions}")
         StatsKeyValue("过期清理数", "${cacheStats.expiredRemovals}")
+    }
+}
+
+/**
+ * P5 dex 缓存统计展示区.
+ *
+ * 与 [CompilationCacheSection] 字段对齐, 展示端到端缓存效果.
+ */
+@Composable
+private fun DexCacheSection(dexStats: DexCacheStats) {
+    val hitPercent = (dexStats.hitRate * 100).coerceIn(0.0, 100.0)
+    val hitColor = when {
+        hitPercent >= 70.0 -> Color(0xFF81C784)
+        hitPercent >= 40.0 -> Color(0xFFFFB74D)
+        else -> Color(0xFFE57373)
+    }
+    val totalMb = dexStats.totalSizeBytes / 1024.0 / 1024.0
+
+    StatsSection(title = "P5 DexCache · 端到端缓存") {
+        Text(
+            text = String.format("命中率 %.1f%%", hitPercent),
+            color = hitColor,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+        )
+        Spacer(Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { (dexStats.hitRate).coerceIn(0.0, 1.0).toFloat() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp)),
+            color = hitColor,
+            trackColor = Color(0xFF2A2A35),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "${dexStats.hits} 命中 / ${dexStats.misses} 未命中 / put ${dexStats.puts}",
+            color = Color(0xFF888888),
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+
+        Spacer(Modifier.height(6.dp))
+        HorizontalDivider(color = Color(0x15FFFFFF))
+        Spacer(Modifier.height(6.dp))
+
+        StatsKeyValue("累计节省 dex", "${dexStats.savedDexMsTotal} ms")
+        StatsKeyValue("当前条目数", "${dexStats.entryCount}")
+        StatsKeyValue("总占用", String.format("%.2f MB", totalMb))
+        StatsKeyValue("淘汰数", "${dexStats.evictions}")
+        StatsKeyValue("过期清理数", "${dexStats.expiredRemovals}")
     }
 }
 
