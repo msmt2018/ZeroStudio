@@ -24,8 +24,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,16 +40,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.itsaky.androidide.compose.preview.data.device.CutoutGeometry
 
 /**
- * 自定义分辨率编辑器.
+ * 自定义分辨率 / 形态 / 切口 编辑器 v2.1.
  *
- * 用户可输入 width × height × dpi 来自定义设备尺寸.
- * 默认填入当前 [initial] 的值, 确认后通过 [onConfirm] 回调传出.
+ * 用户可输入:
+ * - width × height × dpi
+ * - 形态因子 (Phone / Foldable / Tablet / Watch / Desktop)
+ * - 切口 (None / Notch / PunchHole / Waterfall)
+ *
+ * 实时显示预览尺寸 (dp).
+ *
+ * @param initial 初始 profile
+ * @param onConfirm 确认时传出新 profile
+ * @param onDismiss 取消
  */
 @Composable
 fun ResolutionEditor(
@@ -55,15 +71,59 @@ fun ResolutionEditor(
     var width by remember { mutableStateOf(initial.widthPx.toString()) }
     var height by remember { mutableStateOf(initial.heightPx.toString()) }
     var dpi by remember { mutableStateOf(initial.densityDpi.toString()) }
+    var formFactor by remember { mutableStateOf(initial.formFactor) }
+    var cutoutKind by remember { mutableStateOf(initial.cutout?.kind() ?: CutoutKind.NONE) }
+    var cornerRadius by remember { mutableStateOf(initial.cornerRadiusDp.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("自定义分辨率", fontWeight = FontWeight.SemiBold) },
+        title = { Text("自定义设备", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // 形态因子
+                Text(
+                    text = "形态",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(vertical = 4.dp)
                 ) {
+                    items(DeviceProfile.FormFactor.values().toList()) { ff ->
+                        FilterChip(
+                            selected = formFactor == ff,
+                            onClick = { formFactor = ff },
+                            label = { Text(ff.name) },
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 切口
+                Text(
+                    text = "切口 (Cutout)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    items(CutoutKind.values().toList()) { kind ->
+                        FilterChip(
+                            selected = cutoutKind == kind,
+                            onClick = { cutoutKind = kind },
+                            label = { Text(kind.displayName) },
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 分辨率
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = width,
                         onValueChange = { width = it.filter { c -> c.isDigit() } },
@@ -82,20 +142,29 @@ fun ResolutionEditor(
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = dpi,
-                    onValueChange = { dpi = it.filter { c -> c.isDigit() } },
-                    label = { Text("Density (dpi)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = dpi,
+                        onValueChange = { dpi = it.filter { c -> c.isDigit() } },
+                        label = { Text("Density (dpi)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = cornerRadius,
+                        onValueChange = { cornerRadius = it.filter { c -> c.isDigit() || c == '.' } },
+                        label = { Text("Corner (dp)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
+                val w = width.toIntOrNull() ?: initial.widthPx
+                val h = height.toIntOrNull() ?: initial.heightPx
+                val d = dpi.toIntOrNull() ?: initial.densityDpi
                 Text(
-                    text = "预览尺寸: %.0f × %.0f dp".format(
-                        (width.toIntOrNull() ?: initial.widthPx) * 160f / (dpi.toIntOrNull() ?: initial.densityDpi),
-                        (height.toIntOrNull() ?: initial.heightPx) * 160f / (dpi.toIntOrNull() ?: initial.densityDpi)
-                    ),
+                    text = "预览尺寸: %.0f × %.0f dp".format(w * 160f / d, h * 160f / d),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -106,13 +175,17 @@ fun ResolutionEditor(
                 val w = width.toIntOrNull() ?: initial.widthPx
                 val h = height.toIntOrNull() ?: initial.heightPx
                 val d = dpi.toIntOrNull()?.coerceIn(120, 800) ?: initial.densityDpi
+                val r = cornerRadius.toFloatOrNull()?.coerceIn(0f, 200f) ?: initial.cornerRadiusDp
                 onConfirm(
                     initial.copy(
-                        id = "custom-${w}x${h}@${d}",
-                        displayName = "Custom ${w}×${h}",
+                        id = "custom-${w}x${h}@${d}-${formFactor.name}",
+                        displayName = "Custom ${w}×${h} ${formFactor.name.lowercase()}",
                         widthPx = w,
                         heightPx = h,
                         densityDpi = d,
+                        formFactor = formFactor,
+                        cornerRadiusDp = r,
+                        cutout = cutoutKind.toCutoutGeometry(),
                         isCustom = true,
                     )
                 )
@@ -122,4 +195,27 @@ fun ResolutionEditor(
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
+}
+
+/**
+ * 切口类型 (在 ResolutionEditor 中作为 chip 显示).
+ */
+internal enum class CutoutKind(val displayName: String) {
+    NONE("None"),
+    NOTCH("Notch"),
+    PUNCH_HOLE("Punch"),
+    WATERFALL("Waterfall");
+
+    fun toCutoutGeometry(): CutoutGeometry? = when (this) {
+        NONE -> null
+        NOTCH -> CutoutGeometry.IPHONE_14_NOTCH
+        PUNCH_HOLE -> CutoutGeometry.PIXEL_PUNCHHOLE
+        WATERFALL -> CutoutGeometry.HUAWEI_WATERFALL
+    }
+}
+
+private fun CutoutGeometry.kind(): CutoutKind = when (this) {
+    is CutoutGeometry.Notch -> CutoutKind.NOTCH
+    is CutoutGeometry.PunchHole -> CutoutKind.PUNCH_HOLE
+    is CutoutGeometry.WaterfallCurve -> CutoutKind.WATERFALL
 }

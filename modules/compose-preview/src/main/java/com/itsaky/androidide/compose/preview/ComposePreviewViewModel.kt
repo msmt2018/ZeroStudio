@@ -1,15 +1,36 @@
+/*
+ *  This file is part of AndroidIDE.
+ *
+ *  AndroidIDE is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  AndroidIDE is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.itsaky.androidide.compose.preview
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.compose.preview.compiler.CompileDiagnostic
+import com.itsaky.androidide.compose.preview.data.device.DeviceCatalog
 import com.itsaky.androidide.compose.preview.data.repository.CompilationException
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepository
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepositoryImpl
 import com.itsaky.androidide.compose.preview.data.repository.InitializationResult
 import com.itsaky.androidide.compose.preview.domain.PreviewSourceParser
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
+import com.itsaky.androidide.compose.preview.ui.DeviceProfile
+import com.itsaky.androidide.compose.preview.ui.SystemBarsTheme
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,33 +45,97 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * 预览 UI 状态 (v2 + v2.1).
+ *
+ * 状态机:
+ * - [Idle]          初始 / 完成
+ * - [Initializing]  ViewModel 初始化
+ * - [Compiling]     正在编译
+ * - [Empty]         文件无 @Preview
+ * - [Building]      触发 gradle build
+ * - [Ready]         编译完成, 可渲染
+ * - [Error]         失败 (含诊断信息)
+ * - [NeedsBuild]    需要先构建项目
+ */
+@Immutable
 sealed class PreviewState {
     data object Idle : PreviewState()
     data object Initializing : PreviewState()
     data object Compiling : PreviewState()
     data object Empty : PreviewState()
     data object Building : PreviewState()
+
     data class Ready(
         val dexFile: File,
         val className: String,
         val previewConfigs: List<PreviewConfig>,
         val runtimeDex: File?,
-        val projectDexFiles: List<File> = emptyList()
+        val projectDexFiles: List<File> = emptyList(),
+        // v2.1 增字段
+        val deviceConfig: DeviceConfig = DeviceConfig(),
+        val viewport: ViewportState = ViewportState(),
+        val theme: PreviewTheme = PreviewTheme.Light,
+        val debugEnabled: Boolean = false,
+        val renderCount: Int = 0,
     ) : PreviewState()
+
     data class Error(
         val message: String,
-        val diagnostics: List<CompileDiagnostic> = emptyList()
+        val diagnostics: List<CompileDiagnostic> = emptyList(),
+        val cause: Throwable? = null,
     ) : PreviewState()
+
     data class NeedsBuild(val modulePath: String, val variantName: String = "debug") : PreviewState()
 }
 
 enum class DisplayMode { ALL, SINGLE }
 
+/**
+ * 单个 Composable 预览配置.
+ */
+@Immutable
 data class PreviewConfig(
     val functionName: String,
     val heightDp: Int? = null,
-    val widthDp: Int? = null
+    val widthDp: Int? = null,
+    // v2.1 增字段
+    val fontScale: Float? = null,
+    val isLightDark: Boolean = false,
+    val parameterProviderName: String? = null,
 )
+
+/**
+ * 设备 + 系统栏 + 边框 配置 v2.1.
+ */
+@Immutable
+data class DeviceConfig(
+    val profile: DeviceProfile = DeviceCatalog.DEFAULT,
+    val systemBarsTheme: SystemBarsTheme = SystemBarsTheme.AUTO,
+    val showStatusBar: Boolean = true,
+    val showNavigationBar: Boolean = true,
+    val showCutout: Boolean = true,
+    val showChassis: Boolean = true,
+    val useGestureNav: Boolean = false,
+)
+
+/**
+ * 视口 (缩放 / pan) 状态.
+ */
+@Immutable
+data class ViewportState(
+    val zoom: Float = 1.0f,
+    val offsetXdp: Float = 0f,
+    val offsetYdp: Float = 0f,
+    val fitMode: FitMode = FitMode.FIT_WIDTH,
+)
+
+enum class FitMode { FIT_WIDTH, FIT_HEIGHT, ACTUAL_SIZE }
+
+/**
+ * 主题 (Light / Dark / Custom).
+ */
+enum class PreviewTheme { Light, Dark, Custom }
 
 @OptIn(FlowPreview::class)
 class ComposePreviewViewModel(
@@ -69,6 +154,20 @@ class ComposePreviewViewModel(
 
     private val _availablePreviews = MutableStateFlow<List<String>>(emptyList())
     val availablePreviews: StateFlow<List<String>> = _availablePreviews.asStateFlow()
+
+    // === v2.1 新增 StateFlow ===
+
+    private val _deviceConfig = MutableStateFlow(DeviceConfig())
+    val deviceConfig: StateFlow<DeviceConfig> = _deviceConfig.asStateFlow()
+
+    private val _viewport = MutableStateFlow(ViewportState())
+    val viewport: StateFlow<ViewportState> = _viewport.asStateFlow()
+
+    private val _theme = MutableStateFlow(PreviewTheme.Light)
+    val theme: StateFlow<PreviewTheme> = _theme.asStateFlow()
+
+    private val _debugEnabled = MutableStateFlow(false)
+    val debugEnabled: StateFlow<Boolean> = _debugEnabled.asStateFlow()
 
     private val sourceChanges = MutableSharedFlow<SourceUpdate>()
 
@@ -211,14 +310,20 @@ class ComposePreviewViewModel(
                     className = result.className,
                     previewConfigs = parsed.previewConfigs,
                     runtimeDex = result.runtimeDex,
-                    projectDexFiles = result.projectDexFiles
+                    projectDexFiles = result.projectDexFiles,
+                    // v2.1 注入新状态
+                    deviceConfig = _deviceConfig.value,
+                    viewport = _viewport.value,
+                    theme = _theme.value,
+                    debugEnabled = _debugEnabled.value,
                 )
             }
             .onFailure { error ->
                 val diagnostics = if (error is CompilationException) error.diagnostics else emptyList()
                 _previewState.value = PreviewState.Error(
                     message = error.message ?: "Compilation failed",
-                    diagnostics = diagnostics
+                    diagnostics = diagnostics,
+                    cause = error,
                 )
             }
     }
@@ -263,47 +368,87 @@ class ComposePreviewViewModel(
 
                 _previewState.value = PreviewState.Initializing
 
-            repository.initialize(context, cachedFilePath)
-                .onSuccess { result ->
-                    when (result) {
-                        is InitializationResult.Ready -> {
-                            modulePath = result.projectContext.modulePath
-                            variantName = result.projectContext.variantName
-                            isInitialized.set(true)
-                            initializationDeferred.complete(Unit)
-                            LOG.debug("refreshAfterBuild: initialization complete, state=Ready")
-                            if (currentSource.isNotBlank()) {
-                                compileNow(currentSource)
-                            } else {
-                                _previewState.value = PreviewState.Idle
+                repository.initialize(context, cachedFilePath)
+                    .onSuccess { result ->
+                        when (result) {
+                            is InitializationResult.Ready -> {
+                                modulePath = result.projectContext.modulePath
+                                variantName = result.projectContext.variantName
+                                isInitialized.set(true)
+                                initializationDeferred.complete(Unit)
+                                LOG.debug("refreshAfterBuild: initialization complete, state=Ready")
+                                if (currentSource.isNotBlank()) {
+                                    compileNow(currentSource)
+                                } else {
+                                    _previewState.value = PreviewState.Idle
+                                }
+                            }
+                            is InitializationResult.NeedsBuild -> {
+                                modulePath = result.modulePath
+                                variantName = result.variantName
+                                isInitialized.set(true)
+                                initializationDeferred.complete(Unit)
+                                _previewState.value = PreviewState.NeedsBuild(
+                                    result.modulePath,
+                                    result.variantName
+                                )
+                            }
+                            is InitializationResult.Failed -> {
+                                initializationDeferred.complete(Unit)
+                                LOG.error("refreshAfterBuild: initialization failed - {}", result.message)
+                                _previewState.value = PreviewState.Error(result.message)
                             }
                         }
-                        is InitializationResult.NeedsBuild -> {
-                            modulePath = result.modulePath
-                            variantName = result.variantName
-                            isInitialized.set(true)
-                            initializationDeferred.complete(Unit)
-                            _previewState.value = PreviewState.NeedsBuild(
-                                result.modulePath,
-                                result.variantName
-                            )
-                        }
-                        is InitializationResult.Failed -> {
-                            initializationDeferred.complete(Unit)
-                            LOG.error("refreshAfterBuild: initialization failed - {}", result.message)
-                            _previewState.value = PreviewState.Error(result.message)
-                        }
                     }
-                }
-                .onFailure { error ->
-                    initializationDeferred.complete(Unit)
-                    LOG.error("refreshAfterBuild: initialization failed", error)
-                    _previewState.value = PreviewState.Error(
-                        error.message ?: "Initialization failed"
-                    )
-                }
+                    .onFailure { error ->
+                        initializationDeferred.complete(Unit)
+                        LOG.error("refreshAfterBuild: initialization failed", error)
+                        _previewState.value = PreviewState.Error(
+                            error.message ?: "Initialization failed"
+                        )
+                    }
             }
         }
+    }
+
+    // === v2.1 新增方法 ===
+
+    fun selectDevice(profile: DeviceProfile) {
+        _deviceConfig.value = _deviceConfig.value.copy(profile = profile)
+        LOG.info("Device selected: {}", profile.displayName)
+    }
+
+    fun setSystemBarsTheme(theme: SystemBarsTheme) {
+        _deviceConfig.value = _deviceConfig.value.copy(systemBarsTheme = theme)
+    }
+
+    fun toggleSystemBars() {
+        _deviceConfig.value = _deviceConfig.value.copy(
+            showStatusBar = !_deviceConfig.value.showStatusBar,
+            showNavigationBar = !_deviceConfig.value.showNavigationBar,
+        )
+    }
+
+    fun setZoom(zoom: Float) {
+        _viewport.value = _viewport.value.copy(
+            zoom = zoom.coerceIn(0.1f, 5.0f)
+        )
+    }
+
+    fun fitZoom() {
+        _viewport.value = ViewportState() // reset to fit
+    }
+
+    fun cycleTheme() {
+        _theme.value = when (_theme.value) {
+            PreviewTheme.Light -> PreviewTheme.Dark
+            PreviewTheme.Dark -> PreviewTheme.Custom
+            PreviewTheme.Custom -> PreviewTheme.Light
+        }
+    }
+
+    fun toggleDebug() {
+        _debugEnabled.value = !_debugEnabled.value
     }
 
     override fun onCleared() {
