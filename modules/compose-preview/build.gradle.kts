@@ -235,6 +235,21 @@ android {
 
   defaultConfig { consumerProguardFiles("proguard-rules.pro") }
 
+  // v2.4 P0: R8 minify 集成.
+  // Release preview 启用 R8 minify + resource shrink, debug 不动 (与 Android Studio 一致).
+  buildTypes {
+    release {
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(
+        getDefaultProguardFile("proguard-android-optimize.txt"),
+        "proguard-rules.pro",
+        "proguard-preview-rules.pro",  // v2.4 P0: Compose Preview 专用规则
+      )
+      // 不签名 (沙箱模块无 key)
+    }
+  }
+
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
