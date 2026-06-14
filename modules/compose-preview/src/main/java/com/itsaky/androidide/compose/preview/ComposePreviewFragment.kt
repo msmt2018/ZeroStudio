@@ -14,6 +14,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.itsaky.androidide.compose.preview.databinding.FragmentComposePreviewBinding
 import com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader
 import com.itsaky.androidide.compose.preview.runtime.ComposableRenderer
+import com.itsaky.androidide.compose.preview.runtime.DexMmapPoolEvictor
 import com.itsaky.androidide.resources.R as ResourcesR
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
@@ -27,6 +28,8 @@ class ComposePreviewFragment : Fragment() {
 
     private var classLoader: ComposeClassLoader? = null
     private var renderer: ComposableRenderer? = null
+    // v2.5 P3: 定时 evict 调度器, 随 fragment 视图生命周期启停
+    private var mmapEvictor: DexMmapPoolEvictor? = null
 
     private var sourceCode: String = DEFAULT_SOURCE
     private var onNavigateBack: (() -> Unit)? = null
@@ -47,12 +50,30 @@ class ComposePreviewFragment : Fragment() {
         setupPreview()
         observeState()
 
+        // v2.5 P3: 启动 mmap evict 调度器, 定时释放 refCount=0 的 stale entry
+        if (mmapEvictor == null) {
+            mmapEvictor = DexMmapPoolEvictor().apply { start() }
+            LOG.info("ComposePreviewFragment started mmap evictor")
+        }
+
         val filePath = arguments?.getString(ARG_FILE_PATH) ?: ""
         viewModel.initialize(requireContext(), filePath)
 
         arguments?.getString(ARG_SOURCE_CODE)?.let {
             sourceCode = it
         }
+    }
+
+    override fun onDestroyView() {
+        // v2.5 P3: 停止 mmap evict 调度器, 释放后台协程
+        mmapEvictor?.stop()
+        mmapEvictor = null
+        LOG.info("ComposePreviewFragment stopped mmap evictor")
+        super.onDestroyView()
+        classLoader?.release()
+        classLoader = null
+        renderer = null
+        _binding = null
     }
 
     private fun setupToolbar() {
@@ -149,14 +170,6 @@ class ComposePreviewFragment : Fragment() {
 
     fun setNavigateBackListener(listener: () -> Unit) {
         onNavigateBack = listener
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        classLoader?.release()
-        classLoader = null
-        renderer = null
-        _binding = null
     }
 
     override fun onLowMemory() {
