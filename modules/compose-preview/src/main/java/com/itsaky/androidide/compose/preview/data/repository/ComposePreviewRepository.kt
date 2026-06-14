@@ -29,6 +29,13 @@ interface ComposePreviewRepository {
         parsedSource: ParsedPreviewSource
     ): Result<CompilationResult>
 
+    /**
+     * v2.2 P4: 把当前 source 的 FNV-1a hash 计算出来.
+     *
+     * 用于 LiveLiterals 的 stale check — 持久化值与当前 source hash 不一致视为过期.
+     */
+    fun computeSourceFnvHash(source: String): Int
+
     fun computeSourceHash(source: String): String
 
     fun reset()

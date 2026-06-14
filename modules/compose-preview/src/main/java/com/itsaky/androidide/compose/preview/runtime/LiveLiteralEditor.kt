@@ -79,11 +79,48 @@ class LiveLiteralEditor(
     /**
      * 关联 Composable 并扫描配对字面量组.
      */
-    fun attach(composableClass: Class<*>, functionName: String) {
+    fun attach(composableClass: Class<*>, functionName: String, sourceHash: Int = 0) {
         LOG.info("Attaching LiveLiteralEditor to {}#{}", composableClass.name, functionName)
         val groups = scanner.scanAllGroups(composableClass, functionName)
-        attached.set(AttachInfo(composableClass, functionName, groups))
+        attached.set(AttachInfo(composableClass, functionName, groups, sourceHash))
         notify(groups)
+        // v2.2 P4: 自动恢复持久化的字面量值
+        restorePersistedLiterals(groups, sourceHash)
+    }
+
+    /**
+     * v2.2 P4: 从 [LiveStatePersistenceManager] 读持久化值, 写回 LiveLiterals 静态字段.
+     *
+     * 由 [attach] 在扫描完成后自动调用. 也可手动调用 (例如热重载时).
+     */
+    private fun restorePersistedLiterals(groups: List<LiveLiteralGroup>, sourceHash: Int) {
+        val mgr = LiveStatePersistenceManager.getActive() ?: return
+        val info = attached.get() ?: return
+        val liveLiteralsClass = scanner.resolveLiveLiteralsClass(
+            info.composableClass, info.functionName, groupIndex = 1,
+        ) ?: return
+
+        var restored = 0
+        for (group in groups) {
+            val persisted = mgr.getLiteral(info.composableClass.name, group.primaryFieldName, sourceHash) ?: continue
+            try {
+                if (persisted.pairedValue != null) {
+                    scanner.setEncodedValueOnGroup(
+                        group, liveLiteralsClass,
+                        primaryValue = persisted.value,
+                        pairedValue = persisted.pairedValue,
+                    )
+                } else {
+                    scanner.setEncodedValueOnGroup(group, liveLiteralsClass, persisted.value)
+                }
+                restored++
+            } catch (e: Throwable) {
+                LOG.warn("Failed to restore literal {}: {}", group.primaryFieldName, e.message)
+            }
+        }
+        if (restored > 0) {
+            LOG.info("Restored {}/{} persisted literals for {}", restored, groups.size, info.composableClass.name)
+        }
     }
 
     /**
@@ -107,6 +144,23 @@ class LiveLiteralEditor(
     fun updateValue(group: LiveLiteralGroup, value: LiveLiteralValue) {
         val encoded = encoder.encode(value)
         writeGroup(group, encoded)
+
+        // v2.2 P4: 持久化
+        val mgr = LiveStatePersistenceManager.getActive() ?: return
+        val info = attached.get() ?: return
+        val (primary, paired) = when (encoded) {
+            is EncodedLiteral.Single -> encoded.intValue to null
+            is EncodedLiteral.Pair -> encoded.high to encoded.low
+        }
+        mgr.setLiteral(
+            className = info.composableClass.name,
+            groupKey = group.primaryFieldName,
+            value = primary,
+            pairedValue = paired,
+            type = value.type.name,
+            sourceHash = info.sourceHash,
+        )
+        mgr.scheduleFlush()
     }
 
     /**
@@ -271,5 +325,6 @@ class LiveLiteralEditor(
         val composableClass: Class<*>,
         val functionName: String,
         val groups: List<LiveLiteralGroup>,
+        val sourceHash: Int = 0,
     )
 }

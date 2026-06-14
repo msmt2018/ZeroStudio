@@ -27,6 +27,8 @@ import com.itsaky.androidide.compose.preview.compiler.DexResult
 import com.itsaky.androidide.compose.preview.data.source.ProjectContext
 import com.itsaky.androidide.compose.preview.data.source.ProjectContextSource
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
+import com.itsaky.androidide.compose.preview.runtime.LiveStatePersistenceManager
+import com.itsaky.androidide.compose.preview.runtime.SourceChangeWatcher
 import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.projects.builder.BuildService
 import kotlinx.coroutines.Dispatchers
@@ -102,8 +104,37 @@ class ComposePreviewRepositoryImpl(
             }
             LOG.info("Repository initialized. runtimeDex={} sdkVer={}",
                 runtimeDex?.absolutePath, assetBundles.versionTag)
+
+            // v2.2 P4: 启动 LiveStatePersistenceManager, 加载磁盘快照
+            installLiveStatePersistence(assetBundles, ctx)
+
             InitializationResult.Ready(runtimeDex, ctx)
         }
+    }
+
+    /**
+     * v2.2 P4: 装入 LiveStatePersistenceManager, 加载磁盘持久化状态.
+     *
+     * - 项目目录 = `ctx.modulePath` 的 parent 链中找到含 .androidide 的目录, 或自身
+     * - 启动 scheduler, 异步加载 .androidide/live-state.json
+     */
+    private fun installLiveStatePersistence(
+        @Suppress("UNUSED_PARAMETER") bundles: AssetsComposeBundles,
+        ctx: ProjectContext,
+    ) {
+        val projectPath = ctx.modulePath
+        if (projectPath.isNullOrBlank()) {
+            LOG.info("No project path, skipping LiveStatePersistence")
+            return
+        }
+        val projectDir = File(projectPath)
+        if (!projectDir.exists() || !projectDir.isDirectory) {
+            LOG.info("Project path does not exist or is not a directory: {}", projectPath)
+            return
+        }
+        val mgr = LiveStatePersistenceManager.install(projectDir)
+        mgr.startScheduler()
+        mgr.load()
     }
 
     private fun initializeInfrastructure(context: Context): AssetsComposeBundles {
@@ -378,6 +409,11 @@ class ComposePreviewRepositoryImpl(
         }
         return cache.computeSourceHash(source)
     }
+
+    /**
+     * v2.2 P4: 32-bit FNV-1a hash. 与 [SourceChangeWatcher.fnv1aHash] 算法一致.
+     */
+    override fun computeSourceFnvHash(source: String): Int = SourceChangeWatcher.fnv1aHash(source)
 
     override fun reset() {
         compiler?.cancel()
