@@ -55,6 +55,20 @@ object PhaseThresholds {
   }
 
   /**
+   * 默认绝对阈值 (ms): [0, 100, 500, 1500, ∞)
+   *
+   * `thresholds[0]` = OK 上限 (不包含): < 100 = OK
+   * `thresholds[1]` = WARN 上限: 100-499 = WARN
+   * `thresholds[2]` = SLOW 上限: 500-1499 = SLOW
+   * `thresholds[3]` = 任意上限: ≥ 1500 = CRITICAL
+   *
+   * 必须放在 [thresholds] 之前, 否则 forward reference 报
+   * "Variable 'DEFAULT_THRESHOLDS' must be initialized" —
+   * Kotlin object 成员按声明顺序初始化.
+   */
+  val DEFAULT_THRESHOLDS = longArrayOf(100L, 500L, 1500L, Long.MAX_VALUE)
+
+  /**
    * 当前阈值 (ms). 默认可写, 业务可调.
    *
    * 数组索引对应 [Severity] 枚举 (0=OK 上限, 1=WARN 上限, 2=SLOW 上限, ≥3=CRITICAL).
@@ -120,17 +134,9 @@ object PhaseThresholds {
     return if (byAbs.ordinal >= byRatio.ordinal) byAbs else byRatio
   }
 
-  /**
-   * 默认绝对阈值 (ms): [0, 100, 500, 1500, ∞)
-   *
-   * `thresholds[0]` = OK 上限 (不包含): < 100 = OK
-   * `thresholds[1]` = WARN 上限: 100-499 = WARN
-   * `thresholds[2]` = SLOW 上限: 500-1499 = SLOW
-   * `thresholds[3]` = 任意上限: ≥ 1500 = CRITICAL
-   */
-  val DEFAULT_THRESHOLDS = longArrayOf(100L, 500L, 1500L, Long.MAX_VALUE)
-
   private const val RATIO_WARN = 0.05
   private const val RATIO_SLOW = 0.15
   private const val RATIO_CRITICAL = 0.30
+
+  // 注: DEFAULT_THRESHOLDS 必须在 thresholds 之前声明, 上面已前置
 }

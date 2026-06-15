@@ -72,9 +72,14 @@ class PerfConsoleViewModel(application: Application) : AndroidViewModel(applicat
     )
   }
 
-  override fun onCleared() {
-    super.onCleared()
+  /** 主动停掉 tick executor (Activity onDestroy 时调, 不等 framework). */
+  fun shutdown() {
     tickExecutor.shutdown()
+  }
+
+  protected override fun onCleared() {
+    super.onCleared()
+    shutdown()
   }
 
   /**

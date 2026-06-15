@@ -61,8 +61,9 @@ object PerfTracer {
    * `volatile` 保证多线程可见性 (IDEApplication 入口在 main thread,
    * 后续 Activity onCreate 可能跨 thread).
    */
+  @PublishedApi
   @Volatile
-  private var socket: PerfClientSocket? = null
+  internal var socket: PerfClientSocket? = null
 
   /** :perf 进程是否已 attach 成功. 仅用于日志, 不影响行为. */
   @Volatile

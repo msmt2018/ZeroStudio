@@ -66,6 +66,7 @@ class OnboardingActivity : AppIntro2() {
       try {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
       } catch (e: Exception) {}
+    }
 
     super.onCreate(savedInstanceState)
 
@@ -143,7 +144,6 @@ class OnboardingActivity : AppIntro2() {
 
     if (!SdkChecker.isEnvironmentReadySync()) {
       addSlide(OdSdkToolInstallFragment.newInstance(this))
-    }
     }
   }
 
