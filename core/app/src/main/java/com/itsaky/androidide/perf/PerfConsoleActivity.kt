@@ -54,7 +54,7 @@ class PerfConsoleActivity : ComponentActivity() {
   override fun onDestroy() {
     super.onDestroy()
     if (isFinishing) {
-      viewModel.onCleared()
+      viewModel.shutdown()
     }
   }
 }

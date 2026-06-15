@@ -46,7 +46,7 @@ object PhaseStore {
   /**
    * 在 [com.itsaky.androidide.perf.PerfApplication.onCreate] 调一次.
    */
-  fun bind(collector: PhaseCollector, server: PerfServerSocket) {
+  internal fun bind(collector: PhaseCollector, server: PerfServerSocket) {
     _collector = collector
     _server = server
   }
@@ -55,7 +55,7 @@ object PhaseStore {
   fun collector(): PhaseCollector? = _collector
 
   /** 当前 [PerfServerSocket], 启动前返回 null. */
-  fun server(): PerfServerSocket? = _server
+  internal fun server(): PerfServerSocket? = _server
 
   /** 是否已 bind (UI 用此判断"等待 server 启动" vs "已连接"). */
   fun isReady(): Boolean = _collector != null && _server != null
