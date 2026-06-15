@@ -65,6 +65,14 @@ public class BaseApplication extends Application {
 
     super.onCreate();
 
+    // Environment.init() must run as early as possible so that all downstream
+    // tools (build service, document provider, logback layout, etc.) see a
+    // fully-initialized static path table. The call is idempotent and
+    // thread-safe, so explicit init in IDEDocumentsProvider / test rules
+    // can stay as a defensive measure for contexts that fire before
+    // Application.onCreate().
+    Environment.init(this);
+
     mPrefsManager = new PreferenceManager(this);
   }
 
