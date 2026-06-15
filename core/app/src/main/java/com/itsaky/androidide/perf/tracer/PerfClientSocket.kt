@@ -126,8 +126,17 @@ internal class PerfClientSocket(private val socketPath: String) {
   }
 
   // -- private --
+  //
+  // 注: enqueue 必须是 @PublishedApi internal, 因为上面的
+  // @PublishedApi internal fun sendPhase/sendInstant/sendEndBoot
+  // 被 inline (e.g. PerfTracer.trace) 调, inline 展开时会把 enqueue
+  // 调用 inline 到 caller 字节码, 但 enqueue 本身是 private to this
+  // class — caller 编译期看不到 private, 报
+  // "inline function cannot access non-public-API function".
+  // 加 @PublishedApi internal 后, inline 知道怎么访问.
 
-  private fun enqueue(line: String) {
+  @PublishedApi
+  internal fun enqueue(line: String) {
     if (broken) return
     val ok = queue.offer(line)
     if (!ok) {
