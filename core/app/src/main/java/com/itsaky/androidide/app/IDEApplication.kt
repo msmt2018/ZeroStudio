@@ -38,6 +38,7 @@ import com.itsaky.androidide.events.LspJavaEventsIndex
 import com.itsaky.androidide.events.LspKotlinEventsIndex
 import com.itsaky.androidide.perf.PerfApplication
 import com.itsaky.androidide.perf.monitor.MonitorCoordinator
+import com.itsaky.androidide.perf.monitor.StrictModeViolationMonitor
 import com.itsaky.androidide.perf.tracer.PerfTracer
 import com.itsaky.androidide.preferences.internal.DevOpsPreferences
 import com.itsaky.androidide.preferences.internal.GeneralPreferences
