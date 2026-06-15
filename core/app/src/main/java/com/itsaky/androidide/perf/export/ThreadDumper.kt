@@ -102,7 +102,9 @@ object ThreadDumper {
     entries.forEach { (thread, stack) ->
       sb.appendLine("--- Thread: ${thread.name} (id=${thread.id}, priority=${thread.priority}, state=${thread.state}) ---")
       val sw = StringWriter()
-      PrintWriter(sw).use { pw: PrintWriter -> thread.printStackTrace(pw) }
+      val pw = PrintWriter(sw)
+      thread.printStackTrace(pw)
+      pw.flush()
       sb.append(sw.toString())
       sb.appendLine()
     }
