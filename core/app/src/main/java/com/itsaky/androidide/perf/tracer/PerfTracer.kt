@@ -137,7 +137,37 @@ object PerfTracer {
    */
   @JvmStatic
   inline fun <T> trace(name: String, block: () -> T): T {
-    if (!BuildConfig.DEBUG) return block()
+    if (!BuildConfig.DEBUG) return block() // Release build 0 overhead
+    return _traceImpl(name, block)
+  }
+
+  /**
+   * `trace` 的实际工作体. 拆出来是为了避开 inline 跨 class 访问的
+   * @PublishedApi 链 + 让 `block` 能合法地在 non-inline 函数内调
+   * (noinline 修饰).
+   *
+   * - inline trace body 直接调 `s.sendPhase`, 编译期会递归检查
+   *   sendPhase body 的所有访问 (broken / escape 都是 PerfClientSocket
+   *   private), 这些都要加 @PublishedApi, 污染严重.
+   * - 拆出 _traceImpl 后, inline trace body 只调 _traceImpl (PerfTracer
+   *   自己的 internal fun), 不会跨 class, 也就不递归检查 _traceImpl
+   *   body. _traceImpl 是 non-inline, 调 sendPhase 不递归 body 检查.
+   * - @PublishedApi 让 _traceImpl 能被 inline trace 调.
+   *
+   * Release 0 overhead 由 inline trace 的 `if (!BuildConfig.DEBUG)`
+   * 保证 — _traceImpl 在 Release build 永远不会被调用.
+   *
+   * `block: noinline () -> T` 是因为 _traceImpl 是 non-inline, 不能
+   * 直接调 inline trace 的 lambda 参数 — Kotlin 编译期拒绝
+   * 'Illegal usage of inline parameter'. 加 noinline 后, block 在
+   * trace 调用点先被 evaluate, 然后以普通 Function0 引用传给
+   * _traceImpl. inline 优化效果 (trace 调用点 block 直接展开) 没
+   * 了, 但 Debug build + :perf 路径正常, Release build 走 0 overhead
+   * 那条 `if (!BuildConfig.DEBUG) return block()` — block 在原地展开,
+   * 0 overhead 保留.
+   */
+  @PublishedApi
+  internal fun <T> _traceImpl(name: String, noinline block: () -> T): T {
     val s = socket ?: return block()
     val start = SystemClock.elapsedRealtime()
     return try {
