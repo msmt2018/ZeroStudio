@@ -20,7 +20,6 @@ package com.itsaky.androidide.app
 
 import android.content.Intent
 import android.net.Uri
-import android.os.StrictMode
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import com.blankj.utilcode.util.ThrowableUtils.getFullStackTrace
@@ -36,10 +35,6 @@ import com.itsaky.androidide.events.EditorEventsIndex
 import com.itsaky.androidide.events.LspApiEventsIndex
 import com.itsaky.androidide.events.LspJavaEventsIndex
 import com.itsaky.androidide.events.LspKotlinEventsIndex
-import com.itsaky.androidide.perf.PerfApplication
-import com.itsaky.androidide.perf.monitor.MonitorCoordinator
-import com.itsaky.androidide.perf.monitor.StrictModeViolationMonitor
-import com.itsaky.androidide.perf.tracer.PerfTracer
 import com.itsaky.androidide.preferences.internal.DevOpsPreferences
 import com.itsaky.androidide.preferences.internal.GeneralPreferences
 import com.itsaky.androidide.resources.localization.LocaleProvider
@@ -80,76 +75,44 @@ class IDEApplication : TermuxApplication() {
   override fun onCreate() {
     val bootStart = System.currentTimeMillis()
 
-    // :perf 进程: 只跑 super.onCreate (BaseApplication + TermuxApplication 必要初始化),
-    // 然后调 PerfApplication.init 启动 server / PhaseCollector, 再 return.
-    // 完全跳过 IDE 特有的初始化 (Koin/EventBus/StrictMode/ColorScheme 等).
-    // 让 Perf Console 在 :perf 进程极轻量, 不被主 application 的任何阻塞影响.
-    if (isPerfProcess()) {
-      super.onCreate()
-      log.info("IDEApplication onCreate skipped (running in :perf process)")
-      PerfApplication.init(this)
-      return
-    }
-
     instance = this
-    PerfTracer.reportInstant("ide_on_create_begin")
-    PerfTracer.tryAttach(this)
-    PerfTracer.trace("super_on_create") { super.onCreate() }
-    PerfTracer.trace("init_koin") { RikkaHubRuntime.ensureKoinStarted(this) }
+    super.onCreate()
+    RikkaHubRuntime.ensureKoinStarted(this)
 
-    PerfTracer.trace("apply_persisted_locale") { applyPersistedLocale() }
+    applyPersistedLocale()
 
-    PerfTracer.trace("set_uncaught_handler") {
-      uncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
-      Thread.setDefaultUncaughtExceptionHandler { thread, th -> handleCrash(thread, th) }
-    }
+    uncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, th -> handleCrash(thread, th) }
 
     if (BuildConfig.DEBUG) {
-      PerfTracer.trace("strict_mode_setup") {
-        StrictMode.setVmPolicy(
-            StrictMode.VmPolicy.Builder(StrictMode.getVmPolicy()).penaltyLog().detectAll().build()
-        )
-      }
       if (DevOpsPreferences.dumpLogs) {
-        PerfTracer.trace("start_logcat_reader") { startLogcatReader() }
+        startLogcatReader()
       }
     }
 
-    PerfTracer.trace("eventbus_add_indexes") {
-      EventBus.builder()
-          .addIndex(AppEventsIndex())
-          .addIndex(EditorEventsIndex())
-          .addIndex(LspApiEventsIndex())
-          .addIndex(LspJavaEventsIndex())
-          .addIndex(LspKotlinEventsIndex())
-          .installDefaultEventBus(true)
-    }
+    EventBus.builder()
+        .addIndex(AppEventsIndex())
+        .addIndex(EditorEventsIndex())
+        .addIndex(LspApiEventsIndex())
+        .addIndex(LspJavaEventsIndex())
+        .addIndex(LspKotlinEventsIndex())
+        .installDefaultEventBus(true)
 
-    PerfTracer.trace("eventbus_register") { EventBus.getDefault().register(this) }
+    EventBus.getDefault().register(this)
 
-    PerfTracer.trace("set_default_night_mode") {
-      AppCompatDelegate.setDefaultNightMode(GeneralPreferences.uiMode)
-    }
+    AppCompatDelegate.setDefaultNightMode(GeneralPreferences.uiMode)
 
     if (IThemeManager.getInstance().getCurrentTheme() == IDETheme.MATERIAL_YOU) {
-      PerfTracer.trace("dynamic_colors_apply") {
-        DynamicColors.applyToActivitiesIfAvailable(this)
-      }
+      DynamicColors.applyToActivitiesIfAvailable(this)
     }
 
-    PerfTracer.trace("editor_color_scheme_default") {
-      EditorColorScheme.setDefault(SchemeAndroidIDE.newInstance(null))
-    }
+    EditorColorScheme.setDefault(SchemeAndroidIDE.newInstance(null))
 
-    PerfTracer.reportInstant("ide_color_scheme_provider_init_start")
     GlobalScope.launch(Dispatchers.IO) {
-      PerfTracer.trace("ide_color_scheme_provider_init") { IDEColorSchemeProvider.init() }
+      IDEColorSchemeProvider.init()
     }
 
-    PerfTracer.reportInstant("ide_on_create_end")
-    PerfTracer.endBoot()
-    MonitorCoordinator.start(this)
-    StrictModeViolationMonitor.install()
+    log.info("IDEApplication onCreate completed in {} ms", System.currentTimeMillis() - bootStart)
   }
 
   /**
@@ -244,7 +207,6 @@ class IDEApplication : TermuxApplication() {
 
   override fun attachBaseContext(base: android.content.Context?) {
     if (base != null) {
-      PerfTracer.reportInstant("ide_attach_base_context")
       val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(base)
       val selectedLocaleKey = prefs.getString(GeneralPreferences.SELECTED_LOCALE, null)
       val localeListCompat =
@@ -258,24 +220,6 @@ class IDEApplication : TermuxApplication() {
 
   companion object {
     private val log = LoggerFactory.getLogger(IDEApplication::class.java)
-
-    /**
-     * 当前进程是否在 `:perf` 进程 (Perf Console 独立进程).
-     *
-     * 用 `endsWith(":perf")` 而不是 equals 是因为: `Process.myProcessName()` 在某些
-     * OEM (e.g. 小米) 上可能返回 `com.itsaky.androidide:perf` 或 `xxx:perf`,
-     * 末尾 `:perf` 是稳定后缀.
-     */
-    @JvmStatic
-    private fun isPerfProcess(): Boolean {
-      val processName =
-          runCatching {
-            // android.os.Process.myProcessName() requires API 28
-            @Suppress("DEPRECATION")
-            android.os.Process.myProcessName()
-          }.getOrDefault("")
-      return processName.endsWith(":perf")
-    }
 
     @JvmStatic
     lateinit var instance: IDEApplication

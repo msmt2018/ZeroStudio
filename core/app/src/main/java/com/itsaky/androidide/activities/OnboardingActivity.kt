@@ -38,7 +38,6 @@ import com.itsaky.androidide.fragments.onboarding.GreetingFragment
 import com.itsaky.androidide.fragments.onboarding.OdSdkToolInstallFragment
 import com.itsaky.androidide.fragments.onboarding.OnboardingInfoFragment
 import com.itsaky.androidide.fragments.onboarding.PermissionsFragment
-import com.itsaky.androidide.perf.tracer.PerfTracer
 import com.itsaky.androidide.preferences.internal.prefManager
 import com.itsaky.androidide.repository.sdkmanager.SdkChecker
 import com.itsaky.androidide.ui.themes.IThemeManager
@@ -62,12 +61,10 @@ class OnboardingActivity : AppIntro2() {
 
   @SuppressLint("SourceLockedOrientationActivity")
   override fun onCreate(savedInstanceState: Bundle?) {
-    PerfTracer.trace("onboarding_activity_oncreate") {
-      IThemeManager.getInstance().applyTheme(this)
-      try {
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-      } catch (e: Exception) {}
-    }
+    IThemeManager.getInstance().applyTheme(this)
+    try {
+      requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    } catch (e: Exception) {}
 
     super.onCreate(savedInstanceState)
 
