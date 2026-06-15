@@ -125,15 +125,20 @@
           <!--
             Perf Console (PR #7) — FileProvider for sharing exported JSON / thread dumps.
             独立 authority, 不与 IDEFileProvider 冲突.
+            tools:replace 用来覆盖 :core:chatai:app 里的 androidx FileProvider
+            (它用 .fileprovider, 我们用 .perf.fileprovider). 不加这个 AGP
+            manifest merger 会失败.
           -->
           <provider
                android:authorities="${applicationId}.perf.fileprovider"
                android:exported="false"
                android:grantUriPermissions="true"
-               android:name="androidx.core.content.FileProvider">
+               android:name="androidx.core.content.FileProvider"
+               tools:replace="android:authorities">
                <meta-data
                     android:name="android.support.FILE_PROVIDER_PATHS"
-                    android:resource="@xml/perf_file_provider_paths" />
+                    android:resource="@xml/perf_file_provider_paths"
+                    tools:replace="android:resource" />
           </provider>
 
           <receiver
