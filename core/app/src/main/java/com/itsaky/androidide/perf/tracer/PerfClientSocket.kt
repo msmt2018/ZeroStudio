@@ -94,20 +94,26 @@ internal class PerfClientSocket(private val socketPath: String) {
     }
   }
 
-  /** 异步发送 phase 事件 (有耗时). */
-  fun sendPhase(name: String, elapsedMs: Long) {
+  /**
+   * 异步发送 phase 事件 (有耗时). `inline` (e.g. [PerfTracer.trace]) 调,
+   * 必须 `@PublishedApi internal` 才能 inline 访问.
+   */
+  @PublishedApi
+  internal fun sendPhase(name: String, elapsedMs: Long) {
     if (broken) return
     enqueue("""{"type":"phase","name":"${escape(name)}","elapsed":$elapsedMs}""")
   }
 
-  /** 异步发送 instant 事件 (无耗时). */
-  fun sendInstant(name: String) {
+  /** 异步发送 instant 事件 (无耗时). `inline` 调用, 同上. */
+  @PublishedApi
+  internal fun sendInstant(name: String) {
     if (broken) return
     enqueue("""{"type":"instant","name":"${escape(name)}"}""")
   }
 
-  /** 异步发送 end_boot 标记. */
-  fun sendEndBoot() {
+  /** 异步发送 end_boot 标记. `inline` 调用, 同上. */
+  @PublishedApi
+  internal fun sendEndBoot() {
     if (broken) return
     enqueue("""{"type":"end_boot"}""")
   }
