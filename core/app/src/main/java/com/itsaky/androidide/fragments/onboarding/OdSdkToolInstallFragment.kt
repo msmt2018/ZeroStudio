@@ -254,6 +254,11 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
     var selectedJdk by remember { mutableStateOf("17") }
     var jdkExpanded by remember { mutableStateOf(false) }
 
+    // SDK 树父节点展开状态: 用 Compose 可观察的 mutableStateMap, 按节点 id 记录。
+    // 之前直接改 SdkTreeNode.isExpanded 不会触发重组 (StateFlow 拿到的 List 引用未变),
+    // 所以点击父节点子列表不展开。这里改成在 Screen 范围内持有可观察的展开 id 集合。
+    val expandedNodeIds = remember { mutableStateMapOf<String, Boolean>() }
+
     val currentAbi = IDEBuildConfigProvider.getInstance().cpuAbiName
     val context = LocalContext.current
 
@@ -294,6 +299,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
           OdSdkTreeSection(
               isLoading = isLoading,
               treeNodes = treeNodes,
+              expandedNodeIds = expandedNodeIds,
               onNodeCheckChange = { node, newState ->
                 // 强制安装的项 (android-sdk, cmdline-tools) 不可切换
                 if (node.componentType == "android-sdk" ||
@@ -317,7 +323,13 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                 node.updateParentState()
                 setupViewModel.triggerPendingChangesCheck()
               },
-              onGroupToggle = { group -> group.isExpanded = !group.isExpanded },
+              onGroupToggle = { group ->
+                val isOpen = expandedNodeIds[group.id] == true
+                expandedNodeIds[group.id] = !isOpen
+                // 同步给 SdkTreeNode 自身的 isExpanded 字段, 保留给 SdkManagerViewModel
+                // / SdkRepository 等其他使用方继续读这个字段 (虽然本屏不再依赖它驱动 UI)
+                group.isExpanded = !isOpen
+              },
           )
         }
 
@@ -700,6 +712,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
   private fun OdSdkTreeSection(
       isLoading: Boolean,
       treeNodes: List<SdkTreeNode>,
+      expandedNodeIds: SnapshotStateMap<String, Boolean>,
       onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
       onGroupToggle: (SdkTreeNode) -> Unit,
   ) {
@@ -739,6 +752,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
             OdSdkTopLevelEntry(
                 node = node,
                 index = index,
+                expandedNodeIds = expandedNodeIds,
                 onNodeCheckChange = onNodeCheckChange,
                 onGroupToggle = onGroupToggle,
             )
@@ -814,6 +828,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
   private fun OdSdkTopLevelEntry(
       node: SdkTreeNode,
       index: Int,
+      expandedNodeIds: SnapshotStateMap<String, Boolean>,
       onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
       onGroupToggle: (SdkTreeNode) -> Unit,
   ) {
@@ -830,6 +845,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
       if (node.isGroup) {
         OdSdkGroupCard(
             group = node,
+            expandedNodeIds = expandedNodeIds,
             onGroupToggle = onGroupToggle,
             onNodeCheckChange = onNodeCheckChange,
         )
@@ -842,12 +858,15 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
   @Composable
   private fun OdSdkGroupCard(
       group: SdkTreeNode,
+      expandedNodeIds: SnapshotStateMap<String, Boolean>,
       onGroupToggle: (SdkTreeNode) -> Unit,
       onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
   ) {
     val colors = LocalOdSdkColors.current
     val children = group.children
-    val isExpanded = group.isExpanded
+    // 从可观察的 state map 读, 写入会触发父 / 子 Composable 重组。
+    // 默认未在 map 内的节点视为折叠, 跟 SdkTreeNode.isExpanded 初始 false 一致。
+    val isExpanded = expandedNodeIds[group.id] == true
     val selectedCount = children.count { it.checkedState == ToggleableState.On }
     val totalCount = children.size
     val isSingleSelect = children.firstOrNull()?.componentType in
@@ -1297,28 +1316,28 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
           horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
         OdConfigChip(
-            label = "Git",
+            label = "Install Git",
             icon = Icons.Filled.Code,
             checked = installGit,
             onCheckedChange = onInstallGitChange,
             modifier = Modifier.weight(1f),
         )
         OdConfigChip(
-            label = "SSH",
+            label = "Install SSH",
             icon = Icons.Filled.Key,
             checked = installSsh,
             onCheckedChange = onInstallSshChange,
             modifier = Modifier.weight(1f),
         )
         OdConfigChip(
-            label = "NDK Fix",
+            label = "Fix NDK",
             icon = Icons.Filled.Build,
             checked = applyNdkFix,
             onCheckedChange = onApplyNdkFixChange,
             modifier = Modifier.weight(1f),
         )
         OdConfigChip(
-            label = "CMake",
+            label = "Fix CMake",
             icon = Icons.Filled.Code,
             checked = applyCmakePatch,
             onCheckedChange = onApplyCmakePatchChange,
