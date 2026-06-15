@@ -52,6 +52,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -62,12 +63,12 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.outlined.WifiOff
@@ -794,7 +795,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
       Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
-            Icons.Outlined.Build,
+            Icons.Filled.Build,
             contentDescription = null,
             tint = colors.onSurfaceMuted,
             modifier = Modifier.size(36.dp),
@@ -1082,7 +1083,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         verticalAlignment = Alignment.CenterVertically,
     ) {
       Icon(
-          Icons.Outlined.Build,
+          Icons.Filled.Build,
           contentDescription = null,
           tint = colors.primary,
           modifier = Modifier.size(18.dp),
@@ -1221,11 +1222,11 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         "platform-tools" -> Icons.Filled.Speed
         "build-tools" -> Icons.Filled.Build
         "ndk" -> Icons.Filled.Memory
-        "cmake" -> Icons.Outlined.Code
+        "cmake" -> Icons.Filled.Code
         else ->
             when {
               node.name.contains("Platform", ignoreCase = true) -> Icons.Filled.Storage
-              else -> Icons.Outlined.Build
+              else -> Icons.Filled.Build
             }
       }
 
@@ -1318,7 +1319,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         )
         OdConfigChip(
             label = "CMake",
-            icon = Icons.Outlined.Code,
+            icon = Icons.Filled.Code,
             checked = applyCmakePatch,
             onCheckedChange = onApplyCmakePatchChange,
             modifier = Modifier.weight(1f),
