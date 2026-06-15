@@ -19,6 +19,7 @@ package com.itsaky.androidide.perf.monitor
 import android.os.Build
 import android.os.StrictMode
 import com.itsaky.androidide.perf.tracer.PerfTracer
+import java.util.concurrent.Executor
 import org.slf4j.LoggerFactory
 
 /**
@@ -77,16 +78,27 @@ object StrictModeViolationMonitor {
     installed = true
 
     // 1. Thread 违规
+    // 注意: StrictMode.ThreadPolicy.Builder 没有 onThreadViolation 方法 (PR #8/8 当时
+    // 误用). 正确 API 是 penaltyListener(Executor, OnThreadViolationListener) (API 28+).
+    // OnThreadViolationListener.onThreadViolation(Violation v) 是单参 SAM
+    // (v 是 android.os.strictmode.Violation, 继承 Throwable).
+    // API 26-27 只能走 penaltyLog() (logcat 输出, 不上报).
     val threadPolicy = StrictMode.getThreadPolicy()
-    val newThreadPolicy =
-        StrictMode.ThreadPolicy.Builder(threadPolicy)
-            .onThreadViolation { _, violation ->
-              reportViolation("thread", violation, sampleEveryNth)
-            }
-            .build()
-    StrictMode.setThreadPolicy(newThreadPolicy)
+    val threadPolicyBuilder = StrictMode.ThreadPolicy.Builder(threadPolicy)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      // API 28+: penaltyListener 装 OnThreadViolationListener (单参 Violation)
+      threadPolicyBuilder.penaltyListener(
+          Executor { command -> command.run() }
+      ) { violation -> reportViolation("thread", violation, sampleEveryNth) }
+    } else {
+      // API 26-27: penaltyListener 还没出, 只能 logcat
+      threadPolicyBuilder.penaltyLog()
+    }
+    StrictMode.setThreadPolicy(threadPolicyBuilder.build())
 
     // 2. VM 违规
+    // VmPolicy.Builder.onVmViolation(OnVmViolationListener) (API 26+) 是真实 API,
+    // 单参 SAM, 不动.
     val vmPolicy = StrictMode.getVmPolicy()
     val newVmPolicy =
         StrictMode.VmPolicy.Builder(vmPolicy)
