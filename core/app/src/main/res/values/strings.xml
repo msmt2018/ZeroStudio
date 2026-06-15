@@ -18,8 +18,4 @@
 <resources>
   <!--  Required by F-Droid-->
   <string name="app_name" translatable="false">ZeroStudio</string>
-
-  <!-- Perf Console (性能监控调试控制台) — 桌面启动图标 + 通知标签 -->
-  <string name="perf_console_title" translatable="false">Perf Console</string>
-  <string name="perf_console_label">Perf Console</string>
 </resources>

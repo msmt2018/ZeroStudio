@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.itsaky.androidide.perf.tracer.PerfTracer
 
 /**
  * Startup launcher activity.
@@ -19,10 +18,8 @@ class SplashActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
 
     // Keep launcher activity ultra-lightweight: no Compose / no heavy rendering work.
-    PerfTracer.trace("splash_activity_oncreate") {
-      startActivity(Intent(this, OnboardingActivity::class.java))
-      finish()
-      overridePendingTransition(0, 0)
-    }
+    startActivity(Intent(this, OnboardingActivity::class.java))
+    finish()
+    overridePendingTransition(0, 0)
   }
 }
