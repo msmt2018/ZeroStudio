@@ -17,6 +17,7 @@
 package com.itsaky.androidide.perf
 
 import android.content.Context
+import com.itsaky.androidide.perf.export.ThreadDumper
 import com.itsaky.androidide.perf.server.PerfServerSocket
 import com.itsaky.androidide.perf.server.PhaseCollector
 import com.itsaky.androidide.perf.store.BootHistoryStore
@@ -98,6 +99,14 @@ object PerfApplication {
     val historyStore = BootHistoryStore(context)
     collector.addEndBootListener { events, startElapsedMs ->
       historyStore.append(events, startElapsedMs)
+    }
+
+    // PR #8: ANR 触发时自动 dump 线程到 cacheDir/perf/dumps/
+    collector.addAnrListener { name, latencyMs ->
+      // 写文件放后台线程, 不阻塞 collect 主流程
+      serverExecutor.submit {
+        ThreadDumper.dumpToCache(cacheDir, reason = "anr_${latencyMs}ms")
+      }
     }
 
     // 标记 server 状态供 UI (PR #5) 读

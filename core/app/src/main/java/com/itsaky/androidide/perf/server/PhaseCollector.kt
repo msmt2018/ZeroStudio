@@ -53,6 +53,13 @@ class PhaseCollector {
   /** EndBoot 监听器列表. [BootHistoryStore] 用此 hook 在启动结束时持久化. */
   private val endBootListeners = java.util.concurrent.CopyOnWriteArrayList<(List<PerfEvent>, Long) -> Unit>()
 
+  /** ANR 监听器列表. PR #8 加, [ThreadDumper] 用此 hook 自动 dump 线程. */
+  private val anrListeners =
+      java.util.concurrent.CopyOnWriteArrayList<(name: String, latencyMs: Long) -> Unit>()
+
+  /** 上次已通知监听器的 ANR 计数 (避免重复触发). */
+  @Volatile private var lastNotifiedAnrCount: Int = 0
+
   /**
    * 收集一个事件.
    *
@@ -72,6 +79,24 @@ class PhaseCollector {
         runCatching { listener(snapshot, startElapsedMs) }
       }
     }
+
+    // PR #8: 检测新 ANR (主进程发的 anr_<latency> instant), 触发 listener (e.g. ThreadDumper)
+    if (event is PerfEvent.Instant && event.name.startsWith("anr_") &&
+        !event.name.startsWith("anr_warn_")) {
+      val currentAnrCount = events.count {
+        it is PerfEvent.Instant &&
+            it.name.startsWith("anr_") &&
+            !it.name.startsWith("anr_warn_")
+      }
+      if (currentAnrCount > lastNotifiedAnrCount) {
+        lastNotifiedAnrCount = currentAnrCount
+        val latency = event.name.substring(4).toLongOrNull() ?: 0L
+        anrListeners.forEach { listener ->
+          runCatching { listener(event.name, latency) }
+        }
+      }
+    }
+
     events.add(event)
   }
 
@@ -83,6 +108,18 @@ class PhaseCollector {
    */
   fun addEndBootListener(listener: (List<PerfEvent>, Long) -> Unit) {
     endBootListeners.add(listener)
+  }
+
+  /**
+   * 注册 ANR 监听器 (PR #8).
+   *
+   * 监听器签名 `(name, latencyMs) -> Unit`, 在 [collect] 收到 `anr_<latency>`
+   * instant 时同步调用 (warn 不触发, 只触发真 ANR). 用于 [ThreadDumper] 自动 dump.
+   *
+   * 去重: 同一 ANR 不会重复触发, 监听器只在新增时调一次.
+   */
+  fun addAnrListener(listener: (name: String, latencyMs: Long) -> Unit) {
+    anrListeners.add(listener)
   }
 
   /** 启动是否已结束 (用于 UI 切换 tab 颜色 / 显示 banner). */

@@ -61,6 +61,10 @@ fun FrameTab(state: PerfUiState, modifier: Modifier = Modifier) {
     item {
       AnrListCard(anrs = state.anrEvents)
     }
+    // PR #8: StrictMode 违规列表 (底部)
+    item {
+      StrictModeListCard(violations = state.strictViolations)
+    }
   }
 }
 
@@ -143,6 +147,85 @@ private fun AnrRow(anr: PerfEvent.Instant) {
           fontSize = 11.sp,
           fontFamily = FontFamily.Monospace,
           color = MaterialTheme.colorScheme.onSurface,
+      )
+    }
+  }
+}
+
+/**
+ * PR #8: StrictMode 违规列表.
+ *
+ * 按 hash 聚合, 显示 "类名: 次数" 形式, 避免刷屏.
+ */
+@Composable
+private fun StrictModeListCard(violations: List<PerfEvent.Instant>) {
+  Card(shape = RoundedCornerShape(12.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+      Text(
+          text = "StrictMode 违规 (${violations.size})",
+          fontWeight = FontWeight.SemiBold,
+          color = MaterialTheme.colorScheme.onSurface,
+      )
+      Spacer(modifier = Modifier.size(8.dp))
+      if (violations.isEmpty()) {
+        Text(
+            text = "无违规",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return@Column
+      }
+
+      // 按 hash 聚合
+      val aggregated = violations.groupingBy { it.name }.eachCount()
+      val sorted = aggregated.entries.sortedByDescending { it.value }
+      sorted.forEach { (name, count) ->
+        StrictModeRow(name = name, count = count)
+        Spacer(modifier = Modifier.size(4.dp))
+      }
+    }
+  }
+}
+
+@Composable
+private fun StrictModeRow(name: String, count: Int) {
+  // name = "strict_<scope>_<shortName>_<hash8>"
+  val parts = name.split("_")
+  val scope = parts.getOrNull(1) ?: "?"
+  val shortName = parts.getOrNull(2) ?: "?"
+  val hash = parts.getOrNull(3) ?: ""
+  Card(
+      shape = RoundedCornerShape(6.dp),
+      colors =
+          CardDefaults.cardColors(
+              containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+          ),
+      modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+  ) {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth().padding(10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.fillMaxWidth(0.78f)) {
+        Text(
+            text = "[$scope] $shortName",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+        )
+        Text(
+            text = "hash: $hash",
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      Text(
+          text = "×$count",
+          fontSize = 14.sp,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.error,
       )
     }
   }
