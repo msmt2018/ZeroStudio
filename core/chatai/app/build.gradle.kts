@@ -28,6 +28,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // 把 consumer-rules.pro 显式列出来, AAR 消费方 (:core:app) 一旦开启
+        // isMinifyEnabled = true 就能自动拿到 chatai/app 的反射入口 keep 规则。
+        // 当前 :core:app 的 release 还是 false, 但写在这里以防未来切换。
+        consumerProguardFiles("consumer-rules.pro")
+
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -73,15 +78,7 @@ android {
     buildTypes {
         release {
             // signingConfig = signingConfigs.getByName("release")
-            // NOTE: chatai/app 是被 :core:app 合并的 library，不是独立 APK。
-            // 若开启 R8/ProGuard，core/app 的 IDEApplication.onCreate 中
-            //   RikkaHubRuntime.ensureKoinStarted(this)
-            // 是该模块唯一被外部引用的入口，R8 会把整个 me.rerere.rikkahub.RikkaHubRuntime
-            // （以及它依赖的 appModule / viewModelModule / dataSourceModule / repositoryModule）
-            // 当作死代码从 AAR 中剥离，导致稳定版 APK 启动时
-            //   java.lang.NoClassDefFoundError: me.rerere.rikkahub.RikkaHubRuntime
-            // 其他 chatai 子模块（ai/common/document/highlight/search/speech/web）也是 false。
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             // isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
