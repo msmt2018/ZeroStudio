@@ -34,26 +34,53 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -63,7 +90,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.getSystemService
 import androidx.fragment.app.Fragment
@@ -78,7 +104,6 @@ import com.itsaky.androidide.app.configuration.IDEBuildConfigProvider
 import com.itsaky.androidide.repository.sdkmanager.models.SdkManifest
 import com.itsaky.androidide.repository.sdkmanager.models.SdkTreeNode
 import com.itsaky.androidide.repository.sdkmanager.services.SdkInstallerManager
-import com.itsaky.androidide.repository.sdkmanager.tree.SdkTreeView
 import com.itsaky.androidide.utils.ConnectionInfo
 import com.itsaky.androidide.utils.Environment
 import com.itsaky.androidide.utils.executioncommand.TermuxCommand
@@ -229,6 +254,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
     var jdkExpanded by remember { mutableStateOf(false) }
 
     val currentAbi = IDEBuildConfigProvider.getInstance().cpuAbiName
+    val context = LocalContext.current
 
     fun getValidMirror(): String {
       if (!useGithubMirror) return ""
@@ -239,286 +265,97 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
       return t
     }
 
-    // 主体容器：使用 fillMaxSize 撑满全屏
-    // top = 40.dp 留出状态栏空间；bottom = 98.dp 避开底部的 AppIntro 引导栏
-    Column(
-        modifier =
-            Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 40.dp, bottom = 98.dp)
-    ) {
+    // 主题色板: 暗/亮模式 + 自定义品牌色与渐变
+    val isDark = isSystemInDarkTheme()
+    val brand = remember(isDark) { OdSdkSetupColors.of(isDark) }
 
-      // 头部区域
-      Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
+    CompositionLocalProvider(LocalOdSdkColors provides brand) {
+      Column(
+          modifier = Modifier.fillMaxSize().background(brand.canvas)
       ) {
-        Text(
-            text = "SDK Installation and Configuration",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+        // 1. 紧凑头部: 标题 + 副标题 + 网络状态 + ABI 徽章
+        OdSdkSetupHeader(
+            abiName = currentAbi,
+            netState = netState,
+            onOpenNetworkSettings = {
+              context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+            },
         )
-      }
 
-      Text(
-          text =
-              "The development tools must be installed for the IDE to function properly. Please select the required components and then perform the installation at the end.",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-      )
-
-      NetworkWarnings(netState)
-
-      Spacer(modifier = Modifier.height(8.dp))
-
-      Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Text(
-            text = "Select SDKs & Tools:",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = RoundedCornerShape(8.dp),
+        // 2. 主区域 - SDK 树 (无外壳卡, 直接融入背景, 顶部加 3D 渐变描边)
+        Box(
+            modifier =
+                Modifier.weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 4.dp, bottom = 4.dp)
         ) {
-          Text(
-              text = "ABI: $currentAbi",
-              fontSize = 10.sp,
-              color = MaterialTheme.colorScheme.onSecondaryContainer,
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-          )
-        }
-      }
-
-      Surface(
-          shape = RoundedCornerShape(12.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          modifier =
-              Modifier.fillMaxWidth()
-                  .weight(1f) // 自动拉伸占满高度
-                  .padding(vertical = 8.dp),
-      ) {
-        if (isLoading) {
-          Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(modifier = Modifier.size(32.dp))
-          }
-        } else {
-          AndroidView(
-              factory = { context ->
-                SdkTreeView(context).apply { isNestedScrollingEnabled = false }
-              },
-              update = { view ->
-                if (view.tag != treeNodes && treeNodes.isNotEmpty()) {
-                  val listener: (SdkTreeNode) -> Unit = { clickedNode ->
-                    if (
-                        clickedNode.componentType != "android-sdk" &&
-                            clickedNode.componentType != "cmdline-tools"
-                    ) {
-                      val nextState =
-                          when (clickedNode.checkedState) {
-                            ToggleableState.On -> ToggleableState.Off
-                            ToggleableState.Off,
-                            ToggleableState.Indeterminate -> ToggleableState.On
-                          }
-                      clickedNode.updateChildrenState(nextState)
-                      clickedNode.updateParentState()
-                      view.refreshViews()
-
-                      // 触发外部Compose底栏的按钮状态更新
-                      setupViewModel.triggerPendingChangesCheck()
-                    }
-                  }
-
-                  // 首次注入，记录标志位
-                  view.bindData(treeNodes, listener)
-                  view.tag = treeNodes
+          OdSdkTreeSection(
+              isLoading = isLoading,
+              treeNodes = treeNodes,
+              onNodeCheckChange = { node, newState ->
+                // 强制安装的项 (android-sdk, cmdline-tools) 不可切换
+                if (node.componentType == "android-sdk" ||
+                    node.componentType == "cmdline-tools") {
+                  return@OdSdkTreeSection
                 }
+                val parent = node.parent
+                // 单选组: build-tools / platform-tools (同组内只允许一个被勾选)
+                val isSingleSelectGroup =
+                    parent != null &&
+                        parent.children
+                            .firstOrNull()
+                            ?.componentType in
+                            setOf("build-tools", "platform-tools")
+                if (isSingleSelectGroup && newState == ToggleableState.On && parent != null) {
+                  parent.children.forEach { sibling ->
+                    if (sibling !== node) sibling.checkedState = ToggleableState.Off
+                  }
+                }
+                node.checkedState = newState
+                node.updateParentState()
+                setupViewModel.triggerPendingChangesCheck()
               },
-              modifier = Modifier.fillMaxSize(),
+              onGroupToggle = { group -> group.isExpanded = !group.isExpanded },
           )
         }
-      }
 
-      Spacer(modifier = Modifier.height(8.dp))
-
-      // 底部配置区域
-      Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-        Text(
-            text = "Additional Configurations:",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+        // 3. 附加配置 (紧凑横向布局, 高度受控)
+        OdAdditionalConfigsBar(
+            selectedJdk = selectedJdk,
+            onJdkChange = { selectedJdk = it },
+            jdkExpanded = jdkExpanded,
+            onJdkExpandedChange = { jdkExpanded = it },
+            installGit = installGit,
+            onInstallGitChange = { installGit = it },
+            installSsh = installSsh,
+            onInstallSshChange = { installSsh = it },
+            applyNdkFix = applyNdkFix,
+            onApplyNdkFixChange = { applyNdkFix = it },
+            applyCmakePatch = applyCmakePatch,
+            onApplyCmakePatchChange = { applyCmakePatch = it },
+            useGithubMirror = useGithubMirror,
+            onUseGithubMirrorChange = { useGithubMirror = it },
+            installOffline = installOffline,
+            onInstallOfflineChange = { installOffline = it },
+            githubMirrorUrl = githubMirrorUrl,
+            onGithubMirrorUrlChange = { githubMirrorUrl = it },
+            onReload = { setupViewModel.loadData(getValidMirror()) },
         )
 
-        // JDK 选择
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        ) {
-          Text("Java Development Kit: ", fontSize = 12.sp)
-          Box {
-            OutlinedButton(
-                onClick = { jdkExpanded = true },
-                modifier = Modifier.height(30.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp),
-            ) {
-              Text("OpenJDK $selectedJdk", fontSize = 11.sp)
-            }
-            DropdownMenu(expanded = jdkExpanded, onDismissRequest = { jdkExpanded = false }) {
-              DropdownMenuItem(
-                  text = { Text("OpenJDK 17 (Recommended)", fontSize = 12.sp) },
-                  onClick = {
-                    selectedJdk = "17"
-                    jdkExpanded = false
-                  },
-              )
-              DropdownMenuItem(
-                  text = { Text("OpenJDK 21 (Experimental)", fontSize = 12.sp) },
-                  onClick = {
-                    selectedJdk = "21"
-                    jdkExpanded = false
-                  },
-              )
-            }
-          }
-        }
-
-        // 基础修复与安装开关
-        Column {
-          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(36.dp)) {
-            Checkbox(
-                checked = installGit,
-                onCheckedChange = { installGit = it },
-                modifier = Modifier.scale(0.8f),
-            )
-            Text(
-                "Install Git (Version Control)",
-                fontSize = 11.sp,
-                modifier = Modifier.clickable { installGit = !installGit },
-            )
-          }
-          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(36.dp)) {
-            Checkbox(
-                checked = installSsh,
-                onCheckedChange = { installSsh = it },
-                modifier = Modifier.scale(0.8f),
-            )
-            Text(
-                "Install OpenSSH (Remote Auth)",
-                fontSize = 11.sp,
-                modifier = Modifier.clickable { installSsh = !installSsh },
-            )
-          }
-          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(36.dp)) {
-            Checkbox(
-                checked = applyNdkFix,
-                onCheckedChange = { applyNdkFix = it },
-                modifier = Modifier.scale(0.8f),
-            )
-            Text(
-                "Apply NDK Fixes (symlinks & patches)",
-                fontSize = 11.sp,
-                modifier = Modifier.clickable { applyNdkFix = !applyNdkFix },
-            )
-          }
-          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(36.dp)) {
-            Checkbox(
-                checked = applyCmakePatch,
-                onCheckedChange = { applyCmakePatch = it },
-                modifier = Modifier.scale(0.8f),
-            )
-            Text(
-                "Apply CMake Patches",
-                fontSize = 11.sp,
-                modifier = Modifier.clickable { applyCmakePatch = !applyCmakePatch },
-            )
-          }
-
-          // GitHub 镜像加速选项
-          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(36.dp)) {
-            Checkbox(
-                checked = useGithubMirror,
-                onCheckedChange = { useGithubMirror = it },
-                modifier = Modifier.scale(0.8f),
-            )
-            Text(
-                "Use Github Mirror (Accelerate download)",
-                fontSize = 11.sp,
-                modifier = Modifier.clickable { useGithubMirror = !useGithubMirror },
-            )
-          }
-          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(36.dp)) {
-            Checkbox(
-                checked = installOffline,
-                onCheckedChange = { installOffline = it },
-                modifier = Modifier.scale(0.8f),
-            )
-            Text(
-                "Install Offline SDK & Tools (Local tar.gz)",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { installOffline = !installOffline },
-            )
-          }
-        }
-
-        if (useGithubMirror && !installOffline) {
-          Row(
-              verticalAlignment = Alignment.CenterVertically,
-              modifier = Modifier.padding(start = 12.dp, top = 4.dp),
-          ) {
-            OutlinedTextField(
-                value = githubMirrorUrl,
-                onValueChange = { githubMirrorUrl = it },
-                modifier = Modifier.weight(1f).height(46.dp),
-                textStyle = LocalTextStyle.current.copy(fontSize = 11.sp),
-                singleLine = true,
-                placeholder = { Text("https://gh.llkk.cc/", fontSize = 11.sp) },
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(
-                onClick = { setupViewModel.loadData(getValidMirror()) },
-                modifier = Modifier.height(38.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp),
-            ) {
-              Icon(
-                  Icons.Default.Refresh,
-                  contentDescription = "Reload",
-                  modifier = Modifier.size(16.dp),
-              )
-              Spacer(Modifier.width(4.dp))
-              Text("Reload", fontSize = 11.sp)
-            }
-          }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 底部执行按钮
-        Button(
+        // 4. 底部 CTA
+        OdStickyActionBar(
+            enabled = installOffline || hasPendingChanges || installGit || installSsh,
+            installOffline = installOffline,
             onClick = {
               val activity = requireActivity()
               TermuxInstaller.setupBootstrapIfNeeded(activity) {
                 activity.runOnUiThread {
-                  if (installOffline) {
-                    showOfflineDialog = true
-                  } else {
-                    showActionDialog = true
-                  }
+                  if (installOffline) showOfflineDialog = true else showActionDialog = true
                 }
               }
             },
-            enabled = installOffline || hasPendingChanges || installGit || installSsh,
-            modifier = Modifier.fillMaxWidth().height(46.dp),
-        ) {
-          Text(
-              if (installOffline) "Start Offline Installation" else "Start Environment Setup",
-              fontSize = 13.sp,
-          )
-        }
+        )
       }
     }
 
@@ -548,52 +385,1232 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
     }
   }
 
+  // ---------------- 主题色板 ----------------
+
+  /**
+   * 引导页 SDK 配置专属调色板。 在 Material 3 基础色之上, 提供树形容器 / CTA / 网络状态等场景
+   * 使用的 3D 渐变与高对比辅助色, 确保暗/亮模式下均有正确的视觉冲击。
+   */
+  private data class OdSdkSetupColors(
+      val isDark: Boolean,
+      val canvas: Color,
+      val surface: Color,
+      val surfaceContainer: Color,
+      val surfaceContainerHigh: Color,
+      val surfaceContainerHighest: Color,
+      val onSurface: Color,
+      val onSurfaceVariant: Color,
+      val onSurfaceMuted: Color,
+      val outline: Color,
+      val outlineVariant: Color,
+      val primary: Color,
+      val onPrimary: Color,
+      val primaryContainer: Color,
+      val onPrimaryContainer: Color,
+      val secondary: Color,
+      val tertiary: Color,
+      val error: Color,
+      val warning: Color,
+      val success: Color,
+      val treeContainerGradient: Brush,
+      val treeAccentStart: Color,
+      val treeAccentEnd: Color,
+      val ctaGradient: Brush,
+      val networkOkBg: Color,
+      val networkOkFg: Color,
+      val networkWarnBg: Color,
+      val networkWarnFg: Color,
+      val radioDot: Color,
+      val forcedBadgeBg: Color,
+      val forcedBadgeFg: Color,
+  ) {
+    companion object {
+      fun of(isDark: Boolean): OdSdkSetupColors = if (isDark) dark() else light()
+
+      private fun light() =
+          OdSdkSetupColors(
+              isDark = false,
+              canvas = Color(0xFFFAF8FF),
+              surface = Color(0xFFFFFFFF),
+              surfaceContainer = Color(0xFFF3EEFF),
+              surfaceContainerHigh = Color(0xFFECE6FF),
+              surfaceContainerHighest = Color(0xFFE4DCFF),
+              onSurface = Color(0xFF1C1B1F),
+              onSurfaceVariant = Color(0xFF49454F),
+              onSurfaceMuted = Color(0xFF7A7785),
+              outline = Color(0xFFCAC4D0),
+              outlineVariant = Color(0xFFE7E0EC),
+              primary = Color(0xFF6750A4),
+              onPrimary = Color(0xFFFFFFFF),
+              primaryContainer = Color(0xFFEADDFF),
+              onPrimaryContainer = Color(0xFF21005D),
+              secondary = Color(0xFF625B71),
+              tertiary = Color(0xFF7D5260),
+              error = Color(0xFFB3261E),
+              warning = Color(0xFFE65100),
+              success = Color(0xFF1B5E20),
+              treeContainerGradient =
+                  Brush.verticalGradient(
+                      0.00f to Color(0xFFF7F2FF),
+                      0.50f to Color(0xFFEFE8FF),
+                      1.00f to Color(0xFFE4D9FF),
+                  ),
+              treeAccentStart = Color(0xFFB388FF),
+              treeAccentEnd = Color(0xFF7C4DFF),
+              ctaGradient =
+                  Brush.horizontalGradient(
+                      listOf(Color(0xFF7C4DFF), Color(0xFF536DFE))
+                  ),
+              networkOkBg = Color(0xFFE8F5E9),
+              networkOkFg = Color(0xFF2E7D32),
+              networkWarnBg = Color(0xFFFFF3E0),
+              networkWarnFg = Color(0xFFE65100),
+              radioDot = Color(0xFF7C4DFF),
+              forcedBadgeBg = Color(0xFFE0E0E0),
+              forcedBadgeFg = Color(0xFF424242),
+          )
+
+      private fun dark() =
+          OdSdkSetupColors(
+              isDark = true,
+              canvas = Color(0xFF0F0A1E),
+              surface = Color(0xFF1A1230),
+              surfaceContainer = Color(0xFF1F1640),
+              surfaceContainerHigh = Color(0xFF261C4A),
+              surfaceContainerHighest = Color(0xFF2D2155),
+              onSurface = Color(0xFFF5F0FF),
+              onSurfaceVariant = Color(0xFFCDC2E0),
+              onSurfaceMuted = Color(0xFF8E84A8),
+              outline = Color(0xFF49454F),
+              outlineVariant = Color(0xFF2D2640),
+              primary = Color(0xFFD0BCFF),
+              onPrimary = Color(0xFF381E72),
+              primaryContainer = Color(0xFF4F378B),
+              onPrimaryContainer = Color(0xFFEADDFF),
+              secondary = Color(0xFFCCC2DC),
+              tertiary = Color(0xFFEFB8C8),
+              error = Color(0xFFF2B8B5),
+              warning = Color(0xFFFFB74D),
+              success = Color(0xFF81C784),
+              treeContainerGradient =
+                  Brush.verticalGradient(
+                      0.00f to Color(0xFF1A1240),
+                      0.50f to Color(0xFF1F1648),
+                      1.00f to Color(0xFF12092E),
+                  ),
+              treeAccentStart = Color(0xFFB388FF),
+              treeAccentEnd = Color(0xFF82B1FF),
+              ctaGradient =
+                  Brush.horizontalGradient(
+                      listOf(Color(0xFF7C4DFF), Color(0xFF448AFF))
+                  ),
+              networkOkBg = Color(0xFF1B3A1F),
+              networkOkFg = Color(0xFF81C784),
+              networkWarnBg = Color(0xFF3A2A0E),
+              networkWarnFg = Color(0xFFFFB74D),
+              radioDot = Color(0xFFB388FF),
+              forcedBadgeBg = Color(0xFF3A3050),
+              forcedBadgeFg = Color(0xFFCDC2E0),
+          )
+    }
+  }
+
+  private val LocalOdSdkColors =
+      staticCompositionLocalOf<OdSdkSetupColors> {
+        error("OdSdkSetupColors not provided")
+      }
+
+  // ---------------- 头部 ----------------
+
   @Composable
-  private fun NetworkWarnings(netState: ConnectionInfo) {
-    val context = LocalContext.current
-    if (!netState.isConnected || netState === ConnectionInfo.UNKNOWN) {
-      ErrorChip(
-          text =
-              "${stringResource(R.string.msg_no_internet)} ${stringResource(R.string.action_open_settings)}",
-          isError = true,
-          onClick = { context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) },
+  private fun OdSdkSetupHeader(
+      abiName: String,
+      netState: ConnectionInfo,
+      onOpenNetworkSettings: () -> Unit,
+  ) {
+    val colors = LocalOdSdkColors.current
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(450), label = "header-alpha")
+    val offsetY by animateFloatAsState(if (visible) 0f else -10f, tween(500), label = "header-y")
+
+    Column(
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(start = 20.dp, end = 16.dp, top = 28.dp, bottom = 4.dp)
+                .graphicsLayer {
+                  this.alpha = alpha
+                  translationY = offsetY
+                }
+    ) {
+      // 顶部小徽标 + 章节名
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier =
+                Modifier.size(26.dp)
+                    .clip(CircleShape)
+                    .background(colors.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+              Icons.Filled.Download,
+              contentDescription = null,
+              tint = colors.onPrimaryContainer,
+              modifier = Modifier.size(14.dp),
+          )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "STEP  •  ENVIRONMENT",
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.onSurfaceMuted,
+            fontWeight = FontWeight.Medium,
+        )
+      }
+
+      Spacer(Modifier.height(8.dp))
+
+      // 主标题
+      Text(
+          text = "SDK 安装与配置",
+          style = MaterialTheme.typography.headlineSmall,
+          fontWeight = FontWeight.Bold,
+          color = colors.onSurface,
       )
-    }
-    if (netState.isCellularTransport) {
-      ErrorChip(stringResource(R.string.msg_connected_to_cellular), isError = false)
-    }
-    if (netState.isMeteredConnection && !netState.isCellularTransport) {
-      ErrorChip(stringResource(R.string.msg_connected_to_metered_connection), isError = false)
-    }
-    if (netState.isBackgroundDataRestricted) {
-      ErrorChip(stringResource(R.string.msg_disable_background_data_restriction), isError = false)
+
+      Spacer(Modifier.height(2.dp))
+
+      // 副标题 + ABI 徽章 (单行, 比例合理)
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = "为 IDE 安装开发工具以保证其正常运行",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        Spacer(Modifier.width(8.dp))
+        OdAbiBadge(abiName = abiName)
+      }
+
+      Spacer(Modifier.height(8.dp))
+
+      // 网络状态 - 紧凑胶囊
+      OdNetworkStatusPill(netState = netState, onClick = onOpenNetworkSettings)
     }
   }
 
   @Composable
-  private fun ErrorChip(text: String, isError: Boolean = true, onClick: (() -> Unit)? = null) {
-    val color = if (isError) Color(0xFFF44336) else Color(0xFFFF9800)
+  private fun OdAbiBadge(abiName: String) {
+    val colors = LocalOdSdkColors.current
     Surface(
-        modifier =
-            Modifier.padding(top = 4.dp).fillMaxWidth().clickable(enabled = onClick != null) {
-              onClick?.invoke()
-            },
+        color = colors.surfaceContainerHigh,
+        contentColor = colors.onSurface,
         shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, color),
-        color = Color.Transparent,
+    ) {
+      Text(
+          text = "ABI  $abiName",
+          fontSize = 10.sp,
+          fontWeight = FontWeight.Medium,
+          modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+      )
+    }
+  }
+
+  private enum class OdNetSeverity { OK, WARN, ERROR }
+
+  @Composable
+  private fun OdNetworkStatusPill(netState: ConnectionInfo, onClick: () -> Unit) {
+    val colors = LocalOdSdkColors.current
+    val (label, severity) =
+        when {
+          !netState.isConnected || netState === ConnectionInfo.UNKNOWN ->
+              stringResource(R.string.msg_no_internet) to OdNetSeverity.ERROR
+          netState.isCellularTransport ->
+              stringResource(R.string.msg_connected_to_cellular) to OdNetSeverity.WARN
+          netState.isMeteredConnection ->
+              stringResource(R.string.msg_connected_to_metered_connection) to
+                  OdNetSeverity.WARN
+          else -> "网络已连接" to OdNetSeverity.OK
+        }
+    val bg: Color
+    val fg: Color
+    when (severity) {
+      OdNetSeverity.OK -> {
+        bg = colors.networkOkBg
+        fg = colors.networkOkFg
+      }
+      OdNetSeverity.WARN -> {
+        bg = colors.networkWarnBg
+        fg = colors.networkWarnFg
+      }
+      OdNetSeverity.ERROR -> {
+        bg = colors.error.copy(alpha = 0.12f)
+        fg = colors.error
+      }
+    }
+    val clickable = severity != OdNetSeverity.OK
+
+    // 状态点呼吸动画
+    val infinite = rememberInfiniteTransition(label = "net-pulse")
+    val dotAlpha by
+        infinite.animateFloat(
+            initialValue = 0.45f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse),
+            label = "net-dot-alpha",
+        )
+
+    Surface(
+        color = bg,
+        contentColor = fg,
+        shape = RoundedCornerShape(50),
+        modifier =
+            Modifier.clickable(enabled = clickable) { onClick() }
+                .graphicsLayer { shadowElevation = if (severity == OdNetSeverity.ERROR) 6f else 0f },
     ) {
       Row(
-          modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+      ) {
+        Box(
+            modifier =
+                Modifier.size(6.dp)
+                    .clip(CircleShape)
+                    .background(fg.copy(alpha = dotAlpha))
+        )
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            imageVector =
+                if (severity == OdNetSeverity.OK) Icons.Outlined.Wifi else Icons.Outlined.WifiOff,
+            contentDescription = null,
+            tint = fg,
+            modifier = Modifier.size(12.dp),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+      }
+    }
+  }
+
+  // ---------------- SDK 树 (主区域) ----------------
+
+  @Composable
+  private fun OdSdkTreeSection(
+      isLoading: Boolean,
+      treeNodes: List<SdkTreeNode>,
+      onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
+      onGroupToggle: (SdkTreeNode) -> Unit,
+  ) {
+    val colors = LocalOdSdkColors.current
+
+    // 3D 渐变外壳 + 顶部高光描边
+    Box(
+        modifier =
+            Modifier.fillMaxSize()
+                .clip(RoundedCornerShape(20.dp))
+                .background(colors.treeContainerGradient)
+                .border(
+                    width = 1.dp,
+                    brush =
+                        Brush.verticalGradient(
+                            listOf(
+                                colors.treeAccentStart.copy(alpha = 0.45f),
+                                Color.Transparent
+                            )
+                        ),
+                    shape = RoundedCornerShape(20.dp),
+                )
+    ) {
+      if (isLoading) {
+        OdSdkTreeLoading()
+      } else if (treeNodes.isEmpty()) {
+        OdSdkTreeEmpty()
+      } else {
+        val listState = rememberLazyListState()
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+          itemsIndexed(treeNodes, key = { _, it -> it.id }) { index, node ->
+            OdSdkTopLevelEntry(
+                node = node,
+                index = index,
+                onNodeCheckChange = onNodeCheckChange,
+                onGroupToggle = onGroupToggle,
+            )
+          }
+        }
+      }
+    }
+  }
+
+  @Composable
+  private fun OdSdkTreeLoading() {
+    val colors = LocalOdSdkColors.current
+    val infinite = rememberInfiniteTransition(label = "loading")
+    val angle by
+        infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Restart),
+            label = "loading-angle",
+        )
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier =
+                Modifier.size(46.dp)
+                    .graphicsLayer { rotationZ = angle }
+                    .border(
+                        width = 3.dp,
+                        color = colors.primary.copy(alpha = 0.25f),
+                        shape = CircleShape,
+                    ),
+            contentAlignment = Alignment.Center,
+        ) {
+          Box(
+              modifier =
+                  Modifier.size(20.dp)
+                      .clip(CircleShape)
+                      .background(colors.primary.copy(alpha = 0.85f))
+          )
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            "正在获取 SDK 列表...",
+            color = colors.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
+        )
+      }
+    }
+  }
+
+  @Composable
+  private fun OdSdkTreeEmpty() {
+    val colors = LocalOdSdkColors.current
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            Icons.Outlined.Build,
+            contentDescription = null,
+            tint = colors.onSurfaceMuted,
+            modifier = Modifier.size(36.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "暂无可用组件",
+            color = colors.onSurfaceMuted,
+            style = MaterialTheme.typography.labelMedium,
+        )
+      }
+    }
+  }
+
+  @Composable
+  private fun OdSdkTopLevelEntry(
+      node: SdkTreeNode,
+      index: Int,
+      onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
+      onGroupToggle: (SdkTreeNode) -> Unit,
+  ) {
+    // 错落入场动画
+    var visible by remember(node.id) { mutableStateOf(false) }
+    LaunchedEffect(node.id) {
+      kotlinx.coroutines.delay((40L * index).coerceAtMost(360L))
+      visible = true
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(280)) + expandVertically(tween(320)),
+    ) {
+      if (node.isGroup) {
+        OdSdkGroupCard(
+            group = node,
+            onGroupToggle = onGroupToggle,
+            onNodeCheckChange = onNodeCheckChange,
+        )
+      } else {
+        OdSdkStandaloneRow(node = node, onNodeCheckChange = onNodeCheckChange)
+      }
+    }
+  }
+
+  @Composable
+  private fun OdSdkGroupCard(
+      group: SdkTreeNode,
+      onGroupToggle: (SdkTreeNode) -> Unit,
+      onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
+  ) {
+    val colors = LocalOdSdkColors.current
+    val children = group.children
+    val isExpanded = group.isExpanded
+    val selectedCount = children.count { it.checkedState == ToggleableState.On }
+    val totalCount = children.size
+    val isSingleSelect = children.firstOrNull()?.componentType in
+        setOf("build-tools", "platform-tools")
+    val groupIcon = odSdkGroupIcon(group)
+    val groupTint = odSdkGroupTint(group, colors)
+
+    // 展开 / 折叠 - 箭头旋转
+    val chevronRotation by
+        animateFloatAsState(
+            targetValue = if (isExpanded) 90f else 0f,
+            animationSpec = tween(220),
+            label = "chevron",
+        )
+
+    // 整个组卡片
+    Column(
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 3.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.surface.copy(alpha = if (colors.isDark) 0.5f else 0.65f))
+    ) {
+      // 父节点头部
+      Row(
+          modifier =
+              Modifier.fillMaxWidth()
+                  .clip(RoundedCornerShape(14.dp))
+                  .clickable { onGroupToggle(group) }
+                  .padding(start = 10.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
           verticalAlignment = Alignment.CenterVertically,
       ) {
         Icon(
-            Icons.Default.Info,
+            Icons.Filled.ChevronRight,
             contentDescription = null,
-            tint = color,
-            modifier = Modifier.size(16.dp),
+            tint = colors.onSurfaceVariant,
+            modifier =
+                Modifier.size(18.dp).graphicsLayer { rotationZ = chevronRotation },
         )
         Spacer(Modifier.width(6.dp))
-        Text(text, color = MaterialTheme.colorScheme.onSurface, fontSize = 11.sp)
+        Icon(
+            groupIcon,
+            contentDescription = null,
+            tint = groupTint,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            group.name,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            color = colors.onSurface,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        OdSdkGroupStateBadge(group = group, selectedCount = selectedCount, tint = groupTint)
+      }
+
+      // 子节点 - 向右缩进, 形成视觉层次
+      AnimatedVisibility(
+          visible = isExpanded && children.isNotEmpty(),
+          enter = expandVertically(tween(220)) + fadeIn(tween(180)),
+          exit = shrinkVertically(tween(180)) + fadeOut(tween(140)),
+      ) {
+        Column(
+            modifier =
+                Modifier.padding(start = 26.dp, end = 8.dp, bottom = 8.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        colors.surfaceContainer.copy(alpha = if (colors.isDark) 0.7f else 0.5f)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = colors.outlineVariant.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                    .padding(vertical = 2.dp),
+        ) {
+          children.forEachIndexed { i, child ->
+            OdSdkChildRow(
+                child = child,
+                isSingleSelect = isSingleSelect,
+                onNodeCheckChange = onNodeCheckChange,
+            )
+            if (i < children.lastIndex) {
+              Box(
+                  modifier =
+                      Modifier.fillMaxWidth()
+                          .height(1.dp)
+                          .background(colors.outlineVariant.copy(alpha = 0.18f))
+                          .padding(start = 12.dp)
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+
+  @Composable
+  private fun OdSdkGroupStateBadge(
+      group: SdkTreeNode,
+      selectedCount: Int,
+      tint: Color,
+  ) {
+    val colors = LocalOdSdkColors.current
+    val total = group.children.size
+    val (text, show) =
+        when (group.checkedState) {
+          ToggleableState.On -> "已选 $selectedCount" to true
+          ToggleableState.Indeterminate -> "$selectedCount / $total" to true
+          ToggleableState.Off -> "" to false
+        }
+    if (!show) return
+    Surface(
+        color = tint.copy(alpha = 0.18f),
+        contentColor = tint,
+        shape = RoundedCornerShape(50),
+    ) {
+      Text(
+          text,
+          fontSize = 10.sp,
+          fontWeight = FontWeight.SemiBold,
+          modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+      )
+    }
+  }
+
+  @Composable
+  private fun OdSdkChildRow(
+      child: SdkTreeNode,
+      isSingleSelect: Boolean,
+      onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
+  ) {
+    val colors = LocalOdSdkColors.current
+    val isChecked = child.checkedState == ToggleableState.On
+    val isForced =
+        child.componentType == "android-sdk" || child.componentType == "cmdline-tools"
+
+    val bg by
+        animateColorAsState(
+            targetValue =
+                if (isChecked) colors.primary.copy(alpha = if (colors.isDark) 0.18f else 0.12f)
+                else Color.Transparent,
+            animationSpec = tween(180),
+            label = "child-bg",
+        )
+
+    Row(
+        modifier =
+            Modifier.fillMaxWidth()
+                .background(bg)
+                .clickable(enabled = !isForced) {
+                  val newState = if (isChecked) ToggleableState.Off else ToggleableState.On
+                  onNodeCheckChange(child, newState)
+                }
+                .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      // 左侧 3D 凸起引导线
+      Box(
+          modifier =
+              Modifier.width(3.dp)
+                  .height(22.dp)
+                  .clip(RoundedCornerShape(2.dp))
+                  .background(
+                      if (isChecked) colors.primary
+                      else colors.outlineVariant.copy(alpha = 0.6f)
+                  )
+      )
+      Spacer(Modifier.width(8.dp))
+
+      if (isSingleSelect) {
+        // 单选: radio 圆点
+        OdRadioDot(
+            selected = isChecked,
+            enabled = !isForced,
+            onClick = { onNodeCheckChange(child, ToggleableState.On) },
+        )
+      } else {
+        // 多选: checkbox
+        OdCheckBox(
+            checked = isChecked,
+            enabled = !isForced,
+            onCheckedChange = { newChecked ->
+              onNodeCheckChange(child, if (newChecked) ToggleableState.On else ToggleableState.Off)
+            },
+        )
+      }
+      Spacer(Modifier.width(8.dp))
+
+      Text(
+          child.name,
+          fontSize = 13.sp,
+          fontWeight = if (isChecked) FontWeight.Medium else FontWeight.Normal,
+          color = if (isForced) colors.onSurfaceVariant else colors.onSurface,
+          modifier = Modifier.weight(1f),
+      )
+
+      if (isForced) {
+        OdForcedBadge()
+      } else if (isChecked) {
+        OdSelectedDot()
+      }
+    }
+  }
+
+  @Composable
+  private fun OdSdkStandaloneRow(
+      node: SdkTreeNode,
+      onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
+  ) {
+    val colors = LocalOdSdkColors.current
+    val isChecked = node.checkedState == ToggleableState.On
+    val bg by
+        animateColorAsState(
+            targetValue =
+                if (isChecked) colors.primary.copy(alpha = if (colors.isDark) 0.18f else 0.12f)
+                else Color.Transparent,
+            animationSpec = tween(180),
+            label = "standalone-bg",
+        )
+    Row(
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 3.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    colors.surface.copy(alpha = if (colors.isDark) 0.5f else 0.65f)
+                )
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .background(bg),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Icon(
+          Icons.Outlined.Build,
+          contentDescription = null,
+          tint = colors.primary,
+          modifier = Modifier.size(18.dp),
+      )
+      Spacer(Modifier.width(8.dp))
+      Text(
+          node.name,
+          fontSize = 13.sp,
+          fontWeight = FontWeight.Medium,
+          color = colors.onSurface,
+          modifier = Modifier.weight(1f),
+      )
+      OdForcedBadge()
+    }
+  }
+
+  @Composable
+  private fun OdRadioDot(selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val colors = LocalOdSdkColors.current
+    val ringColor by
+        animateColorAsState(
+            targetValue = if (selected) colors.radioDot else colors.onSurfaceMuted,
+            animationSpec = tween(180),
+            label = "radio-ring",
+        )
+    val scale by
+        animateFloatAsState(if (selected) 1f else 0.85f, tween(180), label = "radio-scale")
+    Box(
+        modifier =
+            Modifier.size(20.dp)
+                .scale(scale)
+                .clip(CircleShape)
+                .border(width = 2.dp, color = ringColor, shape = CircleShape)
+                .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+      if (selected) {
+        Box(
+            modifier =
+                Modifier.size(10.dp)
+                    .clip(CircleShape)
+                    .background(colors.radioDot)
+                    .graphicsLayer {
+                      shadowElevation = 4f
+                      shape = CircleShape
+                      clip = false
+                    }
+        )
+      }
+    }
+  }
+
+  @Composable
+  private fun OdCheckBox(checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val colors = LocalOdSdkColors.current
+    val bg by
+        animateColorAsState(
+            targetValue = if (checked) colors.primary else Color.Transparent,
+            animationSpec = tween(180),
+            label = "cb-bg",
+        )
+    val border by
+        animateColorAsState(
+            targetValue = if (checked) colors.primary else colors.onSurfaceMuted,
+            animationSpec = tween(180),
+            label = "cb-border",
+        )
+    val scale by animateFloatAsState(if (checked) 1.05f else 1f, tween(180), label = "cb-scale")
+    Box(
+        modifier =
+            Modifier.size(20.dp)
+                .scale(scale)
+                .clip(RoundedCornerShape(6.dp))
+                .background(bg)
+                .border(width = 2.dp, color = border, shape = RoundedCornerShape(6.dp))
+                .clickable(enabled = enabled, onClick = { onCheckedChange(!checked) }),
+        contentAlignment = Alignment.Center,
+    ) {
+      if (checked) {
+        Icon(
+            Icons.Filled.Check,
+            contentDescription = null,
+            tint = colors.onPrimary,
+            modifier =
+                Modifier.size(14.dp)
+                    .graphicsLayer { shadowElevation = 2f; clip = false },
+        )
+      }
+    }
+  }
+
+  @Composable
+  private fun OdForcedBadge() {
+    val colors = LocalOdSdkColors.current
+    Surface(
+        color = colors.forcedBadgeBg,
+        contentColor = colors.forcedBadgeFg,
+        shape = RoundedCornerShape(50),
+    ) {
+      Text(
+          "REQUIRED",
+          fontSize = 9.sp,
+          fontWeight = FontWeight.Bold,
+          letterSpacing = 0.5.sp,
+          modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+      )
+    }
+  }
+
+  @Composable
+  private fun OdSelectedDot() {
+    val colors = LocalOdSdkColors.current
+    val pulse by
+        rememberInfiniteTransition(label = "sel")
+            .animateFloat(
+                initialValue = 0.7f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+                label = "sel-pulse",
+            )
+    Box(
+        modifier =
+            Modifier.size(10.dp)
+                .clip(CircleShape)
+                .background(colors.primary.copy(alpha = pulse))
+                .graphicsLayer {
+                  shadowElevation = 4f
+                  shape = CircleShape
+                  clip = false
+                }
+    )
+  }
+
+  private fun odSdkGroupIcon(node: SdkTreeNode) =
+      when (node.componentType) {
+        "platform-tools" -> Icons.Filled.Speed
+        "build-tools" -> Icons.Filled.Build
+        "ndk" -> Icons.Filled.Memory
+        "cmake" -> Icons.Outlined.Code
+        else ->
+            when {
+              node.name.contains("Platform", ignoreCase = true) -> Icons.Filled.Storage
+              else -> Icons.Outlined.Build
+            }
+      }
+
+  private fun odSdkGroupTint(node: SdkTreeNode, colors: OdSdkSetupColors): Color =
+      when (node.componentType) {
+        "platform-tools" -> colors.tertiary
+        "build-tools" -> colors.primary
+        "ndk" -> colors.secondary
+        "cmake" -> colors.treeAccentStart
+        else -> colors.primary
+      }
+
+  // ---------------- 附加配置 ----------------
+
+  @Composable
+  private fun OdAdditionalConfigsBar(
+      selectedJdk: String,
+      onJdkChange: (String) -> Unit,
+      jdkExpanded: Boolean,
+      onJdkExpandedChange: (Boolean) -> Unit,
+      installGit: Boolean,
+      onInstallGitChange: (Boolean) -> Unit,
+      installSsh: Boolean,
+      onInstallSshChange: (Boolean) -> Unit,
+      applyNdkFix: Boolean,
+      onApplyNdkFixChange: (Boolean) -> Unit,
+      applyCmakePatch: Boolean,
+      onApplyCmakePatchChange: (Boolean) -> Unit,
+      useGithubMirror: Boolean,
+      onUseGithubMirrorChange: (Boolean) -> Unit,
+      installOffline: Boolean,
+      onInstallOfflineChange: (Boolean) -> Unit,
+      githubMirrorUrl: String,
+      onGithubMirrorUrlChange: (String) -> Unit,
+      onReload: () -> Unit,
+  ) {
+    val colors = LocalOdSdkColors.current
+
+    Column(
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+      // 分区标题 + JDK 切换 (右对齐, 紧凑)
+      Row(
+          modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+            "附加配置",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = colors.onSurfaceVariant,
+            letterSpacing = 0.3.sp,
+        )
+        Spacer(Modifier.weight(1f))
+        JdkSwitcher(
+            selectedJdk = selectedJdk,
+            onJdkChange = onJdkChange,
+            expanded = jdkExpanded,
+            onExpandedChange = onJdkExpandedChange,
+        )
+      }
+
+      // 第一行: Git / SSH / NDK Fix / CMake Patch / 镜像 / 离线
+      Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        OdConfigChip(
+            label = "Git",
+            icon = Icons.Filled.Code,
+            checked = installGit,
+            onCheckedChange = onInstallGitChange,
+            modifier = Modifier.weight(1f),
+        )
+        OdConfigChip(
+            label = "SSH",
+            icon = Icons.Filled.Key,
+            checked = installSsh,
+            onCheckedChange = onInstallSshChange,
+            modifier = Modifier.weight(1f),
+        )
+        OdConfigChip(
+            label = "NDK Fix",
+            icon = Icons.Filled.Build,
+            checked = applyNdkFix,
+            onCheckedChange = onApplyNdkFixChange,
+            modifier = Modifier.weight(1f),
+        )
+        OdConfigChip(
+            label = "CMake",
+            icon = Icons.Outlined.Code,
+            checked = applyCmakePatch,
+            onCheckedChange = onApplyCmakePatchChange,
+            modifier = Modifier.weight(1f),
+        )
+      }
+      Spacer(Modifier.height(6.dp))
+      Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        OdConfigChip(
+            label = "GitHub 镜像",
+            icon = Icons.Outlined.Wifi,
+            checked = useGithubMirror,
+            onCheckedChange = onUseGithubMirrorChange,
+            modifier = Modifier.weight(1.4f),
+        )
+        OdConfigChip(
+            label = "离线安装",
+            icon = Icons.Filled.Lock,
+            checked = installOffline,
+            onCheckedChange = onInstallOfflineChange,
+            highlight = true,
+            modifier = Modifier.weight(1f),
+        )
+      }
+
+      // 镜像 URL 行 (仅启用时显示)
+      AnimatedVisibility(visible = useGithubMirror && !installOffline) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+          OutlinedTextField(
+              value = githubMirrorUrl,
+              onValueChange = onGithubMirrorUrlChange,
+              modifier = Modifier.weight(1f),
+              textStyle =
+                  LocalTextStyle.current.copy(fontSize = 12.sp, color = colors.onSurface),
+              singleLine = true,
+              placeholder = {
+                Text("https://gh.llkk.cc/", fontSize = 12.sp, color = colors.onSurfaceMuted)
+              },
+              shape = RoundedCornerShape(10.dp),
+          )
+          Spacer(Modifier.width(8.dp))
+          // 重载按钮 - 3D 圆形
+          Box(
+              modifier =
+                  Modifier.size(40.dp)
+                      .clip(CircleShape)
+                      .background(colors.primary)
+                      .clickable { onReload() }
+                      .graphicsLayer { shadowElevation = 4f; shape = CircleShape; clip = false },
+              contentAlignment = Alignment.Center,
+          ) {
+            Icon(
+                Icons.Filled.Refresh,
+                contentDescription = "Reload",
+                tint = colors.onPrimary,
+                modifier = Modifier.size(18.dp),
+            )
+          }
+        }
+      }
+    }
+  }
+
+  @Composable
+  private fun JdkSwitcher(
+      selectedJdk: String,
+      onJdkChange: (String) -> Unit,
+      expanded: Boolean,
+      onExpandedChange: (Boolean) -> Unit,
+  ) {
+    val colors = LocalOdSdkColors.current
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(180), label = "jdk-arr")
+    Box {
+      Surface(
+          color = colors.surfaceContainerHigh,
+          contentColor = colors.onSurface,
+          shape = RoundedCornerShape(8.dp),
+          modifier = Modifier.clickable { onExpandedChange(true) },
+      ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 8.dp, end = 6.dp, top = 3.dp, bottom = 3.dp),
+        ) {
+          Icon(
+              Icons.Filled.Memory,
+              contentDescription = null,
+              tint = colors.primary,
+              modifier = Modifier.size(13.dp),
+          )
+          Spacer(Modifier.width(4.dp))
+          Text("JDK $selectedJdk", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+          Spacer(Modifier.width(2.dp))
+          Icon(
+              Icons.Filled.ChevronRight,
+              contentDescription = null,
+              tint = colors.onSurfaceVariant,
+              modifier = Modifier.size(14.dp).rotate(rotation),
+          )
+        }
+      }
+      DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
+        DropdownMenuItem(
+            text = { Text("OpenJDK 17 (Recommended)", fontSize = 13.sp) },
+            onClick = {
+              onJdkChange("17")
+              onExpandedChange(false)
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("OpenJDK 21 (Experimental)", fontSize = 13.sp) },
+            onClick = {
+              onJdkChange("21")
+              onExpandedChange(false)
+            },
+        )
+      }
+    }
+  }
+
+  @Composable
+  private fun OdConfigChip(
+      label: String,
+      icon: androidx.compose.ui.graphics.vector.ImageVector,
+      checked: Boolean,
+      onCheckedChange: (Boolean) -> Unit,
+      highlight: Boolean = false,
+      modifier: Modifier = Modifier,
+  ) {
+    val colors = LocalOdSdkColors.current
+    val bg by
+        animateColorAsState(
+            targetValue =
+                if (checked) {
+                  if (highlight) colors.tertiary.copy(alpha = 0.18f)
+                  else colors.primary.copy(alpha = if (colors.isDark) 0.20f else 0.14f)
+                } else colors.surfaceContainer,
+            animationSpec = tween(180),
+            label = "chip-bg",
+        )
+    val fg by
+        animateColorAsState(
+            targetValue = if (checked) colors.primary else colors.onSurfaceVariant,
+            animationSpec = tween(180),
+            label = "chip-fg",
+        )
+    val border by
+        animateColorAsState(
+            targetValue =
+                if (checked) {
+                  if (highlight) colors.tertiary else colors.primary
+                } else colors.outlineVariant,
+            animationSpec = tween(180),
+            label = "chip-border",
+        )
+    val scale by
+        animateFloatAsState(if (checked) 1.02f else 1f, tween(160), label = "chip-scale")
+    Row(
+        modifier =
+            modifier
+                .height(38.dp)
+                .scale(scale)
+                .clip(RoundedCornerShape(10.dp))
+                .background(bg)
+                .border(width = 1.dp, color = border, shape = RoundedCornerShape(10.dp))
+                .clickable { onCheckedChange(!checked) }
+                .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      // 左侧 3D 勾选指示器
+      Box(
+          modifier =
+              Modifier.size(16.dp)
+                  .clip(RoundedCornerShape(4.dp))
+                  .background(if (checked) colors.primary else Color.Transparent)
+                  .border(
+                      width = 1.5.dp,
+                      color = if (checked) colors.primary else colors.onSurfaceMuted,
+                      shape = RoundedCornerShape(4.dp),
+                  ),
+          contentAlignment = Alignment.Center,
+      ) {
+        if (checked) {
+          Icon(
+              Icons.Filled.Check,
+              contentDescription = null,
+              tint = colors.onPrimary,
+              modifier = Modifier.size(11.dp),
+          )
+        }
+      }
+      Spacer(Modifier.width(6.dp))
+      Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(13.dp))
+      Spacer(Modifier.width(4.dp))
+      Text(
+          label,
+          fontSize = 11.sp,
+          fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Medium,
+          color = if (checked) colors.onSurface else colors.onSurfaceVariant,
+          maxLines = 1,
+      )
+    }
+  }
+
+  // ---------------- 底部 CTA ----------------
+
+  @Composable
+  private fun OdStickyActionBar(
+      enabled: Boolean,
+      installOffline: Boolean,
+      onClick: () -> Unit,
+  ) {
+    val colors = LocalOdSdkColors.current
+    val infinite = rememberInfiniteTransition(label = "cta-pulse")
+    val pulse by
+        infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = if (enabled) 1f else 0f,
+            animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Restart),
+            label = "cta-pulse-alpha",
+        )
+    val label =
+        if (installOffline) "Start Offline Installation" else "Start Environment Setup"
+    Box(
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .graphicsLayer {
+                  shadowElevation = if (enabled) 12f else 0f
+                  shape = RoundedCornerShape(14.dp)
+                  clip = false
+                }
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (enabled) colors.ctaGradient
+                    else
+                        Brush.horizontalGradient(
+                            listOf(
+                                colors.surfaceContainer,
+                                colors.surfaceContainer
+                            )
+                        )
+                )
+                .clickable(enabled = enabled, onClick = onClick)
+    ) {
+      // 顶部高光 - 3D 感
+      Box(
+          modifier =
+              Modifier.matchParentSize()
+                  .background(
+                      Brush.verticalGradient(
+                          0.0f to Color.White.copy(alpha = if (enabled) 0.20f else 0f),
+                          0.4f to Color.White.copy(alpha = if (enabled) 0.06f else 0f),
+                          1.0f to Color.Transparent,
+                      )
+                  )
+      )
+      // 启用时呼吸外圈
+      if (enabled) {
+        Box(
+            modifier =
+                Modifier.matchParentSize()
+                    .border(
+                        width = 1.5.dp,
+                        color = colors.primary.copy(alpha = 0.35f * (1f - pulse)),
+                        shape = RoundedCornerShape(14.dp),
+                    )
+        )
+      }
+      Row(
+          modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp).padding(horizontal = 18.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.Center,
+      ) {
+        Icon(
+            imageVector = Icons.Filled.Download,
+            contentDescription = null,
+            tint = if (enabled) colors.onPrimary else colors.onSurfaceMuted,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            color = if (enabled) colors.onPrimary else colors.onSurfaceMuted,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            letterSpacing = 0.4.sp,
+        )
       }
     }
   }
