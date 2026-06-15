@@ -136,7 +136,7 @@ object PerfTracer {
    * @return [block] 的返回值
    */
   @JvmStatic
-  inline fun <T> trace(name: String, block: () -> T): T {
+  inline fun <T> trace(name: String, noinline block: () -> T): T {
     if (!BuildConfig.DEBUG) return block() // Release build 0 overhead
     return _traceImpl(name, block)
   }
@@ -167,7 +167,7 @@ object PerfTracer {
    * 0 overhead 保留.
    */
   @PublishedApi
-  internal fun <T> _traceImpl(name: String, noinline block: () -> T): T {
+  internal fun <T> _traceImpl(name: String, block: () -> T): T {
     val s = socket ?: return block()
     val start = SystemClock.elapsedRealtime()
     return try {

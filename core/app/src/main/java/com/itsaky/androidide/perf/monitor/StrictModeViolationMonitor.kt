@@ -80,7 +80,7 @@ object StrictModeViolationMonitor {
     val threadPolicy = StrictMode.getThreadPolicy()
     val newThreadPolicy =
         StrictMode.ThreadPolicy.Builder(threadPolicy)
-            .onThreadViolation { violation ->
+            .onThreadViolation { _, violation ->
               reportViolation("thread", violation, sampleEveryNth)
             }
             .build()
