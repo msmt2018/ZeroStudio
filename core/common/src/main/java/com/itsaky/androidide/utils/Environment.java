@@ -118,110 +118,125 @@ public final class Environment {
    * Initializes the environment paths, system properties, and injects variables into the native OS environment.
    * This ensures that subprocesses (like Runtime.exec or ProcessBuilder) inherit the JDK environment.
    *
+   * <p><b>Thread-safety:</b> double-checked locking on {@link #INITIALIZED}. The method is
+   * safe to call concurrently from any thread. Re-entrant calls (e.g. from inside
+   * {@link #putEnvironment(Map, boolean)} triggered by {@link #injectNativeEnvironment()}) are
+   * short-circuited by setting {@link #INITIALIZED} to {@code true} <em>before</em> calling
+   * {@link #injectNativeEnvironment()}.
+   *
    * @param context Application context
    */
   public static void init(Context context) {
     if (INITIALIZED && ROOT != null) {
       return;
     }
-    ROOT = context.getFilesDir();
-    PREFIX = mkdirIfNotExits(new File(ROOT, "usr"));
-    HOME = mkdirIfNotExits(new File(ROOT, "home"));
-    ANDROIDIDE_HOME = mkdirIfNotExits(new File(HOME, ".androidide"));
-    TMP_DIR = mkdirIfNotExits(new File(PREFIX, "tmp"));
-    BIN_DIR = mkdirIfNotExits(new File(PREFIX, "bin"));
-    LIB_DIR = new File(PREFIX, "lib");
-    PROJETS_JAVA2KOTLIN_BAK = new File(PROJECTS_FOLDER, ".j2k_bak");
-    PROJECTS_DIR = mkdirIfNotExits(new File(FileUtil.getExternalStorageDir(), PROJECTS_FOLDER));
-    ANDROID_JAR = new File(ANDROIDIDE_HOME, "android.jar");
-    TOOLING_API_JAR = new File(new File(ANDROIDIDE_HOME, "tooling-api"), "tooling-api-all.jar");
-    AAPT2 = new File(ANDROIDIDE_HOME, "aapt2");
-    ANDROIDIDE_UI = new File(ANDROIDIDE_HOME, "ui");
-    REALM_DB_DIR = new File(ROOT, "realm-dbs");
-    COMPOSE_HOME = new File(ANDROIDIDE_HOME, "compose");
+    synchronized (Environment.class) {
+      if (INITIALIZED && ROOT != null) {
+        return;
+      }
+      ROOT = context.getFilesDir();
+      PREFIX = mkdirIfNotExits(new File(ROOT, "usr"));
+      HOME = mkdirIfNotExits(new File(ROOT, "home"));
+      ANDROIDIDE_HOME = mkdirIfNotExits(new File(HOME, ".androidide"));
+      TMP_DIR = mkdirIfNotExits(new File(PREFIX, "tmp"));
+      BIN_DIR = mkdirIfNotExits(new File(PREFIX, "bin"));
+      LIB_DIR = new File(PREFIX, "lib");
+      PROJETS_JAVA2KOTLIN_BAK = new File(PROJECTS_FOLDER, ".j2k_bak");
+      PROJECTS_DIR = mkdirIfNotExits(new File(FileUtil.getExternalStorageDir(), PROJECTS_FOLDER));
+      ANDROID_JAR = new File(ANDROIDIDE_HOME, "android.jar");
+      TOOLING_API_JAR = new File(new File(ANDROIDIDE_HOME, "tooling-api"), "tooling-api-all.jar");
+      AAPT2 = new File(ANDROIDIDE_HOME, "aapt2");
+      ANDROIDIDE_UI = new File(ANDROIDIDE_HOME, "ui");
+      REALM_DB_DIR = new File(ROOT, "realm-dbs");
+      COMPOSE_HOME = new File(ANDROIDIDE_HOME, "compose");
 
-    INIT_SCRIPT = new File(new File(ANDROIDIDE_HOME, "init"), "init.gradle");
-    GRADLE_USER_HOME = new File(HOME, ".gradle");
-    MAVEN_REPOSITORY = new File(HOME, ".m2");
-    
-     // 初始化Lottie动画目录
-    LOTTIE_ANIMATION_DIR = new File(ANDROIDIDE_HOME, "LottieAnimation");
-    LOTTIE_EXPORT_DIR = new File(PROJECTS_DIR, "LottieAnimation");
-    
-     File java17Home = new File(PREFIX, "lib/jvm/java-17-openjdk");
-     File java21Home = new File(PREFIX, "lib/jvm/java-21-openjdk");
+      INIT_SCRIPT = new File(new File(ANDROIDIDE_HOME, "init"), "init.gradle");
+      GRADLE_USER_HOME = new File(HOME, ".gradle");
+      MAVEN_REPOSITORY = new File(HOME, ".m2");
 
-    
-    ANDROID_HOME = new File(HOME, "android-sdk");
-    
-    // 交叉编译变量环境
-    ANDROID_NDK_HOME = new File(ANDROID_HOME, "ndk"); 
-    NDK_HOME = ANDROID_NDK_HOME;
-    CMAKE_HOME = new File(ANDROID_HOME, "cmake");
-    CMAKE_BIN = new File(CMAKE_HOME, "bin");
-    // Protobuf (protoc) 路径
-    PROTOC_BIN = new File(PREFIX, "bin");
+       // 初始化Lottie动画目录
+      LOTTIE_ANIMATION_DIR = new File(ANDROIDIDE_HOME, "LottieAnimation");
+      LOTTIE_EXPORT_DIR = new File(PROJECTS_DIR, "LottieAnimation");
 
-    
-    KOTLINC_HOME = new File(HOME, ".kotlinc");
-    
-    //plugin
-    File idePluginDir = new File(ANDROIDIDE_HOME, "ideplugin");
-    PLUGIN_HOME = new File(ANDROIDIDE_HOME, "plugin");
-    
-    KOTLIN_LSP_HOME = new File(idePluginDir, "kotlinLanguageServices");
-    KOTLIN_LSP_LAUNCHER = new File(KOTLIN_LSP_HOME, "bin/kotlin-language-server");
-    KOTLIN_LSP_LIBS_JAR_DIR = new File(KOTLIN_LSP_HOME, "lib");
-    SERVERS_KOTLIN_DIR = KOTLIN_LSP_HOME;
-    SERVER_CONFIG_DIR = new File(HOME, ".config/kotlin-language-server");
-    //格式化插件
-    FORMAT_KOTLIN_KTFMT = new File(idePluginDir, "ktfmt");
-    
-    JAVA_HOME = new File(PREFIX, "opt/openjdk");
-    ANDROIDIDE = new File(PREFIX, "share/AndroidIDE.properties");
+       File java17Home = new File(PREFIX, "lib/jvm/java-17-openjdk");
+       File java21Home = new File(PREFIX, "lib/jvm/java-21-openjdk");
 
-         // SHELL_KOTLIN_LSP = new File(KOTLIN_LSP_HOME, "bin/kotlin-language-server");
-    JAVA = new File(JAVA_HOME, "bin/java");
-    BASH_SHELL = new File(BIN_DIR, "bash");
-    LOGIN_SHELL = new File(BIN_DIR, "login");
 
-    setExecutable(JAVA);
-    setExecutable(BASH_SHELL);
-    setExecutable(new File(CMAKE_BIN, "cmake"));
-    setExecutable(new File(CMAKE_BIN, "ninja")); // CMake 通常配合 ninja
-    setExecutable(new File(PROTOC_BIN, "protoc"));
+      ANDROID_HOME = new File(HOME, "android-sdk");
 
-    // 设置 Java System Properties (供 JVM 内部使用)
-    System.setProperty("user.home", HOME.getAbsolutePath());
-    System.setProperty("android.home", ANDROID_HOME.getAbsolutePath());
-    System.setProperty("ANDROID_HOME", ANDROID_HOME.getAbsolutePath());
-    System.setProperty("ANDROID_NDK", ANDROID_NDK_HOME.getAbsolutePath());
-    System.setProperty("ANDROID_NDK_ROOT", ANDROID_NDK_HOME.getAbsolutePath());
-    System.setProperty("ANDROID_NDK_HOME", ANDROID_NDK_HOME.getAbsolutePath());
-    System.setProperty("NDK_HOME", ANDROID_NDK_HOME.getAbsolutePath());
-    System.setProperty("cmake.dir", CMAKE_HOME.getAbsolutePath());
-    System.setProperty("CMAKE_HOME", CMAKE_HOME.getAbsolutePath());
-    // 如果使用了 Proto 插件，有时需要指定 protoc 路径
-    System.setProperty("protoc", new File(PROTOC_BIN, "protoc").getAbsolutePath());
-    System.setProperty("gradle.user.home", GRADLE_USER_HOME.getAbsolutePath());
-    System.setProperty("kotlin.home", KOTLINC_HOME.getAbsolutePath());
-    System.setProperty("kotlin.lsp.home", KOTLIN_LSP_HOME.getAbsolutePath());
-    System.setProperty("java.io.tmpdir", TMP_DIR.getAbsolutePath());
+      // 交叉编译变量环境
+      ANDROID_NDK_HOME = new File(ANDROID_HOME, "ndk");
+      NDK_HOME = ANDROID_NDK_HOME;
+      CMAKE_HOME = new File(ANDROID_HOME, "cmake");
+      CMAKE_BIN = new File(CMAKE_HOME, "bin");
+      // Protobuf (protoc) 路径
+      PROTOC_BIN = new File(PREFIX, "bin");
 
-    // 关键：先把 INITIALIZED 置为 true 再 inject。
-    // injectNativeEnvironment() 内部会调 putEnvironment() → ensureInitialized()，
-    // 而 ensureInitialized() 的守卫条件是 `!INITIALIZED || ROOT == null`。
-    // 如果先 inject 再设 INITIALIZED，ROOT 已经非空了，但 INITIALIZED 还是 false，
-    // 守卫条件 `!false || false == true` 永远成立 → 无限递归 → StackOverflowError
-    // → 触发 logback 的 FilterReply.<clinit>（这正好是 v20260610 真机 SIGSEGV 的根因）。
-    //
-    // 进一步加固：用 try/finally 保证 INITIALIZED 一定会被置位，
-    // 即便 injectNativeEnvironment 抛异常也不会让后续调用方陷入"未初始化"死锁。
-    try {
-      //  注入 Native 环境变量 (供 ProcessBuilder, Runtime.exec, Terminal 使用)
-      injectNativeEnvironment();
-    } finally {
+
+      KOTLINC_HOME = new File(HOME, ".kotlinc");
+
+      //plugin
+      File idePluginDir = new File(ANDROIDIDE_HOME, "ideplugin");
+      PLUGIN_HOME = new File(ANDROIDIDE_HOME, "plugin");
+
+      KOTLIN_LSP_HOME = new File(idePluginDir, "kotlinLanguageServices");
+      KOTLIN_LSP_LAUNCHER = new File(KOTLIN_LSP_HOME, "bin/kotlin-language-server");
+      KOTLIN_LSP_LIBS_JAR_DIR = new File(KOTLIN_LSP_HOME, "lib");
+      SERVERS_KOTLIN_DIR = KOTLIN_LSP_HOME;
+      SERVER_CONFIG_DIR = new File(HOME, ".config/kotlin-language-server");
+      //格式化插件
+      FORMAT_KOTLIN_KTFMT = new File(idePluginDir, "ktfmt");
+
+      JAVA_HOME = new File(PREFIX, "opt/openjdk");
+      ANDROIDIDE = new File(PREFIX, "share/AndroidIDE.properties");
+
+           // SHELL_KOTLIN_LSP = new File(KOTLIN_LSP_HOME, "bin/kotlin-language-server");
+      JAVA = new File(JAVA_HOME, "bin/java");
+      BASH_SHELL = new File(BIN_DIR, "bash");
+      LOGIN_SHELL = new File(BIN_DIR, "login");
+
+      setExecutable(JAVA);
+      setExecutable(BASH_SHELL);
+      setExecutable(new File(CMAKE_BIN, "cmake"));
+      setExecutable(new File(CMAKE_BIN, "ninja")); // CMake 通常配合 ninja
+      setExecutable(new File(PROTOC_BIN, "protoc"));
+
+      // 设置 Java System Properties (供 JVM 内部使用)
+      System.setProperty("user.home", HOME.getAbsolutePath());
+      System.setProperty("android.home", ANDROID_HOME.getAbsolutePath());
+      System.setProperty("ANDROID_HOME", ANDROID_HOME.getAbsolutePath());
+      System.setProperty("ANDROID_NDK", ANDROID_NDK_HOME.getAbsolutePath());
+      System.setProperty("ANDROID_NDK_ROOT", ANDROID_NDK_HOME.getAbsolutePath());
+      System.setProperty("ANDROID_NDK_HOME", ANDROID_NDK_HOME.getAbsolutePath());
+      System.setProperty("NDK_HOME", ANDROID_NDK_HOME.getAbsolutePath());
+      System.setProperty("cmake.dir", CMAKE_HOME.getAbsolutePath());
+      System.setProperty("CMAKE_HOME", CMAKE_HOME.getAbsolutePath());
+      // 如果使用了 Proto 插件，有时需要指定 protoc 路径
+      System.setProperty("protoc", new File(PROTOC_BIN, "protoc").getAbsolutePath());
+      System.setProperty("gradle.user.home", GRADLE_USER_HOME.getAbsolutePath());
+      System.setProperty("kotlin.home", KOTLINC_HOME.getAbsolutePath());
+      System.setProperty("kotlin.lsp.home", KOTLIN_LSP_HOME.getAbsolutePath());
+      System.setProperty("java.io.tmpdir", TMP_DIR.getAbsolutePath());
+
+      // 关键修复：必须把 INITIALIZED 置为 true 之后再 injectNativeEnvironment()。
+      //
+      // 之前的实现把这个赋值放在 finally 块中、inject 之后，这会导致死循环：
+      //   init() -> injectNativeEnvironment() -> putEnvironment() -> ensureInitialized()
+      //     -> init() -> injectNativeEnvironment() -> putEnvironment() -> ensureInitialized()
+      //     -> ...
+      // 原因：ensureInitialized() 的守卫是 `!INITIALIZED || ROOT == null`。
+      // ROOT 在 init() 早期（第 127 行）就被赋值了，但 INITIALIZED 仍为 false，
+      // 所以 `!false || false == true` 永远成立 → 重入 init()。
+      //
+      // 现在 INITIALIZED 在 inject 之前置位。即便 injectNativeEnvironment() 抛异常，
+      // 静态路径与 System properties 已经完全初始化，应用其余部分可以正常启动。
+      // 真正失败的 setenv 会被 injectNativeEnvironment() 内部的 try/catch 吞掉并写
+      // System.err，不会影响主流程。
       INITIALIZED = true;
+
+      //  注入 Native 环境变量 (供 ProcessBuilder, Runtime.exec, Terminal 使用)
+      // 该方法内部已对失败情形做了保护，此处不再包 try/finally 重新设置 INITIALIZED。
+      injectNativeEnvironment();
     }
   }
 
