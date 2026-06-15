@@ -101,11 +101,9 @@ object ThreadDumper {
     val entries = Thread.getAllStackTraces().entries.sortedBy { it.key.name }
     entries.forEach { (thread, stack) ->
       sb.appendLine("--- Thread: ${thread.name} (id=${thread.id}, priority=${thread.priority}, state=${thread.state}) ---")
-      val sw = StringWriter()
-      val pw = PrintWriter(sw)
-      thread.printStackTrace(pw)
-      pw.flush()
-      sb.append(sw.toString())
+      // Thread 不是 Throwable, 没有 printStackTrace(PrintWriter) overload.
+      // Thread.getAllStackTraces() 已经返回 Array<StackTraceElement>, 直接遍历.
+      stack.forEach { frame -> sb.appendLine("\tat $frame") }
       sb.appendLine()
     }
     return sb.toString()
