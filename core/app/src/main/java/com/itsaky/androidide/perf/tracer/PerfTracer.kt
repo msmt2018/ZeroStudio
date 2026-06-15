@@ -137,7 +137,27 @@ object PerfTracer {
    */
   @JvmStatic
   inline fun <T> trace(name: String, block: () -> T): T {
-    if (!BuildConfig.DEBUG) return block()
+    if (!BuildConfig.DEBUG) return block() // Release build 0 overhead
+    return _traceImpl(name, block)
+  }
+
+  /**
+   * `trace` 的实际工作体. 拆出来是为了避开 inline 跨 class 访问的
+   * @PublishedApi 链:
+   *
+   * - 原来 inline trace body 直接调 `s.sendPhase`, 编译期会递归检查
+   *   sendPhase body 的所有访问 (broken / escape 都是 PerfClientSocket
+   *   private), 这些都要加 @PublishedApi, 污染严重.
+   * - 拆出 _traceImpl 后, inline trace body 只调 _traceImpl (PerfTracer
+   *   自己的 internal fun), 不会跨 class, 也就不递归检查 _traceImpl
+   *   body. _traceImpl 是 non-inline, 调 sendPhase 不递归 body 检查.
+   * - @PublishedApi 让 _traceImpl 能被 inline trace 调.
+   *
+   * Release 0 overhead 由 inline trace 的 `if (!BuildConfig.DEBUG)`
+   * 保证 — _traceImpl 在 Release build 永远不会被调用.
+   */
+  @PublishedApi
+  internal fun <T> _traceImpl(name: String, block: () -> T): T {
     val s = socket ?: return block()
     val start = SystemClock.elapsedRealtime()
     return try {
