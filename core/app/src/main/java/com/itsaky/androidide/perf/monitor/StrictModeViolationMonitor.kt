@@ -97,14 +97,22 @@ object StrictModeViolationMonitor {
     StrictMode.setThreadPolicy(threadPolicyBuilder.build())
 
     // 2. VM 违规
-    // VmPolicy.Builder.onVmViolation(OnVmViolationListener) (API 26+) 是真实 API,
-    // 单参 SAM, 不动.
+    // VmPolicy.Builder 也没有 onVmViolation 方法 (跟 ThreadPolicy.Builder 一样).
+    // 正确 API 是 penaltyListener(Executor, OnVmViolationListener) (API 28+).
+    // OnVmViolationListener.onVmViolation(Throwable) 是单参 SAM.
+    // API 26-27 只能走 penaltyLog() (logcat 输出, 不上报).
     val vmPolicy = StrictMode.getVmPolicy()
-    val newVmPolicy =
-        StrictMode.VmPolicy.Builder(vmPolicy)
-            .onVmViolation { violation -> reportViolation("vm", violation, sampleEveryNth) }
-            .build()
-    StrictMode.setVmPolicy(newVmPolicy)
+    val vmPolicyBuilder = StrictMode.VmPolicy.Builder(vmPolicy)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      // API 28+: penaltyListener 装 OnVmViolationListener (单参 Throwable)
+      vmPolicyBuilder.penaltyListener(
+          Executor { command -> command.run() }
+      ) { violation -> reportViolation("vm", violation, sampleEveryNth) }
+    } else {
+      // API 26-27: penaltyListener 还没出, 只能 logcat
+      vmPolicyBuilder.penaltyLog()
+    }
+    StrictMode.setVmPolicy(vmPolicyBuilder.build())
 
     log.info("StrictModeViolationMonitor installed (sample rate: 1/{})", sampleEveryNth)
   }
