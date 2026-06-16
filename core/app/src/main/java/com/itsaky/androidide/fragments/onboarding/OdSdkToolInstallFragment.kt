@@ -90,6 +90,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1593,9 +1594,13 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                   maxFontSize = 11.sp,
                   stepSize = 0.5.sp,
               ),
-          fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Medium,
-          color =
-              if (checked) colors.onSurface else colors.onSurfaceVariant,
+          // BasicText 不接受 fontWeight / color 作顶层参数 (Compose 1.7 签名),
+          // 全部要进 TextStyle。color 同样走 TextStyle.color。
+          style =
+              TextStyle(
+                  fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Medium,
+                  color = if (checked) colors.onSurface else colors.onSurfaceVariant,
+              ),
           maxLines = 1,
           softWrap = false,
           overflow = TextOverflow.Visible,
