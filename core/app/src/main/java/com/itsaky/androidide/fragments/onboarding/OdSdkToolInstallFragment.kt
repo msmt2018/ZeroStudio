@@ -57,6 +57,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
@@ -90,6 +92,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
@@ -260,6 +263,14 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
     // 所以点击父节点子列表不展开。这里改成在 Screen 范围内持有可观察的展开 id 集合。
     val expandedNodeIds = remember { mutableStateMapOf<String, Boolean>() }
 
+    // SDK 树节点勾选状态: 同样用 Compose 可观察的 map, 按节点 id 记录。
+    // 跟 expandedNodeIds 同根问题: 直接改 SdkTreeNode.checkedState 不会触发重组,
+    // 造成子节点点击 "没反应", 折叠再展开又会重新读 data class 字段, 视觉上像
+    // "自动勾选/取消"。这里 map 自身作为可观察 state, 写入即触发子行 + 父徽标
+    // 重组, 同步回写到 data class.checkedState 是给 ViewModel (getInstallTasks
+    // / triggerPendingChangesCheck) 用的, 不能省。
+    val checkedNodeStates = remember { mutableStateMapOf<String, ToggleableState>() }
+
     val currentAbi = IDEBuildConfigProvider.getInstance().cpuAbiName
     val context = LocalContext.current
 
@@ -301,6 +312,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
               isLoading = isLoading,
               treeNodes = treeNodes,
               expandedNodeIds = expandedNodeIds,
+              checkedNodeStates = checkedNodeStates,
               onNodeCheckChange = { node, newState ->
                 // 强制安装的项 (android-sdk, cmdline-tools) 不可切换
                 if (node.componentType == "android-sdk" ||
@@ -308,20 +320,32 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                   return@OdSdkTreeSection
                 }
                 val parent = node.parent
-                // 单选组: build-tools / platform-tools (同组内只允许一个被勾选)
+                // 单选组: platform-tools 同组内只允许一个被勾选 (build-tools 已
+                // 改多选, 因为用户经常需要并存多个版本用于不同项目)。
                 val isSingleSelectGroup =
                     parent != null &&
                         parent.children
                             .firstOrNull()
                             ?.componentType in
-                            setOf("build-tools", "platform-tools")
+                        setOf("platform-tools")
                 if (isSingleSelectGroup && newState == ToggleableState.On && parent != null) {
                   parent.children.forEach { sibling ->
-                    if (sibling !== node) sibling.checkedState = ToggleableState.Off
+                    if (sibling !== node) {
+                      checkedNodeStates[sibling.id] = ToggleableState.Off
+                      sibling.checkedState = ToggleableState.Off
+                    }
                   }
                 }
+                // 1) 写可观察 map, 触发子行 + 父徽标 重组 (这是修 "子节点无法勾选")
+                checkedNodeStates[node.id] = newState
+                // 2) 回写 data class, 供 ViewModel.getInstallTasks /
+                //    triggerPendingChangesCheck 读 (否则 Action 弹窗列表为空)
                 node.checkedState = newState
+                // 3) 同步更新父级状态, 也写两份
                 node.updateParentState()
+                if (parent != null) {
+                  checkedNodeStates[parent.id] = parent.checkedState
+                }
                 setupViewModel.triggerPendingChangesCheck()
               },
               onGroupToggle = { group ->
@@ -714,6 +738,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
       isLoading: Boolean,
       treeNodes: List<SdkTreeNode>,
       expandedNodeIds: SnapshotStateMap<String, Boolean>,
+      checkedNodeStates: SnapshotStateMap<String, ToggleableState>,
       onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
       onGroupToggle: (SdkTreeNode) -> Unit,
   ) {
@@ -754,6 +779,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                 node = node,
                 index = index,
                 expandedNodeIds = expandedNodeIds,
+                checkedNodeStates = checkedNodeStates,
                 onNodeCheckChange = onNodeCheckChange,
                 onGroupToggle = onGroupToggle,
             )
@@ -830,6 +856,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
       node: SdkTreeNode,
       index: Int,
       expandedNodeIds: SnapshotStateMap<String, Boolean>,
+      checkedNodeStates: SnapshotStateMap<String, ToggleableState>,
       onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
       onGroupToggle: (SdkTreeNode) -> Unit,
   ) {
@@ -847,6 +874,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         OdSdkGroupCard(
             group = node,
             expandedNodeIds = expandedNodeIds,
+            checkedNodeStates = checkedNodeStates,
             onGroupToggle = onGroupToggle,
             onNodeCheckChange = onNodeCheckChange,
         )
@@ -860,6 +888,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
   private fun OdSdkGroupCard(
       group: SdkTreeNode,
       expandedNodeIds: SnapshotStateMap<String, Boolean>,
+      checkedNodeStates: SnapshotStateMap<String, ToggleableState>,
       onGroupToggle: (SdkTreeNode) -> Unit,
       onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
   ) {
@@ -868,10 +897,15 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
     // 从可观察的 state map 读, 写入会触发父 / 子 Composable 重组。
     // 默认未在 map 内的节点视为折叠, 跟 SdkTreeNode.isExpanded 初始 false 一致。
     val isExpanded = expandedNodeIds[group.id] == true
-    val selectedCount = children.count { it.checkedState == ToggleableState.On }
+    // 选中数 / 总数: 优先读可观察 map, 没设置过的用 data class 的字段。
+    // 这样用户点击会立刻反映在父徽标, 不再依赖折叠再展开触发重组。
+    val selectedCount =
+        children.count {
+          (checkedNodeStates[it.id] ?: it.checkedState) == ToggleableState.On
+        }
     val totalCount = children.size
-    val isSingleSelect = children.firstOrNull()?.componentType in
-        setOf("build-tools", "platform-tools")
+    // build-tools 改多选, 只剩 platform-tools 单选。
+    val isSingleSelect = children.firstOrNull()?.componentType == "platform-tools"
     val groupIcon = odSdkGroupIcon(group)
     val groupTint = odSdkGroupTint(group, colors)
 
@@ -923,7 +957,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
             modifier = Modifier.weight(1f),
             maxLines = 1,
         )
-        OdSdkGroupStateBadge(group = group, selectedCount = selectedCount, tint = groupTint)
+        OdSdkGroupStateBadge(group = group, selectedCount = selectedCount, checkedNodeStates = checkedNodeStates, tint = groupTint)
       }
 
       // 子节点 - 向右缩进, 形成视觉层次
@@ -950,6 +984,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
             OdSdkChildRow(
                 child = child,
                 isSingleSelect = isSingleSelect,
+                checkedNodeStates = checkedNodeStates,
                 onNodeCheckChange = onNodeCheckChange,
             )
             if (i < children.lastIndex) {
@@ -971,12 +1006,15 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
   private fun OdSdkGroupStateBadge(
       group: SdkTreeNode,
       selectedCount: Int,
+      checkedNodeStates: SnapshotStateMap<String, ToggleableState>,
       tint: Color,
   ) {
     val colors = LocalOdSdkColors.current
     val total = group.children.size
+    // 从可观察 map 读父节点状态, 这样子行勾选变化能立刻让父徽标刷新。
+    val groupState = checkedNodeStates[group.id] ?: group.checkedState
     val (text, show) =
-        when (group.checkedState) {
+        when (groupState) {
           ToggleableState.On -> "已选 $selectedCount" to true
           ToggleableState.Indeterminate -> "$selectedCount / $total" to true
           ToggleableState.Off -> "" to false
@@ -1000,10 +1038,14 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
   private fun OdSdkChildRow(
       child: SdkTreeNode,
       isSingleSelect: Boolean,
+      checkedNodeStates: SnapshotStateMap<String, ToggleableState>,
       onNodeCheckChange: (SdkTreeNode, ToggleableState) -> Unit,
   ) {
     val colors = LocalOdSdkColors.current
-    val isChecked = child.checkedState == ToggleableState.On
+    // 读可观察 map, 没设置过就回落到 data class (例如首次进入, 跟 SdkManager
+    // 同步过来的"已安装"状态)。这样用户点完 checkbox / radio 立即可见。
+    val isChecked =
+        (checkedNodeStates[child.id] ?: child.checkedState) == ToggleableState.On
     val isForced =
         child.componentType == "android-sdk" || child.componentType == "cmdline-tools"
 
@@ -1538,12 +1580,26 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
       Spacer(Modifier.width(6.dp))
       Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(13.dp))
       Spacer(Modifier.width(4.dp))
-      Text(
-          label,
-          fontSize = 11.sp,
+      // 文字长度不一 ("Install Git" / "Install SSH" / "Fix NDK" / "Fix CMake"),
+      // 4 个 chip 在一行均分宽度, 在 360dp 屏每 chip 约 ~77dp, 11sp 下 "Install
+      // Git" 完整宽度 ≈ 60-65dp, 加 checkbox+icon+padding 容易超界, 之前
+      // maxLines=1 触发了直接截断 (省略号都看不到)。改用 BasicText + autoSize
+      // StepBased: 在 8sp~11sp 之间逐级自动收缩, 保证整词完整显示 + 不换行。
+      BasicText(
+          text = label,
+          autoSize =
+              TextAutoSize.StepBased(
+                  minFontSize = 8.sp,
+                  maxFontSize = 11.sp,
+                  stepSize = 0.5.sp,
+              ),
           fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Medium,
-          color = if (checked) colors.onSurface else colors.onSurfaceVariant,
+          color =
+              if (checked) colors.onSurface else colors.onSurfaceVariant,
           maxLines = 1,
+          softWrap = false,
+          overflow = TextOverflow.Visible,
+          modifier = Modifier.weight(1f).fillMaxWidth(),
       )
     }
   }
