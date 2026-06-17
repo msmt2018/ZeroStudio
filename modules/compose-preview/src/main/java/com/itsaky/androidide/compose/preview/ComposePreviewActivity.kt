@@ -372,6 +372,19 @@ private fun ReadyPanel(
 
 /**
  * 标记渲染目标 - 实际由 ComposableRenderer 接管.
+ *
+ * Bug 3 修复: 之前这里只 setProjectDexFiles / setRuntimeDex 然后显示一个
+ * 白色 Box 占位, 真正的 renderer.render() 永远没被调用, 导致 BUILD SUCCESSFUL
+ * 之后 dex 加载/Compose 渲染流程实际上没跑, 预览界面只是占位.
+ *
+ * 修法: 在这里真正驱动 ComposableRenderer. 用 [remember] 创建一个 [ComposeView]
+ * 作为渲染目标, [ComposableRenderer] 持有它, 当 dexFile/className/previewConfigs
+ * 变化时 [LaunchedEffect] 会重新调用 [ComposableRenderer.render] 加载新 dex 并
+ * 渲染新的 Composable.
+ *
+ * dex 文件来源: 通过 [com.itsaky.androidide.projects.android.AndroidModule.getRuntimeDexFiles]
+ * (core/projects 内) 拿到当前 variant 的所有 dex, 经 [ProjectContextSource.resolveContext]
+ * 聚合成 projectDexFiles, 这里直接用.
  */
 @Composable
 private fun RenderTargetMarker(
@@ -382,20 +395,44 @@ private fun RenderTargetMarker(
     previewConfigs: List<PreviewConfig>,
     classLoader: com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader,
 ) {
-    androidx.compose.runtime.LaunchedEffect(dexFile, className) {
+    val context = LocalContext.current
+    // 渲染目标 view - 整个生命周期内稳定, 不会随 recomposition 重建.
+    val renderView = remember {
+        androidx.compose.ui.platform.ComposeView(context).apply {
+            setViewCompositionStrategy(
+                androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
+            )
+        }
+    }
+    val renderer = remember(renderView, classLoader) {
+        com.itsaky.androidide.compose.preview.runtime.ComposableRenderer(renderView, classLoader)
+    }
+
+    // dex / class 变化时自动重新加载并渲染.
+    androidx.compose.runtime.LaunchedEffect(dexFile, className, previewConfigs) {
         classLoader.setProjectDexFiles(projectDexFiles)
         classLoader.setRuntimeDex(runtimeDex)
+        val config = previewConfigs.firstOrNull() ?: return@LaunchedEffect
+        renderer.render(
+            dexFile = dexFile,
+            className = className,
+            functionName = config.functionName,
+        )
     }
-    // 实际渲染由 Activity / Renderer 接管
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White),
-        contentAlignment = Alignment.Center,
-    ) {
-        // 这里只是占位; 真实渲染由 [ComposePreviewActivity] 持有的
-        // ComposableRenderer 通过 binding.singlePreviewView.setContent() 驱动
-        // (该 v2.1 屏幕只负责 chrome, 渲染仍由旧 XML 流程驱动以保持兼容)
+
+    // 把 renderView 挂到 Compose 树上 (AndroidView 负责把传统 Android view
+    // 嵌入到 Compose UI 中).
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { renderView },
+        modifier = Modifier.fillMaxSize(),
+    )
+
+    // Activity 销毁时释放 classLoader. (Compose 的 DisposableEffect 会自动
+    // 在 Composable 离开组合时调用 onDispose.)
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            classLoader.release()
+        }
     }
 }
 

@@ -130,9 +130,25 @@ class EditorBottomSheet @JvmOverloads constructor(
 
   // 软键盘底部安全区域补丁
   private var currentBottomInset = 0
-  
+
   // Header 区域是否可见(供 3D 滑出动画使用)
   private var isHeaderVisible = true
+
+  // 跟踪 IME 上一次可见状态, 仅在状态切换 (false->true / true->false) 时才
+  // 触发"关闭 IDE 抽屉"动作, 避免每次 WindowInsets 分发都重新设置 state.
+  private var lastImeVisible = false
+
+  /**
+   * 当用户开始拖拽气泡展开 IDE 抽屉时, 主动隐藏 IME 软键盘.
+   * Bug 2 修复: 拖拽手势和 IME 软键盘互斥, 展开抽屉时收起键盘.
+   */
+  private fun hideImeIfShown() {
+    if (!lastImeVisible) return
+    val activity = context as? androidx.appcompat.app.AppCompatActivity ?: return
+    val decor = activity.window?.decorView ?: return
+    val controller = ViewCompat.getWindowInsetsController(decor) ?: return
+    controller.hide(WindowInsetsCompat.Type.ime())
+  }
 
   companion object {
     private val log = LoggerFactory.getLogger(EditorBottomSheet::class.java)
@@ -309,6 +325,30 @@ class EditorBottomSheet @JvmOverloads constructor(
       // (尊重系统 nav bar 区域的手势).
       behavior.isGestureInsetBottomIgnored = isImeVisibleNow
       updateBottomInset(targetBottomInset)
+
+      // Bug 1 修复: IME 弹出时关闭 IDE 抽屉.
+      //
+      // 用户手动验证结论: "IME 弹出 -> 关闭 IDE 抽屉" 这一动作触发后, 现有的
+      // IME 同步代码 (BaseEditorActivity.onApplyWindowInsets 里手动 resize
+      // contentCard.height = contentCardRealHeight - imeBottom) 会自动把
+      // 符号栏顶部贴到 IME 顶部. 不需要再改 IME 同步代码本身.
+      //
+      // 也就是说: IME 和 IDE 抽屉应该互斥, 不能同时占满屏幕. 用户在编辑器
+      // 输入文本时只该看到 IME, 在看 IDE 抽屉时只该看到抽屉.
+      //
+      // 只在 lastImeVisible -> isImeVisibleNow 的状态切换瞬间触发, 避免
+      // 每次 WindowInsets 分发都重新设 state 干扰行为.
+      if (isImeVisibleNow != lastImeVisible) {
+          lastImeVisible = isImeVisibleNow
+          if (isImeVisibleNow) {
+              val currentState = behavior.state
+              if (currentState == BottomSheetBehavior.STATE_HALF_EXPANDED ||
+                  currentState == BottomSheetBehavior.STATE_EXPANDED) {
+                  log.info("IME shown while drawer open (state={}), force-collapsing drawer", currentState)
+                  behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+              }
+          }
+      }
   }
 
   private fun updateBottomInset(targetBottomInset: Int) {
@@ -421,9 +461,24 @@ class EditorBottomSheet @JvmOverloads constructor(
       bubble.setOrientation(com.itsaky.androidide.ui.EdgeSnapBubbleView.Orientation.HORIZONTAL)
       bubble.setPosition(com.itsaky.androidide.ui.EdgeSnapBubbleView.Position.TOP)
 
-      // 需求：点击事件切换 Header 区域的显示/隐藏（通过 3D 上下平移立体隐藏）
+      // 需求：点击事件根据抽屉状态切换:
+      //   - STATE_HALF_EXPANDED / STATE_EXPANDED (抽屉打开) -> 关闭抽屉, 回到 COLLAPSED.
+      //     这是用户原始需求: "在 50% 时点击 -> 关闭 IDE 抽屉", 关闭后 IME 同步
+      //     就能正常工作 (因为符号栏上方不再被抽屉遮挡). Bug 1 修复.
+      //   - STATE_COLLAPSED / STATE_DRAGGING (抽屉折叠中) -> 切换 Header 区域
+      //     的显示/隐藏, 用 3D 上下平移立体隐藏 Header.
       bubble.setOnBubbleClickListener {
-          toggleHeaderVisibilityWithAnimation()
+          val state = behavior.state
+          if (state == BottomSheetBehavior.STATE_HALF_EXPANDED ||
+              state == BottomSheetBehavior.STATE_EXPANDED) {
+              // 关闭抽屉. 不需要清 IME, 这里的"点击"通常是用户在查看抽屉
+              // 不想同时弹键盘; 之后用户主动点编辑器, IME 弹出时 Bug 1 修复
+              // 已经能再次保证抽屉关闭.
+              log.info("Bubble click at state={}, force-collapsing drawer", state)
+              behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+          } else {
+              toggleHeaderVisibilityWithAnimation()
+          }
       }
 
       // 需求：手势滑动打开/关闭整个 BottomSheet 抽屉
@@ -509,6 +564,10 @@ class EditorBottomSheet @JvmOverloads constructor(
                   // 不再设 behavior.state = STATE_DRAGGING (会被 BottomSheetBehavior
                   // 拒绝并抛 IllegalArgumentException). 改用 translationY 移动
                   // view 视觉位置, sheet.top 保持 state 对应位置不被覆盖.
+                  // Bug 2 修复: 拖拽开始瞬间, 如果 IME 软键盘已弹出, 主动隐藏它.
+                  // 原因: 抽屉和 IME 应该互斥, 拖拽展开抽屉时不应该让键盘同时占
+                  // 屏, 否则用户看不到拖拽结果, 体验割裂.
+                  hideImeIfShown()
               }
               if (drawerDragActive) {
                   val parentHeight = (parent as? View)?.height ?: height
