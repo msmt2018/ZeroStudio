@@ -404,14 +404,17 @@ class EditorBottomSheet @JvmOverloads constructor(
   }
 
   /**
+   * 旧版 v2.0.7 的代码片段 - 仅作历史参考保留在注释里, 不要恢复成可执行代码.
    * 在 IME insets 变化后, 等下一帧布局完成再更新一次 peekHeight.
    * 用于覆盖 insets 分发早于布局完成的时间窗, 保证 floatingHeaderArea.height
    * 已经是新值, 符号栏底部才能精确对齐到 IME 顶部.
    *
-   * 注意: deferredPeekHeightRunnable 在 schedulePeekHeightUpdate() 之前声明,
-   * Kotlin 类初始化顺序需要 forward reference, 因此改成函数变量并用 lazy.
+   * 注意: 真正的 deferredPeekHeightRunnable 已经在文件上方声明 (第 356 行),
+   * 在 schedulePeekHeightUpdate() 之前声明以满足 Kotlin 类初始化顺序的
+   * forward reference 要求, 此处不要再重复声明.
+   *
+   * private val deferredPeekHeightRunnable by lazy { Runnable { updatePeekHeight() } }
    */
-  private val deferredPeekHeightRunnable by lazy { Runnable { updatePeekHeight() } }
 
   private fun setupPageSwitchGestureBubble() {
       val bubble = binding.pageSwitchGestureBubble
