@@ -4,7 +4,6 @@ import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.projects.android.AndroidModule
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.util.Properties
 
 data class ProjectContext(
     val modulePath: String?,
@@ -19,7 +18,6 @@ class ProjectContextSource {
 
     companion object {
         private val LOG = LoggerFactory.getLogger(ProjectContextSource::class.java)
-        private const val FORCE_GRADLE_DEXING_KEY = "android.compose.preview.useGradleDexing"
     }
 
     fun resolveContext(filePath: String): ProjectContext {
@@ -57,11 +55,27 @@ class ProjectContextSource {
 
         val intermediateClasspaths = module.getIntermediateClasspaths()
         val compileClasspaths = (module.getCompileClasspaths() + intermediateClasspaths).distinct()
-        val forceGradleDexing = isGradleDexingForced(projectManager.projectDir, file)
 
         val projectDexFiles = module.getRuntimeDexFiles().toList()
         val variantName = (module as? AndroidModule)?.getSelectedVariant()?.name ?: "debug"
-        val needsBuild = forceGradleDexing || intermediateClasspaths.isEmpty()
+        // gradle-dex 已经是唯一路径. 这里判定 "项目还没构建过" 的策略：
+        // 1) 中间产物 (intermediateClasspaths): `assembleDebug` 走通后会写到
+        //    `build/tmp/kotlin-classes/<variant>` 与 `build/intermediates/javac/<variant>/classes`
+        // 2) 运行期 dex (projectDexFiles): AGP mergeDex 后会写到
+        //    `build/intermediates/dex/<variant>` 与 `build/intermediates/project_dex_archive/<variant>`
+        //
+        // 之前只看 intermediateClasspaths 会在两种情况下误判 needsBuild=true, 跟
+        // 用户反馈的 bug 完全一致：
+        //   - 增量构建: AGP 复用上一次的 class 缓存, intermediateClasspaths 路径下
+        //     没有任何文件 (仅 jar 缓存命中), 但 dex 已经被重新生成出来
+        //   - 纯 K2 cache: 只跑过 KSP / K2 流水线, javac 中间产物被 skip, 但 dex
+        //     仍然在 project_dex_archive 下可见
+        //
+        // 因此只要 intermediateClasspaths 或 projectDexFiles 任意一组非空, 都视为
+        // "项目已经构建过, 可以走 dex 加载路径", 避免一直停在 NeedsBuild 状态。
+        val hasIntermediateArtifacts = intermediateClasspaths.isNotEmpty()
+        val hasRuntimeDex = projectDexFiles.isNotEmpty()
+        val needsBuild = !hasIntermediateArtifacts && !hasRuntimeDex
 
         LOG.info("Found {} total classpaths ({} compile, {} intermediate) for module: {}",
             compileClasspaths.size,
@@ -70,11 +84,10 @@ class ProjectContextSource {
             module.name)
         LOG.info("Found {} project DEX files for runtime loading", projectDexFiles.size)
         LOG.info(
-            "Module path: {}, variant: {}, needsBuild: {}, forceGradleDexing: {}",
+            "Module path: {}, variant: {}, needsBuild: {}",
             module.path,
             variantName,
             needsBuild,
-            forceGradleDexing,
         )
 
         if (!needsBuild) {
@@ -94,37 +107,5 @@ class ProjectContextSource {
             projectDexFiles = projectDexFiles,
             needsBuild = needsBuild
         )
-    }
-
-    private fun isGradleDexingForced(projectDir: File?, sourceFile: File): Boolean {
-        // 治本：projectDir 改 nullable 后，no project ⇒ no gradle.properties ⇒ false
-        if (projectDir == null) return false
-        val candidates = linkedSetOf<File>()
-        var current: File? = sourceFile.parentFile
-        while (current != null && current.path.startsWith(projectDir.path)) {
-            candidates.add(File(current, "gradle.properties"))
-            if (current == projectDir) break
-            current = current.parentFile
-        }
-        candidates.add(File(projectDir, "gradle.properties"))
-
-        for (propertiesFile in candidates) {
-            if (!propertiesFile.exists()) continue
-            val value =
-                runCatching {
-                        Properties().apply {
-                            propertiesFile.inputStream().use { load(it) }
-                        }[FORCE_GRADLE_DEXING_KEY]?.toString()?.trim()
-                    }
-                    .getOrNull()
-                    ?: continue
-
-            if (value.equals("true", ignoreCase = true)) {
-                LOG.info("Gradle dexing force-enabled by {}", propertiesFile.absolutePath)
-                return true
-            }
-        }
-
-        return false
     }
 }
