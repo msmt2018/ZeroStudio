@@ -35,6 +35,7 @@ import androidx.annotation.GravityInt
 import androidx.appcompat.widget.TooltipCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
@@ -93,8 +94,12 @@ class EditorBottomSheet @JvmOverloads constructor(
   private var logClearFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
   private var logShareFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
 
-  private val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
-    BottomSheetBehavior.from(this).apply {
+  private val behavior: SymbolInputAwareBottomSheetBehavior<EditorBottomSheet> by lazy {
+    // 使用 SymbolInputAwareBottomSheetBehavior 替换默认 BottomSheetBehavior,
+    // 避免 CoordinatorLayout.Behavior.onInterceptTouchEvent 抢先拦截
+    // 落在 AdvancedSymbolInputView 上的触摸事件, 导致 IDE 抽屉抢走符号栏
+    // 自身的内部展开/折叠手势.
+    SymbolInputAwareBottomSheetBehavior<EditorBottomSheet>(context, null).apply {
       isFitToContents = false
       skipCollapsed = false
       isHideable = false
@@ -102,6 +107,18 @@ class EditorBottomSheet @JvmOverloads constructor(
       // 会停靠在半展开状态 (STATE_HALF_EXPANDED), 继续上滑到 100% 才完全展开.
       // 不再依赖默认值, 避免某些设备/版本上 50% 停靠行为不一致的问题.
       halfExpandedRatio = 0.5f
+      // 注册触摸过滤: 落在 AdvancedSymbolInputView 上的 touch 不被拦截,
+      // 让符号栏自己接管手势.
+      isEventOnExcludedArea = { event -> isTouchOnSymbolInput(event) }
+    }.also {
+      // 把这个自定义 Behavior 绑定到本 BottomSheet, 替换 xml 中默认的
+      // app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior".
+      // 不调用 from(this) 因为那会拿到 xml 里默认 Behavior, 拿不到我们的 SymbolInputAware 版本.
+      // 正确做法: 重新调用 setBehavior. CoordinatorLayout 通过 Behavior 序列化属性解析时
+      // 已经把默认 Behavior 设置到 view 上, 但其类型仍是 BaseBottomSheetBehavior 的子类,
+      // 直接换成我们的版本需要 layoutParams 是 CoordinatorLayout.LayoutParams.
+      val lp = (layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)
+      lp?.behavior = it
     }
   }
 
@@ -279,9 +296,6 @@ class EditorBottomSheet @JvmOverloads constructor(
         val newHeight = bottom - top
         if (newHeight > 0 && newHeight != (oldBottom - oldTop)) {
             updatePeekHeight()
-            // 兜底: 某些设备上 floatingHeaderArea 高度变化会触发子 View 重新测量,
-            // 紧跟着再调一次, 让 IME 同步稳定.
-            updatePeekHeightDeferred()
         }
     }
 
@@ -316,11 +330,35 @@ class EditorBottomSheet @JvmOverloads constructor(
     // BottomSheet top is derived from peekHeight in collapsed mode, so include the IME inset to
     // keep floating_header_area/AdvancedSymbolInputView attached to the keyboard top. The drawer
     // content uses spaceBottom so fragments such as ChatAI keep their bottom input above IME too.
-    updatePeekHeight()
-    // 兜底: 等下一帧布局跑完再更新一次, 避免 floatingHeaderArea.height 拿到旧值,
-    // 导致符号栏底部没有精准落在 IME 顶部.
-    updatePeekHeightDeferred()
+    // 必须通过 doOnLayout 等待 floatingHeaderArea 真实高度, 否则
+    // floatingHeaderArea.height == 0 时, peekHeight 只有 imeBottom, 符号栏
+    // 会被推到 IME 下方而不是贴在 IME 顶部.
+    schedulePeekHeightUpdate()
   }
+
+  /**
+   * 安排一次 peekHeight 更新:
+   *   1) 先用当前 (可能为 0 的) 高度 + IME inset 设置 peekHeight, 触发 layout.
+   *   2) 通过 doOnLayout 在下一帧布局完成时, 用真实高度再设一次, 让符号栏底部
+   *      精准落在 IME 顶部.
+   *
+   * 这个双重写入是必须的:
+   *   - 第一次写入让 BottomSheet 立即开始向上位移 (跟着 peekHeight 变化).
+   *   - 第二次写入修复 insets 分发时 height 还是 0 的时间窗, 避免 peekHeight
+   *     只是 imeBottom 导致符号栏被压在 IME 下面.
+   */
+  private fun schedulePeekHeightUpdate() {
+    removeCallbacks(deferredPeekHeightRunnable)
+    // 第一次: 用当前高度立刻设置一次, 触发 layout.
+    updatePeekHeight()
+    // 第二次: 等下一帧布局完成, 用真实高度再设一次.
+    binding.floatingHeaderArea.doOnLayout {
+        removeCallbacks(deferredPeekHeightRunnable)
+        post(deferredPeekHeightRunnable)
+    }
+  }
+
+  private val deferredPeekHeightRunnable = Runnable { updatePeekHeight() }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
     val parentHeight = (parent as? View)?.height ?: 0
@@ -357,13 +395,11 @@ class EditorBottomSheet @JvmOverloads constructor(
    * 在 IME insets 变化后, 等下一帧布局完成再更新一次 peekHeight.
    * 用于覆盖 insets 分发早于布局完成的时间窗, 保证 floatingHeaderArea.height
    * 已经是新值, 符号栏底部才能精确对齐到 IME 顶部.
+   *
+   * 注意: deferredPeekHeightRunnable 在 schedulePeekHeightUpdate() 之前声明,
+   * Kotlin 类初始化顺序需要 forward reference, 因此改成函数变量并用 lazy.
    */
-  private fun updatePeekHeightDeferred() {
-      removeCallbacks(deferredPeekHeightRunnable)
-      post(deferredPeekHeightRunnable)
-  }
-
-  private val deferredPeekHeightRunnable = Runnable { updatePeekHeight() }
+  private val deferredPeekHeightRunnable by lazy { Runnable { updatePeekHeight() } }
 
   private fun setupPageSwitchGestureBubble() {
       val bubble = binding.pageSwitchGestureBubble
