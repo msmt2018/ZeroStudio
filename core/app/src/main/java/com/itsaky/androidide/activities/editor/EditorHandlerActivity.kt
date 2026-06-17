@@ -733,9 +733,24 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
 
     editor?.close() ?: run { log.error("Cannot save file before close. Editor instance is null") }
 
+    // !!! Bug fix !!!
+    // 之前: editorViewModel.removeFile(index) 在前, 然后 getEditorTabAtIndex(index).
+    //   getEditorTabAtIndex 内部用 editorViewModel.getOpenedFile(index) 算 expectedTag,
+    //   但 removeFile 之后 index 已经指向"下一个文件", 所以 expectedTag 是下一个文件的 tag.
+    //   迭代 TabLayout 时会找到下一个文件的 tab 并 removeTab 掉, 而真正要关闭的文件的
+    //   tab 仍然留在 TabLayout 里, 它的 view 却被 editorContainer.removeViewAt(index)
+    //   移走了, 变成一个"幽灵 tab" - tag 还在但对应的 editor view 已经没了, 内容被下一
+    //   个文件接管, 用户就看到"关闭后 tab 还在, 内容变成邻近 tab"的现象.
+    //
+    // 正确做法: 先按文件的 tag 找到要删除的 tab, 再 removeFile, 再 removeTab.
+    val expectedTag = editorTabId(opened)
+    val tabToRemove = (0 until content.tabs.tabCount)
+      .mapNotNull { content.tabs.getTabAt(it) }
+      .firstOrNull { it.tag == expectedTag }
+
     editorViewModel.removeFile(index)
     content.apply {
-      getEditorTabAtIndex(index)?.let { tabs.removeTab(it) }
+      tabToRemove?.let { tabs.removeTab(it) }
       editorContainer.removeViewAt(index)
     }
 
@@ -1107,6 +1122,32 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
           tab.icon = ResourcesCompat.getDrawable(resources, iconId, theme)
           tab.text = name
         }
+
+        // !!! Bug fix - 清理"幽灵 tab" !!!
+        // 之前 updateTabs 只负责"按 tag 找 tab, 更新 text/icon". 关闭文件时
+        // 如果上一个版本的 closeFile 漏删了某个 tab (例如上面已修的 removeFile/
+        // getEditorTabAtIndex 顺序问题), 那个 tab 会以"已关闭文件"的 tag 永远
+        // 留在 TabLayout 里 - 它的 view 已经被 editorContainer.removeViewAt
+        // 移走, 但 TabLayout 还显示着它的 text/icon, 用户看到的就是"关闭后
+        // tab 还在"+"内容变成邻近 tab".
+        //
+        // 这里加一道保险: 扫一遍 TabLayout, 凡是 tag 不在当前文件列表里的 tab
+        // (并且不是 fragment tab - 那些由 fragmentTabManager 单独管理), 一律
+        // 移除. 配合 closeFile 修法, 保证 TabLayout 和 editorViewModel 永远
+        // 1:1 对齐, 不会再有幽灵 tab.
+        val currentFileTags = files.map { editorTabId(it) }.toSet()
+        val staleTabs = mutableListOf<Tab>()
+        for (i in 0 until content.tabs.tabCount) {
+            val t = content.tabs.getTabAt(i) ?: continue
+            val tag = t.tag as? String ?: continue
+            // fragment tab 由 fragmentTabManager 单独管理, 这里不碰
+            if (EditorFragmentTabManager.isFragmentTabId(tag)) continue
+            if (tag !in currentFileTags) {
+                log.warn("updateTabs: removing stale editor tab with tag={} (file no longer in model)", tag)
+                staleTabs.add(t)
+            }
+        }
+        staleTabs.forEach { content.tabs.removeTab(it) }
       }
     }
   }
