@@ -447,7 +447,10 @@ private fun triggerBuild(
 
     viewModel.setBuildingState()
 
-    val activity = context as? android.app.Activity ?: return
+    // lifecycleScope 是 androidx.activity.ComponentActivity / AppCompatActivity
+    // 提供的扩展属性, 不能 cast 到 android.app.Activity 拿不到. 这里 cast 到
+    // AppCompatActivity (ComposePreviewActivity 的实际基类) 才有 lifecycleScope.
+    val activity = context as? androidx.appcompat.app.AppCompatActivity ?: return
     activity.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
         val result = runCatching {
             buildService.executeTasks(task).get(15, java.util.concurrent.TimeUnit.MINUTES)
