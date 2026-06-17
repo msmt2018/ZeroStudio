@@ -58,9 +58,9 @@ import com.itsaky.androidide.actions.filetree.OpenWithAction
 import com.itsaky.androidide.actions.filetree.RefactorRenameAction
 import com.itsaky.androidide.actions.filetree.RenameAction
 import com.itsaky.androidide.actions.menu.EditorEditLineMenuAction
-import com.itsaky.androidide.actions.search.*
 import com.itsaky.androidide.actions.text.RedoAction
 import com.itsaky.androidide.actions.text.UndoAction
+
 /**
  * Takes care of registering actions to the actions registry for the editor activity.
  *
@@ -93,7 +93,6 @@ class EditorActivityActions {
       registry.registerAction(ReloadColorSchemesAction(context, order++))
       registry.registerAction(DisconnectLogSendersAction(context, order++))
       registry.registerAction(LaunchAppAction(context, order++))
-      registry.registerAction(FindInPathAction(context, order++))
       registry.registerAction(ColorQueryToolbarAction(context, order++))
 
       // editor text actions

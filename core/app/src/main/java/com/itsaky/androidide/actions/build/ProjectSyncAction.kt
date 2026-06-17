@@ -18,6 +18,7 @@
 package com.itsaky.androidide.actions.build
 
 import android.content.Context
+import android.view.MenuItem
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.BaseBuildAction
@@ -47,4 +48,10 @@ class ProjectSyncAction(context: Context, override val order: Int) : BaseBuildAc
     val activity = data.requireActivity()
     activity.initializeProject()
   }
+
+  /**
+   * Collapse this action into the toolbar overflow menu; it should not occupy a fixed toolbar
+   * slot.
+   */
+  override fun getShowAsActionFlags(data: ActionData): Int = MenuItem.SHOW_AS_ACTION_NEVER
 }

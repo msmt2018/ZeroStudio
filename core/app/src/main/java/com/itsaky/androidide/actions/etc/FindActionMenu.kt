@@ -18,6 +18,7 @@
 package com.itsaky.androidide.actions.etc
 
 import android.content.Context
+import android.view.MenuItem
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem
@@ -38,10 +39,17 @@ class FindActionMenu(context: Context, override val order: Int) :
 
     addAction(FindInFileAction(context, 0))
     addAction(FindInProjectAction(context, 1))
+    addAction(FindInPathAction(context, 2))
   }
 
   override fun prepare(data: ActionData) {
     super<EditorActivityAction>.prepare(data)
     super<ActionMenu>.prepare(data)
   }
+
+  /**
+   * Collapse this menu into the toolbar overflow. The child actions are reachable through the
+   * sub-menu, so the parent itself should never occupy toolbar space.
+   */
+  override fun getShowAsActionFlags(data: ActionData): Int = MenuItem.SHOW_AS_ACTION_NEVER
 }

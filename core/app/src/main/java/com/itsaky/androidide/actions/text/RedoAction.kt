@@ -17,11 +17,9 @@
 
 package com.itsaky.androidide.actions.text
 
-import android.app.Activity
 import android.content.Context
 import android.view.MenuItem
 import androidx.core.content.ContextCompat
-import com.blankj.utilcode.util.KeyboardUtils
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
 import com.itsaky.androidide.actions.markInvisible
@@ -67,11 +65,10 @@ class RedoAction(context: Context, override val order: Int) : EditorRelatedActio
     return true
   }
 
-  override fun getShowAsActionFlags(data: ActionData): Int {
-    return if (KeyboardUtils.isSoftInputVisible(data.get(Context::class.java) as Activity)) {
-      MenuItem.SHOW_AS_ACTION_IF_ROOM
-    } else {
-      MenuItem.SHOW_AS_ACTION_NEVER
-    }
-  }
+  /**
+   * Always show this action in the editor toolbar, similar to other fixed toolbar entries like
+   * [com.itsaky.androidide.actions.build.QuickRunWithCancellationAction] and
+   * [com.itsaky.androidide.actions.build.RunTasksAction].
+   */
+  override fun getShowAsActionFlags(data: ActionData): Int = MenuItem.SHOW_AS_ACTION_ALWAYS
 }
