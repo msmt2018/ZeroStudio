@@ -85,6 +85,12 @@ class EditorBottomSheet @JvmOverloads constructor(
   @JvmField var binding: LayoutEditorBottomSheetBinding
   val pagerAdapter: EditorBottomSheetTabAdapter
 
+  // ==== IME 软键盘顶部同步相关字段 ====
+  // 记录上一次 IME 可见性, 用于在 IME 状态切换时做 BottomSheet 状态联动.
+  // 不使用更复杂的 diff 监听, 因为 WindowInsets API 在动画过程中会一帧一帧回调,
+  // 单纯比较 boolean 即可精确捕获"打开/关闭"两个边界.
+  private var wasImeVisible = false
+
   private val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
     BottomSheetBehavior.from(this).apply {
       isFitToContents = false
@@ -247,6 +253,31 @@ class EditorBottomSheet @JvmOverloads constructor(
     val navInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
     val isImeVisibleNow = insets.isVisible(WindowInsetsCompat.Type.ime())
     val targetBottomInset = if (isImeVisibleNow) imeInsets.bottom else navInsets.bottom
+
+    // ==== IME 软键盘打开/关闭 与 BottomSheet 状态联动 ====
+    // 设计目标: IME 弹起时, 底部符号输入控件 (AdvancedSymbolInputView) 的顶部
+    // 自动同步到 IME 顶部, 同时四个层级 (bubble / build_status / header / symbol_input)
+    // 一起跟着 IME 上下移动, 视觉绑定关系不破坏.
+    //
+    // 实现: IME 弹起时, 如果 BottomSheet 处于展开/半展开/拖拽中的"打开"状态, 先把
+    // 它折叠到 STATE_COLLAPSED. 折叠后, floating_header_area 的底部 (即 symbol_input
+    // 的底部) 就被 peekHeight 钉在屏幕底部, peekHeight 包含 IME 高度, 所以 symbol_input
+    // 的底部正好落在 IME 顶部. IME 关闭时, 不自动恢复 BottomSheet 状态, 让用户自己
+    // 决定要不要再展开抽屉 (避免频繁的自动展开/折叠打扰用户).
+    //
+    // 不在 onStateChanged 里做: 那个回调在 BottomSheet 自己的动画过程中也会触发, 会
+    // 和 IME 状态变化抢着切状态. 在这里做是单点控制, 逻辑最清晰.
+    if (isImeVisibleNow != wasImeVisible) {
+      if (isImeVisibleNow) {
+        if (behavior.state == BottomSheetBehavior.STATE_EXPANDED ||
+            behavior.state == BottomSheetBehavior.STATE_HALF_EXPANDED ||
+            behavior.state == BottomSheetBehavior.STATE_DRAGGING) {
+          behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+        }
+      }
+      wasImeVisible = isImeVisibleNow
+    }
+
     updateBottomInset(targetBottomInset)
   }
 
