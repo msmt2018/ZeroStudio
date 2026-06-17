@@ -39,7 +39,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -98,7 +100,15 @@ fun ProjectManagerPage(onOpenProject: (String) -> Unit) {
     }
   }
 
-  val safeSelected = if (tabState.isEmpty()) 0 else selectedTabIndexState.coerceIn(0, tabState.lastIndex)
+  // 把 safeSelected 改成 derivedStateOf, 让它能正确跟踪 tabState.size 和
+  // selectedTabIndexState 的变化, 避免 ScrollableTabRow 内部用旧 size 算
+  // tabPositions 时拿到越界的 selectedTabIndex 触发 IndexOutOfBoundsException。
+  val safeSelected by remember(tabState.size, selectedTabIndexState) {
+    derivedStateOf {
+      if (tabState.isEmpty()) 0
+      else selectedTabIndexState.coerceIn(0, tabState.lastIndex)
+    }
+  }
   if (safeSelected != selectedTabIndexState) selectedTabIndexState = safeSelected
   val selectedTab = tabState.getOrNull(safeSelected)
 
@@ -112,7 +122,10 @@ fun ProjectManagerPage(onOpenProject: (String) -> Unit) {
 
   Column(modifier = Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Box(modifier = Modifier.fillMaxWidth()) {
-      if (tabState.isNotEmpty()) {
+      if (tabState.isNotEmpty() && safeSelected in tabState.indices) {
+        // key(tabState.size) 强制 ScrollableTabRow 在 tab 数量变化时整体重组,
+        // 避免 Material3 内部缓存的 tabIndicators 跟外部传入的 selectedTabIndex 不一致。
+        key(tabState.size) {
         ScrollableTabRow(selectedTabIndex = safeSelected, modifier = Modifier.fillMaxWidth().padding(end = 30.dp)) {
           tabState.forEachIndexed { index, tab ->
             Tab(
@@ -124,6 +137,7 @@ fun ProjectManagerPage(onOpenProject: (String) -> Unit) {
               text = { Text(tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             )
           }
+        }
         }
       }
       FloatingActionButton(
