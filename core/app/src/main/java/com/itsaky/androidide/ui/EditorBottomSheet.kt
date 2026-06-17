@@ -25,9 +25,10 @@ import android.content.Context
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.LinearLayout
 import androidx.annotation.GravityInt
@@ -278,6 +279,9 @@ class EditorBottomSheet @JvmOverloads constructor(
         val newHeight = bottom - top
         if (newHeight > 0 && newHeight != (oldBottom - oldTop)) {
             updatePeekHeight()
+            // 兜底: 某些设备上 floatingHeaderArea 高度变化会触发子 View 重新测量,
+            // 紧跟着再调一次, 让 IME 同步稳定.
+            updatePeekHeightDeferred()
         }
     }
 
@@ -313,6 +317,9 @@ class EditorBottomSheet @JvmOverloads constructor(
     // keep floating_header_area/AdvancedSymbolInputView attached to the keyboard top. The drawer
     // content uses spaceBottom so fragments such as ChatAI keep their bottom input above IME too.
     updatePeekHeight()
+    // 兜底: 等下一帧布局跑完再更新一次, 避免 floatingHeaderArea.height 拿到旧值,
+    // 导致符号栏底部没有精准落在 IME 顶部.
+    updatePeekHeightDeferred()
   }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -339,36 +346,158 @@ class EditorBottomSheet @JvmOverloads constructor(
       val headerHeight = binding.floatingHeaderArea.height
       val parentHeight = (parent as? View)?.height ?: resources.displayMetrics.heightPixels
       behavior.peekHeight = min(max(headerHeight, 0) + currentBottomInset, parentHeight)
+      // 强制下一帧重新布局, 让符号栏底部精确落在 IME 顶部.
+      // 原因: insets 分发时 floatingHeaderArea 的 height 可能还是旧的 (布局还没跑完),
+      // 仅设置 peekHeight 不会立刻让符号栏重新测量; requestLayout 触发新一轮 measure/layout,
+      // 下一帧符号栏的 bottom 就会和 IME top 对齐.
+      requestLayout()
   }
+
+  /**
+   * 在 IME insets 变化后, 等下一帧布局完成再更新一次 peekHeight.
+   * 用于覆盖 insets 分发早于布局完成的时间窗, 保证 floatingHeaderArea.height
+   * 已经是新值, 符号栏底部才能精确对齐到 IME 顶部.
+   */
+  private fun updatePeekHeightDeferred() {
+      removeCallbacks(deferredPeekHeightRunnable)
+      post(deferredPeekHeightRunnable)
+  }
+
+  private val deferredPeekHeightRunnable = Runnable { updatePeekHeight() }
 
   private fun setupPageSwitchGestureBubble() {
       val bubble = binding.pageSwitchGestureBubble
       bubble.setOrientation(com.itsaky.androidide.ui.EdgeSnapBubbleView.Orientation.HORIZONTAL)
       bubble.setPosition(com.itsaky.androidide.ui.EdgeSnapBubbleView.Position.TOP)
-      
+
       // 需求：点击事件切换 Header 区域的显示/隐藏（通过 3D 上下平移立体隐藏）
       bubble.setOnBubbleClickListener {
           toggleHeaderVisibilityWithAnimation()
       }
-      
+
       // 需求：手势滑动打开/关闭整个 BottomSheet 抽屉
+      // 注意: 此处不再用 setOnBubbleGestureListener 做"松手后二值吸附".
+      // 我们把拖拽接管到自定义 OnTouchListener (drawerDragListener) 里:
+      //   - 拖拽期间 1:1 跟随手指, 不会在 80% 位置被 BottomSheetBehavior 自动吸附到 STATE_EXPANDED.
+      //   - 松手时按 sheet.top 位置做三段阈值判定 (COLLAPSED / HALF_EXPANDED / EXPANDED).
+      // EdgeSnapBubbleView 自己的 onBubbleGestureListener 留空, 避免重复驱动抽屉.
       bubble.setOnBubbleGestureListener(
           object : com.itsaky.androidide.ui.EdgeSnapBubbleView.OnBubbleGestureListener {
               override fun onDrag(fraction: Float) {
-                  // Fraction 为负时表示向上拉（打开抽屉），为正时向下拉（无动作或尝试关闭已经关闭的抽屉）
-                  // 注意：拖拽期间主要依赖 BottomSheet 自身的滚动响应
-                  // 如果想强制映射 fraction 到 BottomSheet state 也可以，但容易与原生滑动手势冲突
+                  // 由 drawerDragListener 接管, 这里不做事.
               }
 
               override fun onRelease(fraction: Float) {
-                  if (fraction < -0.15f) { // 向上滑动
-                      tryExpandSheetFromControl()
-                  } else if (fraction > 0.15f) { // 向下滑动
-                      forceCollapse()
-                  }
+                  // 由 drawerDragListener 接管, 这里不做事.
               }
           }
       )
+
+      // 安装自定义拖拽监听器, 覆盖默认的 BottomSheetBehavior 拖拽吸附行为.
+      bubble.setOnTouchListener(drawerDragListener)
+  }
+
+  // === 抽屉自定义拖拽状态 ===
+  private var drawerDragInitialY = 0f
+  private var drawerDragInitialSheetTop = 0
+  private var drawerDragActive = false
+  private val drawerTouchSlopPx by lazy {
+      ViewConfiguration.get(context).scaledTouchSlop
+  }
+
+  /**
+   * 抽屉拖拽监听器, 挂在顶部手势气泡上.
+   *
+   * 行为契约:
+   * 1. ACTION_DOWN: 记录初始手指 y 与 sheet.top; 调用 requestDisallowInterceptTouchEvent(true)
+   *    阻断 CoordinatorLayout/BottomSheetBehavior 的拖拽拦截, 让 IDE 抽屉不会被系统默认
+   *    ViewDragHelper 抢走手势; 返回 false, 气泡自己的 onTouchEvent 仍能处理点击 (无拖拽时).
+   * 2. ACTION_MOVE: 越过 touchSlop 后视为进入拖拽态, 期间 sheet.top 跟随手指 deltaY 1:1
+   *    变化, 不会在 80% 位置被吸附到 STATE_EXPANDED. 同时设置 behavior.state = STATE_DRAGGING
+   *    让 behavior.onLayoutChild 不再按 state 重定位 sheet, 我们的 offset 才不会被覆盖.
+   * 3. ACTION_UP/CANCEL: 根据当前 sheet.top 与 [collapsedTop, halfTop, expandedTop] 三段阈值
+   *    决定最终 state. 用户要求:
+   *    - 上滑到 50% 以上 (sheet.top <= halfTop) -> STATE_EXPANDED (完全展开)
+   *    - 下滑到 50% 以下 (sheet.top > halfTop) -> STATE_HALF_EXPANDED (停靠一半在屏幕中)
+   *    - 继续下滑到接近 collapsed 位置 -> STATE_COLLAPSED (完全折叠)
+   *    行为只依赖位置, 不依赖 velocity, 避免误吸附.
+   */
+  private val drawerDragListener = View.OnTouchListener { v, event ->
+      when (event.actionMasked) {
+          MotionEvent.ACTION_DOWN -> {
+              drawerDragInitialY = event.rawY
+              drawerDragInitialSheetTop = top
+              drawerDragActive = false
+              v.requestDisallowInterceptTouchEvent(true)
+              // 不消费, 让气泡自己的 onTouchEvent 继续处理点击/长按.
+              false
+          }
+          MotionEvent.ACTION_MOVE -> {
+              val deltaY = event.rawY - drawerDragInitialY
+              if (!drawerDragActive && kotlin.math.abs(deltaY) > drawerTouchSlopPx) {
+                  drawerDragActive = true
+                  // 通知 behavior 进入拖拽态, 这样 behavior.onLayoutChild 不会再按 state
+                  // 覆盖 sheet.top, 我们的 offsetTopAndBottom 才不会被抵消.
+                  behavior.state = BottomSheetBehavior.STATE_DRAGGING
+              }
+              if (drawerDragActive) {
+                  val parentHeight = (parent as? View)?.height ?: height
+                  val newTop = (drawerDragInitialSheetTop + deltaY).toInt()
+                      .coerceIn(behavior.expandedOffset, parentHeight)
+                  if (newTop != top) {
+                      offsetTopAndBottom(newTop - top)
+                  }
+                  return@OnTouchListener true
+              }
+              false
+          }
+          MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+              v.requestDisallowInterceptTouchEvent(false)
+              if (drawerDragActive) {
+                  drawerDragActive = false
+                  val parentHeight = (parent as? View)?.height ?: height
+                  val sheetTop = top
+                  val collapsedTop = parentHeight - behavior.peekHeight
+                  val expandedTop = behavior.expandedOffset
+                  val halfTop = (expandedTop + collapsedTop) / 2
+                  val newState = decideDrawerState(sheetTop, expandedTop, halfTop, collapsedTop)
+                  behavior.state = newState
+                  return@OnTouchListener true
+              }
+              false
+          }
+          else -> false
+      }
+  }
+
+  /**
+   * 根据 sheet.top 在三段阈值中的位置决定 BottomSheet 的最终 state.
+   *
+   * 用户原始需求 (中文翻译):
+   * - 松手在 50% 以上 (sheet.top 较小, 抽屉更展开) -> 完全展开
+   * - 松手在 50% 以下但还没接近 collapsed -> 停靠一半 (HALF_EXPANDED)
+   * - 松手在接近 collapsed 位置 (例如已经下滑到 collapsedTop 的 80% 以下) -> 完全折叠
+   *
+   * 不使用 velocity 判定, 完全按位置, 避免快速下滑时误吸附.
+   */
+  private fun decideDrawerState(
+      sheetTop: Int,
+      expandedTop: Int,
+      halfTop: Int,
+      collapsedTop: Int,
+  ): Int {
+      // 1. sheet.top 处于 expanded 半区 -> EXPANDED
+      if (sheetTop <= halfTop) {
+          return BottomSheetBehavior.STATE_EXPANDED
+      }
+      // 2. sheet.top 处于 half 与 collapsed 之间的上 20% 区段 -> HALF_EXPANDED (用户要求"停靠一半")
+      val halfToCollapsedSpan = (collapsedTop - halfTop).coerceAtLeast(1)
+      val upperFifthOfLowerHalf = collapsedTop - halfToCollapsedSpan / 5
+      if (sheetTop <= upperFifthOfLowerHalf) {
+          return BottomSheetBehavior.STATE_HALF_EXPANDED
+      }
+      // 3. 其余 (非常接近 collapsed) -> COLLAPSED
+      return BottomSheetBehavior.STATE_COLLAPSED
   }
 
   /**

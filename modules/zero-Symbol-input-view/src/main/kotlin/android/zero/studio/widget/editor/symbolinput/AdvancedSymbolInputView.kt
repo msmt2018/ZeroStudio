@@ -212,7 +212,14 @@ class AdvancedSymbolInputView @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 val dy = ev.rawY - initialY
                 val dx = ev.rawX - initialX
-                if (!isDragging && expandedHeightPx > collapsedHeightPx && kotlin.math.abs(dy) > touchSlop && kotlin.math.abs(dy) > kotlin.math.abs(dx)) {
+                // 任何垂直滑动都要立即拦截 (不再要求 expandedHeightPx > collapsedHeightPx),
+                // 覆盖三种情况:
+                //   1) 折叠态拖上 -> 展开符号栏 (之前被 IDE 抽屉抢走, 现在符号栏自己处理).
+                //   2) 展开态拖下 -> 折叠符号栏.
+                //   3) 展开态拖上 -> 已到最大高度, drag 不会越界.
+                // 同时调用 requestDisallowInterceptTouchEvent(true) 阻断
+                // BottomSheetBehavior 的 onInterceptTouchEvent, 让 IDE 抽屉不会跟随.
+                if (!isDragging && kotlin.math.abs(dy) > touchSlop && kotlin.math.abs(dy) > kotlin.math.abs(dx)) {
                     isDragging = true
                     parent?.requestDisallowInterceptTouchEvent(true)
                     return true
@@ -241,7 +248,9 @@ class AdvancedSymbolInputView @JvmOverloads constructor(
                 // 原因: 当外部 OnTouchListener 消费了 ACTION_DOWN 之后, 符号输入控件的
                 // onInterceptTouchEvent 不再被调用 (因为本 View 已经是 touch target),
                 // 导致 isDragging 永远为 false, 上滑手势被父级 (IDE 抽屉) 抢占.
-                if (!isDragging && expandedHeightPx > collapsedHeightPx &&
+                // 同样去掉 expandedHeightPx > collapsedHeightPx 限制, 让折叠态
+                // 拖上也能直接展开符号栏.
+                if (!isDragging &&
                     kotlin.math.abs(dy) > touchSlop && kotlin.math.abs(dy) > kotlin.math.abs(dx)) {
                     isDragging = true
                     // 告诉父级 (含 CoordinatorLayout/BottomSheetBehavior) 不要拦截后续 MOVE,
