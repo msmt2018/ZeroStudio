@@ -61,7 +61,21 @@ class ProjectContextSource {
 
         val projectDexFiles = module.getRuntimeDexFiles().toList()
         val variantName = (module as? AndroidModule)?.getSelectedVariant()?.name ?: "debug"
-        val needsBuild = forceGradleDexing || intermediateClasspaths.isEmpty()
+        // 【关键修复】之前只看 intermediateClasspaths.isEmpty(), 但 build 成功后
+        // intermediateClasspaths 仍然可能为空 (variant artifact 没扫到), 导致
+        // needsBuild 永远为 true, 预览页一直在 NeedsBuild / Ready 之间反复横跳.
+        // 现在的判定 (只要任一为真就重建):
+        //   1) forceGradleDexing 强制重建
+        //   2) intermediateClasspaths 为空
+        //   3) projectDexFiles 为空 (没找到任何 dex, 一定没构建)
+        //   4) 任何一个 dex 文件不存在 (构建中断/失败留下的)
+        val anyDexMissing = projectDexFiles.any { dexFile ->
+            !dexFile.exists()
+        }
+        val needsBuild = forceGradleDexing ||
+            intermediateClasspaths.isEmpty() ||
+            projectDexFiles.isEmpty() ||
+            anyDexMissing
 
         LOG.info("Found {} total classpaths ({} compile, {} intermediate) for module: {}",
             compileClasspaths.size,

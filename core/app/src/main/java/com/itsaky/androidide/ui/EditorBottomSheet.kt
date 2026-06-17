@@ -94,31 +94,25 @@ class EditorBottomSheet @JvmOverloads constructor(
   private var logClearFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
   private var logShareFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
 
+  // 自定义 BottomSheetBehavior, 它的 onInterceptTouchEvent 会在
+  // "触摸落在 AdvancedSymbolInputView 区域" 时直接 return false,
+  // 阻止 IDE 抽屉抢走符号栏自己的内部展开/折叠手势.
+  //
+  // 必须用 lazy 而不是 init 时直接赋值, 因为 CoordinatorLayout.LayoutParams
+  // 必须等到本 View 被父布局 attach 之后才存在 (XML inflate 阶段
+  // LayoutInflater 是先创建 View, 再调用 setLayoutParams; 而 init {} 是在
+  // View 构造期间执行的, 此时 layoutParams 还是 null 或者默认的
+  // ViewGroup.LayoutParams, 直接强转 CoordinatorLayout.LayoutParams 会失败).
+  // 所以下面这行 lazy 只是"占位", 真正在 onAttachedToWindow() 里把 behavior
+  // 装到 layoutParams 上, 保证 CoordinatorLayout 拿到的就是 SymbolInputAware 版本.
   private val behavior: SymbolInputAwareBottomSheetBehavior<EditorBottomSheet> by lazy {
-    // 使用 SymbolInputAwareBottomSheetBehavior 替换默认 BottomSheetBehavior,
-    // 避免 CoordinatorLayout.Behavior.onInterceptTouchEvent 抢先拦截
-    // 落在 AdvancedSymbolInputView 上的触摸事件, 导致 IDE 抽屉抢走符号栏
-    // 自身的内部展开/折叠手势.
     SymbolInputAwareBottomSheetBehavior<EditorBottomSheet>(context, null).apply {
       isFitToContents = false
       skipCollapsed = false
       isHideable = false
-      // 显式设置半展开停靠点为父容器高度的 50%. 这样抽屉上滑到 50% 时
-      // 会停靠在半展开状态 (STATE_HALF_EXPANDED), 继续上滑到 100% 才完全展开.
-      // 不再依赖默认值, 避免某些设备/版本上 50% 停靠行为不一致的问题.
       halfExpandedRatio = 0.5f
-      // 注册触摸过滤: 落在 AdvancedSymbolInputView 上的 touch 不被拦截,
-      // 让符号栏自己接管手势.
+      // 触摸落在 AdvancedSymbolInputView 区域时不要拦截, 让符号栏自己处理.
       isEventOnExcludedArea = { event -> isTouchOnSymbolInput(event) }
-    }.also {
-      // 把这个自定义 Behavior 绑定到本 BottomSheet, 替换 xml 中默认的
-      // app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior".
-      // 不调用 from(this) 因为那会拿到 xml 里默认 Behavior, 拿不到我们的 SymbolInputAware 版本.
-      // 正确做法: 重新调用 setBehavior. CoordinatorLayout 通过 Behavior 序列化属性解析时
-      // 已经把默认 Behavior 设置到 view 上, 但其类型仍是 BaseBottomSheetBehavior 的子类,
-      // 直接换成我们的版本需要 layoutParams 是 CoordinatorLayout.LayoutParams.
-      val lp = (layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)
-      lp?.behavior = it
     }
   }
 
@@ -126,7 +120,7 @@ class EditorBottomSheet @JvmOverloads constructor(
   private var headerExpandEnabled = true
   private var expandBlocked = false
   private var behaviorCallbackAttached = false
-  private var wasDraggableBeforeSymbolTouch = true
+  private var customBehaviorAttached = false
 
   var onHeaderPageChanged: ((Int) -> Unit)? = null
   var onActionTextChanged: ((CharSequence) -> Unit)? = null
@@ -203,22 +197,18 @@ class EditorBottomSheet @JvmOverloads constructor(
         }
     )
 
-    // 兼容新版 AdvancedSymbolInputView：不再调用已移除/不稳定的 setImeBottomInset，
-    // 改为在符号栏手势期间临时关闭 BottomSheet 拖拽，避免父级手势抢占导致抽屉无法展开。
-    binding.externalSymbolInputView.setOnTouchListener { _, event ->
-      when (event.actionMasked) {
-        MotionEvent.ACTION_DOWN -> {
-          wasDraggableBeforeSymbolTouch = behavior.isDraggable
-          behavior.isDraggable = false
-          parent?.requestDisallowInterceptTouchEvent(true)
-        }
-        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-          behavior.isDraggable = wasDraggableBeforeSymbolTouch
-          parent?.requestDisallowInterceptTouchEvent(false)
-        }
-      }
-      false
-    }
+    // 不再在 AdvancedSymbolInputView 上挂 OnTouchListener 手动调用
+    // requestDisallowInterceptTouchEvent. 原因: CoordinatorLayout.Behavior
+    // (也就是 BottomSheetBehavior.onInterceptTouchEvent) 是 CoordinatorLayout
+    // 在分发 MotionEvent 之前最先调用的钩子, 任何挂在子 view 上的 OnTouchListener
+    // 都比 Behavior 晚, 此时 IDE 抽屉已经决定了要不要拦截, 符号栏再也拿不到
+    // 这个手势序列.
+    //
+    // 正确做法: 通过 SymbolInputAwareBottomSheetBehavior.onInterceptTouchEvent
+    // 重写拦截逻辑, 在触摸落在 AdvancedSymbolInputView 区域时直接 return false,
+    // 把整个手势交还给符号栏, 让符号栏自己的 onInterceptTouchEvent / onTouchEvent
+    // 完整处理内部展开/折叠抽屉. 这是 EditorBottomSheet.onAttachedToWindow()
+    // 那里安装的, 不要再在这重复挂 OnTouchListener.
   }
 
   /**
@@ -380,14 +370,36 @@ class EditorBottomSheet @JvmOverloads constructor(
   }
 
   private fun updatePeekHeight() {
-      // 只有在 Header 显示时（未被 3D 隐藏），PeekHeight 才包含它
+      // 【关键修复】
+      //
+      // 之前的写法:
+      //   behavior.peekHeight = min(max(headerHeight, 0) + currentBottomInset, parentHeight)
+      //
+      // 这个写法假设 parentHeight 在 IME 弹出前后保持不变, 把 imeBottom 累加到
+      // peekHeight 里. 但实际上 EditorActivity 已经声明了
+      // android:windowSoftInputMode="adjustResize", 配合 BaseEditorActivity
+      // 不再手动写 contentCard.bottomMargin 后, IME 弹出时系统会自动把
+      // CoordinatorLayout 的可用高度 (也就是 parentHeight) 减去 imeBottom.
+      //
+      // 也就是说, parentHeight 在 IME 弹出时已经"包含"了 IME 调整, 这时再把
+      // imeBottom 累加到 peekHeight, 符号栏就会被推到 IME 顶部之上 imeBottom
+      // 像素处, 留下一道 imeBottom 像素的空隙 (用户截图反映的"软键盘顶部没有
+      // 绑定符号输入控件"的根本原因).
+      //
+      // 正确做法:
+      //   peekHeight = headerHeight
+      // 这样:
+      //   BottomSheet.top  = parentHeight - peekHeight
+      //                  = (screenHeight - imeBottom) - headerHeight
+      //   符号栏底部    = BottomSheet.top + headerHeight
+      //                  = screenHeight - imeBottom
+      //                  = IME 顶部
+      //
+      // 不依赖 currentBottomInset, 不依赖 parentHeight 是否减过 imeBottom,
+      // 由 adjustResize 系统保证一致性.
       val headerHeight = binding.floatingHeaderArea.height
       val parentHeight = (parent as? View)?.height ?: resources.displayMetrics.heightPixels
-      behavior.peekHeight = min(max(headerHeight, 0) + currentBottomInset, parentHeight)
-      // 强制下一帧重新布局, 让符号栏底部精确落在 IME 顶部.
-      // 原因: insets 分发时 floatingHeaderArea 的 height 可能还是旧的 (布局还没跑完),
-      // 仅设置 peekHeight 不会立刻让符号栏重新测量; requestLayout 触发新一轮 measure/layout,
-      // 下一帧符号栏的 bottom 就会和 IME top 对齐.
+      behavior.peekHeight = min(max(headerHeight, 0), parentHeight)
       requestLayout()
   }
 
@@ -580,14 +592,74 @@ class EditorBottomSheet @JvmOverloads constructor(
       }
   }
 
+  override fun onFinishInflate() {
+    super.onFinishInflate()
+    // 此时 LayoutInflater 已经把 layoutParams 替换成 CoordinatorLayout.LayoutParams
+    // (来自 XML 的 app:layout_behavior="BottomSheetBehavior" 也已经解析好), 是最早
+    // 能稳妥替换 Behavior 的时机. 一定要在 BaseEditorActivity.setupBottomSheet()
+    // 通过 BottomSheetBehavior.from() 拿引用之前安装, 否则基类缓存的就是默认 Behavior,
+    // 后续基类读 state/expandedOffset 时拿不到 SymbolInputAware 版本的状态.
+    installCustomBehavior()
+  }
+
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+
+    // 【关键】在 layoutParams 已经是 CoordinatorLayout.LayoutParams 之后, 把
+    // SymbolInputAwareBottomSheetBehavior 装上去, 替换 XML 默认的 BottomSheetBehavior.
+    //
+    // 之前在 init {} (或 lazy 第一次访问) 时机太早: 此时 CoordinatorLayout 还没有
+    // 调 setLayoutParams 把本 view 的 layoutParams 换成 CoordinatorLayout.LayoutParams,
+    // lp?.behavior = it 这一行实际上没有生效, CoordinatorLayout 后面照旧使用
+    // XML 里的默认 BottomSheetBehavior, 这才是符号栏抽屉手势打不开的根本原因.
+    //
+    // 现在先在 onFinishInflate() 里装填一次 (确保 BaseEditorActivity.setupBottomSheet()
+    // 通过 BottomSheetBehavior.from() 拿到的是 SymbolInputAware 版本), 这里再保险一次.
+    installCustomBehavior()
+
     setupDynamicPeekHeightAndIME()
     post {
       ViewCompat.requestApplyInsets(this)
       updatePeekHeight()
     }
     ensureBehaviorCallbackAttached()
+  }
+
+  /**
+   * 把 SymbolInputAwareBottomSheetBehavior 装到 layoutParams 上, 替换 XML 默认的
+   * BottomSheetBehavior. 这个方法是幂等的, 多次调用只会真正执行一次.
+   */
+  private fun installCustomBehavior() {
+    if (customBehaviorAttached) return
+    val lp =
+        layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+            ?: return
+    // 替换为 SymbolInputAware 版本. 必须在 attach 之前, 否则 CoordinatorLayout
+    // 第一次 layout pass 还会走默认 Behavior 的状态机 (STATE_DRAGGING 等),
+    // 等下次状态更新才换过来, 中间有一帧错误状态.
+    lp.behavior = behavior
+    behavior.isGestureInsetBottomIgnored = true
+    customBehaviorAttached = true
+  }
+
+  /**
+   * 判断一个 MotionEvent 是否落在 AdvancedSymbolInputView 的屏幕矩形内.
+   *
+   * 注意: 这里用 event.rawX/rawY (屏幕绝对坐标) 与 AdvancedSymbolInputView 的
+   * getLocationOnScreen() (同样是屏幕绝对坐标) 比较. 不要用 getX/getY (相对父布局),
+   // 也不要用 event.x/event.y (相对自身), 这两种都会导致判断错误.
+   */
+  private fun isTouchOnSymbolInput(event: MotionEvent): Boolean {
+    val symbolInput = binding.externalSymbolInputView
+    if (symbolInput.width == 0 || symbolInput.height == 0 || !symbolInput.isShown) {
+      return false
+    }
+    val location = IntArray(2)
+    symbolInput.getLocationOnScreen(location)
+    val x = event.rawX.toInt()
+    val y = event.rawY.toInt()
+    return x >= location[0] && x <= location[0] + symbolInput.width &&
+        y >= location[1] && y <= location[1] + symbolInput.height
   }
 
   private fun ensureBehaviorCallbackAttached() {

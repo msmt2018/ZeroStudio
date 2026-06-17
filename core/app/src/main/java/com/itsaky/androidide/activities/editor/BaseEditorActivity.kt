@@ -128,7 +128,14 @@ abstract class BaseEditorActivity :
   protected val mLifecycleObserver = EditorActivityLifecyclerObserver()
   protected var diagnosticInfoBinding: LayoutDiagnosticInfoBinding? = null
   protected var filesTreeFragment: FileTreeFragment? = null
-  protected var editorBottomSheet: BottomSheetBehavior<out View?>? = null
+  // 改为每次都从 view 实时读取, 不要缓存. EditorBottomSheet 在 onFinishInflate
+  // 时会把默认的 BottomSheetBehavior 替换为 SymbolInputAwareBottomSheetBehavior;
+  // 缓存字段会拿不到这个新 Behavior 的 state/expandedOffset, 后续基类与派生类
+  // (例如 EditorHandlerActivity 通过 mBuildEventListener.setActivity(this) 在
+  // build 完成时读这个状态) 都会读旧 Behavior 的 state, 引发"状态不同步"问题.
+  // 改成"懒属性 + 实时从 view 读"是唯一稳的写法.
+  protected val editorBottomSheet: BottomSheetBehavior<out View?>?
+    get() = _binding?.let { BottomSheetBehavior.from(it.content.bottomSheet) }
   protected val memoryUsageWatcher = MemoryUsageWatcher()
   protected val pidToDatasetIdxMap = MutableIntIntMap(initialCapacity = 3)
   
@@ -261,17 +268,26 @@ abstract class BaseEditorActivity :
   override fun onApplyWindowInsets(insets: WindowInsetsCompat) {
     super.onApplyWindowInsets(insets)
     if (_binding == null) return
-    
+
     val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
     val navInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
     val isImeVisibleNow = insets.isVisible(WindowInsetsCompat.Type.ime())
-    
-    // 只需给内容卡片留出软键盘的空间即可，底层悬浮条会自动在 EditorBottomSheet 中处理。
+
+    // 让 adjustResize 接管 IME 调整. 之前的做法是手动给 contentCard 设置
+    // bottomMargin = imeBottom, 这与 adjustResize 双重 resize, 导致
+    // EditorBottomSheet 的 parentHeight 被错误地减去两倍 imeBottom,
+    // 符号输入控件就偏离了 IME 顶部 imeBottom 像素.
+    //
+    // 现在改成: 只把 insets 转发给 EditorBottomSheet, 让它内部的 peekHeight
+    // 计算 + adjustResize 联合完成"软键盘顶部同步跟随".
     val bottomInset = if (isImeVisibleNow) imeInsets.bottom else navInsets.bottom
-    _binding?.contentCard?.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-      this.bottomMargin = bottomInset
-    }
     _binding?.content?.bottomSheet?.applyEditorWindowInsets(insets)
+    // bottomInset 仅供外部可能的扩展使用 (比如全屏手势/侧滑抽屉), 此处不再手动写
+    // margin, 避免重复 resize. 如果将来需要, 应改用 WindowInsetsCompat.Type.ime()
+    // 在 ViewCompat.setOnApplyWindowInsetsListener 里分发给具体子 view, 而不是
+    // 改 contentCard 的 layout_margin.
+    @Suppress("UNUSED_VARIABLE")
+    val unused = bottomInset
 
     if (this.isImeVisible != isImeVisibleNow) {
       this.isImeVisible = isImeVisibleNow
@@ -774,8 +790,11 @@ abstract class BaseEditorActivity :
 
   private fun setupBottomSheet() {
     if (_binding == null) return
+    // editorBottomSheet 已经是实时从 view 读取的 getter, 这里不需要再赋值.
+    // 直接通过 BottomSheetBehavior.from() 拿本地的 behavior 引用用于下面
+    // 设置 expandedOffset 等配置, 拿到的就是 SymbolInputAware 版本
+    // (EditorBottomSheet.onFinishInflate 已经替换过 layoutParams.behavior).
     val behavior = BottomSheetBehavior.from<View>(content.bottomSheet)
-    editorBottomSheet = behavior
 
     val applyExpandedOffset = {
       val progressBottom = content.progressIndicator.bottom
