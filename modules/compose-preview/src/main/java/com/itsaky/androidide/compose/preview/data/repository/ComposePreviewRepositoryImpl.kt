@@ -18,36 +18,40 @@
 package com.itsaky.androidide.compose.preview.data.repository
 
 import android.content.Context
-import com.itsaky.androidide.compose.preview.compiler.AssetsComposeBundles
-import com.itsaky.androidide.compose.preview.compiler.BundledComposeCompiler
-import com.itsaky.androidide.compose.preview.compiler.BundledD8Dexer
-import com.itsaky.androidide.compose.preview.compiler.CompileDiagnostic
-import com.itsaky.androidide.compose.preview.compiler.DexCache
-import com.itsaky.androidide.compose.preview.compiler.DexResult
 import com.itsaky.androidide.compose.preview.data.source.ProjectContext
 import com.itsaky.androidide.compose.preview.data.source.ProjectContextSource
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
-import com.itsaky.androidide.lookup.Lookup
-import com.itsaky.androidide.projects.builder.BuildService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 /**
- * 仓库实现 v2.
+ * 仓库实现 v3.
  *
- * 重写 [ComposePreviewRepositoryImpl], 用 [AssetsComposeBundles] + [BundledComposeCompiler] +
- * [BundledD8Dexer] 取代旧 `ComposeClasspathManager` + `ComposeCompiler` + `CompilerDaemon` + `ComposeDexCompiler`.
+ * v2 走进程内 K2JVMCompiler + D8 编译 (依赖 assets 中的 jar 压缩包), 在用户机器上
+ * 经常因为 jar 缺失/版本不匹配/IO 权限/gradle dex 已存在但 IDE 端不知道 等原因导致
+ * 编译失败, 进而表现成 Compose Preview Activity 内的花屏 (渲染了异常堆栈) 和
+ * "build 按钮状态反复切换" 的体验问题.
  *
- * ## 主要变化
+ * v3 把 K2 + D8 + assets jar 全部移除, 完全改用现有
+ * [com.itsaky.androidide.projects.builder.BuildService], 跟
+ * [com.itsaky.androidide.actions.build.QuickRunWithCancellationAction] / [com.itsaky.androidide.actions.build.RunTasksAction]
+ * 一致: 用户点击构建按钮时由 [com.itsaky.androidide.compose.preview.ComposePreviewActivity.triggerBuild]
+ * 调 `BuildService.executeTasks(assemble$variant)`, gradle 服务端会直接走自己的
+ * 构建缓存 + Android Build Cache, dex 写到项目 build 目录. dex 的来源是
+ * [ProjectContext.projectDexFiles] (由 [ProjectContextSource] 从
+ * [com.itsaky.androidide.projects.android.AndroidModule.getRuntimeDexFiles] 获取).
  *
- * 1. **零外部依赖**: 编译/dex 全部走 assets 自带 jar; 不再读 `.m2` 或 IDE 私有路径.
- * 2. **无守护进程**: 每次 compile 独立起 isolated classloader, 编译完即关.
- * 3. **取消可响应**: [cancel] 会通过 [BundledComposeCompiler.cancel] 传播.
- * 4. **降级路径**: 进程内 D8 不可用时 (例如 R8 jar 缺失), 走 `useGradleDex` 让 gradle 来 dex.
- * 5. **缓存键含 SDK 版本**: SDK 升级时旧缓存自动失效.
+ * 因此:
+ * 1. 不再需要 assets 中的 jar (kotlin-compiler-embeddable / d8 / compose-*).
+ * 2. 不再需要进程内 K2 编译器, 不需要 class 转 dex 的 D8 步骤.
+ * 3. dex 加载使用 [com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader],
+ *    跟 v2 的 gradle-dex 分支相同.
+ * 4. [initialize] 不再 bootstrap K2 编译环境, 只检查 `intermediateClasspaths` 判断
+ *    是否需要先 build. [compilePreview] 不再触发 gradle assemble, 只取最近一次
+ *    build 产物的 dex (build 由 Activity 端的 [triggerBuild] 触发). 这样 dex 路径
+ *    唯一可控, 避免双触发争抢.
  */
 class ComposePreviewRepositoryImpl(
     private val projectContextSource: ProjectContextSource = ProjectContextSource()
@@ -55,21 +59,8 @@ class ComposePreviewRepositoryImpl(
 
     private val LOG = LoggerFactory.getLogger(ComposePreviewRepositoryImpl::class.java)
 
-    private val useGradleDexTagRegex = Regex(
-        """@compose-preview-use-gradle-dex\s*:\s*(true|false)""",
-        RegexOption.IGNORE_CASE
-    )
-
-    private var bundles: AssetsComposeBundles? = null
-    private var compiler: BundledComposeCompiler? = null
-    private var dexer: BundledD8Dexer? = null
-    private var dexCache: DexCache? = null
-    private var workDir: File? = null
-
-    private var runtimeDex: File? = null
     private var projectContext: ProjectContext? = null
     private var openedFilePath: String? = null
-    private var cachedClasspath: List<File>? = null
 
     override suspend fun initialize(
         context: Context,
@@ -81,237 +72,80 @@ class ComposePreviewRepositoryImpl(
             openedFilePath = filePath
 
             if (ctx.needsBuild && ctx.modulePath != null) {
-                LOG.warn("No intermediate classes found - build required before initialization")
+                LOG.warn(
+                    "No intermediate classes found for {} - build required before preview can be loaded",
+                    ctx.modulePath,
+                )
                 return@runCatching InitializationResult.NeedsBuild(ctx.modulePath, ctx.variantName)
             }
 
-            val assetBundles = initializeInfrastructure(context)
-            if (!assetBundles.init()) {
+            if (ctx.projectDexFiles.isEmpty()) {
+                LOG.warn("No project DEX files resolved for {}", filePath)
                 return@runCatching InitializationResult.Failed(
-                    "Failed to initialize Compose SDK from assets. " +
-                        "Ensure preBuild ran successfully."
+                    "No project DEX files found. Run a Gradle build first to produce the dex artifacts."
                 )
             }
 
-            runtimeDex = assetBundles.composeRuntimeDex
-            if (runtimeDex == null) {
-                LOG.error("Compose runtime DEX missing in assets")
-                return@runCatching InitializationResult.Failed(
-                    "Compose runtime DEX missing. Re-run preBuild to regenerate assets."
-                )
-            }
-            LOG.info("Repository initialized. runtimeDex={} sdkVer={}",
-                runtimeDex?.absolutePath, assetBundles.versionTag)
-            InitializationResult.Ready(runtimeDex, ctx)
+            LOG.info(
+                "Repository ready: module={}, variant={}, projectDexFiles={}",
+                ctx.modulePath,
+                ctx.variantName,
+                ctx.projectDexFiles.size,
+            )
+            InitializationResult.Ready(ctx)
         }
     }
 
-    private fun initializeInfrastructure(context: Context): AssetsComposeBundles {
-        val cacheDir = context.cacheDir
-        val work = File(cacheDir, "compose_preview_work").apply { mkdirs() }
-        workDir = work
-
-        val assetBundles = AssetsComposeBundles(context).also { bundles = it }
-        dexCache = DexCache(File(cacheDir, "compose_dex_cache")) { assetBundles.versionTag }
-        compiler = BundledComposeCompiler(assetBundles)
-        dexer = BundledD8Dexer(assetBundles)
-        return assetBundles
-    }
-
-    private fun <T> requireInitialized(value: T?, name: String): T {
-        return value ?: throw IllegalStateException("Repository not initialized: $name is null. Call initialize() first.")
-    }
-
-    private data class SourceCompileResult(
-        val success: Boolean,
-        val dexFile: File?,
-        val error: String,
-        val diagnostics: List<CompileDiagnostic> = emptyList()
-    )
+    private fun requireProjectContext(): ProjectContext =
+        projectContext
+            ?: error("Repository not initialized. Call initialize() first.")
 
     override suspend fun compilePreview(
         source: String,
         parsedSource: ParsedPreviewSource
     ): Result<CompilationResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val cache = requireInitialized(dexCache, "dexCache")
-            val compiler = requireInitialized(this@ComposePreviewRepositoryImpl.compiler, "compiler")
-            val dexer = requireInitialized(this@ComposePreviewRepositoryImpl.dexer, "dexer")
-            val workDir = requireInitialized(this@ComposePreviewRepositoryImpl.workDir, "workDir")
-            val context = requireInitialized(projectContext, "projectContext")
-            val useGradleDex = shouldUseGradleDex(source)
-
+            val context = requireProjectContext()
             val fileName = parsedSource.className?.removeSuffix("Kt") ?: "Preview"
             val generatedClassName = "${fileName}Kt"
             val fullClassName = "${parsedSource.packageName}.$generatedClassName"
 
-            val sourceHash = cache.computeSourceHash(source)
-
-            if (useGradleDex) {
-                LOG.info("Using gradle-dex mode for {}", fullClassName)
-                return@runCatching compileUsingGradleDexMode(fullClassName, context)
-            }
-
-            // 1) 缓存命中 (含 SDK version 校验)
-            cache.getCachedDex(sourceHash)?.let { cached ->
-                LOG.info("Cache hit for hash: {} (function={})", sourceHash, cached.functionName)
-                return@runCatching CompilationResult(
-                    dexFile = cached.dexFile,
-                    className = cached.className,
-                    runtimeDex = runtimeDex,
-                    projectDexFiles = context.projectDexFiles
+            val dexFiles = context.projectDexFiles.filter { it.exists() }
+            if (dexFiles.isEmpty()) {
+                throw CompilationException(
+                    "No project DEX files available. Run a Gradle build first to produce the dex artifacts."
                 )
             }
 
-            // 2) 准备源文件
-            val sourceDir = File(workDir, "src")
-            val packageDir = File(sourceDir, parsedSource.packageName.replace('.', '/'))
-            packageDir.mkdirs()
-            val sourceFile = File(packageDir, "$fileName.kt")
-            sourceFile.writeText(source)
+            // dex 加载是 ComposeClassLoader 的职责, 这里只透传 dex 列表. UI 层会把
+            // 第一个 dex 当作 target dex 透传给 ComposableRenderer, ComposeClassLoader
+            // 会用全部 dex 列表构造 isolated classloader 来解析 target class.
+            val targetDex = dexFiles.first()
 
-            val classesDir = File(workDir, "classes").apply { mkdirs() }
-            val dexDir = File(workDir, "dex").apply { mkdirs() }
-
-            // 3) 编译
-            val classpath = cachedClasspath ?: context.compileClasspaths.also { cachedClasspath = it }
-            val compileResult = compiler.compile(
-                sourceFiles = listOf(sourceFile),
-                outputDir = classesDir,
-                extraClasspath = classpath,
+            LOG.info(
+                "Preview compiled via gradle-dex: {} (target dex: {}, {} project dex files)",
+                fullClassName,
+                targetDex.absolutePath,
+                dexFiles.size,
             )
-            if (!compileResult.success) {
-                LOG.error("Compilation failed: {}", compileResult.errorOutput)
-                throw CompilationException(
-                    message = compileResult.errorOutput.ifEmpty { "Compilation failed" },
-                    diagnostics = compileResult.diagnostics
-                )
-            }
-
-            // 4) Dex
-            val dexResult = dexer.dexToDex(classesDir, dexDir)
-            if (!dexResult.success || dexResult.dexFile == null) {
-                LOG.error("DEX compilation failed: {}", dexResult.errorMessage)
-                throw CompilationException(
-                    message = dexResult.errorMessage.ifEmpty { "DEX compilation failed" }
-                )
-            }
-
-            // 5) 缓存
-            try {
-                cache.cacheDex(
-                    sourceHash,
-                    dexResult.dexFile,
-                    fullClassName,
-                    parsedSource.previewConfigs.firstOrNull()?.functionName ?: ""
-                )
-            } catch (e: Exception) {
-                LOG.warn("Failed to cache DEX (non-fatal): {}", e.message)
-            }
-
-            LOG.info("Preview ready: {} ({} previews, {} project DEX files)",
-                fullClassName, parsedSource.previewConfigs.size, context.projectDexFiles.size)
 
             CompilationResult(
-                dexFile = dexResult.dexFile,
+                dexFile = targetDex,
                 className = fullClassName,
-                runtimeDex = runtimeDex,
-                projectDexFiles = context.projectDexFiles
+                projectDexFiles = dexFiles,
             )
         }
-    }
-
-    fun cancel() {
-        compiler?.cancel()
-    }
-
-    private fun shouldUseGradleDex(source: String): Boolean {
-        val raw = useGradleDexTagRegex.find(source)?.groupValues?.get(1) ?: return false
-        return raw.equals("true", ignoreCase = true)
-    }
-
-    private fun compileUsingGradleDexMode(
-        fullClassName: String,
-        context: ProjectContext
-    ): CompilationResult {
-        runGradleDexTasks(context)
-
-        val refreshedContext = openedFilePath
-            ?.let { projectContextSource.resolveContext(it) }
-            ?: context
-        projectContext = refreshedContext
-
-        val dexFiles = refreshedContext.projectDexFiles.filter { it.exists() }
-        if (dexFiles.isEmpty()) {
-            throw CompilationException(
-                message = "No project DEX files found after Gradle build. Please run an assemble task first."
-            )
-        }
-
-        return CompilationResult(
-            dexFile = dexFiles.first(),
-            className = fullClassName,
-            runtimeDex = runtimeDex,
-            projectDexFiles = dexFiles
-        )
-    }
-
-    private fun runGradleDexTasks(context: ProjectContext) {
-        val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
-            ?: throw CompilationException("BuildService is unavailable for gradle-dex mode.")
-        if (buildService.isBuildInProgress) {
-            throw CompilationException("Build is already in progress. Try gradle-dex preview again when build finishes.")
-        }
-
-        val capitalizedVariant = context.variantName.replaceFirstChar { it.uppercaseChar() }
-        val modulePath = context.modulePath?.takeIf { it.isNotBlank() }
-        val taskPrefix = modulePath?.let { "$it:" } ?: ""
-        val candidateTasks = listOf(
-            "${taskPrefix}mergeProjectDex$capitalizedVariant",
-            "${taskPrefix}mergeDex$capitalizedVariant",
-            "${taskPrefix}dexBuilder$capitalizedVariant",
-            "${taskPrefix}assemble$capitalizedVariant"
-        )
-
-        val errors = mutableListOf<String>()
-        for (task in candidateTasks) {
-            try {
-                LOG.info("Running Gradle tooling task for gradle-dex mode: {}", task)
-                val result = buildService.executeTasks(task).get(15, TimeUnit.MINUTES)
-                if (result.isSuccessful) {
-                    LOG.info("Gradle task succeeded for gradle-dex mode: {}", task)
-                    return
-                }
-                errors += "$task -> unsuccessful"
-            } catch (e: Exception) {
-                errors += "$task -> ${e.message}"
-            }
-        }
-
-        throw CompilationException(
-            "Failed to run dex-related Gradle tooling tasks for variant '$capitalizedVariant': ${errors.joinToString("; ")}"
-        )
     }
 
     override fun computeSourceHash(source: String): String {
-        val cache = dexCache
-        if (cache == null) {
-            LOG.warn("DexCache not initialized, using non-deterministic hash fallback")
-            return source.hashCode().toString()
-        }
-        return cache.computeSourceHash(source)
+        // source hash 之前是给 DexCache 用的, 现在没有进程内 dex 缓存, 保留接口以
+        // 兼容上层调用方, 返回一个稳定的 hash 让上层做 UI 缓存键 (例如避免在用户
+        // 编辑器内光标变化时重渲染).
+        return java.util.UUID.nameUUIDFromBytes(source.toByteArray(Charsets.UTF_8)).toString()
     }
 
     override fun reset() {
-        compiler?.cancel()
-        compiler = null
-        dexer = null
-        dexCache = null
-        bundles = null
-        cachedClasspath = null
         projectContext = null
         openedFilePath = null
-        runtimeDex = null
-        LOG.debug("Repository reset")
     }
 }

@@ -111,7 +111,9 @@ class ComposePreviewFragment : Fragment() {
                 val loader = classLoader ?: return
                 val render = renderer ?: return
                 loader.setProjectDexFiles(state.projectDexFiles)
-                loader.setRuntimeDex(state.runtimeDex)
+                // v3: assets runtime dex 已删除, 永远传 null. Compose 运行时类从
+                // IDE 进程的 PathClassLoader 解析.
+                loader.setRuntimeDex(null)
                 val config = state.previewConfigs.firstOrNull() ?: return
                 render.render(
                     dexFile = state.dexFile,

@@ -361,7 +361,6 @@ private fun ReadyPanel(
             RenderTargetMarker(
                 dexFile = previewState.dexFile,
                 className = previewState.className,
-                runtimeDex = previewState.runtimeDex,
                 projectDexFiles = previewState.projectDexFiles,
                 previewConfigs = previewState.previewConfigs,
                 classLoader = remember { com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader(context) },
@@ -377,14 +376,15 @@ private fun ReadyPanel(
 private fun RenderTargetMarker(
     dexFile: java.io.File,
     className: String,
-    runtimeDex: java.io.File?,
     projectDexFiles: List<java.io.File>,
     previewConfigs: List<PreviewConfig>,
     classLoader: com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader,
 ) {
     androidx.compose.runtime.LaunchedEffect(dexFile, className) {
         classLoader.setProjectDexFiles(projectDexFiles)
-        classLoader.setRuntimeDex(runtimeDex)
+        // v3 移除 runtime dex: assets 已删除, Compose 运行时类从 IDE 进程的
+        // PathClassLoader 解析, 无需额外注入.
+        classLoader.setRuntimeDex(null)
     }
     // 实际渲染由 Activity / Renderer 接管
     Box(
@@ -433,8 +433,11 @@ private fun triggerBuild(
         return
     }
 
-    viewModel.setBuildingState()
-
+    // 完全对齐 QuickRunWithCancellationAction.quickRun: 直接向 buildService
+    // 发送 gradle assemble 任务. 在 IO 线程阻塞 .get() 等待构建完成, gradle
+    // 服务端会把 dex 写到项目 build 目录, 然后 ProjectContextSource 重新解析
+    // 时就能拿到新的 projectDexFiles. 构建完成后 dex 刷新, Compose Preview
+    // 通过 ComposeClassLoader 加载最新 Composable 即可.
     val capitalizedVariant = variantName.replaceFirstChar { it.uppercaseChar() }
     val task = if (modulePath.isNotEmpty()) {
         "$modulePath:assemble$capitalizedVariant"
@@ -442,15 +445,21 @@ private fun triggerBuild(
         "assemble$capitalizedVariant"
     }
 
-    // 与 QuickRunWithCancellationAction.quickRun 一样, 直接向 buildService
-    // 发送 gradle assemble 任务. 构建完成后 dex 被刷新, Compose Preview 通过
-    // classloading + 反射加载最新的 Composable 即可。
-    buildService.executeTasks(task).whenComplete { result, error ->
-        (context as? android.app.Activity)?.runOnUiThread {
-            if (error != null || result?.isSuccessful != true) {
+    viewModel.setBuildingState()
+
+    val activity = context as? android.app.Activity ?: return
+    activity.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        val result = runCatching {
+            buildService.executeTasks(task).get(15, java.util.concurrent.TimeUnit.MINUTES)
+        }
+        activity.runOnUiThread {
+            val failure = result.exceptionOrNull()
+            if (failure != null || result.getOrNull()?.isSuccessful != true) {
+                LOG.error("Gradle assemble task failed: {}", task, failure)
                 viewModel.setBuildFailed()
             } else {
-                viewModel.refreshAfterBuild(context)
+                LOG.info("Gradle assemble task succeeded: {}", task)
+                viewModel.refreshAfterBuild(activity)
             }
         }
     }

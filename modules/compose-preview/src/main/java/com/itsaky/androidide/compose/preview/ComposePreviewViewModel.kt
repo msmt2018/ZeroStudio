@@ -70,7 +70,11 @@ sealed class PreviewState {
         val dexFile: File,
         val className: String,
         val previewConfigs: List<PreviewConfig>,
-        val runtimeDex: File?,
+        // v3 移除: runtime dex 来自 assets 的 compose runtime dex, 现在 assets 整套
+        // 已删除, Compose 运行时类直接通过 IDE 进程的 PathClassLoader 解析, 无需
+        // 额外注入. 字段保留为 deprecated 兼容旧 UI 调用点, 新代码应直接传 null.
+        @Deprecated("Assets runtime dex 已移除. Compose 运行时类从 IDE PathClassLoader 解析即可.")
+        val runtimeDex: File? = null,
         val projectDexFiles: List<File> = emptyList(),
         // v2.1 增字段
         val deviceConfig: DeviceConfig = DeviceConfig(),
@@ -309,7 +313,8 @@ class ComposePreviewViewModel(
                     dexFile = result.dexFile,
                     className = result.className,
                     previewConfigs = parsed.previewConfigs,
-                    runtimeDex = result.runtimeDex,
+                    // runtimeDex: 不再传, assets 移除后无意义. Compose 运行时类
+                    // 通过 IDE 进程的 PathClassLoader 解析.
                     projectDexFiles = result.projectDexFiles,
                     // v2.1 注入新状态
                     deviceConfig = _deviceConfig.value,
