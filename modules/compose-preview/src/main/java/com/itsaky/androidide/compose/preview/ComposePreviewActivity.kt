@@ -415,6 +415,24 @@ private fun triggerBuild(
         return
     }
 
+    // Tooling server 必须在项目编辑器打开时由 ProjectHandlerActivity 启动
+    // (buildService 不在 compose-preview 模块里自己起 server, 避免与编辑器
+    // 端的 init 流程争抢状态). 未启动时直接告诉用户先去打开项目, 而不是
+    // 让 executeTasks 抛 ToolingServerNotStartedException 炸成未捕获异常。
+    // 这跟 QuickRunWithCancellationAction.onModuleSelected 的兜底一致。
+    if (!buildService.isToolingServerStarted()) {
+        LOG.warn("Tooling server has not been started; ask the user to open the project in the editor first.")
+        viewModel.setBuildFailed()
+        (context as? android.app.Activity)?.runOnUiThread {
+            android.widget.Toast.makeText(
+                context,
+                "请先在编辑器中打开该项目并完成 Gradle 同步, 再使用 Compose 预览。",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+        return
+    }
+
     viewModel.setBuildingState()
 
     val capitalizedVariant = variantName.replaceFirstChar { it.uppercaseChar() }
@@ -424,9 +442,12 @@ private fun triggerBuild(
         "assemble$capitalizedVariant"
     }
 
+    // 与 QuickRunWithCancellationAction.quickRun 一样, 直接向 buildService
+    // 发送 gradle assemble 任务. 构建完成后 dex 被刷新, Compose Preview 通过
+    // classloading + 反射加载最新的 Composable 即可。
     buildService.executeTasks(task).whenComplete { result, error ->
         (context as? android.app.Activity)?.runOnUiThread {
-            if (error != null || !result.isSuccessful) {
+            if (error != null || result?.isSuccessful != true) {
                 viewModel.setBuildFailed()
             } else {
                 viewModel.refreshAfterBuild(context)
