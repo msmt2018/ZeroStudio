@@ -804,7 +804,9 @@ abstract class BaseEditorActivity :
     // 内部), 抽屉在 50% 停靠或半展开时按钮会落到布局可见区域之外. 现在改成
     // CoordinatorLayout 的直接子节点 + app:layout_anchor, 始终跟随 BottomSheet 右下角,
     // 但仍然由 EditorBottomSheet 根据当前选中的 Tab 自行 show/hide.
-    content.bottomSheet.setLogActionFabButtons(binding.clearFab, binding.shareOutputFab)
+    // binding 是 ActivityEditorBinding (从 activity_editor.xml 生成), FAB 实际定义在
+    // content_editor.xml 里, 所以走 content.clearFab / content.shareOutputFab.
+    content.bottomSheet.setLogActionFabButtons(content.clearFab, content.shareOutputFab)
   }
 
   private fun setupDiagnosticInfo() {
