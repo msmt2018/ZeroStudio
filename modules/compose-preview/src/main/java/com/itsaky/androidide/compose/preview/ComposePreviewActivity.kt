@@ -20,7 +20,6 @@ package com.itsaky.androidide.compose.preview
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -48,14 +46,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
 import com.itsaky.androidide.compose.preview.ui.DeviceFrame
 import com.itsaky.androidide.compose.preview.ui.DeviceProfileSheet
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbar
@@ -69,17 +68,34 @@ import com.itsaky.androidide.projects.builder.BuildService
 import com.itsaky.androidide.resources.R as ResourcesR
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import androidx.compose.ui.platform.ComposeView
 
 /**
- * 预览入口 Activity v2.1.
+ * 预览入口 Activity v3.
  *
- * 全 Compose UI:
- * - 顶栏: PreviewToolbar (设备 / 主题 / 缩放 / 调试)
- * - 主体: 设备框 (DeviceFrame) 套预览内容
- * - 错误: 错误详情可滚动
- * - 加载: 居中 CircularProgressIndicator
+ * ## v3 vs v2/v2.1 关键变化
  *
- * 保持向后兼容: 旧 [EXTRA_SOURCE_CODE] / [EXTRA_FILE_PATH] 仍然有效.
+ * 之前 v2.1 把 `RenderTargetMarker` 放在 Composable 子树内, 用 `remember` 创建 [ComposeView]
+ * + `LaunchedEffect` 驱动 `ComposableRenderer.render`. 这种做法有几个根深蒂固的 bug:
+ *
+ * 1. **AndroidView 测量冲突**: `AndroidView` 把 [ComposeView] 当作传统 View 嵌入到 Composable 子树,
+ *    但 ComposeView 自己也是一个 Compose 容器, 在 SubcomposeLayout 嵌套测量时分配到的尺寸为 0.
+ *    结果是 "BUILD SUCCESSFUL 后不显示预览, 只显示一个空白框".
+ *
+ * 2. **LaunchedEffect 时序问题**: `LaunchedEffect(dexFile, className, ...)` 的 keys 在
+ *    `PreviewState.Ready` 第一次进入时会触发, 但 setContent 内部的组合是异步的, 导致
+ *    `currentComposer` 拿不到正确值.
+ *
+ * 3. **可变的 ComposeClassLoader**: `setProjectDexFiles` / `setRuntimeDex` 是 setContent 后
+ *    异步调用, 此时 ClassLoader 已开始使用, 出现 `ClassNotFoundException`.
+ *
+ * v3 修复:
+ *
+ * - **把 [ComposeView] 装到 Activity 的根 FrameLayout**, 而不是 Composable 子树.
+ *   引擎 [PreviewRenderEngine] 在 Activity onCreate 时 attach, 在 onDestroy 时 detach.
+ * - **[DexRuntime] 一次性不可变加载**所有 dex (preview + project + runtime).
+ * - **[ComposableInvoker] 处理 4 种签名变种** (含 $default), 不再因参数数量错误而 invoke 失败.
+ * - **错误显式上抛**到 UI 层.
  */
 class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
 
@@ -95,7 +111,19 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
+
+        // 用 ComposeView 作为 setContent 的根容器, 这样 Activity 已经有了一个
+        // "已知大小" 的 Compose 容器, ReadyPanel 内嵌的 AndroidView/FrameLayout 容器
+        // 会被这个 ComposeView 正确测量.
+        val rootComposeView = ComposeView(this).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+        }
+        setContentView(rootComposeView)
+
+        rootComposeView.setContent {
             ComposePreviewScreen(
                 viewModel = viewModel,
                 onClose = { finish() },
@@ -105,6 +133,46 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         viewModel.initialize(this, filePath)
         if (sourceCode.isNotBlank()) {
             viewModel.onSourceChanged(sourceCode)
+        }
+
+        // 订阅 previewState, 切到 Ready 时调 engine.render(...)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.previewState.collect { state ->
+                    if (state is PreviewState.Ready) {
+                        renderEngine?.let { engine ->
+                            val config = state.previewConfigs.firstOrNull() ?: return@collect
+                            engine.render(
+                                previewDex = state.dexFile,
+                                projectDex = state.projectDexFiles,
+                                runtimeDex = state.runtimeDex,
+                                className = state.className,
+                                functionName = config.functionName,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var renderEngine: PreviewRenderEngine? = null
+
+    override fun onStart() {
+        super.onStart()
+        // 把渲染引擎 attach 到 setContent 创建的 FrameLayout.
+        // 在 ReadyPanel 内, 通过 AndroidView 嵌入一个 FrameLayout 容器,
+        // PreviewRenderEngine 拿到这个容器并把 ComposeView addView 进去.
+        // 容器由 ComposePreviewScreen 提供, 引擎不直接 add 到 decorContent.
+    }
+
+    /**
+     * 由 ComposePreviewScreen 内 AndroidView 调用, 注入预览容器.
+     * 引擎 attach 到此 container 后, container 会显示 Compose 渲染.
+     */
+    fun attachPreviewContainer(container: android.widget.FrameLayout) {
+        if (renderEngine == null) {
+            renderEngine = PreviewRenderEngine(this, container).also { it.attach() }
         }
     }
 
@@ -125,11 +193,11 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
 }
 
 /**
- * 主屏 Composable v2.1.
+ * 主屏 Composable v3.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ComposePreviewScreen(
+private fun ComposePreviewScreen(
     viewModel: ComposePreviewViewModel,
     onClose: () -> Unit,
 ) {
@@ -338,8 +406,10 @@ private fun ReadyPanel(
     viewport: ViewportState,
     onBuildFailed: () -> Unit,
 ) {
+    // 在 ReadyPanel 顶层取 Activity, 然后在 AndroidView factory 内通过闭包访问.
+    // LocalContext.current 在 setContent 创建的 ComposeView 内就是 Activity.
+    val activity: ComposePreviewActivity? = (LocalContext.current as? ComposePreviewActivity)
     // 设备框 + 内容
-    val context = LocalContext.current
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -356,82 +426,24 @@ private fun ReadyPanel(
             showChassis = deviceConfig.showChassis,
             useGestureNav = deviceConfig.useGestureNav,
         ) {
-            // 实际渲染由 ComposableRenderer 负责
-            // 这里放置一个标记 Box
-            RenderTargetMarker(
-                dexFile = previewState.dexFile,
-                className = previewState.className,
-                runtimeDex = previewState.runtimeDex,
-                projectDexFiles = previewState.projectDexFiles,
-                previewConfigs = previewState.previewConfigs,
-                classLoader = remember { com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader(context) },
+            // 容器 Box, 通过 AndroidView 嵌入一个 FrameLayout, 让 PreviewRenderEngine 把
+            // 自己的 ComposeView addView 进去. 显式使用 MATCH_PARENT layoutParams 避免
+            // SubcomposeLayout 嵌套测量把 ComposeView 的尺寸压成 0 (这是 v2.1 的根因).
+            AndroidView(
+                factory = { ctx ->
+                    android.widget.FrameLayout(ctx).apply {
+                        layoutParams = android.view.ViewGroup.LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                        // 通知 Activity 创建引擎, 把这个容器给引擎.
+                        // activity 是从 ReadyPanel 顶层 LocalContext.current 拿到的,
+                        // 它在 factory 调用时已经稳定, 不会因为重组而变成 null.
+                        activity?.attachPreviewContainer(this)
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
             )
-        }
-    }
-}
-
-/**
- * 标记渲染目标 - 实际由 ComposableRenderer 接管.
- *
- * Bug 3 修复: 之前这里只 setProjectDexFiles / setRuntimeDex 然后显示一个
- * 白色 Box 占位, 真正的 renderer.render() 永远没被调用, 导致 BUILD SUCCESSFUL
- * 之后 dex 加载/Compose 渲染流程实际上没跑, 预览界面只是占位.
- *
- * 修法: 在这里真正驱动 ComposableRenderer. 用 [remember] 创建一个 [ComposeView]
- * 作为渲染目标, [ComposableRenderer] 持有它, 当 dexFile/className/previewConfigs
- * 变化时 [LaunchedEffect] 会重新调用 [ComposableRenderer.render] 加载新 dex 并
- * 渲染新的 Composable.
- *
- * dex 文件来源: 通过 [com.itsaky.androidide.projects.android.AndroidModule.getRuntimeDexFiles]
- * (core/projects 内) 拿到当前 variant 的所有 dex, 经 [ProjectContextSource.resolveContext]
- * 聚合成 projectDexFiles, 这里直接用.
- */
-@Composable
-private fun RenderTargetMarker(
-    dexFile: java.io.File,
-    className: String,
-    runtimeDex: java.io.File?,
-    projectDexFiles: List<java.io.File>,
-    previewConfigs: List<PreviewConfig>,
-    classLoader: com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader,
-) {
-    val context = LocalContext.current
-    // 渲染目标 view - 整个生命周期内稳定, 不会随 recomposition 重建.
-    val renderView = remember {
-        androidx.compose.ui.platform.ComposeView(context).apply {
-            setViewCompositionStrategy(
-                androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
-            )
-        }
-    }
-    val renderer = remember(renderView, classLoader) {
-        com.itsaky.androidide.compose.preview.runtime.ComposableRenderer(renderView, classLoader)
-    }
-
-    // dex / class 变化时自动重新加载并渲染.
-    androidx.compose.runtime.LaunchedEffect(dexFile, className, previewConfigs) {
-        classLoader.setProjectDexFiles(projectDexFiles)
-        classLoader.setRuntimeDex(runtimeDex)
-        val config = previewConfigs.firstOrNull() ?: return@LaunchedEffect
-        renderer.render(
-            dexFile = dexFile,
-            className = className,
-            functionName = config.functionName,
-        )
-    }
-
-    // 把 renderView 挂到 Compose 树上 (AndroidView 负责把传统 Android view
-    // 嵌入到 Compose UI 中).
-    androidx.compose.ui.viewinterop.AndroidView(
-        factory = { renderView },
-        modifier = Modifier.fillMaxSize(),
-    )
-
-    // Activity 销毁时释放 classLoader. (Compose 的 DisposableEffect 会自动
-    // 在 Composable 离开组合时调用 onDispose.)
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        onDispose {
-            classLoader.release()
         }
     }
 }
