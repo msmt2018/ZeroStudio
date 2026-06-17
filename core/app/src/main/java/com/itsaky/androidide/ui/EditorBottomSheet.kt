@@ -299,11 +299,16 @@ class EditorBottomSheet @JvmOverloads constructor(
   }
 
   fun applyEditorWindowInsets(insets: WindowInsetsCompat) {
-    val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
-    val navInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-    val isImeVisibleNow = insets.isVisible(WindowInsetsCompat.Type.ime())
-    val targetBottomInset = if (isImeVisibleNow) imeInsets.bottom else navInsets.bottom
-    updateBottomInset(targetBottomInset)
+      val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+      val navInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+      val isImeVisibleNow = insets.isVisible(WindowInsetsCompat.Type.ime())
+      val targetBottomInset = if (isImeVisibleNow) imeInsets.bottom else navInsets.bottom
+      // 同步 IME 状态到底层 BottomSheetBehavior. 旧版 v2.0.7 的 setImeVisible
+      // 就是这个作用: IME 可见时让 BottomSheet 忽略底部手势 inset (用户的滑动
+      // 不会触发系统 home 手势, 全部交给 BottomSheet), IME 隐藏时恢复
+      // (尊重系统 nav bar 区域的手势).
+      behavior.isGestureInsetBottomIgnored = isImeVisibleNow
+      updateBottomInset(targetBottomInset)
   }
 
   private fun updateBottomInset(targetBottomInset: Int) {
@@ -370,33 +375,28 @@ class EditorBottomSheet @JvmOverloads constructor(
   }
 
   private fun updatePeekHeight() {
-      // 【关键修复】
+      // 【IME 同步原理】
       //
-      // 之前的写法:
-      //   behavior.peekHeight = min(max(headerHeight, 0) + currentBottomInset, parentHeight)
+      // 之前这里用 `peekHeight = headerHeight + imeBottom` 的累加写法, 假设
+      // parentHeight 在 IME 弹出前后保持不变. 这个假设是错的:
+      //   - EdgeToEdgeIDEActivity.applyEdgeToEdge() 调了
+      //     WindowCompat.setDecorFitsSystemWindows(window, false) 开了 edge-to-edge
+      //   - edge-to-edge 模式下, `windowSoftInputMode="adjustResize"` 不会再
+      //     自动 resize activity content view, 跟旧版 v2.0.7 之前的 IDE 行为不一致
+      //   - 旧版 v2.0.7 的解法是手动 `contentCard.height = contentCardRealHeight - imeBottom`
       //
-      // 这个写法假设 parentHeight 在 IME 弹出前后保持不变, 把 imeBottom 累加到
-      // peekHeight 里. 但实际上 EditorActivity 已经声明了
-      // android:windowSoftInputMode="adjustResize", 配合 BaseEditorActivity
-      // 不再手动写 contentCard.bottomMargin 后, IME 弹出时系统会自动把
-      // CoordinatorLayout 的可用高度 (也就是 parentHeight) 减去 imeBottom.
+      // 现在 BaseEditorActivity.onApplyWindowInsets 恢复了手动 resize. 配合这里的
+      // `peekHeight = headerHeight`, 几何关系就是:
+      //   BottomSheet.top    = parentHeight - peekHeight
+      //                    = (contentCardRealHeight - imeBottom) - headerHeight
+      //   符号栏底部 (即 AdvancedSymbolInputView.bottom)
+      //                    = BottomSheet.top + headerHeight
+      //                    = contentCardRealHeight - imeBottom
+      //                    = contentCard.bottom (因为 contentCard 已被手动 resize 到这个高度)
+      //                    = IME 顶部
       //
-      // 也就是说, parentHeight 在 IME 弹出时已经"包含"了 IME 调整, 这时再把
-      // imeBottom 累加到 peekHeight, 符号栏就会被推到 IME 顶部之上 imeBottom
-      // 像素处, 留下一道 imeBottom 像素的空隙 (用户截图反映的"软键盘顶部没有
-      // 绑定符号输入控件"的根本原因).
-      //
-      // 正确做法:
-      //   peekHeight = headerHeight
-      // 这样:
-      //   BottomSheet.top  = parentHeight - peekHeight
-      //                  = (screenHeight - imeBottom) - headerHeight
-      //   符号栏底部    = BottomSheet.top + headerHeight
-      //                  = screenHeight - imeBottom
-      //                  = IME 顶部
-      //
-      // 不依赖 currentBottomInset, 不依赖 parentHeight 是否减过 imeBottom,
-      // 由 adjustResize 系统保证一致性.
+      // 不再叠加 currentBottomInset 到 peekHeight: parentHeight 已经包含了
+      // IME 调整 (由 BaseEditorActivity 手动减 imeBottom), 再叠加就偏移了.
       val headerHeight = binding.floatingHeaderArea.height
       val parentHeight = (parent as? View)?.height ?: resources.displayMetrics.heightPixels
       behavior.peekHeight = min(max(headerHeight, 0), parentHeight)

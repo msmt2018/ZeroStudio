@@ -30,6 +30,7 @@ import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.Gravity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
@@ -209,6 +210,25 @@ abstract class BaseEditorActivity :
   }
 
   private var isImeVisible = false
+
+  /**
+   * 缓存 contentCard 在没有任何 IME 弹出时的原始高度.
+   *
+   * 【关键】必须用这个值作为基线手动调整 contentCard.height, 而不是依赖
+   * `windowSoftInputMode="adjustResize"`. 原因: BaseEditorActivity 继承自
+   * EdgeToEdgeIDEActivity, 后者在 onCreate 里调用了
+   * `WindowCompat.setDecorFitsSystemWindows(window, false)`, 也就是 edge-to-edge
+   * 模式. 在 edge-to-edge 模式下, `adjustResize` **不会自动 resize activity
+   * 内容视图** 来给 IME 让位 (这是 Android 11+ 官方行为, 见
+   * https://developer.android.com/develop/ui/views/layout/edge-to-edge#resize).
+   *
+   * 如果只靠 adjustResize, contentCard 在 IME 弹出时高度不变, EditorBottomSheet
+   * 的 parentHeight 也不变, `peekHeight = headerHeight` 算出来的
+   * `BottomSheet.top = parentHeight - peekHeight` 就把符号栏推到了屏幕底部,
+   * 而不是 IME 顶部. 旧版 v2.0.7 用手动 `contentCard.height -= imeBottom`
+   * 解决, 现在恢复这个机制.
+   */
+  private var contentCardRealHeight: Int? = null
   private val editorSurfaceContainerBackground by lazy { resolveAttr(R.attr.colorSurfaceDim) }
 
   private var optionsMenuInvalidator: Runnable? = null
@@ -272,22 +292,27 @@ abstract class BaseEditorActivity :
     val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
     val navInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
     val isImeVisibleNow = insets.isVisible(WindowInsetsCompat.Type.ime())
+    val imeBottom = imeInsets.bottom
 
-    // 让 adjustResize 接管 IME 调整. 之前的做法是手动给 contentCard 设置
-    // bottomMargin = imeBottom, 这与 adjustResize 双重 resize, 导致
-    // EditorBottomSheet 的 parentHeight 被错误地减去两倍 imeBottom,
-    // 符号输入控件就偏离了 IME 顶部 imeBottom 像素.
-    //
-    // 现在改成: 只把 insets 转发给 EditorBottomSheet, 让它内部的 peekHeight
-    // 计算 + adjustResize 联合完成"软键盘顶部同步跟随".
-    val bottomInset = if (isImeVisibleNow) imeInsets.bottom else navInsets.bottom
+    // === 关键: 手动 resize contentCard 模拟 adjustResize ===
+    // edge-to-edge 模式下 adjustResize 不会自动 resize, 必须手动
+    // `contentCard.height = contentCardRealHeight - imeBottom`, 这样
+    // EditorBottomSheet 的 parentHeight 在 IME 弹出时被减去 imeBottom,
+    // `peekHeight = headerHeight` 才能让符号栏底部落在 IME 顶部.
+    val baseHeight = contentCardRealHeight
+    if (baseHeight != null && baseHeight > 0) {
+      _binding?.contentCard?.updateLayoutParams<ViewGroup.LayoutParams> {
+        this.height = baseHeight - imeBottom
+      }
+    }
+
+    // === 同步调用 EditorBottomSheet.applyEditorWindowInsets ===
+    // 1) setImeVisible 切换 isImeVisible 标志 + behavior.isGestureInsetBottomIgnored
+    //    (旧版 setImeVisible 的核心作用)
+    // 2) 内部 schedulePeekHeightUpdate() 重新计算 peekHeight, 配合上面的
+    //    contentCard 手动 resize, 符号栏底部刚好落在 IME 顶部
+    // 3) spaceBottom.height = imeBottom 把抽屉内容 (ViewPager2/log) 顶到 IME 上方
     _binding?.content?.bottomSheet?.applyEditorWindowInsets(insets)
-    // bottomInset 仅供外部可能的扩展使用 (比如全屏手势/侧滑抽屉), 此处不再手动写
-    // margin, 避免重复 resize. 如果将来需要, 应改用 WindowInsetsCompat.Type.ime()
-    // 在 ViewCompat.setOnApplyWindowInsetsListener 里分发给具体子 view, 而不是
-    // 改 contentCard 的 layout_margin.
-    @Suppress("UNUSED_VARIABLE")
-    val unused = bottomInset
 
     if (this.isImeVisible != isImeVisibleNow) {
       this.isImeVisible = isImeVisibleNow
@@ -809,6 +834,24 @@ abstract class BaseEditorActivity :
       applyExpandedOffset()
     }
     content.realContainer.post { applyExpandedOffset() }
+
+    // === 缓存 contentCard 原始高度 ===
+    // 旧版 v2.0.7 在第一次 layout 后用 OnGlobalLayoutListener 把
+    // binding.contentCard.height 缓存到 contentCardRealHeight, 后续
+    // onApplyWindowInsets 用这个基线手动 resize contentCard.
+    // 现在 edge-to-edge 模式下 adjustResize 不可靠, 必须恢复这个机制.
+    // content_card 在 activity_editor.xml 顶层, 属于 ActivityEditorBinding,
+    // 不是 ContentEditorBinding, 所以这里用 binding.contentCard 而不是 content.contentCard.
+    binding.contentCard.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+      override fun onGlobalLayout() {
+        val h = binding.contentCard.height
+        if (h > 0) {
+          contentCardRealHeight = h
+          // 只缓存一次, 缓存到就解绑, 避免反复触发
+          binding.contentCard.viewTreeObserver.removeOnGlobalLayoutListener(this)
+        }
+      }
+    })
 
     content.bottomSheet.onSlideAction = { slideOffset ->
       if (!isDestroying && _binding != null) {
