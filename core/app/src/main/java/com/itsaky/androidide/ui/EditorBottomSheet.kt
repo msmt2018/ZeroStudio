@@ -451,6 +451,7 @@ class EditorBottomSheet @JvmOverloads constructor(
   // === 抽屉自定义拖拽状态 ===
   private var drawerDragInitialY = 0f
   private var drawerDragInitialSheetTop = 0
+  private var drawerDragInitialTranslationY = 0f
   private var drawerDragActive = false
   private val drawerTouchSlopPx by lazy {
       ViewConfiguration.get(context).scaledTouchSlop
@@ -460,16 +461,31 @@ class EditorBottomSheet @JvmOverloads constructor(
    * 抽屉拖拽监听器, 挂在顶部手势气泡上.
    *
    * 行为契约:
-   * 1. ACTION_DOWN: 记录初始手指 y 与 sheet.top; 调用 requestDisallowInterceptTouchEvent(true)
-   *    阻断 CoordinatorLayout/BottomSheetBehavior 的拖拽拦截, 让 IDE 抽屉不会被系统默认
-   *    ViewDragHelper 抢走手势; 返回 false, 气泡自己的 onTouchEvent 仍能处理点击 (无拖拽时).
-   * 2. ACTION_MOVE: 越过 touchSlop 后视为进入拖拽态, 期间 sheet.top 跟随手指 deltaY 1:1
-   *    变化, 不会在 80% 位置被吸附到 STATE_EXPANDED. 同时设置 behavior.state = STATE_DRAGGING
-   *    让 behavior.onLayoutChild 不再按 state 重定位 sheet, 我们的 offset 才不会被覆盖.
-   * 3. ACTION_UP/CANCEL: 根据当前 sheet.top 与 [collapsedTop, halfTop, expandedTop] 三段阈值
-   *    决定最终 state. 用户要求:
-   *    - 上滑到 50% 以上 (sheet.top <= halfTop) -> STATE_EXPANDED (完全展开)
-   *    - 下滑到 50% 以下 (sheet.top > halfTop) -> STATE_HALF_EXPANDED (停靠一半在屏幕中)
+   * 1. ACTION_DOWN: 记录初始手指 y、sheet.top、sheet.translationY; 调用
+   *    requestDisallowInterceptTouchEvent(true) 阻断 CoordinatorLayout/
+   *    BottomSheetBehavior 的拖拽拦截, 让 IDE 抽屉不会被系统默认 ViewDragHelper
+   *    抢走手势; 返回 false, 气泡自己的 onTouchEvent 仍能处理点击 (无拖拽时).
+   * 2. ACTION_MOVE: 越过 touchSlop 后视为进入拖拽态, 期间 sheet 通过 translationY
+   *    跟随手指 deltaY 1:1 变化, 不会在 80% 位置被 BottomSheetBehavior 默认吸附到
+   *    STATE_EXPANDED.
+   *
+   *    注意: 这里**不能**用 `behavior.state = STATE_DRAGGING` 来防止
+   *    BottomSheetBehavior.onLayoutChild 重新定位 sheet.top. 因为 STATE_DRAGGING
+   *    是 BottomSheetBehavior 内部状态, setState() 会直接抛 IllegalArgumentException
+   *    "STATE_DRAGGING should not be set externally" (com.google.android.material
+   *    BottomSheetBehavior.java:1480). 也不能直接用 offsetTopAndBottom 改 sheet.top,
+   *    因为下一次 layout pass 时 onLayoutChild 会按 state 把 sheet.top 重置回
+   *    state 对应位置, 把我们的 offset 抵消.
+   *
+   *    正确做法: 用 translationY 移动 view (这是 view 绘制时的平移, 不影响 layout),
+   *    sheet.top 保持 state 对应位置不变. 视觉位置 = sheet.top + translationY.
+   *    松手时 reset translationY=0 再 setState(newState), onLayoutChild 会把
+   *    sheet.top 重新设到 newState 对应位置, translationY=0 保证视觉上从当前
+   *    位置无缝过渡到 newState 位置, 不会出现跳变.
+   * 3. ACTION_UP/CANCEL: 根据当前 sheet 的视觉位置 (initialTop + translationY)
+   *    与 [collapsedTop, halfTop, expandedTop] 三段阈值决定最终 state. 用户要求:
+   *    - 上滑到 50% 以上 (visualTop <= halfTop) -> STATE_EXPANDED (完全展开)
+   *    - 下滑到 50% 以下但还没接近 collapsed -> STATE_HALF_EXPANDED (停靠一半)
    *    - 继续下滑到接近 collapsed 位置 -> STATE_COLLAPSED (完全折叠)
    *    行为只依赖位置, 不依赖 velocity, 避免误吸附.
    */
@@ -478,6 +494,7 @@ class EditorBottomSheet @JvmOverloads constructor(
           MotionEvent.ACTION_DOWN -> {
               drawerDragInitialY = event.rawY
               drawerDragInitialSheetTop = top
+              drawerDragInitialTranslationY = translationY
               drawerDragActive = false
               // requestDisallowInterceptTouchEvent 是 ViewParent 的方法, 不是 View 的.
               // 调用 v.parent 才能阻断 CoordinatorLayout/BottomSheetBehavior 的拦截.
@@ -489,16 +506,20 @@ class EditorBottomSheet @JvmOverloads constructor(
               val deltaY = event.rawY - drawerDragInitialY
               if (!drawerDragActive && kotlin.math.abs(deltaY) > drawerTouchSlopPx) {
                   drawerDragActive = true
-                  // 通知 behavior 进入拖拽态, 这样 behavior.onLayoutChild 不会再按 state
-                  // 覆盖 sheet.top, 我们的 offsetTopAndBottom 才不会被抵消.
-                  behavior.state = BottomSheetBehavior.STATE_DRAGGING
+                  // 不再设 behavior.state = STATE_DRAGGING (会被 BottomSheetBehavior
+                  // 拒绝并抛 IllegalArgumentException). 改用 translationY 移动
+                  // view 视觉位置, sheet.top 保持 state 对应位置不被覆盖.
               }
               if (drawerDragActive) {
                   val parentHeight = (parent as? View)?.height ?: height
-                  val newTop = (drawerDragInitialSheetTop + deltaY).toInt()
+                  val initialTop = drawerDragInitialSheetTop
+                  val newTop = (initialTop + deltaY).toInt()
                       .coerceIn(behavior.expandedOffset, parentHeight)
-                  if (newTop != top) {
-                      offsetTopAndBottom(newTop - top)
+                  // 计算 translationY = visualTop - initialTop. 这样视觉位置
+                  // = top (state 对应) + translationY = newTop.
+                  val newTranslationY = (newTop - initialTop).toFloat()
+                  if (newTranslationY != translationY) {
+                      translationY = newTranslationY
                   }
                   return@OnTouchListener true
               }
@@ -509,11 +530,17 @@ class EditorBottomSheet @JvmOverloads constructor(
               if (drawerDragActive) {
                   drawerDragActive = false
                   val parentHeight = (parent as? View)?.height ?: height
-                  val sheetTop = top
+                  // 当前视觉位置 = 初始 sheet.top + 当前 translationY.
+                  val initialTop = drawerDragInitialSheetTop
+                  val currentTop = initialTop + translationY.toInt()
                   val collapsedTop = parentHeight - behavior.peekHeight
                   val expandedTop = behavior.expandedOffset
                   val halfTop = (expandedTop + collapsedTop) / 2
-                  val newState = decideDrawerState(sheetTop, expandedTop, halfTop, collapsedTop)
+                  val newState = decideDrawerState(currentTop, expandedTop, halfTop, collapsedTop)
+                  // 先重置 translationY=0 再设 state. setState 会触发 onLayoutChild
+                  // 把 sheet.top 重新定位到 newState 对应位置, 这时 translationY=0
+                  // 保证视觉上从当前位置无缝过渡到 newState 位置, 不会出现跳变.
+                  translationY = 0f
                   behavior.state = newState
                   return@OnTouchListener true
               }
