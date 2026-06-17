@@ -428,7 +428,9 @@ class EditorBottomSheet @JvmOverloads constructor(
               drawerDragInitialY = event.rawY
               drawerDragInitialSheetTop = top
               drawerDragActive = false
-              v.requestDisallowInterceptTouchEvent(true)
+              // requestDisallowInterceptTouchEvent 是 ViewParent 的方法, 不是 View 的.
+              // 调用 v.parent 才能阻断 CoordinatorLayout/BottomSheetBehavior 的拦截.
+              v.parent?.requestDisallowInterceptTouchEvent(true)
               // 不消费, 让气泡自己的 onTouchEvent 继续处理点击/长按.
               false
           }
@@ -452,7 +454,7 @@ class EditorBottomSheet @JvmOverloads constructor(
               false
           }
           MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-              v.requestDisallowInterceptTouchEvent(false)
+              v.parent?.requestDisallowInterceptTouchEvent(false)
               if (drawerDragActive) {
                   drawerDragActive = false
                   val parentHeight = (parent as? View)?.height ?: height
