@@ -18,6 +18,7 @@
 package com.itsaky.androidide.actions.text
 
 import android.content.Context
+import android.view.MenuItem
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
@@ -54,4 +55,11 @@ class UndoAction(context: Context, override val order: Int) : EditorRelatedActio
       false
     }
   }
+
+  /**
+   * Always show this action in the editor toolbar, similar to other fixed toolbar entries like
+   * [com.itsaky.androidide.actions.build.QuickRunWithCancellationAction] and
+   * [com.itsaky.androidide.actions.build.RunTasksAction].
+   */
+  override fun getShowAsActionFlags(data: ActionData): Int = MenuItem.SHOW_AS_ACTION_ALWAYS
 }

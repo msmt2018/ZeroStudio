@@ -162,7 +162,12 @@ abstract class BaseEditorActivity :
 
           if (binding.editorDrawerLayout.isDrawerOpen(GravityCompat.START)) {
             binding.editorDrawerLayout.closeDrawer(GravityCompat.START)
-          } else if (editorBottomSheet?.state == BottomSheetBehavior.STATE_EXPANDED) {
+          } else if (editorBottomSheet?.state == BottomSheetBehavior.STATE_EXPANDED ||
+              editorBottomSheet?.state == BottomSheetBehavior.STATE_HALF_EXPANDED ||
+              editorBottomSheet?.state == BottomSheetBehavior.STATE_DRAGGING) {
+            // IDE 抽屉在展开/半展开/正在拖拽任一状态时, 返回键都先关闭抽屉,
+            // 而不是直接退出项目. STATE_DRAGGING 也要兜底: 用户在拖拽过程中按返回,
+            // 也视为"抽屉处于打开状态", 关闭抽屉.
             content.bottomSheet.forceCollapse()
           } else if (binding.swipeReveal.isOpen) {
             binding.swipeReveal.close()
@@ -793,6 +798,15 @@ abstract class BaseEditorActivity :
           content.viewContainer.scaleY = editorScale
       }
     }
+
+    // 把 CoordinatorLayout 上的日志分享/清空 FAB 注入到 EditorBottomSheet.
+    // 这两个 FAB 之前在 layout_editor_bottom_sheet.xml 里 (放在 drawer_content_area
+    // 内部), 抽屉在 50% 停靠或半展开时按钮会落到布局可见区域之外. 现在改成
+    // CoordinatorLayout 的直接子节点 + app:layout_anchor, 始终跟随 BottomSheet 右下角,
+    // 但仍然由 EditorBottomSheet 根据当前选中的 Tab 自行 show/hide.
+    // binding 是 ActivityEditorBinding (从 activity_editor.xml 生成), FAB 实际定义在
+    // content_editor.xml 里, 所以走 content.clearFab / content.shareOutputFab.
+    content.bottomSheet.setLogActionFabButtons(content.clearFab, content.shareOutputFab)
   }
 
   private fun setupDiagnosticInfo() {
