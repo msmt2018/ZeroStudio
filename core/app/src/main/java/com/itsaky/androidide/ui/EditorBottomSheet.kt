@@ -305,6 +305,12 @@ class EditorBottomSheet @JvmOverloads constructor(
         }
     }
 
+    // 把 fully expanded 的位置从全屏 (expandedOffset = 0) 改成编辑器界面
+    // toolbar 下方 progress_indicator 的底部. 这样展开抽屉时, 用户能看到
+    // 上方 toolbar + progress_indicator, 下方是 IDE 抽屉 (构建输出/文件/搜索等),
+    // 不再被抽屉整个盖住.
+    setupExpandedOffset()
+
     // 将 WindowInsets 拦截用于 IME 同步；BaseEditorActivity 也会直接转发一次，
     // 以覆盖 CoordinatorLayout/BottomSheetBehavior 未把 IME insets 分发到子 View 的设备。
     ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
@@ -312,6 +318,62 @@ class EditorBottomSheet @JvmOverloads constructor(
       insets
     }
     behavior.isGestureInsetBottomIgnored = true
+  }
+
+  /**
+   * 把 [BottomSheetBehavior.getExpandedOffset] 设为 progress_indicator.bottom
+   * 在 EditorBottomSheet.parent (CoordinatorLayout) 坐标里的位置.
+   *
+   * XML 结构 (content_editor.xml):
+   *   CoordinatorLayout (realContainer, parent)
+   *     AppBarLayout (editor_appBarLayout)
+   *       editor_toolbar
+   *       progress_indicator    <-- 我们要把抽屉顶边放在这里
+   *       tabs
+   *     EditorBottomSheet (this)
+   *
+   * 几何关系:
+   *   expandedOffset  = progress_indicator.bottom - CoordinatorLayout.top
+   *
+   * 用 [View.getLocationOnScreen] 算绝对屏幕坐标差, 而不是 progressIndicator.bottom
+   * 直接取值, 因为 progress_indicator.bottom 是它自己在 AppBarLayout 内的相对值,
+   * 还要加上 AppBarLayout 自身在 CoordinatorLayout 里的 offset, 计算起来更绕.
+   * 屏幕坐标差是最直接的, 且对 AppBarLayout 的 scroll/collapse 行为 (即使将来
+   * 启用) 都能正确跟随.
+   */
+  private fun setupExpandedOffset() {
+    val parentView = parent as? View ?: return
+    val progressIndicator = parentView.findViewById<View>(R.id.progress_indicator) ?: run {
+      log.warn("setupExpandedOffset: R.id.progress_indicator not found in parent; expandedOffset left as default 0")
+      return
+    }
+    // progress_indicator 还没 measure/layout 完时, 不能算. 用 doOnLayout 等下一帧.
+    progressIndicator.doOnLayout {
+      applyExpandedOffset(parentView, progressIndicator)
+    }
+    // 后续 toolbar / progress_indicator / tabs 任何一项尺寸变化都要重算.
+    // (比如将来 toolbar 菜单图标数变化让 toolbar 高度变化, progress_indicator 底
+    // 部就跟着动.)
+    progressIndicator.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, oldBottom ->
+      if (bottom != oldBottom) {
+        applyExpandedOffset(parentView, progressIndicator)
+      }
+    }
+  }
+
+  private fun applyExpandedOffset(parentView: View, progressIndicator: View) {
+    if (progressIndicator.width == 0 || progressIndicator.height == 0) return
+    val parentLoc = IntArray(2)
+    val progressLoc = IntArray(2)
+    parentView.getLocationOnScreen(parentLoc)
+    progressIndicator.getLocationOnScreen(progressLoc)
+    // progress_indicator.bottom 在 parentView 坐标里 = progress 屏幕 y + height - parent 屏幕 y
+    val newOffset = (progressLoc[1] + progressIndicator.height) - parentLoc[1]
+    val clamped = max(0, newOffset)
+    if (behavior.expandedOffset != clamped) {
+      log.info("applyExpandedOffset: progress_indicator.bottom={} (parent coords) -> expandedOffset={}", newOffset, clamped)
+      behavior.expandedOffset = clamped
+    }
   }
 
   fun applyEditorWindowInsets(insets: WindowInsetsCompat) {
