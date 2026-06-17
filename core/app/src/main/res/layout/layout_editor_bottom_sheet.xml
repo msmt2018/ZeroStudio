@@ -134,10 +134,13 @@
 
      </LinearLayout>
 
-     <!-- 
+     <!--
       ==== Drawer Content Area ====
       实际展开的抽屉内容（日志、终端等），背景填充。
       随着 BottomSheet 的滑动，这部分内容会从下往上跟随浮出。
+      分享/清空日志的 FAB 已经被移动到 content_editor.xml 中 (作为 CoordinatorLayout
+      的子节点, 用 app:layout_anchor 锚定到本 BottomSheet), 避免抽屉在 50% 停靠
+      或半展开时按钮落到布局可见区域之外.
     -->
      <RelativeLayout
           android:id="@+id/drawer_content_area"
@@ -167,29 +170,6 @@
                android:layout_below="@id/tabs"
                android:clickable="true"
                android:focusable="false" />
-
-          <com.google.android.material.floatingactionbutton.FloatingActionButton
-               android:id="@+id/clear_fab"
-               android:layout_width="wrap_content"
-               android:layout_height="wrap_content"
-               android:layout_above="@id/space_bottom"
-               android:layout_alignParentEnd="true"
-               android:layout_margin="16dp"
-               android:src="@drawable/ic_sweep_delete"
-               app:fabSize="normal" />
-
-          <com.google.android.material.floatingactionbutton.FloatingActionButton
-               android:id="@+id/share_output_fab"
-               android:layout_width="wrap_content"
-               android:layout_height="wrap_content"
-               android:layout_above="@id/clear_fab"
-               android:layout_alignParentEnd="true"
-               android:layout_marginStart="16dp"
-               android:layout_marginTop="16dp"
-               android:layout_marginEnd="16dp"
-               android:layout_marginBottom="16dp"
-               android:src="@drawable/ic_share"
-               app:fabSize="normal" />
 
      </RelativeLayout>
 

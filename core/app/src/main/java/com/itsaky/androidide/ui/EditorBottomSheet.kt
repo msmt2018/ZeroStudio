@@ -85,11 +85,22 @@ class EditorBottomSheet @JvmOverloads constructor(
   @JvmField var binding: LayoutEditorBottomSheetBinding
   val pagerAdapter: EditorBottomSheetTabAdapter
 
+  // 日志分享/清空 FAB: 已经从 layout_editor_bottom_sheet.xml 移到 content_editor.xml
+  // (CoordinatorLayout 直接子节点 + app:layout_anchor 锚定到本 BottomSheet 右下角),
+  // 通过 setLogActionFabButtons() 由 BaseEditorActivity 注入. 在没注入时所有引用都是
+  // null, 不会 NPE - 等 BaseEditorActivity.setupBottomSheet() 注入后才有实际效果.
+  private var logClearFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
+  private var logShareFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
+
   private val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
     BottomSheetBehavior.from(this).apply {
       isFitToContents = false
       skipCollapsed = false
       isHideable = false
+      // 显式设置半展开停靠点为父容器高度的 50%. 这样抽屉上滑到 50% 时
+      // 会停靠在半展开状态 (STATE_HALF_EXPANDED), 继续上滑到 100% 才完全展开.
+      // 不再依赖默认值, 避免某些设备/版本上 50% 停靠行为不一致的问题.
+      halfExpandedRatio = 0.5f
     }
   }
 
@@ -148,11 +159,9 @@ class EditorBottomSheet @JvmOverloads constructor(
           override fun onTabSelected(tab: Tab) {
             val fragment: Fragment = pagerAdapter.getFragmentAtIndex(tab.position)
             if (fragment is ShareableOutputFragment) {
-              binding.clearFab.show()
-              binding.shareOutputFab.show()
+              showLogActionFabs()
             } else {
-              binding.clearFab.hide()
-              binding.shareOutputFab.hide()
+              hideLogActionFabs()
             }
           }
 
@@ -161,34 +170,8 @@ class EditorBottomSheet @JvmOverloads constructor(
         }
     )
 
-    binding.shareOutputFab.setOnClickListener {
-      val fragment = pagerAdapter.getFragmentAtIndex(binding.tabs.selectedTabPosition)
-
-      if (fragment !is ShareableOutputFragment) {
-        log.error("Unknown fragment: {}", fragment)
-        return@setOnClickListener
-      }
-
-      val filename = fragment.getFilename()
-
-      @Suppress("DEPRECATION")
-      val progress =
-          android.app.ProgressDialog.show(context, null, context.getString(string.please_wait))
-      executeAsync(fragment::getContent) {
-        progress.dismiss()
-        shareText(it, filename)
-      }
-    }
-
-    TooltipCompat.setTooltipText(binding.clearFab, context.getString(string.title_clear_output))
-    binding.clearFab.setOnClickListener {
-      val fragment: Fragment = pagerAdapter.getFragmentAtIndex(binding.tabs.selectedTabPosition)
-      if (fragment !is ShareableOutputFragment) {
-        log.error("Unknown fragment: {}", fragment)
-        return@setOnClickListener
-      }
-      (fragment as ShareableOutputFragment).clearOutput()
-    }
+    // 默认隐藏日志 FAB, 等 Tab 选中 ShareableOutputFragment 时再显示.
+    hideLogActionFabs()
 
     // 解决气泡启动时错位：延时并在 Layout 完成后重置气泡形态
     binding.pageSwitchGestureBubble.viewTreeObserver.addOnGlobalLayoutListener(
@@ -218,6 +201,71 @@ class EditorBottomSheet @JvmOverloads constructor(
       }
       false
     }
+  }
+
+  /**
+   * 由 BaseEditorActivity 调用, 把 CoordinatorLayout 上的日志分享/清空 FAB 注入进来.
+   * 注入之后, EditorBottomSheet 内部会根据当前选中的 Tab 自行 show/hide 这两个按钮,
+   * 并把点击事件绑定到当前选中的 ShareableOutputFragment 上.
+   */
+  fun setLogActionFabButtons(
+      clearFab: com.google.android.material.floatingactionbutton.FloatingActionButton,
+      shareFab: com.google.android.material.floatingactionbutton.FloatingActionButton,
+  ) {
+    this.logClearFab = clearFab
+    this.logShareFab = shareFab
+
+    // 绑定 click listener (使用注入的 FAB).
+    TooltipCompat.setTooltipText(clearFab, context.getString(string.title_clear_output))
+    clearFab.setOnClickListener {
+      val fragment: Fragment = pagerAdapter.getFragmentAtIndex(binding.tabs.selectedTabPosition)
+      if (fragment !is ShareableOutputFragment) {
+        log.error("Unknown fragment: {}", fragment)
+        return@setOnClickListener
+      }
+      (fragment as ShareableOutputFragment).clearOutput()
+    }
+
+    shareFab.setOnClickListener {
+      val fragment = pagerAdapter.getFragmentAtIndex(binding.tabs.selectedTabPosition)
+
+      if (fragment !is ShareableOutputFragment) {
+        log.error("Unknown fragment: {}", fragment)
+        return@setOnClickListener
+      }
+
+      val filename = fragment.getFilename()
+
+      @Suppress("DEPRECATION")
+      val progress =
+          android.app.ProgressDialog.show(context, null, context.getString(string.please_wait))
+      executeAsync(fragment::getContent) {
+        progress.dismiss()
+        shareText(it, filename)
+      }
+    }
+
+    // 根据当前选中的 Tab 决定是否显示.
+    val fragment: Fragment? = try {
+      pagerAdapter.getFragmentAtIndex(binding.tabs.selectedTabPosition)
+    } catch (t: Throwable) {
+      null
+    }
+    if (fragment is ShareableOutputFragment) {
+      showLogActionFabs()
+    } else {
+      hideLogActionFabs()
+    }
+  }
+
+  private fun showLogActionFabs() {
+    logClearFab?.show()
+    logShareFab?.show()
+  }
+
+  private fun hideLogActionFabs() {
+    logClearFab?.hide()
+    logShareFab?.hide()
   }
 
   /**
@@ -383,6 +431,12 @@ class EditorBottomSheet @JvmOverloads constructor(
             if (!canExpandSheet() && newState == BottomSheetBehavior.STATE_EXPANDED) {
               forceCollapse()
             }
+            // 半展开 (50% 停靠) 与完全展开都允许: 用户在抽屉上滑到 50% 时会
+            // 自动停靠, 继续上滑超过 50% 才完全展开. STATE_HALF_EXPANDED 与
+            // STATE_EXPANDED 都是有效的"打开"状态, 后续返回键/手势关闭抽屉时
+            // 会从这两个状态折叠回 peek.
+            // 不在此处做强制状态切换, 保持 BottomSheetBehavior 默认的吸附行为
+            // (释放手指时按位置和速度吸附到最近的状态), 这样抽屉能精确跟随手指.
           }
 
           override fun onSlide(bottomSheet: View, slideOffset: Float) {

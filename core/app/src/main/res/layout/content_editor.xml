@@ -121,6 +121,34 @@
           android:clipToPadding="false"
           app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior" />
 
+     <!--
+       日志分享/清空按钮: 从 layout_editor_bottom_sheet.xml 中移出, 改成 CoordinatorLayout
+       的直接子节点, 并用 app:layout_anchor 锚定到 bottom_sheet. 这样无论 BottomSheet
+       处于折叠/半展开/完全展开哪种状态, FAB 都会跟随 BottomSheet 的右下角,
+       不会再落到布局可见区域之外.
+     -->
+     <com.google.android.material.floatingactionbutton.FloatingActionButton
+          android:id="@+id/clear_fab"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:src="@drawable/ic_sweep_delete"
+          app:fabSize="normal"
+          app:layout_anchor="@id/bottom_sheet"
+          app:layout_anchorGravity="bottom|end"
+          android:layout_marginEnd="16dp"
+          android:layout_marginBottom="16dp" />
+
+     <com.google.android.material.floatingactionbutton.FloatingActionButton
+          android:id="@+id/share_output_fab"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:src="@drawable/ic_share"
+          app:fabSize="normal"
+          app:layout_anchor="@id/bottom_sheet"
+          app:layout_anchorGravity="bottom|end"
+          android:layout_marginEnd="16dp"
+          android:layout_marginBottom="92dp" />
+
      <!-- 悬浮诊断信息 -->
      <include
           android:id="@+id/diagnosticInfo"

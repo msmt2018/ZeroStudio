@@ -230,15 +230,34 @@ class AdvancedSymbolInputView @JvmOverloads constructor(
                 heightAnimator?.cancel()
                 initialY = event.rawY
                 lastY = event.rawY
+                initialX = event.rawX
+                isDragging = false
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (!isDragging) return super.onTouchEvent(event)
-                val deltaY = event.rawY - lastY
-                val nextHeight = (pagerHost.layoutParams.height - deltaY.toInt()).coerceIn(collapsedHeightPx, expandedHeightPx)
-                updatePagerHeight(nextHeight)
-                lastY = event.rawY
-                return true
+                val dy = event.rawY - initialY
+                val dx = event.rawX - initialX
+                // 在 onTouchEvent 内部检测垂直拖拽起点, 不再依赖 onInterceptTouchEvent.
+                // 原因: 当外部 OnTouchListener 消费了 ACTION_DOWN 之后, 符号输入控件的
+                // onInterceptTouchEvent 不再被调用 (因为本 View 已经是 touch target),
+                // 导致 isDragging 永远为 false, 上滑手势被父级 (IDE 抽屉) 抢占.
+                if (!isDragging && expandedHeightPx > collapsedHeightPx &&
+                    kotlin.math.abs(dy) > touchSlop && kotlin.math.abs(dy) > kotlin.math.abs(dx)) {
+                    isDragging = true
+                    // 告诉父级 (含 CoordinatorLayout/BottomSheetBehavior) 不要拦截后续 MOVE,
+                    // 这样 IDE 抽屉就不会跟着符号栏上滑手势一起被拖出.
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    lastY = event.rawY
+                    return true
+                }
+                if (isDragging) {
+                    val deltaY = event.rawY - lastY
+                    val nextHeight = (pagerHost.layoutParams.height - deltaY.toInt()).coerceIn(collapsedHeightPx, expandedHeightPx)
+                    updatePagerHeight(nextHeight)
+                    lastY = event.rawY
+                    return true
+                }
+                return super.onTouchEvent(event)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (isDragging) {
@@ -250,6 +269,8 @@ class AdvancedSymbolInputView @JvmOverloads constructor(
                     animateToHeight(target)
                 }
                 isDragging = false
+                // 手势结束, 恢复父级拦截能力.
+                parent?.requestDisallowInterceptTouchEvent(false)
                 return true
             }
         }
