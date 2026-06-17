@@ -843,21 +843,43 @@ class GradleBuildService :
         log.info("Running idle runtime cleanup. trigger={}", trigger)
         eventListener?.onOutput("Running runtime cleanup ($trigger)...")
 
+        // Gradle daemons and build processes are always safe to clean up. They can be
+        // restarted on the next build via the wrapper (`gradlew --stop` then any gradle
+        // invocation will spawn a fresh daemon).
         stopGradleDaemons().get(8, TimeUnit.SECONDS)
         killGradlewProcesses()
         currentBuildProcess?.destroy()
         currentBuildProcess = null
 
-        try {
-          server?.shutdown()?.get(2, TimeUnit.SECONDS)
-        } catch (e: Throwable) {
-          log.warn("Tooling server shutdown during cleanup failed", e)
-        }
+        // 【compose-preview 共享构建服务修复】post-build 触发器不能关闭 Tooling API
+        // server, 否则会把编辑器端的同步/构建能力一起干掉。Tooling API server 是单
+        // 进程共享资源：编辑器 ProjectHandlerActivity 和 ComposePreviewActivity 共用
+        // 同一个 GradleBuildService 实例, post-build cleanup 把 server 杀掉后, 用户
+        // 返回编辑器就会看到 "Tooling API 服务器不可用" + "项目初始化失败", 跟用户
+        // 反馈的 bug 完全一致。
+        //
+        // 只有显式的全量清理触发器 (默认 manual / apm-menu-self-clean) 才允许关掉
+        // Tooling API server; post-build 仅清理 gradle daemon 和残留的 build 进程,
+        // 保留 server 给编辑器继续使用。
+        val shutdownToolingServer = trigger != "post-build"
+        if (shutdownToolingServer) {
+          try {
+            server?.shutdown()?.get(2, TimeUnit.SECONDS)
+          } catch (e: Throwable) {
+            log.warn("Tooling server shutdown during cleanup failed", e)
+          }
 
-        toolingServerRunner?.release()
-        toolingServerRunner = null
-        server = null
-        isToolingServerStarted = false
+          toolingServerRunner?.release()
+          toolingServerRunner = null
+          server = null
+          isToolingServerStarted = false
+        } else {
+          log.info(
+              "Preserving Tooling API server across post-build cleanup (trigger={}). " +
+                  "Editor and compose preview share the same server instance.",
+              trigger,
+          )
+        }
 
         Runtime.getRuntime().gc()
         System.gc()
