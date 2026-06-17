@@ -187,14 +187,13 @@ class ComposableInvoker {
         val params = method.parameterTypes
         val isStatic = Modifier.isStatic(method.modifiers)
         val tail = computeTailArgCount(params)
-        val hasDefault = params.size >= 3 && (params.size - tail) < params.size &&
-            isInteger(params.last())
         return Resolved(
             handle = handle,
             method = method,
             isStatic = isStatic,
             tailArgCount = tail,
-            hasDefaultBitmask = params.size - tail == 3,
+            // $default bitmask 段: 末尾 tail 段里除 Composer, int 外还有 1 个 int 参数
+            hasDefaultBitmask = tail == 3,
             parameterTypes = params,
         )
     }

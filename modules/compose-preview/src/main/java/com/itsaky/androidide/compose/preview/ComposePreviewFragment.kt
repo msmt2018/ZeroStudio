@@ -84,8 +84,10 @@ class ComposePreviewFragment : Fragment() {
     }
 
     private fun setupPreview() {
-        // 把 PreviewRenderEngine 挂到 binding.root, 由它创建/管理 ComposeView.
-        renderEngine = PreviewRenderEngine(requireContext(), binding.root).also { it.attach() }
+        // 把 PreviewRenderEngine 挂到 previewContainer (FrameLayout), 由它创建/管理 ComposeView.
+        // previewContainer 是 fragment_compose_preview.xml 中专门用于预览的 FrameLayout,
+        // 使用它能避免在 ConstraintLayout 根上 addView 时尺寸为 0 的问题.
+        renderEngine = PreviewRenderEngine(requireContext(), binding.previewContainer).also { it.attach() }
     }
 
     private fun observeState() {

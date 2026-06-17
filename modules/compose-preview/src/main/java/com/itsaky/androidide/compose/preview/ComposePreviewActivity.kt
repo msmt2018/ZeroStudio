@@ -124,7 +124,11 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         setContentView(rootComposeView)
 
         rootComposeView.setContent {
+            // 把 Activity 自身显式传进 Composable, 而不是通过 LocalContext.current as Activity 拿,
+            // 因为 LocalContext 在 AndroidView 嵌套时可能 wrap 一层 ContextWrapper, 导致
+            // 类型转换返回 null. 显式参数最稳定可靠.
             ComposePreviewScreen(
+                activity = this,
                 viewModel = viewModel,
                 onClose = { finish() },
             )
@@ -158,14 +162,6 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private var renderEngine: PreviewRenderEngine? = null
 
-    override fun onStart() {
-        super.onStart()
-        // 把渲染引擎 attach 到 setContent 创建的 FrameLayout.
-        // 在 ReadyPanel 内, 通过 AndroidView 嵌入一个 FrameLayout 容器,
-        // PreviewRenderEngine 拿到这个容器并把 ComposeView addView 进去.
-        // 容器由 ComposePreviewScreen 提供, 引擎不直接 add 到 decorContent.
-    }
-
     /**
      * 由 ComposePreviewScreen 内 AndroidView 调用, 注入预览容器.
      * 引擎 attach 到此 container 后, container 会显示 Compose 渲染.
@@ -174,6 +170,12 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         if (renderEngine == null) {
             renderEngine = PreviewRenderEngine(this, container).also { it.attach() }
         }
+    }
+
+    override fun onDestroy() {
+        renderEngine?.detach()
+        renderEngine = null
+        super.onDestroy()
     }
 
     companion object {
@@ -198,6 +200,7 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ComposePreviewScreen(
+    activity: ComposePreviewActivity,
     viewModel: ComposePreviewViewModel,
     onClose: () -> Unit,
 ) {
@@ -270,12 +273,8 @@ private fun ComposePreviewScreen(
                             diagnostics = s.diagnostics,
                         )
                         is PreviewState.Ready -> ReadyPanel(
-                            previewState = s,
+                            activity = activity,
                             deviceConfig = deviceConfig,
-                            viewport = viewport,
-                            onBuildFailed = {
-                                viewModel.setBuildFailed()
-                            }
                         )
                     }
                 }
@@ -401,14 +400,9 @@ private fun ErrorPanel(
 
 @Composable
 private fun ReadyPanel(
-    previewState: PreviewState.Ready,
+    activity: ComposePreviewActivity,
     deviceConfig: DeviceConfig,
-    viewport: ViewportState,
-    onBuildFailed: () -> Unit,
 ) {
-    // 在 ReadyPanel 顶层取 Activity, 然后在 AndroidView factory 内通过闭包访问.
-    // LocalContext.current 在 setContent 创建的 ComposeView 内就是 Activity.
-    val activity: ComposePreviewActivity? = (LocalContext.current as? ComposePreviewActivity)
     // 设备框 + 内容
     Box(
         modifier = Modifier
@@ -437,9 +431,8 @@ private fun ReadyPanel(
                             android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                         )
                         // 通知 Activity 创建引擎, 把这个容器给引擎.
-                        // activity 是从 ReadyPanel 顶层 LocalContext.current 拿到的,
-                        // 它在 factory 调用时已经稳定, 不会因为重组而变成 null.
-                        activity?.attachPreviewContainer(this)
+                        // activity 由 ComposePreviewScreen 显式传入, 不会因重组失效.
+                        activity.attachPreviewContainer(this)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
