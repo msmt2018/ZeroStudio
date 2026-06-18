@@ -142,6 +142,9 @@ data class PreviewConfig(
 
 /**
  * 设备 + 系统栏 + 边框 配置 v2.1.
+ *
+ * v3.5 增 [orientation] 字段: 控制横屏 / 竖屏. DeviceFrame 据此切换
+ * 有效宽高 + 旋转 cutout / 物理键 / 铰链方向. 默认 PORTRAIT.
  */
 @Immutable
 data class DeviceConfig(
@@ -154,6 +157,11 @@ data class DeviceConfig(
     val useGestureNav: Boolean = false,
     // 【PR-A】真实设备模拟开关. true=套壳显示; false=无外壳直接显示 compose UI.
     val deviceSimEnabled: Boolean = false,
+    // 【v3.5】横竖屏切换. 不会修改 [profile] 本身, 仅在渲染时按 orientation 计算
+    // effective widthDp/heightDp + 旋转 cutout/物理键/铰链. 切换后保持
+    // 当前选中设备不变.
+    val orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation =
+        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT,
 )
 
 /**
@@ -602,6 +610,60 @@ class ComposePreviewViewModel(
 
     fun setSystemBarsTheme(theme: SystemBarsTheme) {
         _deviceConfig.value = _deviceConfig.value.copy(systemBarsTheme = theme)
+    }
+
+    /**
+     * 【v3.5】直接设置设备方向. 不会改变 [DeviceConfig.profile], 仅修改
+     * [DeviceConfig.orientation]. UI 重订阅后 [DeviceFrame] 立即用
+     * [DeviceProfile.effectiveWidthDp] / [effectiveHeightDp] / [effectiveCutout] /
+     * [effectivePhysicalKeys] 等旋转后的几何重新布局.
+     *
+     * WATCH / DESKTOP / NONE 形态下, 切方向通常**没有视觉变化** (圆形
+     * 任意方向都是圆; 桌面 launcher 不区分方向). 但为统一 API, 这些
+     * 形态也允许切方向, 内部逻辑自行 ignore 即可.
+     *
+     * @param orientation 目标方向
+     */
+    fun setOrientation(
+        orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation
+    ) {
+        if (_deviceConfig.value.orientation == orientation) return
+        _deviceConfig.value = _deviceConfig.value.copy(orientation = orientation)
+        // 切方向后, 屏幕宽高对调, 旧的 pan offset 可能对应新尺寸的完全不同位置.
+        resetPan()
+        LOG.info("Orientation set to: {}", orientation)
+    }
+
+    /**
+     * 【v3.5】循环切换方向: PORTRAIT → LANDSCAPE → REVERSE_LANDSCAPE →
+     * REVERSE_PORTRAIT → PORTRAIT. 用于顶栏"旋转"按钮单击.
+     *
+     * 跳过 REVERSE_PORTRAIT (180°) 的话, 调 [cycleOrientationFast].
+     */
+    fun cycleOrientation() {
+        val next = when (_deviceConfig.value.orientation) {
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT ->
+                com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE ->
+                com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_LANDSCAPE
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_LANDSCAPE ->
+                com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_PORTRAIT
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_PORTRAIT ->
+                com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT
+        }
+        setOrientation(next)
+    }
+
+    /**
+     * 【v3.5】快切: PORTRAIT ↔ LANDSCAPE (跳过反向). 用于"横竖屏"按钮.
+     */
+    fun cycleOrientationFast() {
+        val next = if (_deviceConfig.value.orientation.isLandscape) {
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT
+        } else {
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE
+        }
+        setOrientation(next)
     }
 
     /**

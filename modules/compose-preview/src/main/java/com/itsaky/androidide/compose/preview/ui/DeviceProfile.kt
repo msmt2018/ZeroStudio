@@ -38,21 +38,27 @@ import com.itsaky.androidide.compose.preview.data.device.PhysicalKey
  * **保留** v2 旧字段 (widthPx / heightPx / densityDpi / frameStyle / isCustom),
  * 这样 ComposePreviewFragment / ComposePreviewActivity 等旧入口不需要立刻全部迁移.
  *
+ * v3.5 增 [orientation] 字段: 控制预览是竖屏还是横屏. **不修改** widthPx / heightPx
+ * 这些物理尺寸, 而是在 [effectiveWidthDp] / [effectiveHeightDp] 等计算属性中
+ * 根据 orientation 做旋转. 这样切横竖屏不会污染 catalog, 同一个设备既能竖屏
+ * 也能横屏预览.
+ *
  * @property id 唯一 ID, 用于 SharedPreferences / Catalog 查询
  * @property manufacturer 厂商 ("Google" / "Huawei" / "Samsung" / "Apple" / ...)
  * @property model 型号 ("Pixel 7 Pro" / "Galaxy Z Fold 5")
  * @property osVersion 系统版本字符串 ("Android 14" / "iOS 17")
  * @property formFactor 形态因子 (决定 [DeviceFrame] 渲染策略)
- * @property widthPx 屏幕宽 (px)
- * @property heightPx 屏幕高 (px)
+ * @property widthPx 屏幕宽 (px) — 物理设备"自然方向" (竖屏) 宽
+ * @property heightPx 屏幕高 (px) — 物理设备"自然方向" (竖屏) 高
  * @property densityDpi 屏幕 DPI
  * @property cornerRadiusDp 屏幕圆角
  * @property cutout 切口几何 (刘海 / 针孔 / 瀑布); null = 无切口
- * @property bezels 边框 (上下左右 dp)
+ * @property bezels 边框 (上下左右 dp) — 按竖屏方向定义
  * @property chassisColor 机身颜色
- * @property physicalKeys 物理按键列表
+ * @property physicalKeys 物理按键列表 — 按竖屏方向定位
  * @property statusBarHeightDp 状态栏高度
  * @property navigationBarHeightDp 导航栏高度
+ * @property orientation v3.5 增: 当前预览方向. 默认 PORTRAIT.
  * @property frameStyle 旧字段, 由 [formFactor] 推导 (兼容)
  * @property isCustom 是否为用户自定义
  */
@@ -74,17 +80,81 @@ data class DeviceProfile(
     val physicalKeys: List<PhysicalKey> = PhysicalKey.NO_KEYS,
     val statusBarHeightDp: Int = 24,
     val navigationBarHeightDp: Int = 48,
+    /** 【v3.5】当前预览方向. 横屏切换不会改 widthPx/heightPx, 只影响渲染. */
+    val orientation: DeviceOrientation = DeviceOrientation.PORTRAIT,
     val frameStyle: FrameStyle = formFactor.toFrameStyle(),
     val isCustom: Boolean = false,
 ) {
 
-    /** width in dp. */
+    /** width in dp — 物理设备"自然方向" (竖屏) 宽. */
     val widthDp: Float get() = widthPx * 160f / densityDpi
 
-    /** height in dp. */
+    /** height in dp — 物理设备"自然方向" (竖屏) 高. */
     val heightDp: Float get() = heightPx * 160f / densityDpi
 
     val aspectRatio: Float get() = widthPx.toFloat() / heightPx
+
+    // === v3.5 增: 按 orientation 旋转后的"有效"几何 ===
+
+    /**
+     * 旋转后有效屏幕宽 (dp). 横屏时 = 原 heightDp; 竖屏时 = 原 widthDp.
+     *
+     * 注意: 仅用于渲染, 不会改 [widthDp] / [heightDp] (这些代表物理设备"自然方向"
+     * 尺寸, 不会因为切方向而变化). DeviceFrame 用这个计算屏幕 Box 的 width/height.
+     */
+    val effectiveWidthDp: Float
+        get() = if (orientation.isLandscape) heightDp else widthDp
+
+    /**
+     * 旋转后有效屏幕高 (dp). 横屏时 = 原 widthDp; 竖屏时 = 原 heightDp.
+     */
+    val effectiveHeightDp: Float
+        get() = if (orientation.isLandscape) widthDp else heightDp
+
+    /**
+     * 旋转后宽高比. 横屏时 = 1/aspectRatio (例如 0.5), 竖屏时 = aspectRatio.
+     */
+    val effectiveAspectRatio: Float
+        get() = if (orientation.isLandscape) 1f / aspectRatio else aspectRatio
+
+    /**
+     * 旋转后边框 (按 [orientation] 旋转 [bezels]).
+     *
+     * 横屏时原 bezel.topDp 变成新屏幕的 leftDp. 用于 [DeviceFrame] 在横屏下
+     * 正确放置边框厚度.
+     */
+    val effectiveBezels: Bezels
+        get() = orientation.rotateBezels(bezels.topDp, bezels.bottomDp, bezels.leftDp, bezels.rightDp)
+
+    /**
+     * 旋转后物理按键列表 (按 [orientation] 旋转 [physicalKeys] 每个键的坐标 + 尺寸).
+     *
+     * 横屏时原 (positionXdp, positionYdp) 旋转 90° 后, positionXdp 变成新屏幕
+     * 的高度方向位置. 实现见 [PhysicalKey.rotated].
+     */
+    val effectivePhysicalKeys: List<PhysicalKey>
+        get() = physicalKeys.map { it.rotated(orientation, widthDp, heightDp) }
+
+    /**
+     * 旋转后切口 (锚点按 [orientation] 旋转). 切口 widthDp / heightDp
+     * 不变 (它们是设备本身物理尺寸), 仅锚点变化.
+     *
+     * 例如竖屏 [CutoutGeometry.Anchor.TOP_CENTER] 旋转 90° 变成
+     * [CutoutGeometry.Anchor.LEFT_CENTER] — 物理上还是同一颗前置摄像头, 旋转
+     * 后到屏幕左边.
+     */
+    val effectiveCutout: CutoutGeometry?
+        get() = cutout?.let { c ->
+            when (c) {
+                is CutoutGeometry.Notch -> c.copy(anchor = orientation.rotateAnchor(c.anchor))
+                is CutoutGeometry.PunchHole -> c.copy(anchor = orientation.rotateAnchor(c.anchor))
+                is CutoutGeometry.WaterfallCurve -> c.copy(
+                    side = orientation.rotateAnchor(c.side),
+                    anchor = orientation.rotateAnchor(c.anchor),
+                )
+                else -> c
+            }
+        }
 
     /** 是否圆表 (Watch) */
     val isRound: Boolean get() = formFactor == FormFactor.WATCH

@@ -29,6 +29,9 @@ import androidx.compose.runtime.Immutable
  * v2.1 P0 只渲染矩形 + 文字 (不做 3D 仿真 / 凹凸效果). P1 增强时
  * 可以叠加渐变 / 阴影 / 颜色等.
  *
+ * v3.5 增 [rotated] 方法: 按设备方向旋转按键坐标 + 尺寸. 横屏时物理按键
+ * 位置自然变化 (电源键从右移到顶, 音量键从左移到上).
+ *
  * 坐标定义:
  * - 屏幕 (Screen) 坐标系: 原点 = 屏幕左上角, 单位 dp
  * - [positionXdp] / [positionYdp] 是按键**中心点**相对屏幕左上角的偏移
@@ -49,6 +52,43 @@ sealed class PhysicalKey {
 
     /** 按键显示名 (Compose 渲染时用, 例如 "Power" / "Vol+" / "Cam") */
     abstract val displayName: String
+
+    /**
+     * 【v3.5】按 [orientation] 旋转返回新按键. 旋转 90° 时:
+     * - positionXdp, positionYdp 互换并翻转 (用 [DeviceOrientation.rotateCoord])
+     * - widthDp, heightDp 互换
+     *
+     * @param orientation 目标方向
+     * @param originalScreenWidthDp 物理设备"自然方向" (竖屏) 屏幕宽
+     * @param originalScreenHeightDp 物理设备"自然方向" (竖屏) 屏幕高
+     *
+     * 注意: 输入的 (originalScreenWidthDp, originalScreenHeightDp) 必须用
+     * 物理设备的"竖屏"尺寸, 不是 [DeviceProfile.effectiveWidthDp]. 因为
+     * [positionXdp] / [positionYdp] 在 catalog 里是按"竖屏"定义的.
+     */
+    fun rotated(
+        orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation,
+        originalScreenWidthDp: Float,
+        originalScreenHeightDp: Float,
+    ): PhysicalKey {
+        if (orientation == com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT) {
+            return this
+        }
+        val (nx, ny) = orientation.rotateCoord(
+            x = positionXdp,
+            y = positionYdp,
+            originalWidth = originalScreenWidthDp,
+            originalHeight = originalScreenHeightDp,
+        )
+        val (nw, nh) = orientation.rotateSize(widthDp, heightDp)
+        return when (this) {
+            is Power -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+            is VolumeUp -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+            is VolumeDown -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+            is Camera -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+            is Assistant -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+        }
+    }
 
     /**
      * 电源键 (绝大多数手机在右侧).

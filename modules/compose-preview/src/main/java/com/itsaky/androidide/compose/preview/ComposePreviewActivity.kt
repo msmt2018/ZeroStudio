@@ -179,6 +179,7 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                             ?: return@collect
                         // v3.4: 传入对应 @Composable 的 PreviewConfig, 让 uiMode /
                         // showBackground / backgroundColor 真正生效.
+                        // v3.5: 传 deviceConfig.orientation, 让 LocalConfiguration 注入横竖屏.
                         val previewConfig = state.previewConfigs
                             .firstOrNull { it.functionName == functionName }
                         engine.render(
@@ -187,6 +188,7 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                             className = state.className,
                             functionName = functionName,
                             previewConfig = previewConfig,
+                            orientation = state.deviceConfig.orientation,
                         )
                     }
                 }
@@ -211,6 +213,7 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                         className = state.className,
                         functionName = functionName,
                         previewConfig = previewConfig,
+                        orientation = state.deviceConfig.orientation,
                     )
                 }
             }
@@ -390,6 +393,13 @@ private fun ComposePreviewScreen(
                 // 【PR-B】顶栏: 全屏时隐藏. 退出全屏按钮在 main content 区右上角
                 // 用 Box 叠层显示 (见下面 MainBox).
                 if (!isFullscreen) {
+                    // 【v3.5】横竖屏 chip label 派生.
+                    val orientationLabel = when (deviceConfig.orientation) {
+                        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT -> "竖屏"
+                        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE -> "横屏"
+                        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_LANDSCAPE -> "反向横屏"
+                        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_PORTRAIT -> "倒置竖屏"
+                    }
                     PreviewToolbar(
                         state = PreviewToolbarState(
                             deviceName = deviceConfig.profile.displayName,
@@ -400,6 +410,9 @@ private fun ComposePreviewScreen(
                             fullscreen = false,
                             // 【v3.3】调试模式 — 替换旧的 debugEnabled
                             debugModeEnabled = debugMode.enabled,
+                            // 【v3.5】横竖屏 chip
+                            orientationLabel = orientationLabel,
+                            orientationIsLandscape = deviceConfig.orientation.isLandscape,
                         ),
                         actions = PreviewToolbarActions(
                             onOpenDeviceSheet = { showDeviceSheet = true },
@@ -413,6 +426,9 @@ private fun ComposePreviewScreen(
                             onToggleDeviceSim = { viewModel.toggleDeviceSim() },
                             onToggleFullscreen = { viewModel.toggleFullscreen() },
                             onSetFullscreenMode = { mode -> viewModel.setFullscreenMode(mode) },
+                            // 【v3.5】横竖屏
+                            onCycleOrientation = { viewModel.cycleOrientationFast() },
+                            onSetOrientation = { o -> viewModel.setOrientation(o) },
                         ),
                     )
                     HorizontalDivider()
@@ -844,9 +860,15 @@ private fun ReadyPanel(
 
                 if (deviceConfig.deviceSimEnabled) {
                     // 设备模式: 整个 device frame 一起缩放 + 拖动
+                    // 【v3.5】把 deviceConfig.orientation 应用到 profile.orientation, 让
+                    // DeviceFrame 的 effective* 系列 (effectiveWidthDp / effectiveHeightDp /
+                    // effectiveCutout / effectivePhysicalKeys / effectiveBezels) 正确旋转.
+                    val orientedProfile = deviceConfig.profile.copy(
+                        orientation = deviceConfig.orientation,
+                    )
                     Box(modifier = graphicsModifier) {
                         DeviceFrame(
-                            profile = deviceConfig.profile,
+                            profile = orientedProfile,
                             systemBarsTheme = deviceConfig.systemBarsTheme,
                             showStatusBar = deviceConfig.showStatusBar,
                             showNavigationBar = deviceConfig.showNavigationBar,

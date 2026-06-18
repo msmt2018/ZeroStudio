@@ -124,15 +124,23 @@ fun DeviceFrame(
     onGoHome: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
-    when (profile.formFactor) {
+    // 【v3.5】从 profile.orientation 派生一个 effective profile, 让
+    // 后续渲染逻辑 (cutout / bezels / 物理键 / 铰链) 一律用
+    // [DeviceProfile.effectiveCutout] / [effectiveBezels] / [effectivePhysicalKeys] / [effectiveAspectRatio].
+    // 这样同一个 profile 在横屏 / 竖屏下自然得到正确的几何, 无需在
+    // 调用方手动 swap.
+    val effectiveProfile = profile.copy(
+        orientation = profile.orientation,
+    )
+    when (effectiveProfile.formFactor) {
         DeviceProfile.FormFactor.WATCH -> WatchFrame(
-            profile = profile,
+            profile = effectiveProfile,
             modifier = modifier,
             systemBarsTheme = systemBarsTheme,
             content = content,
         )
         DeviceProfile.FormFactor.DESKTOP -> DesktopFrame(
-            profile = profile,
+            profile = effectiveProfile,
             modifier = modifier,
             desktopApps = desktopApps,
             foregroundApp = foregroundApp,
@@ -149,14 +157,14 @@ fun DeviceFrame(
             Box(
                 modifier = modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(profile.cornerRadiusDp.dp))
+                    .clip(RoundedCornerShape(effectiveProfile.cornerRadiusDp.dp))
                     .background(Color.Transparent)
             ) {
                 content()
             }
         }
         else -> PhoneOrFoldableFrame(
-            profile = profile,
+            profile = effectiveProfile,
             modifier = modifier,
             systemBarsTheme = systemBarsTheme,
             showStatusBar = showStatusBar,
@@ -296,10 +304,13 @@ private fun PhoneOrFoldableFrame(
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
-    val bezelTopPx = with(density) { profile.bezels.topDp.dp.toPx() }
-    val bezelBottomPx = with(density) { profile.bezels.bottomDp.dp.toPx() }
-    val bezelLeftPx = with(density) { profile.bezels.leftDp.dp.toPx() }
-    val bezelRightPx = with(density) { profile.bezels.rightDp.dp.toPx() }
+    // 【v3.5】用 effectiveBezels (按 orientation 旋转后的边框). 横屏时
+    // 原 bezel.topDp 变成 effectiveBezels.leftDp, 用于屏幕内 padding.
+    val effectiveBezels = profile.effectiveBezels
+    val bezelTopPx = with(density) { effectiveBezels.topDp.dp.toPx() }
+    val bezelBottomPx = with(density) { effectiveBezels.bottomDp.dp.toPx() }
+    val bezelLeftPx = with(density) { effectiveBezels.leftDp.dp.toPx() }
+    val bezelRightPx = with(density) { effectiveBezels.rightDp.dp.toPx() }
 
     BoxWithConstraints(
         modifier = modifier,
@@ -307,7 +318,9 @@ private fun PhoneOrFoldableFrame(
     ) {
         val parentWidth = maxWidth
         val parentHeight = maxHeight
-        val aspect = profile.aspectRatio
+        // 【v3.5】用 effectiveAspectRatio. 横屏时宽高比翻转, 屏幕 Box 的
+        // width/height 对调.
+        val aspect = profile.effectiveAspectRatio
 
         // 【v3.2 修复 #3】按 maxWidth 和 maxHeight 双向约束, 选 min.
         //
@@ -339,41 +352,47 @@ private fun PhoneOrFoldableFrame(
                 )
             }
 
-            // 2) 屏幕 (圆角矩形)
+            // 2) 屏幕 (圆角矩形) — padding 按 effectiveBezels (已旋转)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(
-                        top = with(density) { profile.bezels.topDp.dp },
-                        bottom = with(density) { profile.bezels.bottomDp.dp },
-                        start = with(density) { profile.bezels.leftDp.dp },
-                        end = with(density) { profile.bezels.rightDp.dp },
+                        top = with(density) { effectiveBezels.topDp.dp },
+                        bottom = with(density) { effectiveBezels.bottomDp.dp },
+                        start = with(density) { effectiveBezels.leftDp.dp },
+                        end = with(density) { effectiveBezels.rightDp.dp },
                     )
                     .clip(RoundedCornerShape(profile.cornerRadiusDp.dp))
             ) {
                 // 3) 内容
                 content()
 
-                // 4) 切口叠加 (在内容之上)
-                if (showCutout && profile.cutout != null) {
+                // 4) 切口叠加 (在内容之上) — 用 effectiveCutout (已旋转锚点)
+                if (showCutout && profile.effectiveCutout != null) {
                     CutoutOverlay(
-                        cutout = profile.cutout,
+                        cutout = profile.effectiveCutout,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
 
                 // 5) 折叠铰链 (仅内屏) — 【PR-C】可拖拽改变 foldAngle
+                // 【v3.5】横屏时铰链方向翻转: 原 horizontal = true (Galaxy Z Fold)
+                // 在 LANDSCAPE 模式下变 horizontal = false (竖向铰链).
                 if (profile.formFactor == DeviceProfile.FormFactor.FOLDABLE_INNER) {
                     var foldAngle by remember { mutableStateOf(0f) }
                     FoldableHingeOverlay(
                         foldAngle = foldAngle,
                         onFoldAngleChange = { foldAngle = it },
                         modifier = Modifier.fillMaxSize(),
-                        horizontal = true,
+                        // 横屏时铰链方向对调: 屏幕从竖向 (长边垂直) 变成
+                        // 横向 (长边水平), 所以铰链从"水平"变"垂直".
+                        horizontal = !profile.orientation.isLandscape,
                     )
                 }
 
-                // 6) 状态栏 + 导航栏
+                // 6) 状态栏 + 导航栏 — 横屏时 status bar / nav bar 仍在
+                // "新屏幕的顶/底" (因为 SystemBarsOverlay 内部已是 Spacer.weight
+                // 布局, 不需要再旋转). 数值不变 (statusBar 高度 = 原 statusBar 高度).
                 SystemBarsOverlay(
                     profile = profile,
                     systemBarsTheme = systemBarsTheme,
@@ -384,9 +403,12 @@ private fun PhoneOrFoldableFrame(
                 )
             }
 
-            // 7) 物理按键 (屏幕外侧) — 传实际渲染高度, 让按比例定位的按键不超范围
+            // 7) 物理按键 (屏幕外侧) — 用 effectivePhysicalKeys (已旋转).
+            // 实际渲染高度按"旋转后"的 finalScreenWidth / screenHeight,
+            // 因为 effectivePhysicalKeys 内的 positionXdp / positionYdp
+            // 是按"旋转后"屏幕坐标算的.
             if (showPhysicalKeys) {
-                profile.physicalKeys.forEach { key ->
+                profile.effectivePhysicalKeys.forEach { key ->
                     PhysicalKeyIndicator(
                         key = key,
                         screenWidthDp = with(density) { finalScreenWidth },

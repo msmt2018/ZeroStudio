@@ -38,6 +38,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Rotate90DegreesCcw
+import androidx.compose.material.icons.filled.Rotate90DegreesCw
+import androidx.compose.material.icons.filled.RotateLeft
+import androidx.compose.material.icons.filled.RotateRight
+import androidx.compose.material.icons.filled.ScreenLockPortrait
+import androidx.compose.material.icons.filled.ScreenLockLandscape
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.SmartphoneOff
 import androidx.compose.material.icons.filled.Visibility
@@ -130,6 +136,85 @@ fun PreviewToolbar(
                 )
             },
         )
+
+        // 【v3.5】横竖屏切换按钮 — 点击循环 PORTRAIT → LANDSCAPE → REVERSE_LANDSCAPE
+        // → REVERSE_PORTRAIT → PORTRAIT. 长按弹菜单, 4 个方向任选.
+        var orientationMenuOpen by remember { mutableStateOf(false) }
+        Box {
+            AssistChip(
+                onClick = actions.onCycleOrientation,
+                label = { Text(state.orientationLabel) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (state.orientationIsLandscape) {
+                            Icons.Filled.ScreenLockLandscape
+                        } else {
+                            Icons.Filled.ScreenLockPortrait
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+                modifier = Modifier.pointerInput(Unit) {
+                    androidx.compose.foundation.gestures.detectTapGestures(
+                        onLongPress = { orientationMenuOpen = true },
+                    )
+                },
+            )
+            DropdownMenu(
+                expanded = orientationMenuOpen,
+                onDismissRequest = { orientationMenuOpen = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("竖屏 (Portrait)") },
+                    leadingIcon = {
+                        Icon(Icons.Filled.ScreenLockPortrait, contentDescription = null)
+                    },
+                    onClick = {
+                        orientationMenuOpen = false
+                        actions.onSetOrientation(
+                            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT
+                        )
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("横屏 (Landscape)") },
+                    leadingIcon = {
+                        Icon(Icons.Filled.ScreenLockLandscape, contentDescription = null)
+                    },
+                    onClick = {
+                        orientationMenuOpen = false
+                        actions.onSetOrientation(
+                            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE
+                        )
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("反向横屏 (Reverse Landscape)") },
+                    leadingIcon = {
+                        Icon(Icons.Filled.RotateLeft, contentDescription = null)
+                    },
+                    onClick = {
+                        orientationMenuOpen = false
+                        actions.onSetOrientation(
+                            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_LANDSCAPE
+                        )
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("倒置竖屏 (Reverse Portrait)") },
+                    leadingIcon = {
+                        Icon(Icons.Filled.Rotate90DegreesCcw, contentDescription = null)
+                    },
+                    onClick = {
+                        orientationMenuOpen = false
+                        actions.onSetOrientation(
+                            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_PORTRAIT
+                        )
+                    },
+                )
+            }
+        }
 
         // 主题 chip
         AssistChip(
@@ -258,6 +343,17 @@ data class PreviewToolbarState(
      * 会显示 Debug Toolbar. UI 上 debug chip 改用这个字段.
      */
     val debugModeEnabled: Boolean = false,
+    // === v3.5 增 ===
+    /**
+     * 横竖屏切换 chip 显示的文本. 由 Activity 从 [com.itsaky.androidide.compose.preview.ui.DeviceOrientation]
+     * 派生, 例如 "竖屏" / "横屏" / "反向横屏" / "倒置竖屏".
+     */
+    val orientationLabel: String = "竖屏",
+    /**
+     * 横竖屏切换 chip 是否显示"横屏"图标 (ScreenLockLandscape). Activity 派生
+     * 自 [orientationLabel] 同步, 让 chip 图标随方向切换.
+     */
+    val orientationIsLandscape: Boolean = false,
 )
 
 /**
@@ -280,4 +376,14 @@ data class PreviewToolbarActions(
     val onToggleFullscreen: () -> Unit = {},
     /** PR-B: 设置全屏模式 (长按全屏菜单调用). */
     val onSetFullscreenMode: (com.itsaky.androidide.compose.preview.FullscreenMode) -> Unit = {},
+    // === v3.5 增 ===
+    /**
+     * 横竖屏循环切换. 单击 chip 触发. 顺序: PORTRAIT → LANDSCAPE → REVERSE_LANDSCAPE
+     * → REVERSE_PORTRAIT → PORTRAIT.
+     */
+    val onCycleOrientation: () -> Unit = {},
+    /**
+     * 横竖屏直接设方向. 长按 chip 弹菜单, 4 个方向任选, 选哪个调这个.
+     */
+    val onSetOrientation: (com.itsaky.androidide.compose.preview.ui.DeviceOrientation) -> Unit = {},
 )

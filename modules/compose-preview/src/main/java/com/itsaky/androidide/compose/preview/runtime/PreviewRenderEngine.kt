@@ -33,11 +33,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.currentComposer
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import com.itsaky.androidide.compose.preview.PreviewConfig
@@ -146,6 +149,12 @@ class PreviewRenderEngine(
      * @param args          透传给 Composable 的 user 参数.
      * @param previewConfig v3.4 新增 — `@Preview` 标注的完整配置 (背景色 / showBackground /
      *                      uiMode / showSystemUi). 为 null 时使用默认 (无背景色 / 浅色主题).
+     * @param orientation   v3.5 新增 — 设备方向. 通过 [android.content.res.Configuration]
+     *                      的 ORIENTATION_PORTRAIT / ORIENTATION_LANDSCAPE 字段传给
+     *                      Compose 的 [androidx.compose.ui.platform.LocalConfiguration],
+     *                      让 [androidx.compose.foundation.layout.BoxWithConstraints] /
+     *                      `Modifier.aspectRatio` / `LocalConfiguration.current.orientation`
+     *                      等能正确响应方向. 真机模式: preview 内容按 orientation 重新布局.
      */
     fun render(
         previewDex: File?,
@@ -154,6 +163,8 @@ class PreviewRenderEngine(
         functionName: String,
         args: Array<out Any?> = emptyArray(),
         previewConfig: PreviewConfig? = null,
+        orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation =
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT,
     ) {
         val view = composeView ?: run {
             LOG.error("render() called before attach()")
@@ -198,18 +209,35 @@ class PreviewRenderEngine(
             null
         }
 
-        // 4) setContent + 通过 currentComposer 注入 (v3.4: 应用 PreviewConfig)
+        // 4) setContent + 通过 currentComposer 注入 (v3.4: 应用 PreviewConfig; v3.5: 应用 orientation)
         view.setContent {
-            PreviewConfigTheme(previewConfig) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
-                    RenderComposable(invoker, clazz, instance, functionName, args)
+            // 【v3.5】用 LocalConfiguration 注入 orientation. Compose 在
+            // BoxWithConstraints / Modifier.aspectRatio / LocalConfiguration.current.orientation
+            // 处能正确响应, preview 内容按 orientation 重新布局.
+            val configuration = LocalConfiguration.current
+            val orientedConfiguration = remember(configuration, orientation) {
+                val updated = android.content.res.Configuration(configuration)
+                updated.orientation = if (orientation.isLandscape) {
+                    android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                } else {
+                    android.content.res.Configuration.ORIENTATION_PORTRAIT
+                }
+                updated
+            }
+            CompositionLocalProvider(
+                LocalConfiguration provides orientedConfiguration,
+            ) {
+                PreviewConfigTheme(previewConfig) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
+                        RenderComposable(invoker, clazz, instance, functionName, args)
+                    }
                 }
             }
         }
-        LOG.info("Rendered composable: {}#{}", className, functionName)
+        LOG.info("Rendered composable: {}#{} (orientation={})", className, functionName, orientation)
     }
 
     /**

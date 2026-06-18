@@ -135,12 +135,15 @@ class ComposePreviewFragment : Fragment() {
                 val config = state.previewConfigs.firstOrNull() ?: return
                 // v3.4: 把整个 PreviewConfig 传给 engine, 让 @Preview 的
                 // backgroundColor / showBackground / uiMode 真正生效.
+                // v3.5: 把 deviceConfig.orientation 也传给 engine, 让 preview 内容
+                // 按 orientation 重新布局 (通过 LocalConfiguration).
                 engine.render(
                     previewDex = state.dexFile,
                     projectDex = state.projectDexFiles,
                     className = state.className,
                     functionName = config.functionName,
                     previewConfig = config,
+                    orientation = state.deviceConfig.orientation,
                 )
             }
             is PreviewState.Error -> {
