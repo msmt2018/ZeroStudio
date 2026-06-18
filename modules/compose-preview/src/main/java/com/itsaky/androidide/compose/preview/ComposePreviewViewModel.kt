@@ -384,14 +384,26 @@ class ComposePreviewViewModel(
                                 }
                             }
                             is InitializationResult.NeedsBuild -> {
+                                // 【关键修复】build 刚完成, initialize 仍判定 NeedsBuild
+                                // (例如 gradle.properties 启用了 useGradleDexing, 或
+                                //  intermediateClasspaths 临时为空). 此时强制走 compileNow
+                                // 兜底, 让 preview 真正进入编译流程, 而不是停在
+                                // Build Project 按钮页.
                                 modulePath = result.modulePath
                                 variantName = result.variantName
                                 isInitialized.set(true)
                                 initializationDeferred.complete(Unit)
-                                _previewState.value = PreviewState.NeedsBuild(
-                                    result.modulePath,
-                                    result.variantName
+                                LOG.warn(
+                                    "refreshAfterBuild: initialize returned NeedsBuild " +
+                                        "after build success (forceGradleDexing or " +
+                                        "intermediate empty), forcing compileNow bypass",
                                 )
+                                _previewState.value = PreviewState.Initializing
+                                if (currentSource.isNotBlank()) {
+                                    compileNow(currentSource)
+                                } else {
+                                    _previewState.value = PreviewState.Idle
+                                }
                             }
                             is InitializationResult.Failed -> {
                                 initializationDeferred.complete(Unit)

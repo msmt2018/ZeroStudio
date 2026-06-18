@@ -80,9 +80,42 @@ class ComposePreviewRepositoryImpl(
             projectContext = ctx
             openedFilePath = filePath
 
-            if (ctx.needsBuild && ctx.modulePath != null) {
-                LOG.warn("No intermediate classes found - build required before initialization")
-                return@runCatching InitializationResult.NeedsBuild(ctx.modulePath, ctx.variantName)
+            // 【关键修复】build 成功后停在 NeedsBuild / Build Project 按钮页
+            //
+            // 原逻辑: 只看 ctx.needsBuild, 但当 gradle.properties 启用了
+            //   android.compose.preview.useGradleDexing=true (或其它增量构建
+            //   场景让 intermediateClasspaths 暂时为空) 时, needsBuild 永远
+            //   为 true, 哪怕 build 已经成功 + dex 已经生成, 也会卡在
+            //   NeedsBuild, 永远点不动 Build Project 按钮.
+            //
+            // 新逻辑: 优先看 dex 实际状态. 只要 dex 文件存在, 就直接走
+            //   dex 加载路径, 跳过 needsBuild 强制判定. 这与 v2 修复保持
+            //   一致 (Repository 层防御 + ViewModel 层强制 compileNow 兜底).
+            if (ctx.modulePath != null) {
+                val existingDex = ctx.projectDexFiles.filter { it.exists() }
+                if (existingDex.isNotEmpty()) {
+                    LOG.info(
+                        "Repository ready (via project DEX): module={}, variant={}, " +
+                            "projectDexFiles={}/{}, needsBuild={}",
+                        ctx.modulePath, ctx.variantName,
+                        existingDex.size, ctx.projectDexFiles.size, ctx.needsBuild,
+                    )
+                } else if (ctx.needsBuild) {
+                    LOG.warn(
+                        "No dex files for {} - build required before preview can be loaded",
+                        ctx.modulePath,
+                    )
+                    return@runCatching InitializationResult.NeedsBuild(
+                        ctx.modulePath, ctx.variantName,
+                    )
+                } else {
+                    // needsBuild=false 但 dex 也没有 — 异常状态
+                    LOG.warn("No project DEX files resolved for {}", filePath)
+                    return@runCatching InitializationResult.Failed(
+                        "No project DEX files found. Run a Gradle build first " +
+                            "to produce the dex artifacts.",
+                    )
+                }
             }
 
             val assetBundles = initializeInfrastructure(context)
