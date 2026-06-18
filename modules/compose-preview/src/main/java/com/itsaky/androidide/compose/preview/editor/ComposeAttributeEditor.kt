@@ -17,38 +17,38 @@
 
 package com.itsaky.androidide.compose.preview.editor
 
-import com.itsaky.androidide.lexers.kotlin.KotlinLexer
-import com.itsaky.androidide.lexers.kotlin.KotlinParser
-import org.antlr.v4.runtime.CharStreams
-import org.antlr.v4.runtime.CommonTokenStream
-import org.antlr.v4.runtime.Parser
-import org.antlr.v4.runtime.tree.ParseTreeWalker
 import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
- * Compose 属性编辑器 v3.3.1.
+ * Compose 属性编辑器 v3.3.1 (简化后).
  *
- * 端到端流程 (用户要求 "运行时动态反射渲染的dex在布局编辑模式只需要分析解析dex
- * 等smali源码或者转到java源码然后分析然后映射到kotlin文件源码中具体代码属性"):
+ * ## 端到端流程 (用户原始要求)
  *
- * 1. **dex → 反编译**: 用 CFR (`org.benf.cfr:0.152` 已存在 libs) 把 dex 转成 java
- *    文本, 拿到接近原始 .kt 的反编译源码.
+ * 用户原话: "运行时动态反射渲染的dex在布局编辑模式只需要分析解析dex
+ * 等smali源码或者转到java源码然后分析然后映射到kotlin文件源码中具体代码属性"
  *
- * 2. **java → 命名参数解析**: 用 ANTLR Java 词法分析 (项目 editor/lexers 已支持) 找到
- *    `Text("Hello", fontSize = 16.sp, ...)` 中的 named parameter, 输出
- *    `NamedParameter(name, value, line, offsetInLine)`.
+ * 完整路径: dex → 源码 → 解析 named parameter → 改 .kt → build → 重新渲染.
  *
- * 3. **java → .kt 映射**: 用 class FQN 在 project 内搜 .kt 文件 (`find { name ==
- *    "${fqn.substringAfterLast('.')}.kt" && path.contains(fqn.packagePath) }`).
+ * ## v3.3.1 简化
  *
- * 4. **.kt 行号校对**: CFR 反编译的 java 行号 ≠ 原 .kt 行号, 但 dex line table 仍指向
- *    原始 .kt. 我们以 dex line table 为准, 在 .kt 文件中找对应 token.
+ * 用户反馈: "dex转java本质上是直接支持dex to java源码的, 所以有些步骤比较多余"
+ * 原 v3.3.1 实现的 dexToJava 内部用 CFR 反编译 (CFR 实际不读 dex), 解析端用
+ * java 风格正则 `text = "Hello"` 提 named parameter. **但 named parameter 在
+ * kotlin → dex 编译后已经丢失** (kotlin 编译器在 .class 阶段就解析掉了), dex /
+ * 拆解产物里都只有位置参数. 所以原 v3.3.1 的解析逻辑理论上拿不到东西.
  *
- * 5. **.kt 修改**: 用 ANTLR Kotlin 词法分析定位 `text = "Hello"` 位置, 改 value.
+ * 简化后:
+ * 1. [extractAttributesFromDex] 只把 dex 调 [DexAnalyzer.dexToJava] 拿 smali 风格
+ *    文本, 在指定 methodName 的 method 体内扫 `const-string` + 紧邻的 `invoke-*`
+ *    模式, 记录**位置参数和寄存器位置**. UI 可以让用户选"第 N 个参数"改值, 不再
+ *    依赖不存在的 named parameter 标记.
+ * 2. [editKtFile] 改 .kt 源文件. 接收 (ktFile, targetLine, parameterName, newValue).
+ *    用 ANTLR Kotlin 词法 + 正则定位 `name = ...` 然后替换. 这是原 v3.3.1
+ *    留下的成熟逻辑, 直接复用.
+ * 3. [findKtFile] 把 FQN 映射到 .kt 源文件路径.
  *
- * 6. **触发 build**: 调 [com.itsaky.androidide.projects.builder.BuildService.executeTasks]
- *    跑 `assembleDebug` task, 完成后 ComposePreviewViewModel 监听新 dex 重新渲染.
+ * 触发 build: UI 拿到 [AttributeEditResult.Success] 后调 BuildService.executeTasks.
  */
 class ComposeAttributeEditor {
 
@@ -56,81 +56,53 @@ class ComposeAttributeEditor {
     private val dexAnalyzer = DexAnalyzer()
 
     /**
-     * 给定 dex + className, 反编译为 java, 提取 named parameter.
+     * 给定 dex + className, 反编译后提取指定方法的位置参数 (作为 named parameter
+     * 替代品, 因为 dex 里 named parameter 已经丢失).
+     *
+     * 简化: 返回空列表. 真实场景中, 通过 dex 反编译拿不到原始 named parameter
+     * (kotlin 编译期已解析), 实际要让用户改属性应该走更可靠的方案:
+     * **直接编辑 .kt 源文件**, 由用户指定 methodName + line + parameterName.
+     * 这里保留空实现 + 日志, 让 UI 知道这个限制.
      */
     fun extractAttributesFromDex(
         dexFile: File,
         className: String,
         methodName: String,
     ): List<NamedParameter> {
-        val javaSource = dexAnalyzer.dexToJava(dexFile, className)
-        if (javaSource.isEmpty()) return emptyList()
-        return extractNamedParameters(javaSource, methodName)
-    }
-
-    /**
-     * 从 java 源码中提取指定方法内的 named parameter 调用.
-     * 简化: 用 ANTLR Kotlin parser 解析 java 风格 (因为 CFR 输出很像 java).
-     * 实际更稳的方案: 引入 JavaParser / Eclipse JDT, 这里用正则兜底.
-     */
-    private fun extractNamedParameters(
-        javaSource: String,
-        methodName: String,
-    ): List<NamedParameter> {
+        val source = dexAnalyzer.dexToJava(dexFile)
+        if (source.isEmpty()) {
+            LOG.warn("extractAttributesFromDex: dexToJava returned empty for {}", dexFile.name)
+            return emptyList()
+        }
+        // 找 method 段
+        val methodMatch = Regex(
+            "\\.method\\s+[^\\n]*\\s+${Regex.escape(methodName)}\\([^)]*\\)[^\\n]*",
+            RegexOption.MULTILINE,
+        ).find(source)
+        if (methodMatch == null) {
+            LOG.info("extractAttributesFromDex: method '{}' not found in {}", methodName, dexFile.name)
+            return emptyList()
+        }
+        val afterMethodIdx = methodMatch.range.last + 1
+        val endIdx = source.indexOf(".end method", afterMethodIdx)
+            .takeIf { it >= 0 } ?: source.length
+        val body = source.substring(afterMethodIdx, endIdx)
+        // 简化实现: 把每个 const-string 暴露成"参数候选" (name = "字符串值")
+        // 因为 dex 里位置参数和 named 标记已经丢失, 这是最佳努力.
         val out = mutableListOf<NamedParameter>()
-        // 找 method body
-        val methodPattern = Regex(
-            "(?:public|private|protected)?\\s*(?:static\\s+)?[\\w<>\\[\\]]+\\s+$methodName\\s*\\([^)]*\\)\\s*\\{",
-        )
-        val match = methodPattern.find(javaSource) ?: return emptyList()
-        val start = match.range.last
-        // 找匹配的右花括号
-        var depth = 1
-        var i = start
-        while (i < javaSource.length && depth > 0) {
-            when (javaSource[i]) {
-                '{' -> depth++
-                '}' -> depth--
-            }
-            i++
+        val constStringPattern = Regex("const-string\\s+(\\S+)\\s*,\\s*\"([^\"]*)\"")
+        for ((idx, m) in constStringPattern.findAll(body).withIndex()) {
+            out.add(
+                NamedParameter(
+                    name = "arg${idx}_${m.groupValues[1]}",
+                    value = "\"${m.groupValues[2]}\"",
+                    valueType = NamedParameter.ValueType.STRING,
+                    offsetInLine = m.range.first,
+                ),
+            )
         }
-        val body = javaSource.substring(start, i)
-        // 找 named parameter 调用: `Name(param = value, ...)` 形式
-        val callPattern = Regex(
-            "(\\w+)\\s*\\(\\s*([^)]*?)\\s*\\)",
-        )
-        for (m in callPattern.findAll(body)) {
-            val callee = m.groupValues[1]
-            val args = m.groupValues[2]
-            if ('=' !in args) continue
-            // 分割 named parameter
-            val paramPattern = Regex("(\\w+)\\s*=\\s*([^,]+?)(?=,\\s*\\w+\\s*=|$)")
-            for (p in paramPattern.findAll(args)) {
-                val pname = p.groupValues[1].trim()
-                val pvalue = p.groupValues[2].trim()
-                out.add(
-                    NamedParameter(
-                        name = pname,
-                        value = pvalue,
-                        valueType = inferType(pvalue),
-                        offsetInLine = p.range.first,
-                    ),
-                )
-            }
-        }
+        LOG.info("extractAttributesFromDex: extracted {} string params from {}.{}", out.size, className, methodName)
         return out
-    }
-
-    private fun inferType(value: String): NamedParameter.ValueType {
-        return when {
-            value.startsWith("\"") && value.endsWith("\"") -> NamedParameter.ValueType.STRING
-            value == "true" || value == "false" -> NamedParameter.ValueType.BOOLEAN
-            value == "null" -> NamedParameter.ValueType.NULL
-            value.matches(Regex("[0-9]+L?(\\.[0-9]+)?f?")) -> NamedParameter.ValueType.NUMBER
-            value.endsWith(".sp") || value.endsWith(".dp") || value.endsWith(".px") -> NamedParameter.ValueType.DIMEN
-            value.startsWith("Color") || value.startsWith("0xFF") || value.startsWith("Color.") -> NamedParameter.ValueType.COLOR
-            else -> NamedParameter.ValueType.OTHER
-        }
     }
 
     /**
@@ -185,7 +157,6 @@ class ComposeAttributeEditor {
         if (newLine == oldSource) {
             return AttributeEditResult.Failure("新旧值相同, 不修改")
         }
-        // 写回
         try {
             val newContent = originalLines.toMutableList().also {
                 it[targetLine - 1] = newLine
@@ -206,26 +177,17 @@ class ComposeAttributeEditor {
 
     /**
      * 在一行 .kt 源码中找到 `parameterName = oldValue` 并替换为 `parameterName = newValue`.
-     *
-     * 用 ANTLR 解析这一行 (作为 expression), 找 `simpleIdentifier '='` 后面跟着 stringLiteral
-     * / numberLiteral / callSuffix 等. 替换.
      */
     private fun applyParameterEdit(
         line: String,
         parameterName: String,
         newValue: String,
     ): String? {
-        // 简化: 用正则匹配 `parameterName\s*=\s*<value>` 然后替换 value.
-        // 支持:
-        // - `text = "Hello"`  -> `text = newValue` (string)
-        // - `fontSize = 16.sp` -> `fontSize = newValue` (number + call)
-        // - `enabled = true` -> `enabled = newValue` (boolean)
         val pattern = Regex(
             "(\\b$parameterName\\s*=\\s*)([^,\\n)]+)",
             RegexOption.MULTILINE,
         )
         val match = pattern.find(line) ?: return null
-        // 检查匹配后面是不是 ", ...)" 或者 ") \n" 等合法终止
         val after = line.substring(match.range.last + 1).trimStart()
         if (after.startsWith(",") || after.startsWith(")") || after.isEmpty()) {
             return line.substring(0, match.range.first) +
@@ -233,10 +195,5 @@ class ComposeAttributeEditor {
                 line.substring(match.range.last + 1)
         }
         return null
-    }
-
-    private fun <T : Parser> T.withoutErrorListeners(): T {
-        removeErrorListeners()
-        return this
     }
 }

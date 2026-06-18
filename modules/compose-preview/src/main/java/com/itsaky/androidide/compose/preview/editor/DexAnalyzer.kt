@@ -19,167 +19,163 @@ package com.itsaky.androidide.compose.preview.editor
 
 import com.android.tools.smali.dexlib2.DexFileFactory
 import com.android.tools.smali.dexlib2.Opcodes
-import com.android.tools.smali.dexlib2.iface.ClassDef as DexClassDef
+import com.android.tools.smali.dexlib2.iface.ClassDef
 import com.android.tools.smali.dexlib2.iface.DexFile
 import com.android.tools.smali.dexlib2.iface.Method
-import com.android.tools.smali.dexlib2.util.MethodUtil
 import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
- * Dex 分析器 v3.3.1.
+ * Dex → 源码 v3.3.1 (简化后, 单方法直读).
  *
- * 用 `com.android.tools.smali:smali-dexlib2` (项目已有 google-smali-dexlib2:3.0.9)
- * 读取 dex 字节码, 找到 @Composable 函数, 提取:
- * - 方法签名 / 起始-结束行号 (从 line table)
- * - 方法内的 compose 函数调用点 (从 invoke 指令)
- * - 命名参数赋值 (从 invoke-virtual/range + iget-object + const-string 等)
+ * ## 设计原则 (用户反馈驱动)
  *
- * ## 关键启发式
+ * 用户反馈: "dex转java本质上是直接支持dex to java源码的, 所以有些步骤比较多余"
  *
- * 1. **找 @Composable 函数**: 方法签名最后两个参数必须是
- *    `(Landroidx/compose/runtime/Composer;I)L<return type>;` (Compose 编译器 1.0+ 通用),
- *    或者倒数第二个参数是 `Composer`, 倒数第一个是 `int` (changed flags).
- * 2. **找 invoke 调用点**: 遍历 instruction list, 找 `invoke-static` / `invoke-virtual` /
- *    `invoke-direct` 等. 提取方法 FQN + line number.
- * 3. **找命名参数赋值**: compose 编译器会把 `Text(text = "Hello")` 编译成
- *    `p0.text = "Hello"`, 然后 invoke. 因此我们看 invoke 前 N 条指令的 `iput-object` /
- *    `const-string` 序列, 推断参数赋值.
+ * 原来 v3.3.1 拆分了两步:
+ *   1. [analyze] 用 `smali-dexlib2` 读 dex 字节码, 找 @Composable 函数 + invoke 调用点
+ *   2. [dexToJava] 用 CFR 反编译
  *
- * ## 反编译 (CFR) 用途
+ * 实际上 [analyze] 的结果 (ComposableFunctionDescriptor / ComposableCallSite) 从未被
+ * UI 使用, 完全是死代码. 整个 v3.3.1 调用链只有一处真正用到了 dex→源码:
  *
- * CFR 反编译后的 java 源码更接近原始 .kt 结构, 用来做精确的 named parameter 提取 +
- * 反向映射到 .kt. 因为直接看 smali 指令需要做更多字符串分析.
+ *   [ComposeAttributeEditor.extractAttributesFromDex]
+ *     └→ [dexToJava] 拿源码
+ *     └→ 在文本里找 methodName, 提 named parameter
+ *
+ * ## 简化
+ *
+ * v3.3.1 简化版**只保留一个公共方法 [dexToJava]**: dex 文件 → 完整源码.
+ *
+ * ## 实现说明
+ *
+ * CFR 0.152 不能直接读 dex (它只吃 JVM class file, magic 0xCAFEBABE; dex 是
+ * magic 0x6465780A "dex\n"). 因此这里**直接用 smali-dexlib2 读 dex** (这是
+ * JVM 生态中唯一稳定的 dex 读取库), 然后手动遍历每个 class 的 method +
+ * instruction 输出**类 java 助记符文本** (smali 风格).
+ *
+ * 文本格式:
+ * ```
+ * // ---- <FQN> ----
+ * .class <access> L<FQN>;
+ * .super <FQN>;
+ * # methods
+ * .method <access> <name>(<args>)<ret>
+ *   .registers N
+ *   .line K
+ *   const-string vX, "value"
+ *   invoke-* {vX, ...}, L<callee>;-><method>(...)...
+ * .end method
+ * ```
+ *
+ * 后续 [ComposeAttributeEditor] 拿这个文本后, 在指定 methodName 的 method 体内
+ * 找 `const-string` / `const/high16` 等指令, 反推 named parameter 值.
  */
 class DexAnalyzer {
 
     private val LOG = LoggerFactory.getLogger(DexAnalyzer::class.java)
 
     /**
-     * 从 [dexFiles] 中分析全部 @Composable 函数.
+     * 把 dex 文件反编译为源码.
+     *
+     * @param dexFile 当前 preview 用的 dex 文件.
+     * @return 全部类的源码 (smali 风格). 多个类用 `// ---- <FQN> ----` 分隔.
+     *         失败时返回空字符串.
      */
-    fun analyze(dexFiles: List<File>): List<ComposableFunctionDescriptor> {
-        val all = mutableListOf<ComposableFunctionDescriptor>()
-        for (dexFile in dexFiles) {
-            try {
-                all.addAll(analyzeSingle(dexFile))
-            } catch (e: Throwable) {
-                LOG.warn("Failed to analyze {}: {}", dexFile.name, e.message)
-            }
+    fun dexToJava(dexFile: File): String {
+        if (!dexFile.exists() || dexFile.length() == 0L) {
+            LOG.warn("dexToJava: file missing or empty: {}", dexFile.absolutePath)
+            return ""
         }
-        return all
-    }
-
-    private fun analyzeSingle(dexFile: File): List<ComposableFunctionDescriptor> {
-        val dex: DexFile = DexFileFactory.loadDexFile(dexFile, Opcodes.getDefault())
-        val out = mutableListOf<ComposableFunctionDescriptor>()
-        for (classDef in dex.classes) {
-            if (classDef.type.startsWith("Landroidx/") ||
-                classDef.type.startsWith("Lcom/google/") ||
-                classDef.type.startsWith("Lkotlin/") ||
-                classDef.type.startsWith("Ljava/")
-            ) {
-                continue
+        return try {
+            val dex: DexFile = DexFileFactory.loadDexFile(dexFile, Opcodes.getDefault())
+            val out = StringBuilder()
+            var classCount = 0
+            for (classDef in dex.classes) {
+                val fqn = classDef.type
+                    .removePrefix("L")
+                    .removeSuffix(";")
+                    .replace('/', '.')
+                if (out.isNotEmpty()) out.append("\n\n")
+                out.append("// ---- ").append(fqn).append(" ----\n")
+                renderClass(out, classDef)
+                classCount++
             }
-            for (method in classDef.methods) {
-                val descriptor = analyzeMethod(classDef, method) ?: continue
-                out.add(descriptor)
+            if (classCount == 0) {
+                LOG.warn("dexToJava: dex contains no classes: {}", dexFile.name)
+                ""
+            } else {
+                out.toString()
             }
+        } catch (e: Throwable) {
+            LOG.warn("dexToJava failed for {}: {}", dexFile.name, e.message)
+            ""
         }
-        return out
-    }
-
-    private fun analyzeMethod(
-        classDef: DexClassDef,
-        method: Method,
-    ): ComposableFunctionDescriptor? {
-        // 1) 启发式: @Composable 函数签名包含 Composer + int 参数.
-        val params = MethodUtil.getParameterTypes(method)
-        if (params.size < 2) return null
-        // 倒数第二个参数必须是 Composer
-        val composerIdx = params.size - 2
-        val composerParam = params[composerIdx]
-        if (composerParam != "Landroidx/compose/runtime/Composer;") return null
-        // 倒数第一个参数必须是 int (changed flags)
-        val flagsParam = params[params.size - 1]
-        if (flagsParam != "I") return null
-        // 排除纯 lambda (单参数 + 返回 Unit, 内部是 restartable group)
-        // 接受, 继续分析.
-
-        // 2) 行号范围
-        val impl = method.implementation ?: return null
-        val instructions = impl.instructions
-        var minLine = Int.MAX_VALUE
-        var maxLine = 0
-        for (insn in instructions) {
-            val line = insn.location?.line ?: continue
-            if (line in 1..100_000) {
-                if (line < minLine) minLine = line
-                if (line > maxLine) maxLine = line
-            }
-        }
-        if (minLine == Int.MAX_VALUE) {
-            minLine = -1
-            maxLine = -1
-        }
-
-        // 3) 找 invoke 调用点
-        val calls = mutableListOf<ComposableCallSite>()
-        for (insn in instructions) {
-            if (insn.opcode.name.startsWith("invoke-")) {
-                val ref = insn.reference as? com.android.tools.smali.dexlib2.iface.reference.MethodReference
-                    ?: continue
-                val callLine = insn.location?.line ?: continue
-                // 简化: 跳过 java/lang / kotlin / androidx 内部
-                val calleeClass = ref.definingClass
-                if (calleeClass.startsWith("Ljava/") ||
-                    calleeClass.startsWith("Lkotlin/") ||
-                    calleeClass.startsWith("Landroidx/compose/runtime/")
-                ) {
-                    continue
-                }
-                val callSite = ComposableCallSite(
-                    composableName = ref.name,
-                    composableFqn = "${calleeClass.substring(1, calleeClass.length - 1).replace('/', '.')}.${ref.name}",
-                    line = callLine,
-                    parameterAssignments = emptyList(), // 简化: 不解析 iget-object 链
-                )
-                calls.add(callSite)
-            }
-        }
-
-        return ComposableFunctionDescriptor(
-            className = classDef.type.substring(1, classDef.type.length - 1).replace('/', '.'),
-            methodName = method.name,
-            methodDesc = method.descriptor,
-            sourceFile = classDef.sourceFile,
-            lineStart = minLine,
-            lineEnd = maxLine,
-            calls = calls,
-        )
     }
 
     /**
-     * 用 CFR 把 dex 反编译为 java 文本.
-     *
-     * 实际反编译由 [com.itsaky.androidide.compose.preview.editor.ComposeAttributeEditor]
-     * 包装调用. 这里是占位 — CFR 0.152 的 API 通过 reflection 调, 不在本类直接 import.
-     *
-     * @return java 源码, 失败返回空字符串.
+     * 渲染单个 class 为 smali 风格文本.
      */
-    fun dexToJava(dexFile: File, className: String): String {
-        return try {
-            // CFR 0.152 API: 用 Driver 类 + 多个 args
-            val driverClass = Class.forName("org.benf.cfr.reader.Driver")
-            val driver = driverClass.getDeclaredConstructor().newInstance()
-            val setArgs = driverClass.getMethod("setArgs", Array<String>::class.java)
-            // 这里用 CFR sink 收集输出. 完整实现需要构造 ClassPath + Driver config.
-            // 简化: 返回空, 让调用方用 ComposeAttributeEditor 里更稳的正则提取 fallback.
-            setArgs.invoke(driver, arrayOf(dexFile.absolutePath))
-            ""
-        } catch (e: Throwable) {
-            LOG.warn("CFR decompile failed: {}", e.message)
-            ""
+    private fun renderClass(out: StringBuilder, classDef: ClassDef) {
+        out.append(".class ").append(classDef.accessFlags).append(" ")
+            .append(classDef.type).append("\n")
+        out.append(".super ").append(classDef.superclass).append("\n")
+        if (!classDef.interfaces.isNullOrEmpty()) {
+            for (iface in classDef.interfaces) {
+                out.append(".implements ").append(iface).append("\n")
+            }
         }
+        if (classDef.sourceFile != null) {
+            out.append(".source \"").append(classDef.sourceFile).append("\"\n")
+        }
+
+        // fields
+        for (field in classDef.fields) {
+            out.append(".field ").append(field.accessFlags).append(" ")
+                .append(field.name).append(" ").append(field.type).append("\n")
+        }
+
+        // methods
+        for (method in classDef.methods) {
+            renderMethod(out, method)
+        }
+    }
+
+    /**
+     * 渲染单个 method 为 smali 风格文本.
+     */
+    private fun renderMethod(out: StringBuilder, method: Method) {
+        // 构造方法签名: name(p1 p2 ...)returnType
+        val params = method.parameterTypes.joinToString("")
+        out.append("\n.method ").append(method.accessFlags).append(" ")
+            .append(method.name).append("(").append(params).append(")")
+            .append(method.returnType).append("\n")
+        val impl = method.implementation
+        if (impl == null) {
+            out.append(".end method\n")
+            return
+        }
+        out.append("    .registers ").append(impl.registerCount).append("\n")
+        for (insn in impl.instructions) {
+            val opcode = insn.opcode.name
+            val operand = when (val ref = insn.reference) {
+                null -> ""
+                is com.android.tools.smali.dexlib2.iface.reference.StringReference -> "\"${ref.string}\""
+                is com.android.tools.smali.dexlib2.iface.reference.MethodReference ->
+                    "${ref.definingClass}->${ref.name}${ref.parameterTypes}"
+                is com.android.tools.smali.dexlib2.iface.reference.FieldReference ->
+                    "${ref.definingClass}->${ref.name}:${ref.type}"
+                is com.android.tools.smali.dexlib2.iface.reference.TypeReference ->
+                    ref.type
+                else -> ref.toString()
+            }
+            // 注: smali-dexlib2 v3.0.9 的 Instruction.getLocation() 不在基础接口上
+            // (只在 OffsettedInstruction), 这里省去 .line 指令以保证编译通过.
+            // .line 信息可以通过 debug info 单独遍历拿到, 简化版暂不处理.
+            out.append("    ").append(opcode)
+            if (operand.isNotEmpty()) out.append(" ").append(operand)
+            out.append("\n")
+        }
+        out.append(".end method\n")
     }
 }

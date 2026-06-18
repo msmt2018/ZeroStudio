@@ -473,7 +473,6 @@ okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor",
 
 # 文件反编译器
 org-jetbrains-fernflower = { module = "zerostudio:fernflower", version = "1.0" }
-org-benf-cfr = { module = "org.benf:cfr", version = "0.152" }
 org-bitbucket-mstrobel-procyon-compilertools = { module = "org.bitbucket.mstrobel:procyon-compilertools", version = "0.6.0" }
 com-jetbrains-intellij-java-decompiler = { module = "com.jetbrains.intellij.java:java-decompiler-engine", version.ref = "fernFlowerVersion" }
 

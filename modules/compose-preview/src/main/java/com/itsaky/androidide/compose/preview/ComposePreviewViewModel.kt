@@ -37,7 +37,6 @@ import com.itsaky.androidide.compose.preview.data.source.ComposableSymbolExtract
 import com.itsaky.androidide.compose.preview.data.source.ProjectContextSource
 import com.itsaky.androidide.compose.preview.domain.PreviewSourceParser
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
-import com.itsaky.androidide.compose.preview.editor.AttributeEdit
 import com.itsaky.androidide.compose.preview.editor.AttributeEditResult
 import com.itsaky.androidide.compose.preview.editor.ComposeAttributeEditor
 import com.itsaky.androidide.compose.preview.editor.NamedParameter
@@ -809,19 +808,24 @@ class ComposePreviewViewModel(
         _layoutSnapshotUpdatedAt.value = 0L
     }
 
-    // === v3.3.1 属性编辑 (dex → smali/java → .kt → build) ===
+    // === v3.3.1 属性编辑 (dex → smali → .kt → build) ===
 
     /**
-     * 【v3.3.1】从 dex 中提取选中节点的属性列表.
+     * 【v3.3.1 简化】从 dex 中提取选中节点的属性列表.
      *
      * @param dexFile 当前 preview 的 dex.
      * @param className 当前 preview 的 class FQN.
      * @param methodName 当前选中的 @Composable 方法名.
      *
-     * 端到端:
-     * 1. [ComposeAttributeEditor.extractAttributesFromDex] 调 CFR 反编译 dex → java
-     * 2. 在 java 源码中找到 `methodName(...)` 内的 named parameter 调用
+     * 端到端 (v3.3.1 简化版, 移除 CFR + ComposableFunctionDescriptor 中间步骤):
+     * 1. [ComposeAttributeEditor.extractAttributesFromDex] 调 [DexAnalyzer.dexToJava]
+     *    把 dex 拆解为 smali 风格文本 (单步, 不再分 analyze + dexToJava)
+     * 2. 在源码中找 `methodName(...)` 段内的 `const-string` 指令, 提字符串值
      * 3. 输出 `List<NamedParameter>` 给 UI 属性面板显示
+     *
+     * 注: 完整 named parameter 在 kotlin→dex 编译后已丢失, dex 里只有位置参数 +
+     * 寄存器. 简化版只能拿到 const-string 值. 真实场景中要改属性应该走更可靠的
+     * 路径 — 直接改 .kt 源文件, 由用户指定 methodName + line + parameterName.
      */
     fun loadAttributesForSelectedNode(
         dexFile: java.io.File?,
