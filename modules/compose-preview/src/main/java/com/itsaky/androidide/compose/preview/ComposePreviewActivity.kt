@@ -934,7 +934,9 @@ private fun ReadyPanel(
                 selectedNodeId = debugModeState.selectedNodeId,
                 isInspectorActive = true,
                 showRecomposition = debugModeState.showRecompositionHighlight,
-                onNodeClick = { node -> viewModel.selectLayoutNode(node.id) },
+                onNodeClick = { node: com.itsaky.androidide.compose.preview.data.model.LayoutNodeSnapshot ->
+                    viewModel.selectLayoutNode(node.id)
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }
