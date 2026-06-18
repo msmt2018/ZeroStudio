@@ -23,6 +23,7 @@ import com.itsaky.androidide.models.Position
 import com.itsaky.androidide.models.Range
 import io.github.rosemoe.sora.widget.SelectionMovement
 import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * Handler which implements various features in [IEditor].
@@ -33,15 +34,26 @@ import java.io.File
 class EditorFeatures(var editor: IDEEditor? = null) : IEditor {
 
   /**
-   * 短延迟, 等待 sora-editor LineBreakLayout 的异步 `measureAllLines` 完成.
+   * 多次重试的延迟链 (指数退避).
    *
-   * 经验值 50ms:
-   * - sora-editor 0.23.6 的 LayoutTask 在内部线程池上跑, 测量一行约 0.1~2ms,
-   *   几十行的 build output 累计 < 30ms.
-   * - 50ms 在 UI 感知上几乎无延迟, 但给 layout task 足够完成时间.
-   * - 太短 (< 20ms) 可能重试仍失败, 太长 (> 200ms) 用户会看到"延迟显示".
+   * sora-editor 0.23.6 的 `BlockIntList.set(index=0, length=0)` race condition
+   * 在某些场景下可能持续较久 (例如 BuildOutputFragment 在 build 期间
+   * 持续 append, 50ms 一次重试仍不够). 用 4 次退避 (50/100/200/400 = 750ms
+   * 总预算) 大幅提升首次成功率, 避免数据丢失.
    */
-  private val RETRY_DELAY_MS = 50L
+  private val RETRY_DELAYS_MS = longArrayOf(50L, 100L, 200L, 400L)
+
+  /** pending 队列 flush 间隔. */
+  private val PENDING_FLUSH_DELAY_MS = 100L
+
+  /**
+   * 所有重试都失败时被丢弃的 append, 暂存到 pending 队列, 等下一次
+   * [append] 成功或定时器触发时再 flush. 避免 build output 静默丢失.
+   */
+  private val pendingAppends = ConcurrentLinkedQueue<CharSequence>()
+
+  /** 防止 scheduleFlush 重复排队. */
+  @Volatile private var flushScheduled = false
 
   override fun getFile(): File? = withEditor { _file }
 
@@ -135,60 +147,100 @@ class EditorFeatures(var editor: IDEEditor? = null) : IEditor {
 
   override fun append(text: CharSequence?): Int =
       withEditor {
-        val content = getText()
         if (lineCount <= 0) {
           return@withEditor 0
         }
-
-        val line = lineCount - 1
-        var col = content.getColumnCount(line)
-        if (col < 0) {
-          col = 0
-        }
-        // capture by value so the retry below uses the same insert site
-        val safeText = text
-        try {
-          content.insert(line, col, safeText)
-          return@withEditor line
-        } catch (e: ArrayIndexOutOfBoundsException) {
-          // sora-editor 0.23.6 race condition (upstream bug):
-          //   CodeEditor.afterInsert -> LineBreakLayout.afterInsert
-          //   -> LineBreakLayout.measureLineAndUpdateInlineWidths
-          //   -> BlockIntList.set (index=0, length=0)
-          //
-          // When the layout is still doing its asynchronous `measureAllLines`
-          // (triggered by setText() or by a large batch replace), the
-          // `inlineElementsWidths` and `widthMaintainer` BlockIntList instances
-          // are still empty. The first `insert()` after the layout is created
-          // (e.g. the very first build output appended to a freshly-created
-          // BuildOutputFragment) crashes here.
-          //
-          // sora-editor 0.23.6 is the latest published version on Maven Central
-          // (2025-06-22), so we cannot upgrade. Defensive retry after a short
-          // delay: the layout task will have completed by then and the second
-          // `insert()` succeeds.
-          log.warn(
-              "EditorFeatures.append race condition, deferring retry: {}",
-              e.message)
-          postDelayedInLifecycle(
-              {
-                try {
-                  val currentLine = lineCount - 1
-                  val currentCol =
-                      getText().getColumnCount(currentLine).coerceAtLeast(0)
-                  getText().insert(currentLine, currentCol, safeText)
-                } catch (retryError: Throwable) {
-                  // Give up after one retry. The next user-driven append will
-                  // succeed once the layout has settled.
-                  log.error(
-                      "EditorFeatures.append retry failed, dropping this append",
-                      retryError)
-                }
-              },
-              RETRY_DELAY_MS)
-          return@withEditor line
-        }
+        val safeText = text ?: return@withEditor (lineCount - 1)
+        attemptInsert(safeText, attempt = 0)
+        return@withEditor (lineCount - 1)
       } ?: -1
+
+  /**
+   * 尝试在末尾行 insert, 失败时按 [RETRY_DELAYS_MS] 链式延迟重试.
+   * 全部失败时把内容加到 [pendingAppends] 队列, 等待 [scheduleFlush] 触发再写.
+   */
+  private fun attemptInsert(text: CharSequence, attempt: Int) {
+    val target = editor ?: return
+    if (target.isReleased) return
+    val currentLine = (target.lineCount - 1).coerceAtLeast(0)
+    try {
+      val currentCol = target.getText().getColumnCount(currentLine).coerceAtLeast(0)
+      target.getText().insert(currentLine, currentCol, text)
+      // insert 成功, 顺便把 pending 队列里积压的也写进去
+      if (pendingAppends.isNotEmpty()) flushPending()
+      return
+    } catch (e: ArrayIndexOutOfBoundsException) {
+      // sora-editor 0.23.6 race condition (upstream bug):
+      //   CodeEditor.afterInsert -> LineBreakLayout.afterInsert
+      //   -> LineBreakLayout.measureLineAndUpdateInlineWidths
+      //   -> BlockIntList.set (index=0, length=0)
+      //
+      // 当 LineBreakLayout 仍在做异步 `measureAllLines` 时 (setText 或
+      // 大批量 replace 后), `inlineElementsWidths` 和 `widthMaintainer`
+      // 仍为空, 这时 insert 会抛 ArrayIndexOutOfBoundsException.
+      // sora-editor 0.23.6 是 Maven Central 最新版 (2025-06-22), 不能升级.
+      // 防御策略: 多次重试 + pending queue.
+      if (attempt >= RETRY_DELAYS_MS.size) {
+        // 用完所有重试, 暂存到 pending 队列, 稍后由 scheduleFlush 触发再写.
+        // 避免之前那种 "dropping this append" 静默丢失.
+        log.warn(
+            "EditorFeatures.append race condition: all {} retries exhausted, " +
+                "queued (pending size: {})",
+            RETRY_DELAYS_MS.size,
+            pendingAppends.size + 1)
+        pendingAppends.add(text)
+        scheduleFlush()
+        return
+      }
+      val delayMs = RETRY_DELAYS_MS[attempt]
+      log.warn(
+          "EditorFeatures.append race condition, retrying in {}ms (attempt {}/{})",
+          delayMs,
+          attempt + 1,
+          RETRY_DELAYS_MS.size)
+      target.postDelayedInLifecycle({ attemptInsert(text, attempt + 1) }, delayMs)
+    }
+  }
+
+  /** 调度一次 flushPending. 多次调用合并为一次, 避免重复排队. */
+  private fun scheduleFlush() {
+    val target = editor ?: return
+    if (flushScheduled) return
+    flushScheduled = true
+    target.postDelayedInLifecycle(
+        {
+          flushScheduled = false
+          flushPending()
+        },
+        PENDING_FLUSH_DELAY_MS)
+  }
+
+  /**
+   * 把 [pendingAppends] 队列里的内容依次 append 到末尾. 任何一次失败
+   * 都会把该项放回队首并重新调度 [scheduleFlush].
+   */
+  private fun flushPending() {
+    val target = editor ?: return
+    if (target.isReleased) return
+    if (pendingAppends.isEmpty()) return
+    val currentLine = (target.lineCount - 1).coerceAtLeast(0)
+    while (true) {
+      val text = pendingAppends.poll() ?: return
+      try {
+        val currentCol = target.getText().getColumnCount(currentLine).coerceAtLeast(0)
+        target.getText().insert(currentLine, currentCol, text)
+        // 成功, 继续 flush 下一项
+      } catch (e: ArrayIndexOutOfBoundsException) {
+        // 还是失败, 放回队首, 重新调度
+        pendingAppends.add(text)
+        log.warn(
+            "EditorFeatures.append pending flush failed, will retry (pending size: {})",
+            pendingAppends.size)
+        scheduleFlush()
+        return
+      }
+    }
+  }
 
   override fun replaceContent(newContent: CharSequence?) {
     withEditor {

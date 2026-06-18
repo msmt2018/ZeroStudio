@@ -18,4 +18,8 @@
 <resources>
   <dimen name="editor_mem_usage_view_height">200dp</dimen>
   <dimen name="editor_container_corners">28dp</dimen>
+
+  <!-- 编辑器 AppBar 内 toolbar / tabs 高度 (比 Material 默认值减少 10%, 让顶栏更紧凑) -->
+  <dimen name="editor_toolbar_height">50.4dp</dimen>
+  <dimen name="editor_tablayout_height">43.2dp</dimen>
 </resources>

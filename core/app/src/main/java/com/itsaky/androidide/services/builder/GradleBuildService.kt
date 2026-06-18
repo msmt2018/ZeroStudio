@@ -427,8 +427,55 @@ class GradleBuildService :
     updateNotification(getString(R.string.build_status_sucess), false)
     eventListener?.onBuildSuccessful(result.tasks)
     if (result.tasks.any { it.contains("assemble", true) || it.contains("bundle", true) }) {
-      cleanupIdleResources("post-build").exceptionally {
-        log.warn("Post-build runtime cleanup failed", it)
+      // 【关键修复】之前这里直接调 cleanupIdleResources("post-build"), 里面会
+      //   server.shutdown() + isToolingServerStarted = false
+      // 后果: compose 预览跑完构建后, 编辑器主 Activity (BaseEditorActivity) 再
+      // 启动一次构建, GradleBuildServicePool.getNewIdleServer() 拿不到任何 idle
+      // server, 只能启动新的 (或者卡死等待), 而新的 server 在 Tooling API 协议
+      // 下无法与已绑定的项目结构正常通信, 编辑器侧的构建就报"服务器无法用".
+      //
+      // 现在改成: post-build 阶段只做"清理内存里的临时工件 (jar cache, class
+      // 转换缓存等) + 停 daemons + 杀 gradlew 进程", 显式跳过 Tooling API
+      // server 的 shutdown. Tooling API server 的生命周期由调用方 (BuildServiceProvider)
+      // 在没有更多任务时统一收尾, 任何 post-build hook 都不应该把它打死.
+      postBuildCleanupOnly("post-build")
+    }
+  }
+
+  /**
+   * 跟 cleanupIdleResources 类似, 但【不】关 Tooling API server, 不释放
+   * ToolingServerRunner, 不重置 isToolingServerStarted. 用于 post-build 的
+   * 轻量收尾, 避免 compose 预览跑完把编辑器侧的 build server 一起打死.
+   */
+  private fun postBuildCleanupOnly(trigger: String): CompletableFuture<Boolean> {
+    return CompletableFuture.supplyAsync {
+      try {
+        log.info("Running post-build light cleanup (server kept alive). trigger={}", trigger)
+        eventListener?.onOutput("Running post-build cleanup ($trigger, server kept alive)...")
+
+        // 1) 停掉 Gradle daemons, 释放 daemon 占用的内存.
+        try {
+          stopGradleDaemons().get(8, TimeUnit.SECONDS)
+        } catch (e: Throwable) {
+          log.warn("Gradle daemon stop during post-build cleanup failed", e)
+        }
+
+        // 2) 杀残留 gradlew 进程, 防止僵尸占用端口.
+        try {
+          killGradlewProcesses()
+        } catch (e: Throwable) {
+          log.warn("killGradlewProcesses during post-build cleanup failed", e)
+        }
+
+        // 3) 清理当前 build 进程引用, 但不破坏 server.
+        currentBuildProcess?.destroy()
+        currentBuildProcess = null
+
+        // 4) 主动做一次 GC, 释放 dex 缓存 / jar 缓存. server 自身不动.
+        System.gc()
+        true
+      } catch (e: Throwable) {
+        log.warn("Post-build light cleanup failed", e)
         false
       }
     }

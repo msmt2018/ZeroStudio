@@ -70,11 +70,6 @@ sealed class PreviewState {
         val dexFile: File,
         val className: String,
         val previewConfigs: List<PreviewConfig>,
-        // v3 移除: runtime dex 来自 assets 的 compose runtime dex, 现在 assets 整套
-        // 已删除, Compose 运行时类直接通过 IDE 进程的 PathClassLoader 解析, 无需
-        // 额外注入. 字段保留为 deprecated 兼容旧 UI 调用点, 新代码应直接传 null.
-        @Deprecated("Assets runtime dex 已移除. Compose 运行时类从 IDE PathClassLoader 解析即可.")
-        val runtimeDex: File? = null,
         val projectDexFiles: List<File> = emptyList(),
         // v2.1 增字段
         val deviceConfig: DeviceConfig = DeviceConfig(),
@@ -308,21 +303,19 @@ class ComposePreviewViewModel(
         _previewState.value = PreviewState.Compiling
 
         repository.compilePreview(source, parsed)
-            .onSuccess { result ->
-                _previewState.value = PreviewState.Ready(
-                    dexFile = result.dexFile,
-                    className = result.className,
-                    previewConfigs = parsed.previewConfigs,
-                    // runtimeDex: 不再传, assets 移除后无意义. Compose 运行时类
-                    // 通过 IDE 进程的 PathClassLoader 解析.
-                    projectDexFiles = result.projectDexFiles,
-                    // v2.1 注入新状态
-                    deviceConfig = _deviceConfig.value,
-                    viewport = _viewport.value,
-                    theme = _theme.value,
-                    debugEnabled = _debugEnabled.value,
-                )
-            }
+                .onSuccess { result ->
+                    _previewState.value = PreviewState.Ready(
+                        dexFile = result.dexFile,
+                        className = result.className,
+                        previewConfigs = parsed.previewConfigs,
+                        projectDexFiles = result.projectDexFiles,
+                        // v2.1 注入新状态
+                        deviceConfig = _deviceConfig.value,
+                        viewport = _viewport.value,
+                        theme = _theme.value,
+                        debugEnabled = _debugEnabled.value,
+                    )
+                }
             .onFailure { error ->
                 val diagnostics = if (error is CompilationException) error.diagnostics else emptyList()
                 _previewState.value = PreviewState.Error(
@@ -389,14 +382,26 @@ class ComposePreviewViewModel(
                                 }
                             }
                             is InitializationResult.NeedsBuild -> {
+                                // 【关键修复】build 刚完成, initialize 仍判定 NeedsBuild
+                                // (例如 gradle.properties 启用了 useGradleDexing, 或
+                                //  intermediateClasspaths 临时为空). 此时强制走 compileNow
+                                // 兜底, 让 preview 真正进入编译流程, 而不是停在
+                                // Build Project 按钮页.
                                 modulePath = result.modulePath
                                 variantName = result.variantName
                                 isInitialized.set(true)
                                 initializationDeferred.complete(Unit)
-                                _previewState.value = PreviewState.NeedsBuild(
-                                    result.modulePath,
-                                    result.variantName
+                                LOG.warn(
+                                    "refreshAfterBuild: initialize returned NeedsBuild " +
+                                        "after build success (forceGradleDexing or " +
+                                        "intermediate empty), forcing compileNow bypass",
                                 )
+                                _previewState.value = PreviewState.Initializing
+                                if (currentSource.isNotBlank()) {
+                                    compileNow(currentSource)
+                                } else {
+                                    _previewState.value = PreviewState.Idle
+                                }
                             }
                             is InitializationResult.Failed -> {
                                 initializationDeferred.complete(Unit)

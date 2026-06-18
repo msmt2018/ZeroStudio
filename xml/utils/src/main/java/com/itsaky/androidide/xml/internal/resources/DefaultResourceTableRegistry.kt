@@ -319,7 +319,31 @@ class DefaultResourceTableRegistry : ResourceTableRegistry {
         extractor.extract(stream)
       } catch (err: Exception) {
         if (isLoggingEnabled) {
-          log.warn("Failed to compile {}", pathData.file)
+          // Android SDK 自带资源 (android-X/data/res/values/*.xml) 在新版本
+          // platform 里偶尔有 IDE 解析器不认识的元素或属性, 例如:
+          //   - android-36 的 config_telephony.xml 包含 <bool> 引用
+          //   - public-final.xml / public-staging.xml 是 aapt2 生成的元数据
+          // 这些失败不影响 IDE 功能, 资源查找会 fallback 到 android.jar.
+          // 把 platform 资源失败降级为 DEBUG (无 WARN 噪音),
+          // 用户项目资源失败仍保留 WARN 以便发现问题.
+          val isPlatformFile = pathData.file.path.contains("/platforms/android-")
+          if (isPlatformFile) {
+            log.debug(
+                "Skipping platform resource {} ({}: {})",
+                pathData.file,
+                err::class.java.simpleName,
+                err.message ?: "<no message>")
+          } else {
+            log.warn(
+                "Failed to compile {} ({}: {})",
+                pathData.file,
+                err::class.java.simpleName,
+                err.message ?: "<no message>")
+            // 用户项目资源失败时附带堆栈, 便于诊断
+            if (log.isDebugEnabled) {
+              log.debug("Resource extraction failure details", err)
+            }
+          }
         }
       }
     }

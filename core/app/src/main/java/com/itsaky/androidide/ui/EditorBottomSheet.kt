@@ -35,6 +35,7 @@ import androidx.annotation.GravityInt
 import androidx.appcompat.widget.TooltipCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
@@ -93,15 +94,25 @@ class EditorBottomSheet @JvmOverloads constructor(
   private var logClearFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
   private var logShareFab: com.google.android.material.floatingactionbutton.FloatingActionButton? = null
 
-  private val behavior: BottomSheetBehavior<EditorBottomSheet> by lazy {
-    BottomSheetBehavior.from(this).apply {
+  // 自定义 BottomSheetBehavior, 它的 onInterceptTouchEvent 会在
+  // "触摸落在 AdvancedSymbolInputView 区域" 时直接 return false,
+  // 阻止 IDE 抽屉抢走符号栏自己的内部展开/折叠手势.
+  //
+  // 必须用 lazy 而不是 init 时直接赋值, 因为 CoordinatorLayout.LayoutParams
+  // 必须等到本 View 被父布局 attach 之后才存在 (XML inflate 阶段
+  // LayoutInflater 是先创建 View, 再调用 setLayoutParams; 而 init {} 是在
+  // View 构造期间执行的, 此时 layoutParams 还是 null 或者默认的
+  // ViewGroup.LayoutParams, 直接强转 CoordinatorLayout.LayoutParams 会失败).
+  // 所以下面这行 lazy 只是"占位", 真正在 onAttachedToWindow() 里把 behavior
+  // 装到 layoutParams 上, 保证 CoordinatorLayout 拿到的就是 SymbolInputAware 版本.
+  private val behavior: SymbolInputAwareBottomSheetBehavior<EditorBottomSheet> by lazy {
+    SymbolInputAwareBottomSheetBehavior<EditorBottomSheet>(context, null).apply {
       isFitToContents = false
       skipCollapsed = false
       isHideable = false
-      // 显式设置半展开停靠点为父容器高度的 50%. 这样抽屉上滑到 50% 时
-      // 会停靠在半展开状态 (STATE_HALF_EXPANDED), 继续上滑到 100% 才完全展开.
-      // 不再依赖默认值, 避免某些设备/版本上 50% 停靠行为不一致的问题.
       halfExpandedRatio = 0.5f
+      // 触摸落在 AdvancedSymbolInputView 区域时不要拦截, 让符号栏自己处理.
+      isEventOnExcludedArea = { event -> isTouchOnSymbolInput(event) }
     }
   }
 
@@ -109,7 +120,7 @@ class EditorBottomSheet @JvmOverloads constructor(
   private var headerExpandEnabled = true
   private var expandBlocked = false
   private var behaviorCallbackAttached = false
-  private var wasDraggableBeforeSymbolTouch = true
+  private var customBehaviorAttached = false
 
   var onHeaderPageChanged: ((Int) -> Unit)? = null
   var onActionTextChanged: ((CharSequence) -> Unit)? = null
@@ -119,9 +130,25 @@ class EditorBottomSheet @JvmOverloads constructor(
 
   // 软键盘底部安全区域补丁
   private var currentBottomInset = 0
-  
+
   // Header 区域是否可见(供 3D 滑出动画使用)
   private var isHeaderVisible = true
+
+  // 跟踪 IME 上一次可见状态, 仅在状态切换 (false->true / true->false) 时才
+  // 触发"关闭 IDE 抽屉"动作, 避免每次 WindowInsets 分发都重新设置 state.
+  private var lastImeVisible = false
+
+  /**
+   * 当用户开始拖拽气泡展开 IDE 抽屉时, 主动隐藏 IME 软键盘.
+   * Bug 2 修复: 拖拽手势和 IME 软键盘互斥, 展开抽屉时收起键盘.
+   */
+  private fun hideImeIfShown() {
+    if (!lastImeVisible) return
+    val activity = context as? androidx.appcompat.app.AppCompatActivity ?: return
+    val decor = activity.window?.decorView ?: return
+    val controller = ViewCompat.getWindowInsetsController(decor) ?: return
+    controller.hide(WindowInsetsCompat.Type.ime())
+  }
 
   companion object {
     private val log = LoggerFactory.getLogger(EditorBottomSheet::class.java)
@@ -186,22 +213,18 @@ class EditorBottomSheet @JvmOverloads constructor(
         }
     )
 
-    // 兼容新版 AdvancedSymbolInputView：不再调用已移除/不稳定的 setImeBottomInset，
-    // 改为在符号栏手势期间临时关闭 BottomSheet 拖拽，避免父级手势抢占导致抽屉无法展开。
-    binding.externalSymbolInputView.setOnTouchListener { _, event ->
-      when (event.actionMasked) {
-        MotionEvent.ACTION_DOWN -> {
-          wasDraggableBeforeSymbolTouch = behavior.isDraggable
-          behavior.isDraggable = false
-          parent?.requestDisallowInterceptTouchEvent(true)
-        }
-        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-          behavior.isDraggable = wasDraggableBeforeSymbolTouch
-          parent?.requestDisallowInterceptTouchEvent(false)
-        }
-      }
-      false
-    }
+    // 不再在 AdvancedSymbolInputView 上挂 OnTouchListener 手动调用
+    // requestDisallowInterceptTouchEvent. 原因: CoordinatorLayout.Behavior
+    // (也就是 BottomSheetBehavior.onInterceptTouchEvent) 是 CoordinatorLayout
+    // 在分发 MotionEvent 之前最先调用的钩子, 任何挂在子 view 上的 OnTouchListener
+    // 都比 Behavior 晚, 此时 IDE 抽屉已经决定了要不要拦截, 符号栏再也拿不到
+    // 这个手势序列.
+    //
+    // 正确做法: 通过 SymbolInputAwareBottomSheetBehavior.onInterceptTouchEvent
+    // 重写拦截逻辑, 在触摸落在 AdvancedSymbolInputView 区域时直接 return false,
+    // 把整个手势交还给符号栏, 让符号栏自己的 onInterceptTouchEvent / onTouchEvent
+    // 完整处理内部展开/折叠抽屉. 这是 EditorBottomSheet.onAttachedToWindow()
+    // 那里安装的, 不要再在这重复挂 OnTouchListener.
   }
 
   /**
@@ -279,11 +302,14 @@ class EditorBottomSheet @JvmOverloads constructor(
         val newHeight = bottom - top
         if (newHeight > 0 && newHeight != (oldBottom - oldTop)) {
             updatePeekHeight()
-            // 兜底: 某些设备上 floatingHeaderArea 高度变化会触发子 View 重新测量,
-            // 紧跟着再调一次, 让 IME 同步稳定.
-            updatePeekHeightDeferred()
         }
     }
+
+    // 把 fully expanded 的位置从全屏 (expandedOffset = 0) 改成编辑器界面
+    // toolbar 下方 progress_indicator 的底部. 这样展开抽屉时, 用户能看到
+    // 上方 toolbar + progress_indicator, 下方是 IDE 抽屉 (构建输出/文件/搜索等),
+    // 不再被抽屉整个盖住.
+    setupExpandedOffset()
 
     // 将 WindowInsets 拦截用于 IME 同步；BaseEditorActivity 也会直接转发一次，
     // 以覆盖 CoordinatorLayout/BottomSheetBehavior 未把 IME insets 分发到子 View 的设备。
@@ -294,12 +320,97 @@ class EditorBottomSheet @JvmOverloads constructor(
     behavior.isGestureInsetBottomIgnored = true
   }
 
+  /**
+   * 把 [BottomSheetBehavior.getExpandedOffset] 设为 progress_indicator.bottom
+   * 在 EditorBottomSheet.parent (CoordinatorLayout) 坐标里的位置.
+   *
+   * XML 结构 (content_editor.xml):
+   *   CoordinatorLayout (realContainer, parent)
+   *     AppBarLayout (editor_appBarLayout)
+   *       editor_toolbar
+   *       progress_indicator    <-- 我们要把抽屉顶边放在这里
+   *       tabs
+   *     EditorBottomSheet (this)
+   *
+   * 几何关系:
+   *   expandedOffset  = progress_indicator.bottom - CoordinatorLayout.top
+   *
+   * 用 [View.getLocationOnScreen] 算绝对屏幕坐标差, 而不是 progressIndicator.bottom
+   * 直接取值, 因为 progress_indicator.bottom 是它自己在 AppBarLayout 内的相对值,
+   * 还要加上 AppBarLayout 自身在 CoordinatorLayout 里的 offset, 计算起来更绕.
+   * 屏幕坐标差是最直接的, 且对 AppBarLayout 的 scroll/collapse 行为 (即使将来
+   * 启用) 都能正确跟随.
+   */
+  private fun setupExpandedOffset() {
+    val parentView = parent as? View ?: return
+    val progressIndicator = parentView.findViewById<View>(R.id.progress_indicator) ?: run {
+      log.warn("setupExpandedOffset: R.id.progress_indicator not found in parent; expandedOffset left as default 0")
+      return
+    }
+    // progress_indicator 还没 measure/layout 完时, 不能算. 用 doOnLayout 等下一帧.
+    progressIndicator.doOnLayout {
+      applyExpandedOffset(parentView, progressIndicator)
+    }
+    // 后续 toolbar / progress_indicator / tabs 任何一项尺寸变化都要重算.
+    // (比如将来 toolbar 菜单图标数变化让 toolbar 高度变化, progress_indicator 底
+    // 部就跟着动.)
+    progressIndicator.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, oldBottom ->
+      if (bottom != oldBottom) {
+        applyExpandedOffset(parentView, progressIndicator)
+      }
+    }
+  }
+
+  private fun applyExpandedOffset(parentView: View, progressIndicator: View) {
+    if (progressIndicator.width == 0 || progressIndicator.height == 0) return
+    val parentLoc = IntArray(2)
+    val progressLoc = IntArray(2)
+    parentView.getLocationOnScreen(parentLoc)
+    progressIndicator.getLocationOnScreen(progressLoc)
+    // progress_indicator.bottom 在 parentView 坐标里 = progress 屏幕 y + height - parent 屏幕 y
+    val newOffset = (progressLoc[1] + progressIndicator.height) - parentLoc[1]
+    val clamped = max(0, newOffset)
+    if (behavior.expandedOffset != clamped) {
+      log.info("applyExpandedOffset: progress_indicator.bottom={} (parent coords) -> expandedOffset={}", newOffset, clamped)
+      behavior.expandedOffset = clamped
+    }
+  }
+
   fun applyEditorWindowInsets(insets: WindowInsetsCompat) {
-    val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
-    val navInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-    val isImeVisibleNow = insets.isVisible(WindowInsetsCompat.Type.ime())
-    val targetBottomInset = if (isImeVisibleNow) imeInsets.bottom else navInsets.bottom
-    updateBottomInset(targetBottomInset)
+      val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+      val navInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+      val isImeVisibleNow = insets.isVisible(WindowInsetsCompat.Type.ime())
+      val targetBottomInset = if (isImeVisibleNow) imeInsets.bottom else navInsets.bottom
+      // 同步 IME 状态到底层 BottomSheetBehavior. 旧版 v2.0.7 的 setImeVisible
+      // 就是这个作用: IME 可见时让 BottomSheet 忽略底部手势 inset (用户的滑动
+      // 不会触发系统 home 手势, 全部交给 BottomSheet), IME 隐藏时恢复
+      // (尊重系统 nav bar 区域的手势).
+      behavior.isGestureInsetBottomIgnored = isImeVisibleNow
+      updateBottomInset(targetBottomInset)
+
+      // Bug 1 修复: IME 弹出时关闭 IDE 抽屉.
+      //
+      // 用户手动验证结论: "IME 弹出 -> 关闭 IDE 抽屉" 这一动作触发后, 现有的
+      // IME 同步代码 (BaseEditorActivity.onApplyWindowInsets 里手动 resize
+      // contentCard.height = contentCardRealHeight - imeBottom) 会自动把
+      // 符号栏顶部贴到 IME 顶部. 不需要再改 IME 同步代码本身.
+      //
+      // 也就是说: IME 和 IDE 抽屉应该互斥, 不能同时占满屏幕. 用户在编辑器
+      // 输入文本时只该看到 IME, 在看 IDE 抽屉时只该看到抽屉.
+      //
+      // 只在 lastImeVisible -> isImeVisibleNow 的状态切换瞬间触发, 避免
+      // 每次 WindowInsets 分发都重新设 state 干扰行为.
+      if (isImeVisibleNow != lastImeVisible) {
+          lastImeVisible = isImeVisibleNow
+          if (isImeVisibleNow) {
+              val currentState = behavior.state
+              if (currentState == BottomSheetBehavior.STATE_HALF_EXPANDED ||
+                  currentState == BottomSheetBehavior.STATE_EXPANDED) {
+                  log.info("IME shown while drawer open (state={}), force-collapsing drawer", currentState)
+                  behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+              }
+          }
+      }
   }
 
   private fun updateBottomInset(targetBottomInset: Int) {
@@ -316,11 +427,35 @@ class EditorBottomSheet @JvmOverloads constructor(
     // BottomSheet top is derived from peekHeight in collapsed mode, so include the IME inset to
     // keep floating_header_area/AdvancedSymbolInputView attached to the keyboard top. The drawer
     // content uses spaceBottom so fragments such as ChatAI keep their bottom input above IME too.
-    updatePeekHeight()
-    // 兜底: 等下一帧布局跑完再更新一次, 避免 floatingHeaderArea.height 拿到旧值,
-    // 导致符号栏底部没有精准落在 IME 顶部.
-    updatePeekHeightDeferred()
+    // 必须通过 doOnLayout 等待 floatingHeaderArea 真实高度, 否则
+    // floatingHeaderArea.height == 0 时, peekHeight 只有 imeBottom, 符号栏
+    // 会被推到 IME 下方而不是贴在 IME 顶部.
+    schedulePeekHeightUpdate()
   }
+
+  /**
+   * 安排一次 peekHeight 更新:
+   *   1) 先用当前 (可能为 0 的) 高度 + IME inset 设置 peekHeight, 触发 layout.
+   *   2) 通过 doOnLayout 在下一帧布局完成时, 用真实高度再设一次, 让符号栏底部
+   *      精准落在 IME 顶部.
+   *
+   * 这个双重写入是必须的:
+   *   - 第一次写入让 BottomSheet 立即开始向上位移 (跟着 peekHeight 变化).
+   *   - 第二次写入修复 insets 分发时 height 还是 0 的时间窗, 避免 peekHeight
+   *     只是 imeBottom 导致符号栏被压在 IME 下面.
+   */
+  private fun schedulePeekHeightUpdate() {
+    removeCallbacks(deferredPeekHeightRunnable)
+    // 第一次: 用当前高度立刻设置一次, 触发 layout.
+    updatePeekHeight()
+    // 第二次: 等下一帧布局完成, 用真实高度再设一次.
+    binding.floatingHeaderArea.doOnLayout {
+        removeCallbacks(deferredPeekHeightRunnable)
+        post(deferredPeekHeightRunnable)
+    }
+  }
+
+  private val deferredPeekHeightRunnable = Runnable { updatePeekHeight() }
 
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
     val parentHeight = (parent as? View)?.height ?: 0
@@ -342,37 +477,70 @@ class EditorBottomSheet @JvmOverloads constructor(
   }
 
   private fun updatePeekHeight() {
-      // 只有在 Header 显示时（未被 3D 隐藏），PeekHeight 才包含它
+      // 【IME 同步原理】
+      //
+      // 之前这里用 `peekHeight = headerHeight + imeBottom` 的累加写法, 假设
+      // parentHeight 在 IME 弹出前后保持不变. 这个假设是错的:
+      //   - EdgeToEdgeIDEActivity.applyEdgeToEdge() 调了
+      //     WindowCompat.setDecorFitsSystemWindows(window, false) 开了 edge-to-edge
+      //   - edge-to-edge 模式下, `windowSoftInputMode="adjustResize"` 不会再
+      //     自动 resize activity content view, 跟旧版 v2.0.7 之前的 IDE 行为不一致
+      //   - 旧版 v2.0.7 的解法是手动 `contentCard.height = contentCardRealHeight - imeBottom`
+      //
+      // 现在 BaseEditorActivity.onApplyWindowInsets 恢复了手动 resize. 配合这里的
+      // `peekHeight = headerHeight`, 几何关系就是:
+      //   BottomSheet.top    = parentHeight - peekHeight
+      //                    = (contentCardRealHeight - imeBottom) - headerHeight
+      //   符号栏底部 (即 AdvancedSymbolInputView.bottom)
+      //                    = BottomSheet.top + headerHeight
+      //                    = contentCardRealHeight - imeBottom
+      //                    = contentCard.bottom (因为 contentCard 已被手动 resize 到这个高度)
+      //                    = IME 顶部
+      //
+      // 不再叠加 currentBottomInset 到 peekHeight: parentHeight 已经包含了
+      // IME 调整 (由 BaseEditorActivity 手动减 imeBottom), 再叠加就偏移了.
       val headerHeight = binding.floatingHeaderArea.height
       val parentHeight = (parent as? View)?.height ?: resources.displayMetrics.heightPixels
-      behavior.peekHeight = min(max(headerHeight, 0) + currentBottomInset, parentHeight)
-      // 强制下一帧重新布局, 让符号栏底部精确落在 IME 顶部.
-      // 原因: insets 分发时 floatingHeaderArea 的 height 可能还是旧的 (布局还没跑完),
-      // 仅设置 peekHeight 不会立刻让符号栏重新测量; requestLayout 触发新一轮 measure/layout,
-      // 下一帧符号栏的 bottom 就会和 IME top 对齐.
+      behavior.peekHeight = min(max(headerHeight, 0), parentHeight)
       requestLayout()
   }
 
   /**
+   * 旧版 v2.0.7 的代码片段 - 仅作历史参考保留在注释里, 不要恢复成可执行代码.
    * 在 IME insets 变化后, 等下一帧布局完成再更新一次 peekHeight.
    * 用于覆盖 insets 分发早于布局完成的时间窗, 保证 floatingHeaderArea.height
    * 已经是新值, 符号栏底部才能精确对齐到 IME 顶部.
+   *
+   * 注意: 真正的 deferredPeekHeightRunnable 已经在文件上方声明 (第 356 行),
+   * 在 schedulePeekHeightUpdate() 之前声明以满足 Kotlin 类初始化顺序的
+   * forward reference 要求, 此处不要再重复声明.
+   *
+   * private val deferredPeekHeightRunnable by lazy { Runnable { updatePeekHeight() } }
    */
-  private fun updatePeekHeightDeferred() {
-      removeCallbacks(deferredPeekHeightRunnable)
-      post(deferredPeekHeightRunnable)
-  }
-
-  private val deferredPeekHeightRunnable = Runnable { updatePeekHeight() }
 
   private fun setupPageSwitchGestureBubble() {
       val bubble = binding.pageSwitchGestureBubble
       bubble.setOrientation(com.itsaky.androidide.ui.EdgeSnapBubbleView.Orientation.HORIZONTAL)
       bubble.setPosition(com.itsaky.androidide.ui.EdgeSnapBubbleView.Position.TOP)
 
-      // 需求：点击事件切换 Header 区域的显示/隐藏（通过 3D 上下平移立体隐藏）
+      // 需求：点击事件根据抽屉状态切换:
+      //   - STATE_HALF_EXPANDED / STATE_EXPANDED (抽屉打开) -> 关闭抽屉, 回到 COLLAPSED.
+      //     这是用户原始需求: "在 50% 时点击 -> 关闭 IDE 抽屉", 关闭后 IME 同步
+      //     就能正常工作 (因为符号栏上方不再被抽屉遮挡). Bug 1 修复.
+      //   - STATE_COLLAPSED / STATE_DRAGGING (抽屉折叠中) -> 切换 Header 区域
+      //     的显示/隐藏, 用 3D 上下平移立体隐藏 Header.
       bubble.setOnBubbleClickListener {
-          toggleHeaderVisibilityWithAnimation()
+          val state = behavior.state
+          if (state == BottomSheetBehavior.STATE_HALF_EXPANDED ||
+              state == BottomSheetBehavior.STATE_EXPANDED) {
+              // 关闭抽屉. 不需要清 IME, 这里的"点击"通常是用户在查看抽屉
+              // 不想同时弹键盘; 之后用户主动点编辑器, IME 弹出时 Bug 1 修复
+              // 已经能再次保证抽屉关闭.
+              log.info("Bubble click at state={}, force-collapsing drawer", state)
+              behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+          } else {
+              toggleHeaderVisibilityWithAnimation()
+          }
       }
 
       // 需求：手势滑动打开/关闭整个 BottomSheet 抽屉
@@ -400,6 +568,7 @@ class EditorBottomSheet @JvmOverloads constructor(
   // === 抽屉自定义拖拽状态 ===
   private var drawerDragInitialY = 0f
   private var drawerDragInitialSheetTop = 0
+  private var drawerDragInitialTranslationY = 0f
   private var drawerDragActive = false
   private val drawerTouchSlopPx by lazy {
       ViewConfiguration.get(context).scaledTouchSlop
@@ -409,16 +578,31 @@ class EditorBottomSheet @JvmOverloads constructor(
    * 抽屉拖拽监听器, 挂在顶部手势气泡上.
    *
    * 行为契约:
-   * 1. ACTION_DOWN: 记录初始手指 y 与 sheet.top; 调用 requestDisallowInterceptTouchEvent(true)
-   *    阻断 CoordinatorLayout/BottomSheetBehavior 的拖拽拦截, 让 IDE 抽屉不会被系统默认
-   *    ViewDragHelper 抢走手势; 返回 false, 气泡自己的 onTouchEvent 仍能处理点击 (无拖拽时).
-   * 2. ACTION_MOVE: 越过 touchSlop 后视为进入拖拽态, 期间 sheet.top 跟随手指 deltaY 1:1
-   *    变化, 不会在 80% 位置被吸附到 STATE_EXPANDED. 同时设置 behavior.state = STATE_DRAGGING
-   *    让 behavior.onLayoutChild 不再按 state 重定位 sheet, 我们的 offset 才不会被覆盖.
-   * 3. ACTION_UP/CANCEL: 根据当前 sheet.top 与 [collapsedTop, halfTop, expandedTop] 三段阈值
-   *    决定最终 state. 用户要求:
-   *    - 上滑到 50% 以上 (sheet.top <= halfTop) -> STATE_EXPANDED (完全展开)
-   *    - 下滑到 50% 以下 (sheet.top > halfTop) -> STATE_HALF_EXPANDED (停靠一半在屏幕中)
+   * 1. ACTION_DOWN: 记录初始手指 y、sheet.top、sheet.translationY; 调用
+   *    requestDisallowInterceptTouchEvent(true) 阻断 CoordinatorLayout/
+   *    BottomSheetBehavior 的拖拽拦截, 让 IDE 抽屉不会被系统默认 ViewDragHelper
+   *    抢走手势; 返回 false, 气泡自己的 onTouchEvent 仍能处理点击 (无拖拽时).
+   * 2. ACTION_MOVE: 越过 touchSlop 后视为进入拖拽态, 期间 sheet 通过 translationY
+   *    跟随手指 deltaY 1:1 变化, 不会在 80% 位置被 BottomSheetBehavior 默认吸附到
+   *    STATE_EXPANDED.
+   *
+   *    注意: 这里**不能**用 `behavior.state = STATE_DRAGGING` 来防止
+   *    BottomSheetBehavior.onLayoutChild 重新定位 sheet.top. 因为 STATE_DRAGGING
+   *    是 BottomSheetBehavior 内部状态, setState() 会直接抛 IllegalArgumentException
+   *    "STATE_DRAGGING should not be set externally" (com.google.android.material
+   *    BottomSheetBehavior.java:1480). 也不能直接用 offsetTopAndBottom 改 sheet.top,
+   *    因为下一次 layout pass 时 onLayoutChild 会按 state 把 sheet.top 重置回
+   *    state 对应位置, 把我们的 offset 抵消.
+   *
+   *    正确做法: 用 translationY 移动 view (这是 view 绘制时的平移, 不影响 layout),
+   *    sheet.top 保持 state 对应位置不变. 视觉位置 = sheet.top + translationY.
+   *    松手时 reset translationY=0 再 setState(newState), onLayoutChild 会把
+   *    sheet.top 重新设到 newState 对应位置, translationY=0 保证视觉上从当前
+   *    位置无缝过渡到 newState 位置, 不会出现跳变.
+   * 3. ACTION_UP/CANCEL: 根据当前 sheet 的视觉位置 (initialTop + translationY)
+   *    与 [collapsedTop, halfTop, expandedTop] 三段阈值决定最终 state. 用户要求:
+   *    - 上滑到 50% 以上 (visualTop <= halfTop) -> STATE_EXPANDED (完全展开)
+   *    - 下滑到 50% 以下但还没接近 collapsed -> STATE_HALF_EXPANDED (停靠一半)
    *    - 继续下滑到接近 collapsed 位置 -> STATE_COLLAPSED (完全折叠)
    *    行为只依赖位置, 不依赖 velocity, 避免误吸附.
    */
@@ -427,6 +611,7 @@ class EditorBottomSheet @JvmOverloads constructor(
           MotionEvent.ACTION_DOWN -> {
               drawerDragInitialY = event.rawY
               drawerDragInitialSheetTop = top
+              drawerDragInitialTranslationY = translationY
               drawerDragActive = false
               // requestDisallowInterceptTouchEvent 是 ViewParent 的方法, 不是 View 的.
               // 调用 v.parent 才能阻断 CoordinatorLayout/BottomSheetBehavior 的拦截.
@@ -438,16 +623,24 @@ class EditorBottomSheet @JvmOverloads constructor(
               val deltaY = event.rawY - drawerDragInitialY
               if (!drawerDragActive && kotlin.math.abs(deltaY) > drawerTouchSlopPx) {
                   drawerDragActive = true
-                  // 通知 behavior 进入拖拽态, 这样 behavior.onLayoutChild 不会再按 state
-                  // 覆盖 sheet.top, 我们的 offsetTopAndBottom 才不会被抵消.
-                  behavior.state = BottomSheetBehavior.STATE_DRAGGING
+                  // 不再设 behavior.state = STATE_DRAGGING (会被 BottomSheetBehavior
+                  // 拒绝并抛 IllegalArgumentException). 改用 translationY 移动
+                  // view 视觉位置, sheet.top 保持 state 对应位置不被覆盖.
+                  // Bug 2 修复: 拖拽开始瞬间, 如果 IME 软键盘已弹出, 主动隐藏它.
+                  // 原因: 抽屉和 IME 应该互斥, 拖拽展开抽屉时不应该让键盘同时占
+                  // 屏, 否则用户看不到拖拽结果, 体验割裂.
+                  hideImeIfShown()
               }
               if (drawerDragActive) {
                   val parentHeight = (parent as? View)?.height ?: height
-                  val newTop = (drawerDragInitialSheetTop + deltaY).toInt()
+                  val initialTop = drawerDragInitialSheetTop
+                  val newTop = (initialTop + deltaY).toInt()
                       .coerceIn(behavior.expandedOffset, parentHeight)
-                  if (newTop != top) {
-                      offsetTopAndBottom(newTop - top)
+                  // 计算 translationY = visualTop - initialTop. 这样视觉位置
+                  // = top (state 对应) + translationY = newTop.
+                  val newTranslationY = (newTop - initialTop).toFloat()
+                  if (newTranslationY != translationY) {
+                      translationY = newTranslationY
                   }
                   return@OnTouchListener true
               }
@@ -458,11 +651,17 @@ class EditorBottomSheet @JvmOverloads constructor(
               if (drawerDragActive) {
                   drawerDragActive = false
                   val parentHeight = (parent as? View)?.height ?: height
-                  val sheetTop = top
+                  // 当前视觉位置 = 初始 sheet.top + 当前 translationY.
+                  val initialTop = drawerDragInitialSheetTop
+                  val currentTop = initialTop + translationY.toInt()
                   val collapsedTop = parentHeight - behavior.peekHeight
                   val expandedTop = behavior.expandedOffset
                   val halfTop = (expandedTop + collapsedTop) / 2
-                  val newState = decideDrawerState(sheetTop, expandedTop, halfTop, collapsedTop)
+                  val newState = decideDrawerState(currentTop, expandedTop, halfTop, collapsedTop)
+                  // 先重置 translationY=0 再设 state. setState 会触发 onLayoutChild
+                  // 把 sheet.top 重新定位到 newState 对应位置, 这时 translationY=0
+                  // 保证视觉上从当前位置无缝过渡到 newState 位置, 不会出现跳变.
+                  translationY = 0f
                   behavior.state = newState
                   return@OnTouchListener true
               }
@@ -544,14 +743,74 @@ class EditorBottomSheet @JvmOverloads constructor(
       }
   }
 
+  override fun onFinishInflate() {
+    super.onFinishInflate()
+    // 此时 LayoutInflater 已经把 layoutParams 替换成 CoordinatorLayout.LayoutParams
+    // (来自 XML 的 app:layout_behavior="BottomSheetBehavior" 也已经解析好), 是最早
+    // 能稳妥替换 Behavior 的时机. 一定要在 BaseEditorActivity.setupBottomSheet()
+    // 通过 BottomSheetBehavior.from() 拿引用之前安装, 否则基类缓存的就是默认 Behavior,
+    // 后续基类读 state/expandedOffset 时拿不到 SymbolInputAware 版本的状态.
+    installCustomBehavior()
+  }
+
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+
+    // 【关键】在 layoutParams 已经是 CoordinatorLayout.LayoutParams 之后, 把
+    // SymbolInputAwareBottomSheetBehavior 装上去, 替换 XML 默认的 BottomSheetBehavior.
+    //
+    // 之前在 init {} (或 lazy 第一次访问) 时机太早: 此时 CoordinatorLayout 还没有
+    // 调 setLayoutParams 把本 view 的 layoutParams 换成 CoordinatorLayout.LayoutParams,
+    // lp?.behavior = it 这一行实际上没有生效, CoordinatorLayout 后面照旧使用
+    // XML 里的默认 BottomSheetBehavior, 这才是符号栏抽屉手势打不开的根本原因.
+    //
+    // 现在先在 onFinishInflate() 里装填一次 (确保 BaseEditorActivity.setupBottomSheet()
+    // 通过 BottomSheetBehavior.from() 拿到的是 SymbolInputAware 版本), 这里再保险一次.
+    installCustomBehavior()
+
     setupDynamicPeekHeightAndIME()
     post {
       ViewCompat.requestApplyInsets(this)
       updatePeekHeight()
     }
     ensureBehaviorCallbackAttached()
+  }
+
+  /**
+   * 把 SymbolInputAwareBottomSheetBehavior 装到 layoutParams 上, 替换 XML 默认的
+   * BottomSheetBehavior. 这个方法是幂等的, 多次调用只会真正执行一次.
+   */
+  private fun installCustomBehavior() {
+    if (customBehaviorAttached) return
+    val lp =
+        layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+            ?: return
+    // 替换为 SymbolInputAware 版本. 必须在 attach 之前, 否则 CoordinatorLayout
+    // 第一次 layout pass 还会走默认 Behavior 的状态机 (STATE_DRAGGING 等),
+    // 等下次状态更新才换过来, 中间有一帧错误状态.
+    lp.behavior = behavior
+    behavior.isGestureInsetBottomIgnored = true
+    customBehaviorAttached = true
+  }
+
+  /**
+   * 判断一个 MotionEvent 是否落在 AdvancedSymbolInputView 的屏幕矩形内.
+   *
+   * 注意: 这里用 event.rawX/rawY (屏幕绝对坐标) 与 AdvancedSymbolInputView 的
+   * getLocationOnScreen() (同样是屏幕绝对坐标) 比较. 不要用 getX/getY (相对父布局),
+   // 也不要用 event.x/event.y (相对自身), 这两种都会导致判断错误.
+   */
+  private fun isTouchOnSymbolInput(event: MotionEvent): Boolean {
+    val symbolInput = binding.externalSymbolInputView
+    if (symbolInput.width == 0 || symbolInput.height == 0 || !symbolInput.isShown) {
+      return false
+    }
+    val location = IntArray(2)
+    symbolInput.getLocationOnScreen(location)
+    val x = event.rawX.toInt()
+    val y = event.rawY.toInt()
+    return x >= location[0] && x <= location[0] + symbolInput.width &&
+        y >= location[1] && y <= location[1] + symbolInput.height
   }
 
   private fun ensureBehaviorCallbackAttached() {

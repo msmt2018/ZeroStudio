@@ -1,10 +1,26 @@
+/*
+ *  This file is part of AndroidIDE.
+ *
+ *  AndroidIDE is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  AndroidIDE is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.itsaky.androidide.compose.preview
 
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -12,12 +28,19 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.itsaky.androidide.compose.preview.databinding.FragmentComposePreviewBinding
-import com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader
-import com.itsaky.androidide.compose.preview.runtime.ComposableRenderer
+import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
 import com.itsaky.androidide.resources.R as ResourcesR
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
+/**
+ * Compose 预览 Fragment 入口 (v3).
+ *
+ * 与 v2 不同, 渲染由 [PreviewRenderEngine] 统一管理:
+ * - 在 onViewCreated 中 attach engine 到根容器
+ * - 在 PreviewState.Ready 触发 engine.render(...)
+ * - 在 onDestroyView 中 engine.detach() 释放 dex 运行时
+ */
 class ComposePreviewFragment : Fragment() {
 
     private var _binding: FragmentComposePreviewBinding? = null
@@ -25,8 +48,7 @@ class ComposePreviewFragment : Fragment() {
 
     private val viewModel: ComposePreviewViewModel by viewModels()
 
-    private var classLoader: ComposeClassLoader? = null
-    private var renderer: ComposableRenderer? = null
+    private var renderEngine: PreviewRenderEngine? = null
 
     private var sourceCode: String = DEFAULT_SOURCE
     private var onNavigateBack: (() -> Unit)? = null
@@ -62,8 +84,10 @@ class ComposePreviewFragment : Fragment() {
     }
 
     private fun setupPreview() {
-        classLoader = ComposeClassLoader(requireContext())
-        renderer = ComposableRenderer(binding.composePreview, classLoader!!)
+        // 把 PreviewRenderEngine 挂到 previewContainer (FrameLayout), 由它创建/管理 ComposeView.
+        // previewContainer 是 fragment_compose_preview.xml 中专门用于预览的 FrameLayout,
+        // 使用它能避免在 ConstraintLayout 根上 addView 时尺寸为 0 的问题.
+        renderEngine = PreviewRenderEngine(requireContext(), binding.previewContainer).also { it.attach() }
     }
 
     private fun observeState() {
@@ -83,7 +107,6 @@ class ComposePreviewFragment : Fragment() {
             state is PreviewState.NeedsBuild ||
             state is PreviewState.Building
         binding.errorOverlay.isVisible = state is PreviewState.Error
-        binding.composePreview.isVisible = state is PreviewState.Ready
 
         when (state) {
             is PreviewState.Idle -> {
@@ -108,17 +131,13 @@ class ComposePreviewFragment : Fragment() {
                 binding.initializingText.setText(ResourcesR.string.preview_build_required_title)
             }
             is PreviewState.Ready -> {
-                val loader = classLoader ?: return
-                val render = renderer ?: return
-                loader.setProjectDexFiles(state.projectDexFiles)
-                // v3: assets runtime dex 已删除, 永远传 null. Compose 运行时类从
-                // IDE 进程的 PathClassLoader 解析.
-                loader.setRuntimeDex(null)
+                val engine = renderEngine ?: return
                 val config = state.previewConfigs.firstOrNull() ?: return
-                render.render(
-                    dexFile = state.dexFile,
+                engine.render(
+                    previewDex = state.dexFile,
+                    projectDex = state.projectDexFiles,
                     className = state.className,
-                    functionName = config.functionName
+                    functionName = config.functionName,
                 )
             }
             is PreviewState.Error -> {
@@ -155,17 +174,15 @@ class ComposePreviewFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        classLoader?.release()
-        classLoader = null
-        renderer = null
+        renderEngine?.detach()
+        renderEngine = null
         _binding = null
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
-        classLoader?.release()
-        classLoader = null
-        renderer = null
+        renderEngine?.detach()
+        renderEngine = null
         LOG.warn("Low memory - released preview resources")
     }
 

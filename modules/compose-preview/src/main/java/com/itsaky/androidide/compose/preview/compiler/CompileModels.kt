@@ -18,13 +18,11 @@
 package com.itsaky.androidide.compose.preview.compiler
 
 /**
- * 编译 / 构建阶段产物的统一数据模型.
+ * 编译 / dex 阶段产物的诊断信息.
  *
- * 之前 K2 + D8 进程内编译时这里有 [CompileResult] / [DexResult] 两个数据类,
- * 现在 K2 + D8 整套已经移除, 完全改用 BuildService.executeTasks 跑 gradle
- * assemble 任务, 编译 / dex 产物直接来自项目的 build cache. 保留
- * [CompileDiagnostic] 是为了 [com.itsaky.androidide.compose.preview.data.repository.CompilationException]
- * 的诊断信息仍能透传给 UI 层, 不破坏现有 preview UI 的错误展示.
+ * v3.1 简化: 不再有 [CompileResult] / [DexResult] 数据类 (v2.1 进程内 K2 + D8 链路
+ * 删除后已无调用方), 仅保留 [CompileDiagnostic] 用于错误信息展示. gradle build
+ * 自身的错误由 [com.itsaky.androidide.projects.builder.BuildService] 处理.
  */
 data class CompileDiagnostic(
     val severity: Severity,

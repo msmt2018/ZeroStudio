@@ -27,31 +27,22 @@ import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
- * 仓库实现 v3.
+ * Compose 预览仓库 v3.1 实现.
  *
- * v2 走进程内 K2JVMCompiler + D8 编译 (依赖 assets 中的 jar 压缩包), 在用户机器上
- * 经常因为 jar 缺失/版本不匹配/IO 权限/gradle dex 已存在但 IDE 端不知道 等原因导致
- * 编译失败, 进而表现成 Compose Preview Activity 内的花屏 (渲染了异常堆栈) 和
- * "build 按钮状态反复切换" 的体验问题.
+ * ## v3.1 vs v2.1
  *
- * v3 把 K2 + D8 + assets jar 全部移除, 完全改用现有
- * [com.itsaky.androidide.projects.builder.BuildService], 跟
- * [com.itsaky.androidide.actions.build.QuickRunWithCancellationAction] / [com.itsaky.androidide.actions.build.RunTasksAction]
- * 一致: 用户点击构建按钮时由 [com.itsaky.androidide.compose.preview.ComposePreviewActivity.triggerBuild]
- * 调 `BuildService.executeTasks(assemble$variant)`, gradle 服务端会直接走自己的
- * 构建缓存 + Android Build Cache, dex 写到项目 build 目录. dex 的来源是
- * [ProjectContext.projectDexFiles] (由 [ProjectContextSource] 从
- * [com.itsaky.androidide.projects.android.AndroidModule.getRuntimeDexFiles] 获取).
+ * v2.1 进程内编译链 (`AssetsComposeBundles` + `BundledComposeCompiler` + `BundledD8Dexer` +
+ * `DexCache`) 已被完全移除. 这些工具要求把 `kotlin-compiler-embeddable` / `r8` /
+ * `compose-compiler-plugin` / `compose-runtime` / `compose-ui` 等 jar 打包到
+ * `assets/compose/compose-jars.zip`, 启动时解压到 `cacheDir/compose-sdk/` 再用, 链路脆弱:
+ * 任何 jar 缺失或解压失败都会导致 "Compose runtime jars missing" 这种错误.
  *
- * 因此:
- * 1. 不再需要 assets 中的 jar (kotlin-compiler-embeddable / d8 / compose-*).
- * 2. 不再需要进程内 K2 编译器, 不需要 class 转 dex 的 D8 步骤.
- * 3. dex 加载使用 [com.itsaky.androidide.compose.preview.runtime.ComposeClassLoader],
- *    跟 v2 的 gradle-dex 分支相同.
- * 4. [initialize] 不再 bootstrap K2 编译环境, 只检查 `intermediateClasspaths` 判断
- *    是否需要先 build. [compilePreview] 不再触发 gradle assemble, 只取最近一次
- *    build 产物的 dex (build 由 Activity 端的 [triggerBuild] 触发). 这样 dex 路径
- *    唯一可控, 避免双触发争抢.
+ * v3.1 唯一路径: dex 直接来自 gradle (`BuildService.executeTasks(assemble<Variant>)` 产物),
+ * 通过 `ProjectContextSource.resolveContext` 找. compose runtime / ui / material3 等
+ * 类通过 IDE module 自身 compile dependency + IDE 主 APK 的 PathClassLoader 解析.
+ *
+ * 因此本类不再持有 `bundles / compiler / dexer / dexCache` 任何字段, 也不再维护
+ * `runtimeDex` 字段.
  */
 class ComposePreviewRepositoryImpl(
     private val projectContextSource: ProjectContextSource = ProjectContextSource()
@@ -71,81 +62,133 @@ class ComposePreviewRepositoryImpl(
             projectContext = ctx
             openedFilePath = filePath
 
-            if (ctx.needsBuild && ctx.modulePath != null) {
-                LOG.warn(
-                    "No intermediate classes found for {} - build required before preview can be loaded",
-                    ctx.modulePath,
-                )
-                return@runCatching InitializationResult.NeedsBuild(ctx.modulePath, ctx.variantName)
+            // 【关键修复】build 成功后停在 NeedsBuild / Build Project 按钮页
+            //
+            // 优先看 dex 实际状态: 只要 dex 文件存在, 就直接走
+            //   dex 加载路径, 跳过 needsBuild 强制判定.
+            if (ctx.modulePath != null) {
+                val existingDex = ctx.projectDexFiles.filter { it.exists() }
+                if (existingDex.isNotEmpty()) {
+                    LOG.info(
+                        "Repository ready (via project DEX): module={}, variant={}, " +
+                            "projectDexFiles={}/{}, needsBuild={}",
+                        ctx.modulePath, ctx.variantName,
+                        existingDex.size, ctx.projectDexFiles.size, ctx.needsBuild,
+                    )
+                } else if (ctx.needsBuild) {
+                    LOG.warn(
+                        "No dex files for {} - build required before preview can be loaded",
+                        ctx.modulePath,
+                    )
+                    return@runCatching InitializationResult.NeedsBuild(
+                        ctx.modulePath, ctx.variantName,
+                    )
+                } else {
+                    // needsBuild=false 但 dex 也没有 — 异常状态
+                    LOG.warn("No project DEX files resolved for {}", filePath)
+                    return@runCatching InitializationResult.Failed(
+                        "No project DEX files found. Run a Gradle build first " +
+                            "to produce the dex artifacts.",
+                    )
+                }
             }
 
-            if (ctx.projectDexFiles.isEmpty()) {
-                LOG.warn("No project DEX files resolved for {}", filePath)
-                return@runCatching InitializationResult.Failed(
-                    "No project DEX files found. Run a Gradle build first to produce the dex artifacts."
-                )
-            }
-
-            LOG.info(
-                "Repository ready: module={}, variant={}, projectDexFiles={}",
-                ctx.modulePath,
-                ctx.variantName,
-                ctx.projectDexFiles.size,
-            )
             InitializationResult.Ready(ctx)
         }
     }
-
-    private fun requireProjectContext(): ProjectContext =
-        projectContext
-            ?: error("Repository not initialized. Call initialize() first.")
 
     override suspend fun compilePreview(
         source: String,
         parsedSource: ParsedPreviewSource
     ): Result<CompilationResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val context = requireProjectContext()
+            val context = projectContext ?: throw IllegalStateException(
+                "Repository not initialized. Call initialize() first."
+            )
+
             val fileName = parsedSource.className?.removeSuffix("Kt") ?: "Preview"
             val generatedClassName = "${fileName}Kt"
             val fullClassName = "${parsedSource.packageName}.$generatedClassName"
 
-            val dexFiles = context.projectDexFiles.filter { it.exists() }
+            // v3.1: 直接跑 gradle 拿 dex. 不再 K2 + D8 进程内编译.
+            runGradleAssemble(context)
+
+            // 重新解析 (gradle 跑完可能新增 dex)
+            val refreshedContext = openedFilePath
+                ?.let { projectContextSource.resolveContext(it) }
+                ?: context
+            projectContext = refreshedContext
+
+            val dexFiles = refreshedContext.projectDexFiles.filter { it.exists() }
             if (dexFiles.isEmpty()) {
                 throw CompilationException(
-                    "No project DEX files available. Run a Gradle build first to produce the dex artifacts."
+                    message = "No project DEX files found after Gradle build. " +
+                        "Please run an assemble task first."
                 )
             }
 
-            // dex 加载是 ComposeClassLoader 的职责, 这里只透传 dex 列表. UI 层会把
-            // 第一个 dex 当作 target dex 透传给 ComposableRenderer, ComposeClassLoader
-            // 会用全部 dex 列表构造 isolated classloader 来解析 target class.
-            val targetDex = dexFiles.first()
+            // previewDex: 取用户 Composable 所在的 dex. mergeProjectDex* 之类合并 dex
+            // 通常排在前面, 但用户代码也可能被 d8 切到 project_dex_archive. 用第一个
+            // 存在的 dex 作为预览入口, 其它 dex 仍通过 projectDexFiles 一并加载.
+            val previewDex = dexFiles.first()
 
             LOG.info(
-                "Preview compiled via gradle-dex: {} (target dex: {}, {} project dex files)",
-                fullClassName,
-                targetDex.absolutePath,
-                dexFiles.size,
+                "Preview ready: {} ({} previews, {} project DEX files)",
+                fullClassName, parsedSource.previewConfigs.size, dexFiles.size,
             )
 
             CompilationResult(
-                dexFile = targetDex,
+                dexFile = previewDex,
                 className = fullClassName,
                 projectDexFiles = dexFiles,
             )
         }
     }
 
-    override fun computeSourceHash(source: String): String {
-        // source hash 之前是给 DexCache 用的, 现在没有进程内 dex 缓存, 保留接口以
-        // 兼容上层调用方, 返回一个稳定的 hash 让上层做 UI 缓存键 (例如避免在用户
-        // 编辑器内光标变化时重渲染).
-        return java.util.UUID.nameUUIDFromBytes(source.toByteArray(Charsets.UTF_8)).toString()
+    /**
+     * 跑 gradle `assemble<Variant>` 拿 dex 产物. v3.1 唯一构建路径.
+     *
+     * - 模块: `${modulePath}:assemble<Variant>`
+     * - 根项目: `assemble<Variant>`
+     *
+     * 如果 BuildService 已经在跑, 直接报错让上层提示"build 已在进行中".
+     */
+    private fun runGradleAssemble(context: ProjectContext) {
+        val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
+            ?: throw CompilationException("BuildService is unavailable.")
+
+        if (buildService.isBuildInProgress) {
+            throw CompilationException(
+                "Build is already in progress. Please wait for it to finish."
+            )
+        }
+
+        val capitalizedVariant = context.variantName.replaceFirstChar { it.uppercaseChar() }
+        val modulePath = context.modulePath?.takeIf { it.isNotBlank() }
+        val task = if (modulePath != null) {
+            "$modulePath:assemble$capitalizedVariant"
+        } else {
+            "assemble$capitalizedVariant"
+        }
+
+        LOG.info("Running gradle task for preview: {}", task)
+        val result = runCatching {
+            buildService.executeTasks(task).get(15, TimeUnit.MINUTES)
+        }.getOrElse { e ->
+            throw CompilationException("Gradle task '$task' failed: ${e.message}")
+        }
+
+        if (!result.isSuccessful) {
+            throw CompilationException(
+                "Gradle task '$task' did not complete successfully. " +
+                    "Check build output for details."
+            )
+        }
     }
 
     override fun reset() {
         projectContext = null
         openedFilePath = null
+        LOG.debug("Repository reset")
     }
 }

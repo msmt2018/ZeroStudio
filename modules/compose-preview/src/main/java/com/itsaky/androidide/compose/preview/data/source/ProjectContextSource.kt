@@ -58,24 +58,21 @@ class ProjectContextSource {
 
         val projectDexFiles = module.getRuntimeDexFiles().toList()
         val variantName = (module as? AndroidModule)?.getSelectedVariant()?.name ?: "debug"
-        // gradle-dex 已经是唯一路径. 这里判定 "项目还没构建过" 的策略：
-        // 1) 中间产物 (intermediateClasspaths): `assembleDebug` 走通后会写到
-        //    `build/tmp/kotlin-classes/<variant>` 与 `build/intermediates/javac/<variant>/classes`
-        // 2) 运行期 dex (projectDexFiles): AGP mergeDex 后会写到
-        //    `build/intermediates/dex/<variant>` 与 `build/intermediates/project_dex_archive/<variant>`
-        //
-        // 之前只看 intermediateClasspaths 会在两种情况下误判 needsBuild=true, 跟
-        // 用户反馈的 bug 完全一致：
-        //   - 增量构建: AGP 复用上一次的 class 缓存, intermediateClasspaths 路径下
-        //     没有任何文件 (仅 jar 缓存命中), 但 dex 已经被重新生成出来
-        //   - 纯 K2 cache: 只跑过 KSP / K2 流水线, javac 中间产物被 skip, 但 dex
-        //     仍然在 project_dex_archive 下可见
-        //
-        // 因此只要 intermediateClasspaths 或 projectDexFiles 任意一组非空, 都视为
-        // "项目已经构建过, 可以走 dex 加载路径", 避免一直停在 NeedsBuild 状态。
-        val hasIntermediateArtifacts = intermediateClasspaths.isNotEmpty()
-        val hasRuntimeDex = projectDexFiles.isNotEmpty()
-        val needsBuild = !hasIntermediateArtifacts && !hasRuntimeDex
+        // 【关键修复】之前只看 intermediateClasspaths.isEmpty(), 但 build 成功后
+        // intermediateClasspaths 仍然可能为空 (variant artifact 没扫到), 导致
+        // needsBuild 永远为 true, 预览页一直在 NeedsBuild / Ready 之间反复横跳.
+        // 现在的判定 (只要任一为真就重建):
+        //   1) forceGradleDexing 强制重建
+        //   2) intermediateClasspaths 为空
+        //   3) projectDexFiles 为空 (没找到任何 dex, 一定没构建)
+        //   4) 任何一个 dex 文件不存在 (构建中断/失败留下的)
+        val anyDexMissing = projectDexFiles.any { dexFile ->
+            !dexFile.exists()
+        }
+        val needsBuild = forceGradleDexing ||
+            intermediateClasspaths.isEmpty() ||
+            projectDexFiles.isEmpty() ||
+            anyDexMissing
 
         LOG.info("Found {} total classpaths ({} compile, {} intermediate) for module: {}",
             compileClasspaths.size,
