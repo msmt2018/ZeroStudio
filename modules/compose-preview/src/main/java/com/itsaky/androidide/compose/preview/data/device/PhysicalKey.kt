@@ -29,6 +29,9 @@ import androidx.compose.runtime.Immutable
  * v2.1 P0 只渲染矩形 + 文字 (不做 3D 仿真 / 凹凸效果). P1 增强时
  * 可以叠加渐变 / 阴影 / 颜色等.
  *
+ * v3.5 增 [rotated] 方法: 按设备方向旋转按键坐标 + 尺寸. 横屏时物理按键
+ * 位置自然变化 (电源键从右移到顶, 音量键从左移到上).
+ *
  * 坐标定义:
  * - 屏幕 (Screen) 坐标系: 原点 = 屏幕左上角, 单位 dp
  * - [positionXdp] / [positionYdp] 是按键**中心点**相对屏幕左上角的偏移
@@ -49,6 +52,43 @@ sealed class PhysicalKey {
 
     /** 按键显示名 (Compose 渲染时用, 例如 "Power" / "Vol+" / "Cam") */
     abstract val displayName: String
+
+    /**
+     * 【v3.5】按 [orientation] 旋转返回新按键. 旋转 90° 时:
+     * - positionXdp, positionYdp 互换并翻转 (用 [DeviceOrientation.rotateCoord])
+     * - widthDp, heightDp 互换
+     *
+     * @param orientation 目标方向
+     * @param originalScreenWidthDp 物理设备"自然方向" (竖屏) 屏幕宽
+     * @param originalScreenHeightDp 物理设备"自然方向" (竖屏) 屏幕高
+     *
+     * 注意: 输入的 (originalScreenWidthDp, originalScreenHeightDp) 必须用
+     * 物理设备的"竖屏"尺寸, 不是 [DeviceProfile.effectiveWidthDp]. 因为
+     * [positionXdp] / [positionYdp] 在 catalog 里是按"竖屏"定义的.
+     */
+    fun rotated(
+        orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation,
+        originalScreenWidthDp: Float,
+        originalScreenHeightDp: Float,
+    ): PhysicalKey {
+        if (orientation == com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT) {
+            return this
+        }
+        val (nx, ny) = orientation.rotateCoord(
+            x = positionXdp,
+            y = positionYdp,
+            originalWidth = originalScreenWidthDp,
+            originalHeight = originalScreenHeightDp,
+        )
+        val (nw, nh) = orientation.rotateSize(widthDp, heightDp)
+        return when (this) {
+            is Power -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+            is VolumeUp -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+            is VolumeDown -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+            is Camera -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+            is Assistant -> copy(positionXdp = nx, positionYdp = ny, widthDp = nw, heightDp = nh)
+        }
+    }
 
     /**
      * 电源键 (绝大多数手机在右侧).
@@ -138,13 +178,29 @@ sealed class PhysicalKey {
         )
 
         /**
-         * iPhone (左侧音量 + 静音, 右侧电源). 静音键用 VolUp 占位.
+         * iPhone (左侧音量 + Action Button, 右侧电源). 静音键被
+         * iPhone 15 Pro+ 替换为 Action Button.
+         *
+         * 按真实 iPhone 15 Pro Max 设备图物理键位置 (相对设备原始 dp):
+         * - 左侧 Action Button y ≈ screenHeight × 14%
+         * - 左侧 Vol+ y ≈ screenHeight × 18%
+         * - 左侧 Vol- y ≈ screenHeight × 22%
+         * - 右侧 Power y ≈ screenHeight × 18%
+         *
+         * 屏幕宽 / 高比例固定为 9:19.5, 因此 screenHeight ≈ screenWidthDp × 2.167.
+         * 实际 y 坐标用 screenWidthDp × 0.305 ~ 0.480 系数计算.
          */
-        fun iphoneKeys(screenWidthDp: Float): List<PhysicalKey> = listOf(
-            VolumeUp(positionXdp = -6f, positionYdp = 280f),
-            VolumeDown(positionXdp = -6f, positionYdp = 320f),
-            Power(positionXdp = screenWidthDp + 6f, positionYdp = 480f)
-        )
+        fun iphoneKeys(screenWidthDp: Float): List<PhysicalKey> {
+            val h = screenWidthDp * 2.167f
+            return listOf(
+                // 左侧 Action Button (iPhone 15 Pro+) — 替代静音键
+                Assistant(positionXdp = -6f, positionYdp = h * 0.14f),
+                VolumeUp(positionXdp = -6f, positionYdp = h * 0.18f),
+                VolumeDown(positionXdp = -6f, positionYdp = h * 0.22f),
+                // 右侧 Power (Side button) — 屏幕中上部
+                Power(positionXdp = screenWidthDp + 6f, positionYdp = h * 0.18f)
+            )
+        }
 
         /** 无按键 (平板 / 折叠屏内屏 / 桌面模式 / 自定义) */
         val NO_KEYS: List<PhysicalKey> = emptyList()

@@ -219,9 +219,9 @@ object DeviceCatalog {
         manufacturer = "Apple", model = "iPhone 15 Pro", osVersion = "iOS 17",
         widthPx = 1179, heightPx = 2556, densityDpi = 460,
         cornerRadiusDp = 50f,
-        cutout = CutoutGeometry.Notch(
+        cutout = CutoutGeometry.DynamicIsland(
             widthDp = 126f, heightDp = 37f,
-            anchor = CutoutGeometry.Anchor.TOP_CENTER, cornerRadiusDp = 18f
+            cornerRadiusDp = 18f
         ),
         bezels = Bezels(topDp = 37f, bottomDp = 24f, leftDp = 4f, rightDp = 4f),
         physicalKeys = PhysicalKey.iphoneKeys(393f),
@@ -234,12 +234,12 @@ object DeviceCatalog {
         manufacturer = "Apple", model = "iPhone 15 Pro Max", osVersion = "iOS 17",
         widthPx = 1290, heightPx = 2796, densityDpi = 460,
         cornerRadiusDp = 50f,
-        cutout = CutoutGeometry.Notch(
+        cutout = CutoutGeometry.DynamicIsland(
             widthDp = 130f, heightDp = 38f,
-            anchor = CutoutGeometry.Anchor.TOP_CENTER, cornerRadiusDp = 19f
+            cornerRadiusDp = 19f
         ),
         bezels = Bezels(topDp = 38f, bottomDp = 26f, leftDp = 4f, rightDp = 4f),
-        physicalKeys = PhysicalKey.iphoneKeys(430f),
+        physicalKeys = PhysicalKey.iphoneKeys(449f),
         chassisColor = Color(0xFF2A2A2C),
     )
 

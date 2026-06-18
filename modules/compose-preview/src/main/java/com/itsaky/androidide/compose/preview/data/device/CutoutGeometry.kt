@@ -83,6 +83,25 @@ sealed class CutoutGeometry {
     ) : CutoutGeometry()
 
     /**
+     * iPhone 14 Pro+ 灵动岛 (Dynamic Island).
+     *
+     * 跟 [Notch] 形状类似 (顶部居中药丸), 但**有动画**: 屏幕闲置时
+     * 收缩成药丸形, 显示通知 / 音乐 / 计时器时展开成更宽的矩形. 在
+     * Compose preview 里我们只渲染静态形态, 不模拟动画.
+     *
+     * @param widthDp 切口宽度 (126 ~ 130 dp, 视设备而异)
+     * @param heightDp 切口高度 (37 ~ 38 dp)
+     * @param cornerRadiusDp 切口圆角 (药丸, ~18dp)
+     * @param anchor 顶部锚点 (默认 TOP_CENTER, 横屏时由 [com.itsaky.androidide.compose.preview.ui.DeviceOrientation.rotateAnchor] 调整)
+     */
+    data class DynamicIsland(
+        val widthDp: Float,
+        val heightDp: Float,
+        val cornerRadiusDp: Float = 18f,
+        override val anchor: Anchor = Anchor.TOP_CENTER,
+    ) : CutoutGeometry()
+
+    /**
      * 挖孔屏 / 针孔屏 (小圆孔).
      *
      * 典型设备: Pixel 6/7/8 (居中), 三星 S24 (居中), 小米 14 (居中),
@@ -137,11 +156,10 @@ sealed class CutoutGeometry {
             cornerRadiusDp = 15f
         )
 
-        /** iPhone 15 Pro 风格 Dynamic Island (126 × 37 dp, 顶部居中) */
-        val DYNAMIC_ISLAND: Notch = Notch(
+        /** iPhone 14 Pro+ 灵动岛 (126 × 37 dp, 顶部居中) — v3.2 用独立类型 */
+        val DYNAMIC_ISLAND: DynamicIsland = DynamicIsland(
             widthDp = 126f,
             heightDp = 37f,
-            anchor = Anchor.TOP_CENTER,
             cornerRadiusDp = 18f
         )
 

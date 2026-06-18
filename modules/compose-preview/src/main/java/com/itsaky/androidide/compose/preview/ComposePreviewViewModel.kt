@@ -22,22 +22,40 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.compose.preview.compiler.CompileDiagnostic
+import com.itsaky.androidide.compose.preview.data.device.DesktopApp
 import com.itsaky.androidide.compose.preview.data.device.DeviceCatalog
+import com.itsaky.androidide.compose.preview.data.model.DebugModeState
+import com.itsaky.androidide.compose.preview.data.model.DebugSubMode
+import com.itsaky.androidide.compose.preview.data.model.LayoutNodeSnapshot
 import com.itsaky.androidide.compose.preview.data.repository.CompilationException
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepository
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepositoryImpl
 import com.itsaky.androidide.compose.preview.data.repository.InitializationResult
+import com.itsaky.androidide.compose.preview.data.source.ProjectContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.itsaky.androidide.compose.preview.runtime.LayoutInspector
+import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
+import com.itsaky.androidide.compose.preview.data.source.ComposableFunctionInfo
+import com.itsaky.androidide.compose.preview.data.source.ComposableSymbolExtractor
+import com.itsaky.androidide.compose.preview.data.source.ProjectContextSource
 import com.itsaky.androidide.compose.preview.domain.PreviewSourceParser
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
+import com.itsaky.androidide.compose.preview.editor.AttributeEditResult
+import com.itsaky.androidide.compose.preview.editor.ComposeAttributeEditor
+import com.itsaky.androidide.compose.preview.editor.NamedParameter
 import com.itsaky.androidide.compose.preview.ui.DeviceProfile
 import com.itsaky.androidide.compose.preview.ui.SystemBarsTheme
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -102,10 +120,35 @@ data class PreviewConfig(
     val fontScale: Float? = null,
     val isLightDark: Boolean = false,
     val parameterProviderName: String? = null,
+    // v3.4 增字段 — 完整 @Preview 标注支持
+    /**
+     * `@Preview(backgroundColor = 0xFFFFFFFFL)` — 预览背景色 (ARGB int).
+     * 为 null 时不应用背景色 (跟随设备套壳).
+     */
+    val backgroundColor: Int? = null,
+    /**
+     * `@Preview(showBackground = true)` — 是否显示背景色. 默认 false.
+     * `backgroundColor` 为 null 时, 默认白色.
+     */
+    val showBackground: Boolean = false,
+    /**
+     * `@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)` — 强制 UI 模式.
+     * 取值: `Configuration.UI_MODE_NIGHT_NO` (16) / `UI_MODE_NIGHT_YES` (32).
+     * null 时跟随系统主题.
+     */
+    val uiMode: Int? = null,
+    /**
+     * `@Preview(showSystemUi = true)` — 是否在 preview 中显示系统栏.
+     * 默认 false (我们的 v3.4 由 `DeviceConfig.showStatusBar` / `showNavigationBar` 控制).
+     */
+    val showSystemUi: Boolean = false,
 )
 
 /**
  * 设备 + 系统栏 + 边框 配置 v2.1.
+ *
+ * v3.5 增 [orientation] 字段: 控制横屏 / 竖屏. DeviceFrame 据此切换
+ * 有效宽高 + 旋转 cutout / 物理键 / 铰链方向. 默认 PORTRAIT.
  */
 @Immutable
 data class DeviceConfig(
@@ -116,6 +159,13 @@ data class DeviceConfig(
     val showCutout: Boolean = true,
     val showChassis: Boolean = true,
     val useGestureNav: Boolean = false,
+    // 【PR-A】真实设备模拟开关. true=套壳显示; false=无外壳直接显示 compose UI.
+    val deviceSimEnabled: Boolean = false,
+    // 【v3.5】横竖屏切换. 不会修改 [profile] 本身, 仅在渲染时按 orientation 计算
+    // effective widthDp/heightDp + 旋转 cutout/物理键/铰链. 切换后保持
+    // 当前选中设备不变.
+    val orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation =
+        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT,
 )
 
 /**
@@ -127,7 +177,15 @@ data class ViewportState(
     val offsetXdp: Float = 0f,
     val offsetYdp: Float = 0f,
     val fitMode: FitMode = FitMode.FIT_WIDTH,
-)
+) {
+    /**
+     * 是否处于"可平移"状态 — 即 zoom 偏离 1.0 (放大或缩小).
+     * 放大或缩小时用户都可以触摸拖动被裁掉的区域.
+     * zoom == 1.0 时不显示平移状态, 即便 [offsetXdp] / [offsetYdp] 也不变.
+     */
+    val canPan: Boolean
+        get() = zoom > 0.0001f && (zoom > 1.001f || zoom < 0.999f)
+}
 
 enum class FitMode { FIT_WIDTH, FIT_HEIGHT, ACTUAL_SIZE }
 
@@ -139,7 +197,15 @@ enum class PreviewTheme { Light, Dark, Custom }
 @OptIn(FlowPreview::class)
 class ComposePreviewViewModel(
     private val repository: ComposePreviewRepository = ComposePreviewRepositoryImpl(),
-    private val sourceParser: PreviewSourceParser = PreviewSourceParser()
+    private val sourceParser: PreviewSourceParser = PreviewSourceParser(),
+    // 【PR-C】桌面 launcher 用 — 解析 manifest android:icon + 拿到桌面 app 信息.
+    private val projectContextSource: ProjectContextSource = ProjectContextSource(),
+    // 【v3.3】调试模式: 从 .kt 源码中提取 @Composable 函数列表, 给调试 toolbar 下拉用.
+    private val composableSymbolExtractor: ComposableSymbolExtractor = ComposableSymbolExtractor(),
+    // 【v3.3.1】布局检查器 — 反射读 ComposeView 真实 LayoutNode 树, 给 UI / 底部抽屉用.
+    val layoutInspector: LayoutInspector = LayoutInspector(),
+    // 【v3.3.1】属性编辑器 — dex → smali → java → 改 .kt → 重新 build, 给属性编辑模式用.
+    val attributeEditor: ComposeAttributeEditor = ComposeAttributeEditor(),
 ) : ViewModel() {
 
     private val _previewState = MutableStateFlow<PreviewState>(PreviewState.Idle)
@@ -167,6 +233,108 @@ class ComposePreviewViewModel(
 
     private val _debugEnabled = MutableStateFlow(false)
     val debugEnabled: StateFlow<Boolean> = _debugEnabled.asStateFlow()
+    /**
+     * 【PR-B】全屏模式. 默认为 [FullscreenMode.OFF] (非全屏).
+     *
+     * 单击全屏按钮: 切 [FullscreenMode.WITH_SYSTEM_BARS] (带系统状态栏的全屏).
+     * 长按全屏按钮: 弹菜单, 用户选 [FullscreenMode.WITH_SYSTEM_BARS] 或
+     * [FullscreenMode.WITHOUT_SYSTEM_BARS] (隐藏系统状态栏的纯全屏).
+     * 退出全屏 (右上角 X 按钮): 设回 [FullscreenMode.OFF].
+     */
+    private val _fullscreenMode = MutableStateFlow(FullscreenMode.OFF)
+    val fullscreenMode: StateFlow<FullscreenMode> = _fullscreenMode.asStateFlow()
+
+    /**
+     * 【PR-B】true=处于全屏 (无论是否隐藏系统状态栏). 由 [fullscreenMode] 派生,
+     * 不需要单独维护. UI 用这个判断 toolbar 显示 / 隐藏 + 退出按钮.
+     */
+    val isFullscreen: StateFlow<Boolean> = _fullscreenMode
+        .map { it != FullscreenMode.OFF }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // === v3.3 调试模式 ===
+
+    /**
+     * 【v3.3】调试模式状态. 包含:
+     * - [DebugModeState.enabled] 调试模式总开关, 控制 Debug Toolbar 是否显示
+     * - [DebugModeState.analysisMode] 布局分析模式 (虚线 + 点击节点查看属性)
+     * - [DebugModeState.editMode] 布局编辑模式 (在分析模式上 + 隐藏节点)
+     * - [DebugModeState.selectedNodeId] 当前选中的布局节点 id
+     * - [DebugModeState.hiddenNodeIds] 被隐藏的节点 id 集合
+     * - [DebugModeState.showRecompositionHighlight] Recomposition 高亮开关
+     * - [DebugModeState.showErrorBadge] 错误 badge 开关
+     */
+    private val _debugMode = MutableStateFlow(DebugModeState())
+    val debugMode: StateFlow<DebugModeState> = _debugMode.asStateFlow()
+
+    /**
+     * 【v3.3】当前 .kt 源码中找到的全部 @Composable 函数 (按行号排序).
+     * 每次 [onSourceChanged] 时通过 [composableSymbolExtractor] 重新抽取.
+     */
+    private val _composableFunctions = MutableStateFlow<List<ComposableFunctionInfo>>(emptyList())
+    val composableFunctions: StateFlow<List<ComposableFunctionInfo>> = _composableFunctions.asStateFlow()
+
+    /**
+     * 【v3.3.1】当前 ComposeView 真实运行时布局树快照.
+     * 通过反射访问 [LayoutNode] 私有字段 (`_children` / modifier chain) 捕获, 给:
+     * - 底部抽屉 Tab 1 (节点树) 真实嵌套显示
+     * - 节点点击命中检测
+     * - 属性面板 (后续接入)
+     *
+     * 每次 render 完成 / layout 变化时由 Activity / ReadyPanel 调 [captureLayoutSnapshot] 更新.
+     */
+    private val _layoutSnapshot = MutableStateFlow<LayoutNodeSnapshot?>(null)
+    val layoutSnapshot: StateFlow<LayoutNodeSnapshot?> = _layoutSnapshot.asStateFlow()
+
+    /**
+     * 【v3.3.1】快照最后更新时间 (epoch millis). 给"快照过期"判断用.
+     */
+    private val _layoutSnapshotUpdatedAt = MutableStateFlow(0L)
+    val layoutSnapshotUpdatedAt: StateFlow<Long> = _layoutSnapshotUpdatedAt.asStateFlow()
+
+    /**
+     * 【v3.3.1】当前选中节点的属性列表 (从 dex 反编译 + named parameter 解析得到).
+     * 编辑模式时, 属性面板显示这个. 用户修改后调 [editAttribute].
+     *
+     * 来自 [composableFunctions] + 当前 [dexFile] (如果 ready) + 选中节点 (暂时从 className 推断).
+     */
+    private val _selectedNodeAttributes = MutableStateFlow<List<NamedParameter>>(emptyList())
+    val selectedNodeAttributes: StateFlow<List<NamedParameter>> = _selectedNodeAttributes.asStateFlow()
+
+    /**
+     * 【v3.4】属性加载中状态. true = 正在解析 dex 提取 named parameters (耗时操作,
+     * 可能在 IO 线程做 100ms ~ 数秒, 取决于 dex 大小). UI 用这个显示
+     * [CircularProgressIndicator] 替代 Refresh 图标.
+     *
+     * 由 [loadAttributesForSelectedNode] / [refreshAttributes] 内部维护. 外部
+     * Activity 通过 collectAsStateWithLifecycle() 订阅.
+     */
+    private val _isRefreshingAttributes = MutableStateFlow(false)
+    val isRefreshingAttributes: StateFlow<Boolean> = _isRefreshingAttributes.asStateFlow()
+
+    /**
+     * 【v3.3.1】属性编辑结果 (最后一次).
+     */
+    private val _lastAttributeEditResult = MutableStateFlow<AttributeEditResult?>(null)
+    val lastAttributeEditResult: StateFlow<AttributeEditResult?> = _lastAttributeEditResult.asStateFlow()
+
+    // === PR-C 桌面 launcher 模拟 ===
+
+    /**
+     * 【PR-C】桌面上的应用列表 (系统应用占位 + 用户 app). 包含 [DesktopApp.DEFAULT_SYSTEM_APPS]
+     * + 通过 [addUserApp] 加入的当前 project 的 launcher icon. 用于渲染桌面网格 + Dock 栏.
+     */
+    private val _desktopApps = MutableStateFlow(DesktopApp.DEFAULT_SYSTEM_APPS)
+    val desktopApps: StateFlow<List<DesktopApp>> = _desktopApps.asStateFlow()
+
+    /**
+     * 【PR-C】当前在桌面看到的"前台 app". null=显示 launcher 桌面;
+     * 非 null=用户点击了某个 app, "后台"运行 (这里只模拟 launch 状态, 实际仍渲染 preview).
+     *
+     * 用户要求 #1.1: 物理键返回桌面 — `goToHome()` 把这个设为 null.
+     */
+    private val _foregroundApp = MutableStateFlow<DesktopApp?>(null)
+    val foregroundApp: StateFlow<DesktopApp?> = _foregroundApp.asStateFlow()
 
     private val sourceChanges = MutableSharedFlow<SourceUpdate>()
 
@@ -242,6 +410,8 @@ class ComposePreviewViewModel(
 
     fun onSourceChanged(source: String) {
         currentSource = source
+        // 【v3.3】源码变化时同步刷新 @Composable 函数列表, 给调试模式下拉用.
+        refreshComposableFunctions(source)
         val parsed = parseAndValidateSource(source) ?: return
 
         viewModelScope.launch {
@@ -343,6 +513,17 @@ class ComposePreviewViewModel(
         }
     }
 
+    /**
+     * 【v3.3】从调试模式下拉选择一个 @Composable 函数渲染 (不一定需要 @Preview 标注).
+     * 如果该函数不在 @Preview 列表中, 仍然可以渲染, 因为 [PreviewRenderEngine] 通过
+     * 反射调用函数本身.
+     */
+    fun selectComposable(functionName: String) {
+        // 调试模式允许选择任意 @Composable 函数, 不仅仅 @Preview 标注的.
+        _selectedPreview.value = functionName
+        LOG.info("Selected composable: {}", functionName)
+    }
+
     fun getModulePath(): String = modulePath ?: ""
     fun getVariantName(): String = variantName
     fun canTriggerBuild(): Boolean = !modulePath.isNullOrEmpty()
@@ -424,12 +605,104 @@ class ComposePreviewViewModel(
     // === v2.1 新增方法 ===
 
     fun selectDevice(profile: DeviceProfile) {
-        _deviceConfig.value = _deviceConfig.value.copy(profile = profile)
+        _deviceConfig.value = _deviceConfig.value.copy(profile = profile, deviceSimEnabled = true)
+        // 【PR-D】换设备时重置 pan, 不同 profile 的宽高 / 宽高比不同, 旧的
+        // offset 在新设备下可能对应完全不同的位置.
+        resetPan()
         LOG.info("Device selected: {}", profile.displayName)
     }
 
     fun setSystemBarsTheme(theme: SystemBarsTheme) {
         _deviceConfig.value = _deviceConfig.value.copy(systemBarsTheme = theme)
+    }
+
+    /**
+     * 【v3.5】直接设置设备方向. 不会改变 [DeviceConfig.profile], 仅修改
+     * [DeviceConfig.orientation]. UI 重订阅后 [DeviceFrame] 立即用
+     * [DeviceProfile.effectiveWidthDp] / [effectiveHeightDp] / [effectiveCutout] /
+     * [effectivePhysicalKeys] 等旋转后的几何重新布局.
+     *
+     * WATCH / DESKTOP / NONE 形态下, 切方向通常**没有视觉变化** (圆形
+     * 任意方向都是圆; 桌面 launcher 不区分方向). 但为统一 API, 这些
+     * 形态也允许切方向, 内部逻辑自行 ignore 即可.
+     *
+     * @param orientation 目标方向
+     */
+    fun setOrientation(
+        orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation
+    ) {
+        if (_deviceConfig.value.orientation == orientation) return
+        _deviceConfig.value = _deviceConfig.value.copy(orientation = orientation)
+        // 切方向后, 屏幕宽高对调, 旧的 pan offset 可能对应新尺寸的完全不同位置.
+        resetPan()
+        LOG.info("Orientation set to: {}", orientation)
+    }
+
+    /**
+     * 【v3.5】循环切换方向: PORTRAIT → LANDSCAPE → REVERSE_LANDSCAPE →
+     * REVERSE_PORTRAIT → PORTRAIT. 用于顶栏"旋转"按钮单击.
+     *
+     * 跳过 REVERSE_PORTRAIT (180°) 的话, 调 [cycleOrientationFast].
+     */
+    fun cycleOrientation() {
+        val next = when (_deviceConfig.value.orientation) {
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT ->
+                com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE ->
+                com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_LANDSCAPE
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_LANDSCAPE ->
+                com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_PORTRAIT
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_PORTRAIT ->
+                com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT
+        }
+        setOrientation(next)
+    }
+
+    /**
+     * 【v3.5】快切: PORTRAIT ↔ LANDSCAPE (跳过反向). 用于"横竖屏"按钮.
+     */
+    fun cycleOrientationFast() {
+        val next = if (_deviceConfig.value.orientation.isLandscape) {
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT
+        } else {
+            com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE
+        }
+        setOrientation(next)
+    }
+
+    /**
+     * 【v3.2】切换"真实设备模拟"开关. true=套壳显示, false=无外壳直接显示.
+     * 切到 false 时, profile 仍保留, 方便用户切回去.
+     */
+    fun toggleDeviceSim() {
+        _deviceConfig.value = _deviceConfig.value.copy(
+            deviceSimEnabled = !_deviceConfig.value.deviceSimEnabled
+        )
+        // 【PR-D】设备/无设备切换: 父容器尺寸会变, 重置 pan
+        resetPan()
+        LOG.info("Device sim toggled: {}", _deviceConfig.value.deviceSimEnabled)
+    }
+
+    /**
+     * 【PR-B】切换全屏. 默认切到带系统状态栏的全屏. 长按全屏按钮调 [setFullscreenMode].
+     * - OFF -> WITH_SYSTEM_BARS
+     * - WITH_SYSTEM_BARS / WITHOUT_SYSTEM_BARS -> OFF
+     */
+    fun toggleFullscreen() {
+        _fullscreenMode.value = if (_fullscreenMode.value == FullscreenMode.OFF) {
+            FullscreenMode.WITH_SYSTEM_BARS
+        } else {
+            FullscreenMode.OFF
+        }
+        LOG.info("Fullscreen toggled: {}", _fullscreenMode.value)
+    }
+
+    /**
+     * 【PR-B】设置全屏模式 (长按全屏按钮菜单调用).
+     */
+    fun setFullscreenMode(mode: FullscreenMode) {
+        _fullscreenMode.value = mode
+        LOG.info("Fullscreen mode set: {}", mode)
     }
 
     fun toggleSystemBars() {
@@ -440,13 +713,53 @@ class ComposePreviewViewModel(
     }
 
     fun setZoom(zoom: Float) {
+        val coerced = zoom.coerceIn(0.1f, 5.0f)
+        // 【PR-D】zoom 回到 1.0 时清空 pan 偏移, 否则下次放大时会"跳"到之前
+        // 拖到的位置, 体验不自然. zoom 变化 (不是回到 1.0) 也保留 offset, 让用户
+        // 在缩放过程中能维持位置.
+        val newOffsetX = if (coerced in 0.999f..1.001f) 0f else _viewport.value.offsetXdp
+        val newOffsetY = if (coerced in 0.999f..1.001f) 0f else _viewport.value.offsetYdp
         _viewport.value = _viewport.value.copy(
-            zoom = zoom.coerceIn(0.1f, 5.0f)
+            zoom = coerced,
+            offsetXdp = newOffsetX,
+            offsetYdp = newOffsetY,
         )
     }
 
     fun fitZoom() {
-        _viewport.value = ViewportState() // reset to fit
+        // fitZoom 强制重置, 包括 offset
+        _viewport.value = ViewportState()
+    }
+
+    /**
+     * 【PR-D】触摸拖动平移. 上层 (ReadyPanel) 在 zoom 偏离 1.0 时给 zoomed 内容加
+     * `pointerInput + detectDragGestures`, 把 drag delta 转成 dp 后调这个方法.
+     *
+     * 重要: `deltaXDp` / `deltaYDp` 是**手指拖动**的位移 (不是绝对位置), 累加到
+     * 当前 offset 上. ReadyPanel 内需要根据"父容器宽 × zoom"算出 max pan 范围
+     * 做边界 clamp, 防止用户把内容完全拖出屏幕.
+     *
+     * @param maxXDp 父容器可平移的最大 X 范围 (单位 dp). 通常是 (parentWidthDp * (zoom - 1) / 2).
+     * @param maxYDp 父容器可平移的最大 Y 范围 (单位 dp).
+     */
+    fun panBy(deltaXDp: Float, deltaYDp: Float, maxXDp: Float, maxYDp: Float) {
+        val current = _viewport.value
+        if (!current.canPan) return
+        val newX = (current.offsetXdp + deltaXDp).coerceIn(-maxXDp, maxXDp)
+        val newY = (current.offsetYdp + deltaYDp).coerceIn(-maxYDp, maxYDp)
+        if (newX == current.offsetXdp && newY == current.offsetYdp) return
+        _viewport.value = current.copy(offsetXdp = newX, offsetYdp = newY)
+    }
+
+    /**
+     * 【PR-D】重置 pan 到中心 (offsetX=0, offsetY=0). 在以下时机调:
+     * - 切换 deviceSimEnabled (设备/无设备模式布局差异)
+     * - 切换 device profile
+     * - 重新编译完成
+     */
+    fun resetPan() {
+        if (_viewport.value.offsetXdp == 0f && _viewport.value.offsetYdp == 0f) return
+        _viewport.value = _viewport.value.copy(offsetXdp = 0f, offsetYdp = 0f)
     }
 
     fun cycleTheme() {
@@ -461,6 +774,309 @@ class ComposePreviewViewModel(
         _debugEnabled.value = !_debugEnabled.value
     }
 
+    // === v3.3 调试模式方法 ===
+
+    /**
+     * 【v3.3】切换调试模式总开关. 关闭时同时关闭分析模式 / 编辑模式.
+     */
+    fun toggleDebugMode() {
+        val current = _debugMode.value
+        _debugMode.value = if (current.enabled) {
+            DebugModeState() // 全关
+        } else {
+            current.copy(enabled = true)
+        }
+        LOG.info("Debug mode toggled: {}", _debugMode.value.enabled)
+    }
+
+    /**
+     * 【v3.3】切换布局分析模式. 开启时自动开启调试模式, 关闭时不影响总开关.
+     */
+    fun toggleAnalysisMode() {
+        val current = _debugMode.value
+        val nextAnalysis = !current.analysisMode
+        _debugMode.value = current.copy(
+            enabled = true,
+            analysisMode = nextAnalysis,
+            // 进入分析模式时清空选中节点
+            selectedNodeId = if (nextAnalysis) null else current.selectedNodeId,
+        )
+        LOG.info("Analysis mode toggled: {}", nextAnalysis)
+    }
+
+    /**
+     * 【v3.3】切换布局编辑模式. 开启时自动开启调试模式 + 分析模式 (编辑需要先看节点).
+     */
+    fun toggleEditMode() {
+        val current = _debugMode.value
+        val nextEdit = !current.editMode
+        _debugMode.value = current.copy(
+            enabled = true,
+            analysisMode = true,
+            editMode = nextEdit,
+        )
+        LOG.info("Edit mode toggled: {}", nextEdit)
+    }
+
+    /**
+     * 【v3.3】切换 Recomposition 高亮显示. 与分析模式独立, 可单独开.
+     */
+    fun toggleRecompositionHighlight() {
+        val current = _debugMode.value
+        _debugMode.value = current.copy(
+            enabled = true,
+            showRecompositionHighlight = !current.showRecompositionHighlight,
+        )
+    }
+
+    /**
+     * 【v3.3】选中一个布局节点. 由 LayoutInspector 点击时调.
+     */
+    fun selectLayoutNode(nodeId: String?) {
+        _debugMode.value = _debugMode.value.copy(selectedNodeId = nodeId)
+    }
+
+    /**
+     * 【v3.3】隐藏/取消隐藏一个布局节点 (编辑模式).
+     */
+    fun toggleNodeHidden(nodeId: String) {
+        val current = _debugMode.value
+        val newHidden = current.hiddenNodeIds.toMutableSet().apply {
+            if (contains(nodeId)) remove(nodeId) else add(nodeId)
+        }
+        _debugMode.value = current.copy(hiddenNodeIds = newHidden)
+        LOG.info("Node {} hidden={}", nodeId, newHidden.contains(nodeId))
+    }
+
+    /**
+     * 【v3.3】清空所有隐藏节点.
+     */
+    fun clearHiddenNodes() {
+        _debugMode.value = _debugMode.value.copy(hiddenNodeIds = emptySet())
+    }
+
+    /**
+     * 【v3.3】从当前 .kt 源码中抽取 @Composable 函数列表. 通常由 [onSourceChanged] 触发.
+     */
+    private fun refreshComposableFunctions(source: String) {
+        _composableFunctions.value = composableSymbolExtractor.extract(source)
+    }
+
+    // === v3.3.1 布局快照 + 属性编辑 ===
+
+    /**
+     * 【v3.3.1】从给定的 [composeView] 捕获布局快照, 更新 [_layoutSnapshot].
+     * Activity / ReadyPanel 在 layout 变化时调. 失败 silent, 保留旧快照.
+     *
+     * @param composeView [androidx.compose.ui.platform.ComposeView], 已被 RenderEngine 注入.
+     * @param force 是否强制刷新 (默认 debounce 100ms, 避免 layout 变化频繁时开销过大).
+     */
+    fun captureLayoutSnapshot(composeView: android.view.View?, force: Boolean = false) {
+        if (composeView == null) {
+            _layoutSnapshot.value = null
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (!force && now - _layoutSnapshotUpdatedAt.value < 100) {
+            // debounce 100ms
+            return
+        }
+        val snapshot = layoutInspector.captureSnapshot(
+            composeView = composeView,
+            hiddenIds = _debugMode.value.hiddenNodeIds,
+        )
+        if (snapshot != null) {
+            _layoutSnapshot.value = snapshot
+            _layoutSnapshotUpdatedAt.value = now
+            LOG.debug("Layout snapshot captured: {} nodes total", countNodes(snapshot))
+        }
+    }
+
+    /**
+     * 【v3.3.1】计算 LayoutNodeSnapshot 树的总节点数.
+     */
+    private fun countNodes(root: LayoutNodeSnapshot): Int {
+        return 1 + root.children.sumOf { countNodes(it) }
+    }
+
+    /**
+     * 【v3.3.1】清空布局快照. render engine detach / 切换设备时调.
+     */
+    fun clearLayoutSnapshot() {
+        _layoutSnapshot.value = null
+        _layoutSnapshotUpdatedAt.value = 0L
+    }
+
+    // === v3.3.1 属性编辑 (dex → smali → .kt → build) ===
+
+    /**
+     * 【v3.3.1 简化】从 dex 中提取选中节点的属性列表.
+     *
+     * @param dexFile 当前 preview 的 dex.
+     * @param className 当前 preview 的 class FQN.
+     * @param methodName 当前选中的 @Composable 方法名.
+     *
+     * 端到端 (v3.3.1 简化版, 移除 CFR + ComposableFunctionDescriptor 中间步骤):
+     * 1. [ComposeAttributeEditor.extractAttributesFromDex] 调 [DexAnalyzer.dexToJava]
+     *    把 dex 拆解为 smali 风格文本 (单步, 不再分 analyze + dexToJava)
+     * 2. 在源码中找 `methodName(...)` 段内的 `const-string` 指令, 提字符串值
+     * 3. 输出 `List<NamedParameter>` 给 UI 属性面板显示
+     *
+     * 注: 完整 named parameter 在 kotlin→dex 编译后已丢失, dex 里只有位置参数 +
+     * 寄存器. 简化版只能拿到 const-string 值. 真实场景中要改属性应该走更可靠的
+     * 路径 — 直接改 .kt 源文件, 由用户指定 methodName + line + parameterName.
+     *
+     * v3.4: 改在 viewModelScope (默认 Main 调度) 启动, 内部置
+     * [_isRefreshingAttributes] = true 让 UI 显示加载指示. 解析完成后 (无论
+     * 成功 / 失败) 都置回 false. 之前 v3.3.1 同步在调用方线程执行, UI 没反馈.
+     */
+    fun loadAttributesForSelectedNode(
+        dexFile: java.io.File?,
+        className: String?,
+        methodName: String?,
+    ) {
+        if (dexFile == null || className == null || methodName == null) {
+            _selectedNodeAttributes.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            _isRefreshingAttributes.value = true
+            try {
+                val attrs = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    attributeEditor.extractAttributesFromDex(dexFile, className, methodName)
+                }
+                _selectedNodeAttributes.value = attrs
+                LOG.info("Loaded {} attributes for {}.{}", attrs.size, className, methodName)
+            } catch (e: Throwable) {
+                LOG.warn("loadAttributesForSelectedNode failed: {}", e.message)
+                _selectedNodeAttributes.value = emptyList()
+            } finally {
+                _isRefreshingAttributes.value = false
+            }
+        }
+    }
+
+    /**
+     * 【v3.4】手动刷新属性列表. 由 [AttributeEditPanel] 头部 Refresh 按钮触发.
+     *
+     * 等价于 [loadAttributesForSelectedNode] (用当前 previewState 里的 dexFile +
+     * className + selectedPreview). 抽出独立方法避免 UI 层组装参数.
+     *
+     * 与 [loadAttributesForSelectedNode] 的区别: 这个方法**强制重新加载** (绕过
+     * "如果之前已加载过就跳过" 的优化). 用户主动点 Refresh 时总应该重读 dex,
+     * 因为 .kt 源文件可能已经改了, 但 dex 还没重建 (例如还没触发 build).
+     */
+    fun refreshAttributes() {
+        val readyState = _previewState.value as? PreviewState.Ready ?: return
+        val methodName = _selectedPreview.value
+            ?: readyState.previewConfigs.firstOrNull()?.functionName
+            ?: return
+        loadAttributesForSelectedNode(readyState.dexFile, readyState.className, methodName)
+    }
+
+    /**
+     * 【v3.3.1】修改属性 — 端到端:
+     * 1. [ComposeAttributeEditor.editKtFile] 写 .kt 源文件
+     * 2. 触发 BuildService.executeTasks("assembleDebug")
+     * 3. build 完成后, ViewModel 重新 load dex + render
+     *
+     * @param projectRoot .kt 源文件所在 module 的根目录.
+     * @param className class FQN, 用来反推 .kt 源文件路径.
+     * @param callLine 目标调用行 (从 dex line table 拿).
+     * @param parameterName 要修改的参数名.
+     * @param newValue 新值.
+     * @param onBuildTriggered build 触发后回调, Activity 调 BuildService.
+     */
+    fun editAttribute(
+        projectRoot: java.io.File?,
+        className: String,
+        callLine: Int,
+        parameterName: String,
+        newValue: String,
+        onBuildTriggered: (String) -> Unit = {},
+    ) {
+        if (projectRoot == null) {
+            _lastAttributeEditResult.value = AttributeEditResult.Failure("未配置 projectRoot")
+            return
+        }
+        val ktFile = attributeEditor.findKtFile(className, projectRoot)
+        if (ktFile == null) {
+            _lastAttributeEditResult.value =
+                AttributeEditResult.Failure("未找到 .kt 文件: $className (projectRoot=${projectRoot.absolutePath})")
+            return
+        }
+        val result = attributeEditor.editKtFile(ktFile, callLine, parameterName, newValue)
+        _lastAttributeEditResult.value = result
+        if (result is AttributeEditResult.Success) {
+            // 触发 build
+            onBuildTriggered(result.taskName)
+        }
+    }
+
+    /**
+     * 【v3.3.1】清空最后一次编辑结果.
+     */
+    fun clearAttributeEditResult() {
+        _lastAttributeEditResult.value = null
+    }
+
+    // === PR-C 桌面 launcher 方法 ===
+
+    /**
+     * 【PR-C】把当前 project 的 launcher app 加入桌面 (首次启动桌面时调用).
+     * 用 [DesktopApp.iconResId] = `0` 时 DesktopLauncher 会去解析 manifest android:icon 拿真实图标.
+     */
+    fun addUserApp(app: DesktopApp) {
+        if (_desktopApps.value.any { it.id == app.id }) return
+        _desktopApps.value = _desktopApps.value + app
+        LOG.info("Added user app to desktop: {} ({})", app.label, app.id)
+    }
+
+    /**
+     * 【PR-C】点击桌面应用 — 模拟 launch 流程. isClickable=false 的系统应用占位
+     * 不响应, 真实点击 (用户要求 #1.1 "模拟系统 app 不响应").
+     */
+    fun launchDesktopApp(app: DesktopApp) {
+        if (!app.isClickable) {
+            LOG.info("App {} is not clickable, ignoring launch", app.id)
+            return
+        }
+        _foregroundApp.value = app
+        LOG.info("Launched desktop app: {}", app.label)
+    }
+
+    /**
+     * 【PR-C】物理键 (Home) 返回桌面. 模拟"按 home 键后台 app" — 把前台 app 置空.
+     * PR-C 用户要求 #1.1: "物理键返回桌面".
+     */
+    fun goToHome() {
+        if (_foregroundApp.value != null) {
+            LOG.info("Going to home, foreground app was: {}", _foregroundApp.value?.label)
+        }
+        _foregroundApp.value = null
+    }
+
+    /**
+     * 【PR-C】从 manifest 解析 application 信息, 把当前 project 的 launcher app
+     * 加入桌面. 一般在 ViewModel.initialize 后, Ready 第一次进入时调一次.
+     *
+     * 用 [modulePath] 找 `src/main/AndroidManifest.xml`, 解析 `<application android:icon>`
+     * + `android:label`. 拿不到就用占位.
+     */
+    fun loadUserApp(modulePath: String?) {
+        if (modulePath.isNullOrBlank()) return
+        val info = projectContextSource.loadApplicationIcon(modulePath) ?: return
+
+        val app = DesktopApp(
+            id = info.packageName ?: "user.app",
+            label = info.label ?: "My App",
+            packageName = info.packageName,
+            iconResName = info.iconResName,
+            isClickable = true, // 用户 app 可点击
+        )
+        addUserApp(app)
+    }
+
     override fun onCleared() {
         super.onCleared()
         repository.reset()
@@ -471,4 +1087,18 @@ class ComposePreviewViewModel(
         private val LOG = LoggerFactory.getLogger(ComposePreviewViewModel::class.java)
         private const val DEBOUNCE_MS = 500L
     }
+}
+
+/**
+ * 【PR-B】全屏模式.
+ *
+ * - [OFF]: 非全屏, 顶栏显示.
+ * - [WITH_SYSTEM_BARS]: 全屏, 但保留手机系统状态栏 (用户在 APK 安装运行后看到的样子).
+ * - [WITHOUT_SYSTEM_BARS]: 纯全屏, 隐藏系统状态栏, 适合查看实际应用沉浸式全屏效果.
+ */
+@Immutable
+enum class FullscreenMode {
+    OFF, WITH_SYSTEM_BARS, WITHOUT_SYSTEM_BARS;
+
+    val isFullscreen: Boolean get() = this != OFF
 }

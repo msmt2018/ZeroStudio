@@ -22,23 +22,31 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,21 +54,40 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
+import com.itsaky.androidide.compose.preview.ui.AttributeEditPanel
+import com.itsaky.androidide.compose.preview.ui.ComposableFunctionPicker
+import com.itsaky.androidide.compose.preview.ui.DebugToolbar
+import com.itsaky.androidide.compose.preview.ui.DebugToolbarActions
+import com.itsaky.androidide.compose.preview.ui.DebugToolbarState
 import com.itsaky.androidide.compose.preview.ui.DeviceFrame
 import com.itsaky.androidide.compose.preview.ui.DeviceProfileSheet
+import com.itsaky.androidide.compose.preview.ui.ErrorBadge
+import com.itsaky.androidide.compose.preview.ui.ErrorDetailSheet
+import com.itsaky.androidide.compose.preview.ui.LayoutTreeBottomSheet
+import com.itsaky.androidide.compose.preview.ui.LayoutInspectorOverlay
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbar
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarActions
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarState
 import com.itsaky.androidide.compose.preview.ui.ResolutionEditor
+import com.itsaky.androidide.compose.preview.data.device.DesktopApp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import com.itsaky.androidide.lookup.Lookup
@@ -138,25 +165,98 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         if (sourceCode.isNotBlank()) {
             viewModel.onSourceChanged(sourceCode)
         }
+    }
 
-        // 订阅 previewState, 切到 Ready 时调 engine.render(...)
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.previewState.collect { state ->
-                    if (state is PreviewState.Ready) {
-                            renderEngine?.let { engine ->
-                                val config = state.previewConfigs.firstOrNull() ?: return@collect
-                                engine.render(
-                                    previewDex = state.dexFile,
-                                    projectDex = state.projectDexFiles,
-                                    className = state.className,
-                                    functionName = config.functionName,
-                                )
-                            }
-                        }
+        // 【PR-C】订阅 previewState 拿 modulePath, 第一次 Ready 时加载用户 app
+    // (解析 manifest android:icon + label). 失败不阻塞, 桌面还能用.
+    lifecycleScope.launch {
+        repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.previewState.collect { state ->
+                if (state is PreviewState.Ready) {
+                    // 加载用户 app 一次 (addUserApp 内部有重复检查)
+                    viewModel.loadUserApp(viewModel.getModulePath().takeIf { it.isNotEmpty() })
+                    // 渲染 preview
+                    renderEngine?.let { engine ->
+                        val functionName = viewModel.selectedPreview.value
+                            ?: state.previewConfigs.firstOrNull()?.functionName
+                            ?: return@collect
+                        // v3.4: 传入对应 @Composable 的 PreviewConfig, 让 uiMode /
+                        // showBackground / backgroundColor 真正生效.
+                        // v3.5: 传 deviceConfig.orientation, 让 LocalConfiguration 注入横竖屏.
+                        val previewConfig = state.previewConfigs
+                            .firstOrNull { it.functionName == functionName }
+                        engine.render(
+                            previewDex = state.dexFile,
+                            projectDex = state.projectDexFiles,
+                            className = state.className,
+                            functionName = functionName,
+                            previewConfig = previewConfig,
+                            orientation = state.deviceConfig.orientation,
+                        )
+                    }
                 }
             }
         }
+    }
+
+    // 【v3.3】订阅 selectedPreview 变化 — 用户从调试模式下拉选择新 @Composable 时
+    // 立刻重新渲染. 注意: 这里 ready 状态没变, 所以上面的 collect 不会重新触发.
+    lifecycleScope.launch {
+        repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.selectedPreview.collect { functionName ->
+                if (functionName == null) return@collect
+                val state = viewModel.previewState.value
+                if (state !is PreviewState.Ready) return@collect
+                renderEngine?.let { engine ->
+                    val previewConfig = state.previewConfigs
+                        .firstOrNull { it.functionName == functionName }
+                    engine.render(
+                        previewDex = state.dexFile,
+                        projectDex = state.projectDexFiles,
+                        className = state.className,
+                        functionName = functionName,
+                        previewConfig = previewConfig,
+                        orientation = state.deviceConfig.orientation,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * 【v3.3】公开方法 — ComposableFunctionPicker 选中函数时调, 重新渲染.
+     * (等价于 selectedPreview 的 collect, 但走 Activity 路径更直接, 适合从 sheet 调)
+     */
+    fun renderSelectedComposable(functionName: String) {
+        viewModel.selectComposable(functionName)
+    }
+
+    /**
+     * 【v3.3】拿 preview view 引用 (供 [ScreenshotExporter] 用).
+     * 返回 render engine 的 ComposeView, 如果 engine 还没 attach 返回 null.
+     */
+    fun previewViewForExport(): android.view.View? {
+        return renderEngine?.let { engine ->
+            // 反射拿私有字段 composeView
+            val field = engine.javaClass.getDeclaredField("composeView").apply { isAccessible = true }
+            field.get(engine) as? android.view.View
+        } ?: run {
+            // fallback: 找根 FrameLayout 中的 ComposeView
+            window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content)
+                ?.let { root ->
+                    findComposeView(root)
+                }
+        }
+    }
+
+    private fun findComposeView(view: android.view.View): android.view.View? {
+        if (view is androidx.compose.ui.platform.ComposeView) return view
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findComposeView(view.getChildAt(i))?.let { return it }
+            }
+        }
+        return null
     }
 
     private var renderEngine: PreviewRenderEngine? = null
@@ -164,11 +264,58 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
     /**
      * 由 ComposePreviewScreen 内 AndroidView 调用, 注入预览容器.
      * 引擎 attach 到此 container 后, container 会显示 Compose 渲染.
+     *
+     * 【v3.2】如果上次 attach 的 container 与当前不同 (切 deviceSim / 切 profile
+     * 触发 AndroidView 重建时), 强制 detach 旧引擎 + 新建引擎. 否则旧 ComposeView
+     * 仍然 addView 在旧 FrameLayout 上, 用户看到的是"切回后黑屏".
      */
     fun attachPreviewContainer(container: android.widget.FrameLayout) {
-        if (renderEngine == null) {
+        val existing = renderEngine
+        if (existing == null) {
+            renderEngine = PreviewRenderEngine(this, container).also { it.attach() }
+            return
+        }
+        if (existing.container !== container) {
+            LOG.info(
+                "Container changed ({} -> {}), recreating PreviewRenderEngine",
+                System.identityHashCode(existing.container),
+                System.identityHashCode(container),
+            )
+            existing.detach()
             renderEngine = PreviewRenderEngine(this, container).also { it.attach() }
         }
+    }
+
+    /**
+     * 【PR-B】应用全屏模式到 Activity 的 window insets controller.
+     *
+     * - [FullscreenMode.OFF]: 显示系统状态栏 + 导航栏.
+     * - [FullscreenMode.WITH_SYSTEM_BARS]: 全屏, 但保留系统状态栏 (用户能在顶部看到时间 / 信号).
+     * - [FullscreenMode.WITHOUT_SYSTEM_BARS]: 沉浸式全屏, 隐藏系统栏, 适合看沉浸式 UI.
+     *
+     * 用户在 Preview 内点击设备套壳 / compose 内容时, 需要 swipe to show system bars.
+     * BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE 让系统栏在被 swipe 时短暂显示.
+     */
+    fun applyFullscreenMode(mode: FullscreenMode) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        when (mode) {
+            FullscreenMode.OFF -> {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            }
+            FullscreenMode.WITH_SYSTEM_BARS -> {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+            FullscreenMode.WITHOUT_SYSTEM_BARS -> {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+        LOG.info("Applied fullscreen mode: {}", mode)
     }
 
     override fun onDestroy() {
@@ -208,11 +355,30 @@ private fun ComposePreviewScreen(
     val viewport by viewModel.viewport.collectAsStateWithLifecycle()
     val theme by viewModel.theme.collectAsStateWithLifecycle()
     val debugEnabled by viewModel.debugEnabled.collectAsStateWithLifecycle()
+    val isFullscreen by viewModel.isFullscreen.collectAsStateWithLifecycle()
+    val fullscreenMode by viewModel.fullscreenMode.collectAsStateWithLifecycle()
+    // 【PR-C】桌面 launcher 状态
+    val desktopApps by viewModel.desktopApps.collectAsStateWithLifecycle()
+    val foregroundApp by viewModel.foregroundApp.collectAsStateWithLifecycle()
+    // 【v3.3】调试模式
+    val debugMode by viewModel.debugMode.collectAsStateWithLifecycle()
+    val composableFunctions by viewModel.composableFunctions.collectAsStateWithLifecycle()
+    val selectedPreview by viewModel.selectedPreview.collectAsStateWithLifecycle()
+
+    // 【PR-B】全屏模式: 控制手机系统状态栏. LaunchedEffect 在 mode 变化时调用
+    // Activity 的 windowInsetsController.
+    val activityCtx = LocalContext.current as ComposePreviewActivity
+    LaunchedEffect(fullscreenMode) {
+        activityCtx.applyFullscreenMode(fullscreenMode)
+    }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showDeviceSheet by remember { mutableStateOf(false) }
     var showResolutionEditor by remember { mutableStateOf(false) }
+    var showComposablePicker by remember { mutableStateOf(false) }
+    var showLayoutTreeSheet by remember { mutableStateOf(false) }
+    var showErrorSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
     // 应用主题
@@ -227,29 +393,110 @@ private fun ComposePreviewScreen(
             color = MaterialTheme.colorScheme.background,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // 顶栏
-                PreviewToolbar(
-                    state = PreviewToolbarState(
-                        deviceName = deviceConfig.profile.displayName,
-                        themeLabel = theme.name,
-                        zoom = viewport.zoom,
-                        showSystemBars = deviceConfig.showStatusBar,
-                        debugEnabled = debugEnabled,
-                    ),
-                    actions = PreviewToolbarActions(
-                        onOpenDeviceSheet = { showDeviceSheet = true },
-                        onCycleTheme = { viewModel.cycleTheme() },
-                        onSetZoom = { viewModel.setZoom(it) },
-                        onFitZoom = { viewModel.fitZoom() },
-                        onToggleSystemBars = { viewModel.toggleSystemBars() },
-                        onToggleDebug = { viewModel.toggleDebug() },
-                        onClose = onClose,
-                    ),
-                )
+                // 【PR-B】顶栏: 全屏时隐藏. 退出全屏按钮在 main content 区右上角
+                // 用 Box 叠层显示 (见下面 MainBox).
+                if (!isFullscreen) {
+                    // 【v3.5】横竖屏 chip label 派生.
+                    val orientationLabel = when (deviceConfig.orientation) {
+                        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT -> "竖屏"
+                        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.LANDSCAPE -> "横屏"
+                        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_LANDSCAPE -> "反向横屏"
+                        com.itsaky.androidide.compose.preview.ui.DeviceOrientation.REVERSE_PORTRAIT -> "倒置竖屏"
+                    }
+                    PreviewToolbar(
+                        state = PreviewToolbarState(
+                            deviceName = deviceConfig.profile.displayName,
+                            themeLabel = theme.name,
+                            zoom = viewport.zoom,
+                            showSystemBars = deviceConfig.showStatusBar,
+                            deviceSimEnabled = deviceConfig.deviceSimEnabled,
+                            fullscreen = false,
+                            // 【v3.3】调试模式 — 替换旧的 debugEnabled
+                            debugModeEnabled = debugMode.enabled,
+                            // 【v3.5】横竖屏 chip
+                            orientationLabel = orientationLabel,
+                            orientationIsLandscape = deviceConfig.orientation.isLandscape,
+                        ),
+                        actions = PreviewToolbarActions(
+                            onOpenDeviceSheet = { showDeviceSheet = true },
+                            onCycleTheme = { viewModel.cycleTheme() },
+                            onSetZoom = { viewModel.setZoom(it) },
+                            onFitZoom = { viewModel.fitZoom() },
+                            onToggleSystemBars = { viewModel.toggleSystemBars() },
+                            // 【v3.3】调试模式 toggle
+                            onToggleDebugMode = { viewModel.toggleDebugMode() },
+                            onClose = onClose,
+                            onToggleDeviceSim = { viewModel.toggleDeviceSim() },
+                            onToggleFullscreen = { viewModel.toggleFullscreen() },
+                            onSetFullscreenMode = { mode -> viewModel.setFullscreenMode(mode) },
+                            // 【v3.5】横竖屏
+                            onCycleOrientation = { viewModel.cycleOrientationFast() },
+                            onSetOrientation = { o -> viewModel.setOrientation(o) },
+                        ),
+                    )
+                    HorizontalDivider()
 
-                HorizontalDivider()
+                    // 【v3.3】调试模式开启时, 在主 toolbar 下方显示 Debug Toolbar
+                    if (debugMode.enabled) {
+                        DebugToolbar(
+                            state = DebugToolbarState(
+                                currentFunctionName = selectedPreview,
+                                functionCount = composableFunctions.size,
+                                analysisMode = debugMode.analysisMode,
+                                editMode = debugMode.editMode,
+                                showRecompositionHighlight = debugMode.showRecompositionHighlight,
+                                showLayoutTree = showLayoutTreeSheet,
+                                hiddenNodeCount = debugMode.hiddenNodeIds.size,
+                            ),
+                            actions = DebugToolbarActions(
+                                onOpenFunctionPicker = { showComposablePicker = true },
+                                onToggleAnalysisMode = { viewModel.toggleAnalysisMode() },
+                                onToggleEditMode = { viewModel.toggleEditMode() },
+                                onToggleRecomposition = { viewModel.toggleRecompositionHighlight() },
+                                onToggleLayoutTree = { showLayoutTreeSheet = !showLayoutTreeSheet },
+                                onClearHiddenNodes = { viewModel.clearHiddenNodes() },
+                                // 【v3.3】截图导出 — 通过 Activity 拿 preview view
+                                onExportScreenshot = {
+                                    val previewView = activityCtx.previewViewForExport()
+                                    com.itsaky.androidide.compose.preview.util.ScreenshotExporter
+                                        .export(context, previewView) { ok, uri, msg ->
+                                            activityCtx.runOnUiThread {
+                                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                                if (!ok) {
+                                                    LOG.warn("Screenshot export failed: {}", msg)
+                                                }
+                                            }
+                                        }
+                                },
+                                onClose = { viewModel.toggleDebugMode() },
+                            ),
+                        )
+                        HorizontalDivider()
 
-                // 主体
+                        // 【v3.3】错误 badge — 紧跟 debug toolbar 之后, 仅在调试模式显示
+                        if (debugMode.showErrorBadge) {
+                            val errorState = previewState
+                            val errorMessage = (errorState as? PreviewState.Error)?.message
+                            val diagnostics = (errorState as? PreviewState.Error)?.diagnostics.orEmpty()
+                            if (errorMessage != null || diagnostics.isNotEmpty()) {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                ) {
+                                    ErrorBadge(
+                                        errorMessage = errorMessage,
+                                        diagnostics = diagnostics,
+                                        onClick = { showErrorSheet = true },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 主体 — Box 叠层: 底层是 preview / loading / error, 顶层是退出全屏按钮
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -274,7 +521,41 @@ private fun ComposePreviewScreen(
                         is PreviewState.Ready -> ReadyPanel(
                             activity = activity,
                             deviceConfig = deviceConfig,
+                            viewport = viewport,
+                            isFullscreen = isFullscreen,
+                            desktopApps = desktopApps,
+                            foregroundApp = foregroundApp,
+                            modulePath = viewModel.getModulePath(),
+                            onLaunchApp = { app -> viewModel.launchDesktopApp(app) },
+                            onGoHome = { viewModel.goToHome() },
+                            // 【PR-D】传 previewState 让 ReadyPanel 在重新编译
+                            // (新 Ready 进入) 时重置 pan, 避免旧 pan 在新 dex 上残留.
+                            previewState = s,
                         )
+                    }
+
+                    // 【PR-C 修复】退出全屏按钮 — 放在 main content 的右上角 (叠层),
+                    // 而不是单独占一栏. 之前 v3.2 把它放在 Column 的另一个 Box 里,
+                    // Box fillMaxWidth 没设 height 导致 IconButton align TopEnd 时
+                    // 父容器 0 高度, 按钮渲染但位置跑到屏幕外, 点击没反应或
+                    // exit 后布局混乱 (preview 不显示).
+                    if (isFullscreen) {
+                        IconButton(
+                            onClick = { viewModel.toggleFullscreen() },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .background(
+                                    color = Color.Black.copy(alpha = 0.5f),
+                                    shape = androidx.compose.foundation.shape.CircleShape,
+                                ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FullscreenExit,
+                                contentDescription = "退出全屏",
+                                tint = Color.White,
+                            )
+                        }
                     }
                 }
             }
@@ -309,6 +590,95 @@ private fun ComposePreviewScreen(
             onDismiss = {
                 showResolutionEditor = false
             }
+        )
+    }
+
+    // 【v3.3】@Composable 函数选择器 (调试模式)
+    if (showComposablePicker) {
+        ComposableFunctionPicker(
+            functions = composableFunctions,
+            currentFunctionName = selectedPreview,
+            onSelected = { info ->
+                // 1) 选新函数
+                viewModel.selectComposable(info.name)
+                // 2) 触发重新渲染 — Activity 的 previewState.collect 已经监听,
+                //    但只取 firstOrNull. selectedPreview 变化时需要主动 render.
+                //    这里手动调用 Activity.renderComposable 即可.
+                activityCtx.renderSelectedComposable(info.name)
+            },
+            onDismiss = {
+                showComposablePicker = false
+            },
+        )
+    }
+
+    // 【v3.3】布局树底部抽屉
+    if (showLayoutTreeSheet) {
+        // 【v3.3.1】属性编辑参数 — 从 previewState.Ready 拿 dexFile + className,
+        // 从 composableFunctions 找选中函数对应的行号.
+        val readyState = previewState as? PreviewState.Ready
+        val attrClass = readyState?.className
+        val attrMethod = selectedPreview
+        val attrLine = composableFunctions
+            .firstOrNull { it.name == attrMethod }
+            ?.line ?: -1
+        val attrs by viewModel.selectedNodeAttributes.collectAsStateWithLifecycle()
+        val editResult by viewModel.lastAttributeEditResult.collectAsStateWithLifecycle()
+        // 【v3.4】属性加载状态 — 给底部抽屉头部 Refresh 按钮显示加载动画.
+        val isRefreshingAttr by viewModel.isRefreshingAttributes.collectAsStateWithLifecycle()
+        // 选中节点 / 函数变化时重新 load attributes
+        LaunchedEffect(attrClass, attrMethod) {
+            viewModel.loadAttributesForSelectedNode(readyState?.dexFile, attrClass, attrMethod)
+        }
+        LayoutTreeBottomSheet(
+            debugMode = debugMode,
+            layoutSnapshot = viewModel.layoutSnapshot.value,
+            attributeClassName = attrClass,
+            attributeMethodName = attrMethod,
+            attributeCallLine = attrLine,
+            attributes = attrs,
+            lastEditResult = editResult,
+            onSelectNode = { nodeId -> viewModel.selectLayoutNode(nodeId) },
+            onToggleHidden = { nodeId -> viewModel.toggleNodeHidden(nodeId) },
+            onClearHidden = { viewModel.clearHiddenNodes() },
+            onEditAttribute = { paramName, newValue ->
+                val projectRoot = viewModel.getModulePath()
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { java.io.File(it) }
+                if (attrClass == null) return@LayoutTreeBottomSheet
+                viewModel.editAttribute(
+                    projectRoot = projectRoot,
+                    className = attrClass,
+                    callLine = attrLine,
+                    parameterName = paramName,
+                    newValue = newValue,
+                ) {
+                    // 触发 build — taskName 形如 "assembleDebug" / "assembleRelease",
+                    // 跟 triggerBuild(context, viewModel, modulePath, variantName) 一致.
+                    // ComposeAttributeEditor 默认返回 "assembleDebug", variantName 用 default.
+                    triggerBuild(
+                        context = context,
+                        viewModel = viewModel,
+                        modulePath = viewModel.getModulePath(),
+                        variantName = "debug",
+                    )
+                }
+            },
+            onClearEditResult = { viewModel.clearAttributeEditResult() },
+            // 【v3.4】用户主动重新解析 dex — 用于源文件改了但 dex 未重建的情况.
+            onRefreshAttributes = { viewModel.refreshAttributes() },
+            isRefreshingAttributes = isRefreshingAttr,
+            onDismiss = { showLayoutTreeSheet = false },
+        )
+    }
+
+    // 【v3.3】错误详情 Sheet
+    if (showErrorSheet) {
+        val errState = previewState as? PreviewState.Error
+        ErrorDetailSheet(
+            errorMessage = errState?.message,
+            diagnostics = errState?.diagnostics.orEmpty(),
+            onDismiss = { showErrorSheet = false },
         )
     }
 }
@@ -401,43 +771,221 @@ private fun ErrorPanel(
 private fun ReadyPanel(
     activity: ComposePreviewActivity,
     deviceConfig: DeviceConfig,
+    viewport: ViewportState,
+    isFullscreen: Boolean,
+    desktopApps: List<DesktopApp>,
+    foregroundApp: DesktopApp?,
+    modulePath: String,
+    onLaunchApp: (DesktopApp) -> Unit,
+    onGoHome: () -> Unit,
+    previewState: PreviewState,
 ) {
+    // 【v3.3.1】ComposeView 引用 — LayoutInspector 通过这个反射读 LayoutNode 树.
+    // 由 PreviewContainer 通过 onComposeViewReady 回调设置.
+    var composeView by remember { mutableStateOf<android.view.View?>(null) }
+
+    // 【v3.3.1】Activity-scoped ViewModel / debugMode (Composable 函数里取).
+    val viewModel = activity.viewModel
+    val debugModeState by viewModel.debugMode.collectAsStateWithLifecycle()
+    val density = LocalDensity.current
+
     // 设备框 + 内容
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(if (deviceConfig.deviceSimEnabled) 16.dp else 0.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // 用 DeviceFrame 包裹实际预览 ComposeView
-        DeviceFrame(
-            profile = deviceConfig.profile,
-            systemBarsTheme = deviceConfig.systemBarsTheme,
-            showStatusBar = deviceConfig.showStatusBar,
-            showNavigationBar = deviceConfig.showNavigationBar,
-            showCutout = deviceConfig.showCutout,
-            showChassis = deviceConfig.showChassis,
-            useGestureNav = deviceConfig.useGestureNav,
+
+        // 【v3.2】用 key() 强制 deviceSimEnabled / profile 变化时整体重组.
+        // 【PR-D】previewState 也加入 key, 重新编译时彻底重置 (LaunchedEffect 已经
+        // resetPan, 但 key() 还能让 graphicsLayer 缓存的 layout 状态一起刷新).
+        androidx.compose.runtime.key(
+            deviceConfig.deviceSimEnabled,
+            deviceConfig.profile.id,
+            previewState,
         ) {
-            // 容器 Box, 通过 AndroidView 嵌入一个 FrameLayout, 让 PreviewRenderEngine 把
-            // 自己的 ComposeView addView 进去. 显式使用 MATCH_PARENT layoutParams 避免
-            // SubcomposeLayout 嵌套测量把 ComposeView 的尺寸压成 0 (这是 v2.1 的根因).
-            AndroidView(
-                factory = { ctx ->
-                    android.widget.FrameLayout(ctx).apply {
-                        layoutParams = android.view.ViewGroup.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                        )
-                        // 通知 Activity 创建引擎, 把这个容器给引擎.
-                        // activity 由 ComposePreviewScreen 显式传入, 不会因重组失效.
-                        activity.attachPreviewContainer(this)
+            // 把 zoom 后的内容 + pan 手势都包在 BoxWithConstraints 里, 这样能拿到
+            // 父容器尺寸, 计算 maxPan 范围.
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                val parentWidthDp = maxWidth.value
+                val parentHeightDp = maxHeight.value
+                // zoom > 1 时, 内容宽度 = parent * zoom, 多出来的部分 = parent * (zoom - 1)
+                // 中心为 TransformOrigin.Center, 所以左右各溢出 (parent * (zoom - 1) / 2).
+                val zoomScale = viewport.zoom
+                val canPan = zoomScale != 1f
+                val overflowXDp = (parentWidthDp * (zoomScale - 1f) / 2f).coerceAtLeast(0f)
+                val overflowYDp = (parentHeightDp * (zoomScale - 1f) / 2f).coerceAtLeast(0f)
+
+                val translationXDp = viewport.offsetXdp
+                val translationYDp = viewport.offsetYdp
+
+                // 把 dp 偏移转成 px 喂给 graphicsLayer (translationX/Y 用 px).
+                val translationXPx = with(density) { translationXDp.dp.toPx() }
+                val translationYPx = with(density) { translationYDp.dp.toPx() }
+
+                val graphicsModifier = Modifier
+                    .graphicsLayer(
+                        scaleX = zoomScale,
+                        scaleY = zoomScale,
+                        translationX = translationXPx,
+                        translationY = translationYPx,
+                        transformOrigin = TransformOrigin.Center,
+                    )
+                    // 【PR-D】触摸平移手势. 只在 canPan (zoom != 1.0) 时启用, 避免
+                    // 误吞点击事件 (例如设备模式下用户想点物理键/状态栏).
+                    .then(
+                        if (canPan) {
+                            Modifier.pointerInput(zoomScale, parentWidthDp, parentHeightDp) {
+                                // PointerInputScope 继承自 Density, 这里拿 px-per-dp
+                                // 把 dragAmount (px) 转成 dp.
+                                val pxPerDp = density
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    // dragAmount 是 px, 还原成 dp.
+                                    // 手指往右拖 → 内容跟随手指往右移 → offsetXdp
+                                    // 增大 → translationX 增大 (graphicsLayer 中
+                                    // 正值 = 向右). 所以 deltaXDp 保持原符号.
+                                    val deltaXDp = dragAmount.x / pxPerDp
+                                    val deltaYDp = dragAmount.y / pxPerDp
+                                    viewModel.panBy(
+                                        deltaXDp = deltaXDp,
+                                        deltaYDp = deltaYDp,
+                                        maxXDp = overflowXDp,
+                                        maxYDp = overflowYDp,
+                                    )
+                                }
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
+
+                if (deviceConfig.deviceSimEnabled) {
+                    // 设备模式: 整个 device frame 一起缩放 + 拖动
+                    // 【v3.5】把 deviceConfig.orientation 应用到 profile.orientation, 让
+                    // DeviceFrame 的 effective* 系列 (effectiveWidthDp / effectiveHeightDp /
+                    // effectiveCutout / effectivePhysicalKeys / effectiveBezels) 正确旋转.
+                    val orientedProfile = deviceConfig.profile.copy(
+                        orientation = deviceConfig.orientation,
+                    )
+                    Box(modifier = graphicsModifier) {
+                        DeviceFrame(
+                            profile = orientedProfile,
+                            systemBarsTheme = deviceConfig.systemBarsTheme,
+                            showStatusBar = deviceConfig.showStatusBar,
+                            showNavigationBar = deviceConfig.showNavigationBar,
+                            showCutout = deviceConfig.showCutout,
+                            showChassis = deviceConfig.showChassis,
+                            useGestureNav = deviceConfig.useGestureNav,
+                            desktopApps = desktopApps,
+                            foregroundApp = foregroundApp,
+                            modulePath = modulePath,
+                            onLaunchApp = onLaunchApp,
+                            onGoHome = onGoHome,
+                        ) {
+                            PreviewContainer(
+                                activity = activity,
+                                onComposeViewReady = { v -> composeView = v },
+                            )
+                        }
                     }
+                } else {
+                    // 无设备模式: 缩放 compose UI 本身, 不缩放外层
+                    Box(modifier = graphicsModifier) {
+                        PreviewContainer(
+                            activity = activity,
+                            onComposeViewReady = { v -> composeView = v },
+                        )
+                    }
+                }
+
+                // 【PR-D 提示】缩放 != 1.0 时显示一个小提示 "拖动平移"
+                if (canPan) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.55f),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        androidx.compose.material3.Text(
+                            text = "${(zoomScale * 100).toInt()}% · 拖动平移",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                        )
+                    }
+                }
+            }
+        }
+
+        // 【v3.3.1】Layout Inspector Overlay — 在分析 / 编辑模式下叠加在 preview 内容之上.
+        // 它本身用 Canvas 画虚线 + 节点类型角标, 同时把 layoutSnapshot 传给 LayoutTreeBottomSheet.
+        if (debugModeState.isInspectorActive && composeView != null) {
+            val snapshot = viewModel.layoutSnapshot.collectAsStateWithLifecycle().value
+            LayoutInspectorOverlay(
+                snapshot = snapshot,
+                selectedNodeId = debugModeState.selectedNodeId,
+                isInspectorActive = true,
+                showRecomposition = debugModeState.showRecompositionHighlight,
+                onNodeClick = { node: com.itsaky.androidide.compose.preview.data.model.LayoutNodeSnapshot ->
+                    viewModel.selectLayoutNode(node.id)
                 },
                 modifier = Modifier.fillMaxSize(),
             )
         }
+
+        // 【v3.3.1】布局快照 capture — 仅在分析 / 编辑模式下采集, 避免 layout 变化频繁时反射开销.
+        // 500ms debounce 足够用户感知 + 不卡顿.
+        if (debugModeState.isInspectorActive) {
+            LaunchedEffect(composeView, previewState, deviceConfig.profile.id, deviceConfig.deviceSimEnabled) {
+                if (composeView == null) return@LaunchedEffect
+                kotlinx.coroutines.delay(500)
+                viewModel.captureLayoutSnapshot(composeView, force = true)
+            }
+        }
     }
+}
+
+@Composable
+private fun PreviewContainer(
+    activity: ComposePreviewActivity,
+    onComposeViewReady: (android.view.View) -> Unit = {},
+) {
+    // 容器 Box, 通过 AndroidView 嵌入一个 FrameLayout, 让 PreviewRenderEngine 把
+    // 自己的 ComposeView addView 进去. 显式使用 MATCH_PARENT layoutParams 避免
+    // SubcomposeLayout 嵌套测量把 ComposeView 的尺寸压成 0 (这是 v2.1 的根因).
+    AndroidView(
+        factory = { ctx ->
+            android.widget.FrameLayout(ctx).apply {
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                // 通知 Activity 创建引擎, 把这个容器给引擎.
+                // activity 由 ComposePreviewScreen 显式传入, 不会因重组失效.
+                activity.attachPreviewContainer(this)
+            }
+        },
+        // 【v3.3.1】layout 变化时通知 layout inspector 重新 capture.
+        // 用 update 回调 + onGloballyPositioned 拿真实 on-screen view 引用.
+        update = { frameLayout ->
+            // 拿 RenderEngine 注入的 ComposeView
+            val composeView = (0 until frameLayout.childCount)
+                .map { frameLayout.getChildAt(it) }
+                .firstOrNull { it is androidx.compose.ui.platform.ComposeView }
+            if (composeView != null) {
+                onComposeViewReady(composeView)
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 private fun triggerBuild(

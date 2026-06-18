@@ -95,6 +95,8 @@ class PreviewSourceParser {
     /**
      * 从 [params] 解析 @Preview 注解参数 + 从 [source] 全文解析
      * @PreviewParameter / @PreviewFontScale / @PreviewLightDark.
+     *
+     * v3.4 增: 解析 backgroundColor / showBackground / uiMode / showSystemUi.
      */
     private fun buildConfig(functionName: String, params: String, source: String): PreviewConfig {
         return PreviewConfig(
@@ -104,6 +106,11 @@ class PreviewSourceParser {
             fontScale = extractFontScale(source, functionName),
             isLightDark = isLightDark(source, functionName),
             parameterProviderName = extractParameterProvider(source, functionName),
+            // v3.4
+            backgroundColor = extractBackgroundColor(params),
+            showBackground = extractBooleanParam(params, "showBackground"),
+            uiMode = extractUiMode(params),
+            showSystemUi = extractBooleanParam(params, "showSystemUi"),
         )
     }
 
@@ -115,6 +122,62 @@ class PreviewSourceParser {
     private fun extractFloatParam(params: String, name: String): Float? {
         if (params.isBlank()) return null
         return Regex("""$name\s*=\s*([0-9]*\.?[0-9]+)""").find(params)?.groupValues?.get(1)?.toFloatOrNull()
+    }
+
+    /**
+     * v3.4: 解析 `backgroundColor = 0xFFFFFFFFL` 或 `0xFFFFFFFF`.
+     *
+     * @Preview 默认 0xFFFFFFFFL (白色), 但实际意义是 "只有 showBackground=true 才生效".
+     * 我们这里返回原始 int, 渲染端按 [showBackground] 决定是否应用.
+     */
+    private fun extractBackgroundColor(params: String): Int? {
+        if (params.isBlank()) return null
+        val m = Regex(
+            """backgroundColor\s*=\s*(0x[0-9A-Fa-f]+|\d+)L?""",
+            RegexOption.IGNORE_CASE,
+        ).find(params) ?: return null
+        val raw = m.groupValues[1]
+        return if (raw.startsWith("0x") || raw.startsWith("0X")) {
+            raw.substring(2).toLong(16).toInt()
+        } else {
+            raw.toLong().toInt()
+        }
+    }
+
+    /**
+     * v3.4: 解析布尔参数 `showBackground = true` / `showSystemUi = true`.
+     */
+    private fun extractBooleanParam(params: String, name: String): Boolean {
+        if (params.isBlank()) return false
+        val trueMatch = Regex("""$name\s*=\s*true""", RegexOption.IGNORE_CASE).containsMatchIn(params)
+        if (trueMatch) return true
+        val falseMatch = Regex("""$name\s*=\s*false""", RegexOption.IGNORE_CASE).containsMatchIn(params)
+        return false  // 缺省 = false
+    }
+
+    /**
+     * v3.4: 解析 `uiMode = Configuration.UI_MODE_NIGHT_YES` 或
+     * `uiMode = 0x30` / `uiMode = 16` / `uiMode = 32`.
+     */
+    private fun extractUiMode(params: String): Int? {
+        if (params.isBlank()) return null
+        // 1. 数字字面量
+        Regex("""uiMode\s*=\s*(\d+)""").find(params)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+        // 2. 十六进制字面量
+        Regex("""uiMode\s*=\s*(0x[0-9A-Fa-f]+)""").find(params)?.groupValues?.get(1)?.let { hex ->
+            return hex.substring(2).toLong(16).toInt()
+        }
+        // 3. Configuration.UI_MODE_NIGHT_*
+        val named = Regex(
+            """uiMode\s*=\s*Configuration\.UI_MODE_(NIGHT|UNDEFINED|TYPE)_\w+""",
+            RegexOption.IGNORE_CASE,
+        ).find(params)?.groupValues?.get(0) ?: return null
+        return when {
+            named.endsWith("NIGHT_YES", ignoreCase = true) -> 0x20  // 32
+            named.endsWith("NIGHT_NO", ignoreCase = true) -> 0x10   // 16
+            named.endsWith("NIGHT_UNDEFINED", ignoreCase = true) -> 0x00
+            else -> null
+        }
     }
 
     /**
