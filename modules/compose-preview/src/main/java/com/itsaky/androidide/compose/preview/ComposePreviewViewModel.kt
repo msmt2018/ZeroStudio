@@ -22,11 +22,13 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.compose.preview.compiler.CompileDiagnostic
+import com.itsaky.androidide.compose.preview.data.device.DesktopApp
 import com.itsaky.androidide.compose.preview.data.device.DeviceCatalog
 import com.itsaky.androidide.compose.preview.data.repository.CompilationException
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepository
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepositoryImpl
 import com.itsaky.androidide.compose.preview.data.repository.InitializationResult
+import com.itsaky.androidide.compose.preview.data.source.ProjectContextSource
 import com.itsaky.androidide.compose.preview.domain.PreviewSourceParser
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
 import com.itsaky.androidide.compose.preview.ui.DeviceProfile
@@ -119,6 +121,8 @@ data class DeviceConfig(
     val showCutout: Boolean = true,
     val showChassis: Boolean = true,
     val useGestureNav: Boolean = false,
+    // 【PR-A】真实设备模拟开关. true=套壳显示; false=无外壳直接显示 compose UI.
+    val deviceSimEnabled: Boolean = false,
 )
 
 /**
@@ -142,7 +146,9 @@ enum class PreviewTheme { Light, Dark, Custom }
 @OptIn(FlowPreview::class)
 class ComposePreviewViewModel(
     private val repository: ComposePreviewRepository = ComposePreviewRepositoryImpl(),
-    private val sourceParser: PreviewSourceParser = PreviewSourceParser()
+    private val sourceParser: PreviewSourceParser = PreviewSourceParser(),
+    // 【PR-C】桌面 launcher 用 — 解析 manifest android:icon + 拿到桌面 app 信息.
+    private val projectContextSource: ProjectContextSource = ProjectContextSource(),
 ) : ViewModel() {
 
     private val _previewState = MutableStateFlow<PreviewState>(PreviewState.Idle)
@@ -188,6 +194,24 @@ class ComposePreviewViewModel(
     val isFullscreen: StateFlow<Boolean> = _fullscreenMode
         .map { it != FullscreenMode.OFF }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // === PR-C 桌面 launcher 模拟 ===
+
+    /**
+     * 【PR-C】桌面上的应用列表 (系统应用占位 + 用户 app). 包含 [DesktopApp.DEFAULT_SYSTEM_APPS]
+     * + 通过 [addUserApp] 加入的当前 project 的 launcher icon. 用于渲染桌面网格 + Dock 栏.
+     */
+    private val _desktopApps = MutableStateFlow(DesktopApp.DEFAULT_SYSTEM_APPS)
+    val desktopApps: StateFlow<List<DesktopApp>> = _desktopApps.asStateFlow()
+
+    /**
+     * 【PR-C】当前在桌面看到的"前台 app". null=显示 launcher 桌面;
+     * 非 null=用户点击了某个 app, "后台"运行 (这里只模拟 launch 状态, 实际仍渲染 preview).
+     *
+     * 用户要求 #1.1: 物理键返回桌面 — `goToHome()` 把这个设为 null.
+     */
+    private val _foregroundApp = MutableStateFlow<DesktopApp?>(null)
+    val foregroundApp: StateFlow<DesktopApp?> = _foregroundApp.asStateFlow()
 
     private val sourceChanges = MutableSharedFlow<SourceUpdate>()
 
@@ -513,6 +537,63 @@ class ComposePreviewViewModel(
 
     fun toggleDebug() {
         _debugEnabled.value = !_debugEnabled.value
+    }
+
+    // === PR-C 桌面 launcher 方法 ===
+
+    /**
+     * 【PR-C】把当前 project 的 launcher app 加入桌面 (首次启动桌面时调用).
+     * 用 [DesktopApp.iconResId] = `0` 时 DesktopLauncher 会去解析 manifest android:icon 拿真实图标.
+     */
+    fun addUserApp(app: DesktopApp) {
+        if (_desktopApps.value.any { it.id == app.id }) return
+        _desktopApps.value = _desktopApps.value + app
+        LOG.info("Added user app to desktop: {} ({})", app.label, app.id)
+    }
+
+    /**
+     * 【PR-C】点击桌面应用 — 模拟 launch 流程. isClickable=false 的系统应用占位
+     * 不响应, 真实点击 (用户要求 #1.1 "模拟系统 app 不响应").
+     */
+    fun launchDesktopApp(app: DesktopApp) {
+        if (!app.isClickable) {
+            LOG.info("App {} is not clickable, ignoring launch", app.id)
+            return
+        }
+        _foregroundApp.value = app
+        LOG.info("Launched desktop app: {}", app.label)
+    }
+
+    /**
+     * 【PR-C】物理键 (Home) 返回桌面. 模拟"按 home 键后台 app" — 把前台 app 置空.
+     * PR-C 用户要求 #1.1: "物理键返回桌面".
+     */
+    fun goToHome() {
+        if (_foregroundApp.value != null) {
+            LOG.info("Going to home, foreground app was: {}", _foregroundApp.value?.label)
+        }
+        _foregroundApp.value = null
+    }
+
+    /**
+     * 【PR-C】从 manifest 解析 application 信息, 把当前 project 的 launcher app
+     * 加入桌面. 一般在 ViewModel.initialize 后, Ready 第一次进入时调一次.
+     *
+     * 用 [modulePath] 找 `src/main/AndroidManifest.xml`, 解析 `<application android:icon>`
+     * + `android:label`. 拿不到就用占位.
+     */
+    fun loadUserApp(modulePath: String?) {
+        if (modulePath.isNullOrBlank()) return
+        val info = projectContextSource.loadApplicationIcon(modulePath) ?: return
+
+        val app = DesktopApp(
+            id = info.packageName ?: "user.app",
+            label = info.applicationLabel ?: "My App",
+            packageName = info.packageName,
+            iconResName = info.iconResName,
+            isClickable = true, // 用户 app 可点击
+        )
+        addUserApp(app)
     }
 
     override fun onCleared() {

@@ -51,6 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +72,7 @@ import com.itsaky.androidide.compose.preview.ui.PreviewToolbar
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarActions
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarState
 import com.itsaky.androidide.compose.preview.ui.ResolutionEditor
+import com.itsaky.androidide.compose.preview.data.device.DesktopApp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import com.itsaky.androidide.lookup.Lookup
@@ -149,21 +151,25 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
             viewModel.onSourceChanged(sourceCode)
         }
 
-        // 订阅 previewState, 切到 Ready 时调 engine.render(...)
+        // 【PR-C】订阅 previewState 拿 modulePath, 第一次 Ready 时加载用户 app
+        // (解析 manifest android:icon + label). 失败不阻塞, 桌面还能用.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.previewState.collect { state ->
                     if (state is PreviewState.Ready) {
-                            renderEngine?.let { engine ->
-                                val config = state.previewConfigs.firstOrNull() ?: return@collect
-                                engine.render(
-                                    previewDex = state.dexFile,
-                                    projectDex = state.projectDexFiles,
-                                    className = state.className,
-                                    functionName = config.functionName,
-                                )
-                            }
+                        // 加载用户 app 一次 (addUserApp 内部有重复检查)
+                        viewModel.loadUserApp(viewModel.getModulePath().takeIf { it.isNotEmpty() })
+                        // 渲染 preview
+                        renderEngine?.let { engine ->
+                            val config = state.previewConfigs.firstOrNull() ?: return@collect
+                            engine.render(
+                                previewDex = state.dexFile,
+                                projectDex = state.projectDexFiles,
+                                className = state.className,
+                                functionName = config.functionName,
+                            )
                         }
+                    }
                 }
             }
         }
@@ -267,6 +273,9 @@ private fun ComposePreviewScreen(
     val debugEnabled by viewModel.debugEnabled.collectAsStateWithLifecycle()
     val isFullscreen by viewModel.isFullscreen.collectAsStateWithLifecycle()
     val fullscreenMode by viewModel.fullscreenMode.collectAsStateWithLifecycle()
+    // 【PR-C】桌面 launcher 状态
+    val desktopApps by viewModel.desktopApps.collectAsStateWithLifecycle()
+    val foregroundApp by viewModel.foregroundApp.collectAsStateWithLifecycle()
 
     // 【PR-B】全屏模式: 控制手机系统状态栏. LaunchedEffect 在 mode 变化时调用
     // Activity 的 windowInsetsController.
@@ -293,7 +302,8 @@ private fun ComposePreviewScreen(
             color = MaterialTheme.colorScheme.background,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // 【PR-B】顶栏: 全屏时隐藏, 右上角改放"退出全屏"按钮.
+                // 【PR-B】顶栏: 全屏时隐藏. 退出全屏按钮在 main content 区右上角
+                // 用 Box 叠层显示 (见下面 MainBox).
                 if (!isFullscreen) {
                     PreviewToolbar(
                         state = PreviewToolbarState(
@@ -319,22 +329,9 @@ private fun ComposePreviewScreen(
                         ),
                     )
                     HorizontalDivider()
-                } else {
-                    // 【PR-B】全屏时: 右上角加一个退出全屏按钮 (全人类习惯).
-                    Box(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                        IconButton(
-                            onClick = { viewModel.toggleFullscreen() },
-                            modifier = Modifier.align(Alignment.TopEnd),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.FullscreenExit,
-                                contentDescription = "退出全屏",
-                            )
-                        }
-                    }
                 }
 
-                // 主体
+                // 主体 — Box 叠层: 底层是 preview / loading / error, 顶层是退出全屏按钮
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -361,7 +358,36 @@ private fun ComposePreviewScreen(
                             deviceConfig = deviceConfig,
                             viewport = viewport,
                             isFullscreen = isFullscreen,
+                            desktopApps = desktopApps,
+                            foregroundApp = foregroundApp,
+                            modulePath = viewModel.getModulePath(),
+                            onLaunchApp = { app -> viewModel.launchDesktopApp(app) },
+                            onGoHome = { viewModel.goToHome() },
                         )
+                    }
+
+                    // 【PR-C 修复】退出全屏按钮 — 放在 main content 的右上角 (叠层),
+                    // 而不是单独占一栏. 之前 v3.2 把它放在 Column 的另一个 Box 里,
+                    // Box fillMaxWidth 没设 height 导致 IconButton align TopEnd 时
+                    // 父容器 0 高度, 按钮渲染但位置跑到屏幕外, 点击没反应或
+                    // exit 后布局混乱 (preview 不显示).
+                    if (isFullscreen) {
+                        IconButton(
+                            onClick = { viewModel.toggleFullscreen() },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .background(
+                                    color = Color.Black.copy(alpha = 0.5f),
+                                    shape = androidx.compose.foundation.shape.CircleShape,
+                                ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FullscreenExit,
+                                contentDescription = "退出全屏",
+                                tint = Color.White,
+                            )
+                        }
                     }
                 }
             }
@@ -490,6 +516,11 @@ private fun ReadyPanel(
     deviceConfig: DeviceConfig,
     viewport: ViewportState,
     isFullscreen: Boolean,
+    desktopApps: List<DesktopApp>,
+    foregroundApp: DesktopApp?,
+    modulePath: String,
+    onLaunchApp: (DesktopApp) -> Unit,
+    onGoHome: () -> Unit,
 ) {
     // 设备框 + 内容
     Box(
@@ -527,6 +558,11 @@ private fun ReadyPanel(
                         showCutout = deviceConfig.showCutout,
                         showChassis = deviceConfig.showChassis,
                         useGestureNav = deviceConfig.useGestureNav,
+                        desktopApps = desktopApps,
+                        foregroundApp = foregroundApp,
+                        modulePath = modulePath,
+                        onLaunchApp = onLaunchApp,
+                        onGoHome = onGoHome,
                     ) {
                         PreviewContainer(activity)
                     }

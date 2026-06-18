@@ -14,10 +14,49 @@ data class ProjectContext(
     val needsBuild: Boolean
 )
 
+/**
+ * 应用图标 + 标签 (PR-C 桌面 launcher 用).
+ *
+ * - [iconResName] 资源名 (例如 `ic_launcher`), 用来在 res/mipmap 目录找 png.
+ * - [iconResId] 暂时保留 0, 真正解析用 [findAppIconFile] 路径.
+ * - [label] 来自 `<application android:label="...">`.
+ * - [packageName] 来自 `<manifest package="...">`.
+ */
+data class ApplicationIconInfo(
+    val iconResName: String?,
+    val label: String?,
+    val packageName: String?,
+)
+
 class ProjectContextSource {
 
     companion object {
         private val LOG = LoggerFactory.getLogger(ProjectContextSource::class.java)
+    }
+
+    /**
+     * 【PR-C】从模块的 AndroidManifest.xml 解析 application 图标 + 标签 + 包名.
+     *
+     * 找不到 manifest 或解析失败时返回 null. 不会抛异常, 上层 [DesktopLauncher] 走
+     * Material icon fallback 即可.
+     */
+    fun loadApplicationIcon(modulePath: String?): ApplicationIconInfo? {
+        if (modulePath.isNullOrBlank()) return null
+        val moduleDir = File(modulePath)
+        if (!moduleDir.isDirectory) return null
+
+        // 优先 src/main/AndroidManifest.xml, 找不到再 fallback 到模块根目录.
+        val manifestFile = File(moduleDir, "src/main/AndroidManifest.xml")
+            .takeIf { it.isFile }
+            ?: File(moduleDir, "AndroidManifest.xml").takeIf { it.isFile }
+            ?: return null
+
+        val info = ManifestIconLoader.load(manifestFile) ?: return null
+        return ApplicationIconInfo(
+            iconResName = info.applicationIconResName,
+            label = info.applicationLabel,
+            packageName = info.packageName,
+        )
     }
 
     fun resolveContext(filePath: String): ProjectContext {

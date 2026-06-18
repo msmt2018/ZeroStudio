@@ -18,9 +18,11 @@
 package com.itsaky.androidide.compose.preview.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,11 +31,19 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +59,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,7 +94,9 @@ import kotlin.math.roundToInt
  * - FOLDABLE_OUTER: 类似 PHONE + 切口
  * - TABLET: 较厚边框
  * - WATCH: 圆形 (radius = width/2)
- * - DESKTOP / NONE: 无外壳
+ * - DESKTOP (PR-C): 桌面 launcher + 物理 home 键. 屏幕内容 (preview) 作为
+ *                   "前台 app" 显示, 桌面在背后, 按 home 键返回桌面.
+ * - NONE: 无外壳
  *
  * @param profile 设备 profile
  * @param modifier 外部 modifier
@@ -103,6 +116,12 @@ fun DeviceFrame(
     showChassis: Boolean = true,
     showPhysicalKeys: Boolean = true,
     useGestureNav: Boolean = false,
+    // === PR-C 桌面 launcher 集成参数 ===
+    desktopApps: List<com.itsaky.androidide.compose.preview.data.device.DesktopApp> = emptyList(),
+    foregroundApp: com.itsaky.androidide.compose.preview.data.device.DesktopApp? = null,
+    modulePath: String? = null,
+    onLaunchApp: (com.itsaky.androidide.compose.preview.data.device.DesktopApp) -> Unit = {},
+    onGoHome: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     when (profile.formFactor) {
@@ -112,9 +131,18 @@ fun DeviceFrame(
             systemBarsTheme = systemBarsTheme,
             content = content,
         )
-        DeviceProfile.FormFactor.DESKTOP,
+        DeviceProfile.FormFactor.DESKTOP -> DesktopFrame(
+            profile = profile,
+            modifier = modifier,
+            desktopApps = desktopApps,
+            foregroundApp = foregroundApp,
+            modulePath = modulePath,
+            onLaunchApp = onLaunchApp,
+            onGoHome = onGoHome,
+            content = content,
+        )
         DeviceProfile.FormFactor.NONE -> {
-            // 【v3.2 修复 #1】DESKTOP / NONE 必须 fillMaxSize, 否则 Box 没有
+            // 【v3.2 修复 #1】NONE 必须 fillMaxSize, 否则 Box 没有
             // 尺寸约束, Compose 跳过绘制 (用户看到全透明 + 紫底透出).
             // 之前版本只 .clip(RoundedCornerShape(...)) 没用 fillMaxSize, 在
             // ComposePreviewScreen 内会被父容器测量为 0.
@@ -139,6 +167,118 @@ fun DeviceFrame(
             useGestureNav = useGestureNav,
             content = content,
         )
+    }
+}
+
+/**
+ * 桌面形态设备外壳 (PR-C).
+ *
+ * 渲染策略:
+ * - **桌面** ([foregroundApp] == null): 屏幕显示 [DesktopLauncher] (壁纸 + 应用网格 + Dock 栏).
+ * - **前台 app** ([foregroundApp] != null): 屏幕显示 [content] (preview), 桌面状态栏仍显示
+ *   "app running in background" 提示, 用户可点 Home 键返回桌面.
+ *
+ * 这样 PR-C "桌面 launcher 模拟" + "物理键返回桌面" + "后台模拟" 三件事在屏幕内的不同
+ * 状态自然过渡, 用户能直接感受到"app 在桌面里被启动 → 按 home 键回到桌面"流程.
+ */
+@Composable
+private fun DesktopFrame(
+    profile: DeviceProfile,
+    modifier: Modifier,
+    desktopApps: List<com.itsaky.androidide.compose.preview.data.device.DesktopApp>,
+    foregroundApp: com.itsaky.androidide.compose.preview.data.device.DesktopApp?,
+    modulePath: String?,
+    onLaunchApp: (com.itsaky.androidide.compose.preview.data.device.DesktopApp) -> Unit,
+    onGoHome: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(profile.cornerRadiusDp.dp))
+            .background(Color.Black)
+    ) {
+        if (foregroundApp == null) {
+            // === 桌面态: 显示 DesktopLauncher, content() 不渲染 ===
+            DesktopLauncher(
+                apps = desktopApps,
+                foregroundApp = foregroundApp,
+                onLaunchApp = onLaunchApp,
+                onGoHome = onGoHome,
+            )
+        } else {
+            // === 前台 app 态: 显示 preview 内容, 上层叠 DesktopLauncher dock
+            //     + foreground app 提示 (用于按 home 返回) ===
+            content()
+            DesktopForegroundOverlay(
+                foregroundApp = foregroundApp,
+                modulePath = modulePath,
+                onGoHome = onGoHome,
+            )
+        }
+    }
+}
+
+/**
+ * 前台 app 状态下的桌面浮层 — 仅显示 dock + foreground app 提示条, 让用户能按
+ * "home" 键返回桌面. preview 内容透传显示在底层.
+ */
+@Composable
+private fun DesktopForegroundOverlay(
+    foregroundApp: com.itsaky.androidide.compose.preview.data.device.DesktopApp,
+    modulePath: String?,
+    onGoHome: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 顶部小提示条 — 不抢 preview 视觉
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0x80000000))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${foregroundApp.label} · running",
+                color = Color.White,
+                fontSize = 11.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "Home",
+                color = Color.White,
+                fontSize = 11.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF2563EB))
+                    .clickable(onClick = onGoHome)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        // 底部 dock — Home 物理键, 模拟"按 home 键返回桌面" (PR-C 用户要求 #1.1)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF2563EB))
+                    .clickable(onClick = onGoHome),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Home,
+                    contentDescription = "Home",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
     }
 }
 
@@ -222,9 +362,12 @@ private fun PhoneOrFoldableFrame(
                     )
                 }
 
-                // 5) 折叠铰链 (仅内屏)
+                // 5) 折叠铰链 (仅内屏) — 【PR-C】可拖拽改变 foldAngle
                 if (profile.formFactor == DeviceProfile.FormFactor.FOLDABLE_INNER) {
+                    var foldAngle by remember { mutableStateOf(0f) }
                     FoldableHingeOverlay(
+                        foldAngle = foldAngle,
+                        onFoldAngleChange = { foldAngle = it },
                         modifier = Modifier.fillMaxSize(),
                         horizontal = true,
                     )
@@ -269,20 +412,77 @@ private fun WatchFrame(
         contentAlignment = Alignment.Center,
     ) {
         val size = if (maxWidth < maxHeight) maxWidth else maxHeight
+        // 渲染层次: 表壳 (圆形) → 屏幕 (内嵌圆形) → content → 数字表冠 + 侧键
         Box(
             modifier = Modifier
                 .size(size)
-                .clip(androidx.compose.foundation.shape.CircleShape)
+                .clip(CircleShape)
                 .background(profile.chassisColor)
         ) {
+            // 【PR-C 修复】内层屏幕用 matchParentSize(), 让任意 content 都被圆形
+            // 裁切 (不论 content 是 LazyColumn / 滚动列表 / 大尺寸 view 都会被
+            // CircleShape 切掉, 而不溢出). 之前版本 size(size * 0.94f) 在父容器
+            // 用 .clip(CircleShape) 时已经能切, 但当 content 想撑满圆形区域时
+            // (例如预览了一个全屏大背景) 会留 6% 黑边. matchParentSize + 0.94f
+            // 的 padding 用 inset 模拟, 真实表盘的"屏幕"区域是内嵌的小圆.
             Box(
                 modifier = Modifier
-                    .size(size * 0.94f)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .matchParentSize()
+                    .padding(size * 0.03f)
+                    .clip(CircleShape)
                     .background(Color.Black)
             ) {
                 content()
             }
+
+            // === 数字表冠 (digital crown) — 表盘右侧 ===
+            // 真实手表 (Wear OS / Apple Watch) 右侧有一个小圆柱形旋钮, 用矩形 + 渐变模拟.
+            WatchCrown(modifier = Modifier.align(Alignment.CenterEnd))
+        }
+    }
+}
+
+/**
+ * 数字表冠 (Wear OS / Apple Watch 右侧的旋钮). PR-C 加, 让手表模拟更真实.
+ */
+@Composable
+private fun WatchCrown(modifier: Modifier = Modifier) {
+    val density = LocalDensity.current
+    val crownW = with(density) { 6.dp.toPx() }
+    val crownH = with(density) { 32.dp.toPx() }
+    val crownColor = Color(0xFF6B6B70)
+    val crownRidgeColor = Color(0xFF3A3A3E)
+
+    Canvas(
+        modifier = modifier
+            .width(8.dp)
+            .height(40.dp)
+    ) {
+        // 外壳
+        drawRoundRect(
+            color = crownColor,
+            topLeft = Offset(
+                x = (size.width - crownW) / 2f,
+                y = (size.height - crownH) / 2f,
+            ),
+            size = Size(crownW, crownH),
+            cornerRadius = CornerRadius(crownW / 2f, crownW / 2f),
+        )
+        // 凹槽纹理 (4 道横线模拟螺纹)
+        for (i in 0 until 4) {
+            val y = (size.height - crownH) / 2f + (i + 1) * (crownH / 5f)
+            drawLine(
+                color = crownRidgeColor,
+                start = Offset(
+                    x = (size.width - crownW) / 2f,
+                    y = y,
+                ),
+                end = Offset(
+                    x = (size.width + crownW) / 2f,
+                    y = y,
+                ),
+                strokeWidth = 1.2f,
+            )
         }
     }
 }
@@ -297,8 +497,8 @@ private fun WatchFrame(
 @Composable
 private fun PhysicalKeyIndicator(
     key: PhysicalKey,
-    screenWidthDp: androidx.compose.ui.unit.Dp,
-    screenHeightDp: androidx.compose.ui.unit.Dp,
+    screenWidthDp: Dp,
+    screenHeightDp: Dp,
 ) {
     val density = LocalDensity.current
     val xPx = with(density) { key.positionXdp.dp.toPx() }
@@ -333,7 +533,7 @@ private fun PhysicalKeyIndicator(
 fun DeviceThumbnail(
     profile: DeviceProfile,
     modifier: Modifier = Modifier,
-    maxHeight: androidx.compose.ui.unit.Dp = 80.dp,
+    maxHeight: Dp = 80.dp,
 ) {
     val density = LocalDensity.current
     val aspect = profile.aspectRatio
@@ -392,7 +592,7 @@ fun DeviceThumbnail(
                                     )
                                 }
                                 .size(with(density) { d.toDp() })
-                                .background(cutoutColor, androidx.compose.foundation.shape.CircleShape)
+                                .background(cutoutColor, CircleShape)
                         )
                     }
                     is CutoutGeometry.WaterfallCurve -> {
