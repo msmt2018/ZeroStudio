@@ -71,8 +71,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
+import com.itsaky.androidide.compose.preview.ui.ComposableFunctionPicker
+import com.itsaky.androidide.compose.preview.ui.DebugToolbar
+import com.itsaky.androidide.compose.preview.ui.DebugToolbarActions
+import com.itsaky.androidide.compose.preview.ui.DebugToolbarState
 import com.itsaky.androidide.compose.preview.ui.DeviceFrame
 import com.itsaky.androidide.compose.preview.ui.DeviceProfileSheet
+import com.itsaky.androidide.compose.preview.ui.ErrorBadge
+import com.itsaky.androidide.compose.preview.ui.ErrorDetailSheet
+import com.itsaky.androidide.compose.preview.ui.LayoutTreeBottomSheet
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbar
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarActions
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarState
@@ -157,27 +164,84 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         }
 
         // 【PR-C】订阅 previewState 拿 modulePath, 第一次 Ready 时加载用户 app
-        // (解析 manifest android:icon + label). 失败不阻塞, 桌面还能用.
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.previewState.collect { state ->
-                    if (state is PreviewState.Ready) {
-                        // 加载用户 app 一次 (addUserApp 内部有重复检查)
-                        viewModel.loadUserApp(viewModel.getModulePath().takeIf { it.isNotEmpty() })
-                        // 渲染 preview
-                        renderEngine?.let { engine ->
-                            val config = state.previewConfigs.firstOrNull() ?: return@collect
-                            engine.render(
-                                previewDex = state.dexFile,
-                                projectDex = state.projectDexFiles,
-                                className = state.className,
-                                functionName = config.functionName,
-                            )
-                        }
+    // (解析 manifest android:icon + label). 失败不阻塞, 桌面还能用.
+    lifecycleScope.launch {
+        repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.previewState.collect { state ->
+                if (state is PreviewState.Ready) {
+                    // 加载用户 app 一次 (addUserApp 内部有重复检查)
+                    viewModel.loadUserApp(viewModel.getModulePath().takeIf { it.isNotEmpty() })
+                    // 渲染 preview
+                    renderEngine?.let { engine ->
+                        val functionName = viewModel.selectedPreview.value
+                            ?: state.previewConfigs.firstOrNull()?.functionName
+                            ?: return@collect
+                        engine.render(
+                            previewDex = state.dexFile,
+                            projectDex = state.projectDexFiles,
+                            className = state.className,
+                            functionName = functionName,
+                        )
                     }
                 }
             }
         }
+    }
+
+    // 【v3.3】订阅 selectedPreview 变化 — 用户从调试模式下拉选择新 @Composable 时
+    // 立刻重新渲染. 注意: 这里 ready 状态没变, 所以上面的 collect 不会重新触发.
+    lifecycleScope.launch {
+        repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.selectedPreview.collect { functionName ->
+                if (functionName == null) return@collect
+                val state = viewModel.previewState.value
+                if (state !is PreviewState.Ready) return@collect
+                renderEngine?.let { engine ->
+                    engine.render(
+                        previewDex = state.dexFile,
+                        projectDex = state.projectDexFiles,
+                        className = state.className,
+                        functionName = functionName,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * 【v3.3】公开方法 — ComposableFunctionPicker 选中函数时调, 重新渲染.
+     * (等价于 selectedPreview 的 collect, 但走 Activity 路径更直接, 适合从 sheet 调)
+     */
+    fun renderSelectedComposable(functionName: String) {
+        viewModel.selectComposable(functionName)
+    }
+
+    /**
+     * 【v3.3】拿 preview view 引用 (供 [ScreenshotExporter] 用).
+     * 返回 render engine 的 ComposeView, 如果 engine 还没 attach 返回 null.
+     */
+    fun previewViewForExport(): android.view.View? {
+        return renderEngine?.let { engine ->
+            // 反射拿私有字段 composeView
+            val field = engine.javaClass.getDeclaredField("composeView").apply { isAccessible = true }
+            field.get(engine) as? android.view.View
+        } ?: run {
+            // fallback: 找根 FrameLayout 中的 ComposeView
+            window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content)
+                ?.let { root ->
+                    findComposeView(root)
+                }
+        }
+    }
+
+    private fun findComposeView(view: android.view.View): android.view.View? {
+        if (view is androidx.compose.ui.platform.ComposeView) return view
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findComposeView(view.getChildAt(i))?.let { return it }
+            }
+        }
+        return null
     }
 
     private var renderEngine: PreviewRenderEngine? = null
@@ -281,6 +345,10 @@ private fun ComposePreviewScreen(
     // 【PR-C】桌面 launcher 状态
     val desktopApps by viewModel.desktopApps.collectAsStateWithLifecycle()
     val foregroundApp by viewModel.foregroundApp.collectAsStateWithLifecycle()
+    // 【v3.3】调试模式
+    val debugMode by viewModel.debugMode.collectAsStateWithLifecycle()
+    val composableFunctions by viewModel.composableFunctions.collectAsStateWithLifecycle()
+    val selectedPreview by viewModel.selectedPreview.collectAsStateWithLifecycle()
 
     // 【PR-B】全屏模式: 控制手机系统状态栏. LaunchedEffect 在 mode 变化时调用
     // Activity 的 windowInsetsController.
@@ -293,6 +361,9 @@ private fun ComposePreviewScreen(
     val scope = rememberCoroutineScope()
     var showDeviceSheet by remember { mutableStateOf(false) }
     var showResolutionEditor by remember { mutableStateOf(false) }
+    var showComposablePicker by remember { mutableStateOf(false) }
+    var showLayoutTreeSheet by remember { mutableStateOf(false) }
+    var showErrorSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
     // 应用主题
@@ -316,9 +387,10 @@ private fun ComposePreviewScreen(
                             themeLabel = theme.name,
                             zoom = viewport.zoom,
                             showSystemBars = deviceConfig.showStatusBar,
-                            debugEnabled = debugEnabled,
                             deviceSimEnabled = deviceConfig.deviceSimEnabled,
                             fullscreen = false,
+                            // 【v3.3】调试模式 — 替换旧的 debugEnabled
+                            debugModeEnabled = debugMode.enabled,
                         ),
                         actions = PreviewToolbarActions(
                             onOpenDeviceSheet = { showDeviceSheet = true },
@@ -326,7 +398,8 @@ private fun ComposePreviewScreen(
                             onSetZoom = { viewModel.setZoom(it) },
                             onFitZoom = { viewModel.fitZoom() },
                             onToggleSystemBars = { viewModel.toggleSystemBars() },
-                            onToggleDebug = { viewModel.toggleDebug() },
+                            // 【v3.3】调试模式 toggle
+                            onToggleDebugMode = { viewModel.toggleDebugMode() },
                             onClose = onClose,
                             onToggleDeviceSim = { viewModel.toggleDeviceSim() },
                             onToggleFullscreen = { viewModel.toggleFullscreen() },
@@ -334,6 +407,65 @@ private fun ComposePreviewScreen(
                         ),
                     )
                     HorizontalDivider()
+
+                    // 【v3.3】调试模式开启时, 在主 toolbar 下方显示 Debug Toolbar
+                    if (debugMode.enabled) {
+                        DebugToolbar(
+                            state = DebugToolbarState(
+                                currentFunctionName = selectedPreview,
+                                functionCount = composableFunctions.size,
+                                analysisMode = debugMode.analysisMode,
+                                editMode = debugMode.editMode,
+                                showRecompositionHighlight = debugMode.showRecompositionHighlight,
+                                showLayoutTree = showLayoutTreeSheet,
+                                hiddenNodeCount = debugMode.hiddenNodeIds.size,
+                            ),
+                            actions = DebugToolbarActions(
+                                onOpenFunctionPicker = { showComposablePicker = true },
+                                onToggleAnalysisMode = { viewModel.toggleAnalysisMode() },
+                                onToggleEditMode = { viewModel.toggleEditMode() },
+                                onToggleRecomposition = { viewModel.toggleRecompositionHighlight() },
+                                onToggleLayoutTree = { showLayoutTreeSheet = !showLayoutTreeSheet },
+                                onClearHiddenNodes = { viewModel.clearHiddenNodes() },
+                                // 【v3.3】截图导出 — 通过 Activity 拿 preview view
+                                onExportScreenshot = {
+                                    val previewView = activityCtx.previewViewForExport()
+                                    com.itsaky.androidide.compose.preview.util.ScreenshotExporter
+                                        .export(context, previewView) { ok, uri, msg ->
+                                            activityCtx.runOnUiThread {
+                                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                                if (!ok) {
+                                                    LOG.warn("Screenshot export failed: {}", msg)
+                                                }
+                                            }
+                                        }
+                                },
+                                onClose = { viewModel.toggleDebugMode() },
+                            ),
+                        )
+                        HorizontalDivider()
+
+                        // 【v3.3】错误 badge — 紧跟 debug toolbar 之后, 仅在调试模式显示
+                        if (debugMode.showErrorBadge) {
+                            val errorState = previewState
+                            val errorMessage = (errorState as? PreviewState.Error)?.message
+                            val diagnostics = (errorState as? PreviewState.Error)?.diagnostics.orEmpty()
+                            if (errorMessage != null || diagnostics.isNotEmpty()) {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                ) {
+                                    ErrorBadge(
+                                        errorMessage = errorMessage,
+                                        diagnostics = diagnostics,
+                                        onClick = { showErrorSheet = true },
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // 主体 — Box 叠层: 底层是 preview / loading / error, 顶层是退出全屏按钮
@@ -430,6 +562,46 @@ private fun ComposePreviewScreen(
             onDismiss = {
                 showResolutionEditor = false
             }
+        )
+    }
+
+    // 【v3.3】@Composable 函数选择器 (调试模式)
+    if (showComposablePicker) {
+        ComposableFunctionPicker(
+            functions = composableFunctions,
+            currentFunctionName = selectedPreview,
+            onSelected = { info ->
+                // 1) 选新函数
+                viewModel.selectComposable(info.name)
+                // 2) 触发重新渲染 — Activity 的 previewState.collect 已经监听,
+                //    但只取 firstOrNull. selectedPreview 变化时需要主动 render.
+                //    这里手动调用 Activity.renderComposable 即可.
+                activityCtx.renderSelectedComposable(info.name)
+            },
+            onDismiss = {
+                showComposablePicker = false
+            },
+        )
+    }
+
+    // 【v3.3】布局树底部抽屉
+    if (showLayoutTreeSheet) {
+        LayoutTreeBottomSheet(
+            debugMode = debugMode,
+            onSelectNode = { nodeId -> viewModel.selectLayoutNode(nodeId) },
+            onToggleHidden = { nodeId -> viewModel.toggleNodeHidden(nodeId) },
+            onClearHidden = { viewModel.clearHiddenNodes() },
+            onDismiss = { showLayoutTreeSheet = false },
+        )
+    }
+
+    // 【v3.3】错误详情 Sheet
+    if (showErrorSheet) {
+        val errState = previewState as? PreviewState.Error
+        ErrorDetailSheet(
+            errorMessage = errState?.message,
+            diagnostics = errState?.diagnostics.orEmpty(),
+            onDismiss = { showErrorSheet = false },
         )
     }
 }

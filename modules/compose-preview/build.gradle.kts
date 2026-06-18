@@ -89,6 +89,10 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.common.kotlin.coroutines.android)
 
+  // === 【v3.3】调试模式: 反射读 LayoutNode 私有字段, 拿子节点 + bounds. ===
+  // kotlin-reflect 提供 kotlin-reflect API, 同时通过 setAccessible 拿私有字段.
+  implementation(libs.org.jetbrains.kotlin.reflect)
+
   // === AndroidIDE 内部模块 ===
   implementation(projects.core.common)
   implementation(projects.editor.impl)

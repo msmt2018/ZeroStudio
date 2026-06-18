@@ -181,11 +181,11 @@ fun PreviewToolbar(
             },
         )
 
-        // 调试开关
+        // 调试开关 — 【v3.3】改名为 Debug Mode, 区别于旧 placeholder.
         FilterChip(
-            selected = state.debugEnabled,
-            onClick = actions.onToggleDebug,
-            label = { Text("Debug") },
+            selected = state.debugModeEnabled,
+            onClick = actions.onToggleDebugMode,
+            label = { Text(if (state.debugModeEnabled) "Debug ON" else "Debug") },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Filled.BugReport,
@@ -249,11 +249,15 @@ data class PreviewToolbarState(
     val themeLabel: String = "Light",
     val zoom: Float = 1.0f,
     val showSystemBars: Boolean = true,
-    val debugEnabled: Boolean = false,
     /** v3.2: 是否启用真实设备模拟. 默认 false. */
     val deviceSimEnabled: Boolean = false,
     /** v3.2 / PR-B: 全屏模式. 默认 false. */
     val fullscreen: Boolean = false,
+    /**
+     * 【v3.3】调试模式. 跟旧 [debugEnabled] 区分 — 这个表示"完整调试模式"已开启,
+     * 会显示 Debug Toolbar. UI 上 debug chip 改用这个字段.
+     */
+    val debugModeEnabled: Boolean = false,
 )
 
 /**
@@ -265,7 +269,10 @@ data class PreviewToolbarActions(
     val onSetZoom: (Float) -> Unit,
     val onFitZoom: () -> Unit,
     val onToggleSystemBars: () -> Unit,
-    val onToggleDebug: () -> Unit,
+    /**
+     * 【v3.3】调试模式 toggle. 替换旧的 onToggleDebug. UI 上 debug chip 用这个.
+     */
+    val onToggleDebugMode: () -> Unit = {},
     val onClose: () -> Unit,
     /** v3.2: 切换设备模拟开关. */
     val onToggleDeviceSim: () -> Unit = {},

@@ -24,10 +24,14 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.compose.preview.compiler.CompileDiagnostic
 import com.itsaky.androidide.compose.preview.data.device.DesktopApp
 import com.itsaky.androidide.compose.preview.data.device.DeviceCatalog
+import com.itsaky.androidide.compose.preview.data.model.DebugModeState
+import com.itsaky.androidide.compose.preview.data.model.DebugSubMode
 import com.itsaky.androidide.compose.preview.data.repository.CompilationException
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepository
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepositoryImpl
 import com.itsaky.androidide.compose.preview.data.repository.InitializationResult
+import com.itsaky.androidide.compose.preview.data.source.ComposableFunctionInfo
+import com.itsaky.androidide.compose.preview.data.source.ComposableSymbolExtractor
 import com.itsaky.androidide.compose.preview.data.source.ProjectContextSource
 import com.itsaky.androidide.compose.preview.domain.PreviewSourceParser
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
@@ -157,6 +161,8 @@ class ComposePreviewViewModel(
     private val sourceParser: PreviewSourceParser = PreviewSourceParser(),
     // 【PR-C】桌面 launcher 用 — 解析 manifest android:icon + 拿到桌面 app 信息.
     private val projectContextSource: ProjectContextSource = ProjectContextSource(),
+    // 【v3.3】调试模式: 从 .kt 源码中提取 @Composable 函数列表, 给调试 toolbar 下拉用.
+    private val composableSymbolExtractor: ComposableSymbolExtractor = ComposableSymbolExtractor(),
 ) : ViewModel() {
 
     private val _previewState = MutableStateFlow<PreviewState>(PreviewState.Idle)
@@ -202,6 +208,28 @@ class ComposePreviewViewModel(
     val isFullscreen: StateFlow<Boolean> = _fullscreenMode
         .map { it != FullscreenMode.OFF }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // === v3.3 调试模式 ===
+
+    /**
+     * 【v3.3】调试模式状态. 包含:
+     * - [DebugModeState.enabled] 调试模式总开关, 控制 Debug Toolbar 是否显示
+     * - [DebugModeState.analysisMode] 布局分析模式 (虚线 + 点击节点查看属性)
+     * - [DebugModeState.editMode] 布局编辑模式 (在分析模式上 + 隐藏节点)
+     * - [DebugModeState.selectedNodeId] 当前选中的布局节点 id
+     * - [DebugModeState.hiddenNodeIds] 被隐藏的节点 id 集合
+     * - [DebugModeState.showRecompositionHighlight] Recomposition 高亮开关
+     * - [DebugModeState.showErrorBadge] 错误 badge 开关
+     */
+    private val _debugMode = MutableStateFlow(DebugModeState())
+    val debugMode: StateFlow<DebugModeState> = _debugMode.asStateFlow()
+
+    /**
+     * 【v3.3】当前 .kt 源码中找到的全部 @Composable 函数 (按行号排序).
+     * 每次 [onSourceChanged] 时通过 [composableSymbolExtractor] 重新抽取.
+     */
+    private val _composableFunctions = MutableStateFlow<List<ComposableFunctionInfo>>(emptyList())
+    val composableFunctions: StateFlow<List<ComposableFunctionInfo>> = _composableFunctions.asStateFlow()
 
     // === PR-C 桌面 launcher 模拟 ===
 
@@ -295,6 +323,8 @@ class ComposePreviewViewModel(
 
     fun onSourceChanged(source: String) {
         currentSource = source
+        // 【v3.3】源码变化时同步刷新 @Composable 函数列表, 给调试模式下拉用.
+        refreshComposableFunctions(source)
         val parsed = parseAndValidateSource(source) ?: return
 
         viewModelScope.launch {
@@ -394,6 +424,17 @@ class ComposePreviewViewModel(
         if (_availablePreviews.value.contains(functionName)) {
             _selectedPreview.value = functionName
         }
+    }
+
+    /**
+     * 【v3.3】从调试模式下拉选择一个 @Composable 函数渲染 (不一定需要 @Preview 标注).
+     * 如果该函数不在 @Preview 列表中, 仍然可以渲染, 因为 [PreviewRenderEngine] 通过
+     * 反射调用函数本身.
+     */
+    fun selectComposable(functionName: String) {
+        // 调试模式允许选择任意 @Composable 函数, 不仅仅 @Preview 标注的.
+        _selectedPreview.value = functionName
+        LOG.info("Selected composable: {}", functionName)
     }
 
     fun getModulePath(): String = modulePath ?: ""
@@ -590,6 +631,94 @@ class ComposePreviewViewModel(
 
     fun toggleDebug() {
         _debugEnabled.value = !_debugEnabled.value
+    }
+
+    // === v3.3 调试模式方法 ===
+
+    /**
+     * 【v3.3】切换调试模式总开关. 关闭时同时关闭分析模式 / 编辑模式.
+     */
+    fun toggleDebugMode() {
+        val current = _debugMode.value
+        _debugMode.value = if (current.enabled) {
+            DebugModeState() // 全关
+        } else {
+            current.copy(enabled = true)
+        }
+        LOG.info("Debug mode toggled: {}", _debugMode.value.enabled)
+    }
+
+    /**
+     * 【v3.3】切换布局分析模式. 开启时自动开启调试模式, 关闭时不影响总开关.
+     */
+    fun toggleAnalysisMode() {
+        val current = _debugMode.value
+        val nextAnalysis = !current.analysisMode
+        _debugMode.value = current.copy(
+            enabled = true,
+            analysisMode = nextAnalysis,
+            // 进入分析模式时清空选中节点
+            selectedNodeId = if (nextAnalysis) null else current.selectedNodeId,
+        )
+        LOG.info("Analysis mode toggled: {}", nextAnalysis)
+    }
+
+    /**
+     * 【v3.3】切换布局编辑模式. 开启时自动开启调试模式 + 分析模式 (编辑需要先看节点).
+     */
+    fun toggleEditMode() {
+        val current = _debugMode.value
+        val nextEdit = !current.editMode
+        _debugMode.value = current.copy(
+            enabled = true,
+            analysisMode = true,
+            editMode = nextEdit,
+        )
+        LOG.info("Edit mode toggled: {}", nextEdit)
+    }
+
+    /**
+     * 【v3.3】切换 Recomposition 高亮显示. 与分析模式独立, 可单独开.
+     */
+    fun toggleRecompositionHighlight() {
+        val current = _debugMode.value
+        _debugMode.value = current.copy(
+            enabled = true,
+            showRecompositionHighlight = !current.showRecompositionHighlight,
+        )
+    }
+
+    /**
+     * 【v3.3】选中一个布局节点. 由 LayoutInspector 点击时调.
+     */
+    fun selectLayoutNode(nodeId: String?) {
+        _debugMode.value = _debugMode.value.copy(selectedNodeId = nodeId)
+    }
+
+    /**
+     * 【v3.3】隐藏/取消隐藏一个布局节点 (编辑模式).
+     */
+    fun toggleNodeHidden(nodeId: String) {
+        val current = _debugMode.value
+        val newHidden = current.hiddenNodeIds.toMutableSet().apply {
+            if (contains(nodeId)) remove(nodeId) else add(nodeId)
+        }
+        _debugMode.value = current.copy(hiddenNodeIds = newHidden)
+        LOG.info("Node {} hidden={}", nodeId, newHidden.contains(nodeId))
+    }
+
+    /**
+     * 【v3.3】清空所有隐藏节点.
+     */
+    fun clearHiddenNodes() {
+        _debugMode.value = _debugMode.value.copy(hiddenNodeIds = emptySet())
+    }
+
+    /**
+     * 【v3.3】从当前 .kt 源码中抽取 @Composable 函数列表. 通常由 [onSourceChanged] 触发.
+     */
+    private fun refreshComposableFunctions(source: String) {
+        _composableFunctions.value = composableSymbolExtractor.extract(source)
     }
 
     // === PR-C 桌面 launcher 方法 ===
