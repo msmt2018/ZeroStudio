@@ -46,17 +46,24 @@ import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -188,12 +195,41 @@ fun PreviewToolbar(
             },
         )
 
-        // 【PR-B 占位】全屏切换 (v3.2 先放按钮, 行为 PR-B 实现)
-        IconButton(onClick = actions.onToggleFullscreen) {
-            Icon(
-                Icons.Filled.Fullscreen,
-                contentDescription = "Fullscreen",
-            )
+        // 【PR-B】全屏切换按钮 (单击 = toggle; 长按 = 弹带/不带系统状态栏选择菜单).
+        var fullscreenMenuOpen by remember { mutableStateOf(false) }
+        Box {
+            IconButton(
+                onClick = actions.onToggleFullscreen,
+                modifier = Modifier.pointerInput(Unit) {
+                    androidx.compose.foundation.gestures.detectTapGestures(
+                        onLongPress = { fullscreenMenuOpen = true },
+                    )
+                },
+            ) {
+                Icon(
+                    imageVector = if (state.fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                    contentDescription = if (state.fullscreen) "退出全屏" else "全屏",
+                )
+            }
+            DropdownMenu(
+                expanded = fullscreenMenuOpen,
+                onDismissRequest = { fullscreenMenuOpen = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("全屏 (带系统状态栏)") },
+                    onClick = {
+                        fullscreenMenuOpen = false
+                        actions.onSetFullscreenMode(com.itsaky.androidide.compose.preview.FullscreenMode.WITH_SYSTEM_BARS)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("沉浸式全屏 (隐藏系统状态栏)") },
+                    onClick = {
+                        fullscreenMenuOpen = false
+                        actions.onSetFullscreenMode(com.itsaky.androidide.compose.preview.FullscreenMode.WITHOUT_SYSTEM_BARS)
+                    },
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(8.dp))
@@ -233,6 +269,8 @@ data class PreviewToolbarActions(
     val onClose: () -> Unit,
     /** v3.2: 切换设备模拟开关. */
     val onToggleDeviceSim: () -> Unit = {},
-    /** v3.2 / PR-B: 切换全屏. */
+    /** PR-B: 切换全屏. */
     val onToggleFullscreen: () -> Unit = {},
+    /** PR-B: 设置全屏模式 (长按全屏菜单调用). */
+    val onSetFullscreenMode: (com.itsaky.androidide.compose.preview.FullscreenMode) -> Unit = {},
 )

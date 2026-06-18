@@ -31,14 +31,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,10 +51,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -186,6 +196,38 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
+    /**
+     * 【PR-B】应用全屏模式到 Activity 的 window insets controller.
+     *
+     * - [FullscreenMode.OFF]: 显示系统状态栏 + 导航栏.
+     * - [FullscreenMode.WITH_SYSTEM_BARS]: 全屏, 但保留系统状态栏 (用户能在顶部看到时间 / 信号).
+     * - [FullscreenMode.WITHOUT_SYSTEM_BARS]: 沉浸式全屏, 隐藏系统栏, 适合看沉浸式 UI.
+     *
+     * 用户在 Preview 内点击设备套壳 / compose 内容时, 需要 swipe to show system bars.
+     * BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE 让系统栏在被 swipe 时短暂显示.
+     */
+    fun applyFullscreenMode(mode: FullscreenMode) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        when (mode) {
+            FullscreenMode.OFF -> {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            }
+            FullscreenMode.WITH_SYSTEM_BARS -> {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+            FullscreenMode.WITHOUT_SYSTEM_BARS -> {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+        LOG.info("Applied fullscreen mode: {}", mode)
+    }
+
     override fun onDestroy() {
         renderEngine?.detach()
         renderEngine = null
@@ -223,6 +265,15 @@ private fun ComposePreviewScreen(
     val viewport by viewModel.viewport.collectAsStateWithLifecycle()
     val theme by viewModel.theme.collectAsStateWithLifecycle()
     val debugEnabled by viewModel.debugEnabled.collectAsStateWithLifecycle()
+    val isFullscreen by viewModel.isFullscreen.collectAsStateWithLifecycle()
+    val fullscreenMode by viewModel.fullscreenMode.collectAsStateWithLifecycle()
+
+    // 【PR-B】全屏模式: 控制手机系统状态栏. LaunchedEffect 在 mode 变化时调用
+    // Activity 的 windowInsetsController.
+    val activityCtx = LocalContext.current as ComposePreviewActivity
+    LaunchedEffect(fullscreenMode) {
+        activityCtx.applyFullscreenMode(fullscreenMode)
+    }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -242,30 +293,46 @@ private fun ComposePreviewScreen(
             color = MaterialTheme.colorScheme.background,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // 顶栏
-                PreviewToolbar(
-                    state = PreviewToolbarState(
-                        deviceName = deviceConfig.profile.displayName,
-                        themeLabel = theme.name,
-                        zoom = viewport.zoom,
-                        showSystemBars = deviceConfig.showStatusBar,
-                        debugEnabled = debugEnabled,
-                        deviceSimEnabled = deviceConfig.deviceSimEnabled,
-                    ),
-                    actions = PreviewToolbarActions(
-                        onOpenDeviceSheet = { showDeviceSheet = true },
-                        onCycleTheme = { viewModel.cycleTheme() },
-                        onSetZoom = { viewModel.setZoom(it) },
-                        onFitZoom = { viewModel.fitZoom() },
-                        onToggleSystemBars = { viewModel.toggleSystemBars() },
-                        onToggleDebug = { viewModel.toggleDebug() },
-                        onClose = onClose,
-                        onToggleDeviceSim = { viewModel.toggleDeviceSim() },
-                        onToggleFullscreen = { viewModel.toggleFullscreen() },
-                    ),
-                )
-
-                HorizontalDivider()
+                // 【PR-B】顶栏: 全屏时隐藏, 右上角改放"退出全屏"按钮.
+                if (!isFullscreen) {
+                    PreviewToolbar(
+                        state = PreviewToolbarState(
+                            deviceName = deviceConfig.profile.displayName,
+                            themeLabel = theme.name,
+                            zoom = viewport.zoom,
+                            showSystemBars = deviceConfig.showStatusBar,
+                            debugEnabled = debugEnabled,
+                            deviceSimEnabled = deviceConfig.deviceSimEnabled,
+                            fullscreen = false,
+                        ),
+                        actions = PreviewToolbarActions(
+                            onOpenDeviceSheet = { showDeviceSheet = true },
+                            onCycleTheme = { viewModel.cycleTheme() },
+                            onSetZoom = { viewModel.setZoom(it) },
+                            onFitZoom = { viewModel.fitZoom() },
+                            onToggleSystemBars = { viewModel.toggleSystemBars() },
+                            onToggleDebug = { viewModel.toggleDebug() },
+                            onClose = onClose,
+                            onToggleDeviceSim = { viewModel.toggleDeviceSim() },
+                            onToggleFullscreen = { viewModel.toggleFullscreen() },
+                            onSetFullscreenMode = { mode -> viewModel.setFullscreenMode(mode) },
+                        ),
+                    )
+                    HorizontalDivider()
+                } else {
+                    // 【PR-B】全屏时: 右上角加一个退出全屏按钮 (全人类习惯).
+                    Box(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                        IconButton(
+                            onClick = { viewModel.toggleFullscreen() },
+                            modifier = Modifier.align(Alignment.TopEnd),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FullscreenExit,
+                                contentDescription = "退出全屏",
+                            )
+                        }
+                    }
+                }
 
                 // 主体
                 Box(
@@ -292,6 +359,8 @@ private fun ComposePreviewScreen(
                         is PreviewState.Ready -> ReadyPanel(
                             activity = activity,
                             deviceConfig = deviceConfig,
+                            viewport = viewport,
+                            isFullscreen = isFullscreen,
                         )
                     }
                 }
@@ -419,6 +488,8 @@ private fun ErrorPanel(
 private fun ReadyPanel(
     activity: ComposePreviewActivity,
     deviceConfig: DeviceConfig,
+    viewport: ViewportState,
+    isFullscreen: Boolean,
 ) {
     // 设备框 + 内容
     Box(
@@ -427,28 +498,44 @@ private fun ReadyPanel(
             .padding(if (deviceConfig.deviceSimEnabled) 16.dp else 0.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // 【PR-B】zoom 应用:
+        // - 设备模式: 整个 device frame + content 一起缩放 (用户要求 #3 "真实设备模拟
+        //   时就需要直接将设备套壳以及内容显示区域等同步放大或者缩小").
+        // - 无设备模式: 仅缩放 content (compose UI), 以中心点缩放 (用户要求 #3
+        //   "以中心点逐渐放大").
+        // 用 graphicsLayer + TransformOrigin.Center 实现 GPU 缩放, 不触发重测量.
+        val zoomScale = viewport.zoom
+        val graphicsModifier = Modifier.graphicsLayer(
+            scaleX = zoomScale,
+            scaleY = zoomScale,
+            transformOrigin = TransformOrigin.Center,
+        )
+
         // 【v3.2】用 key() 强制 deviceSimEnabled / profile 变化时整体重组.
-        // 原因: AndroidView 的 factory 缓存 (默认按位置 key), 切 deviceSim 时
-        // 如果不重置, 旧 PreviewRenderEngine 引用的 ComposeView 还在新 container
-        // 之外, 切回时显示黑屏. key 强制整个子树重组, 触发 AndroidView 重建.
         androidx.compose.runtime.key(
             deviceConfig.deviceSimEnabled,
             deviceConfig.profile.id
         ) {
             if (deviceConfig.deviceSimEnabled) {
-                DeviceFrame(
-                    profile = deviceConfig.profile,
-                    systemBarsTheme = deviceConfig.systemBarsTheme,
-                    showStatusBar = deviceConfig.showStatusBar,
-                    showNavigationBar = deviceConfig.showNavigationBar,
-                    showCutout = deviceConfig.showCutout,
-                    showChassis = deviceConfig.showChassis,
-                    useGestureNav = deviceConfig.useGestureNav,
-                ) {
-                    PreviewContainer(activity)
+                // 设备模式: 整个 device frame 一起缩放
+                Box(modifier = graphicsModifier) {
+                    DeviceFrame(
+                        profile = deviceConfig.profile,
+                        systemBarsTheme = deviceConfig.systemBarsTheme,
+                        showStatusBar = deviceConfig.showStatusBar,
+                        showNavigationBar = deviceConfig.showNavigationBar,
+                        showCutout = deviceConfig.showCutout,
+                        showChassis = deviceConfig.showChassis,
+                        useGestureNav = deviceConfig.useGestureNav,
+                    ) {
+                        PreviewContainer(activity)
+                    }
                 }
             } else {
-                PreviewContainer(activity)
+                // 无设备模式: 缩放 compose UI 本身, 不缩放外层
+                Box(modifier = graphicsModifier) {
+                    PreviewContainer(activity)
+                }
             }
         }
     }

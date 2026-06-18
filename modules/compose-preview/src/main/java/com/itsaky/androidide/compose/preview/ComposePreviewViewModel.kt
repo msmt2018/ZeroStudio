@@ -34,10 +34,13 @@ import com.itsaky.androidide.compose.preview.ui.SystemBarsTheme
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -167,9 +170,24 @@ class ComposePreviewViewModel(
 
     private val _debugEnabled = MutableStateFlow(false)
     val debugEnabled: StateFlow<Boolean> = _debugEnabled.asStateFlow()
-    /** v3.2 / PR-B 占位: 全屏状态. */
-    private val _isFullscreen = MutableStateFlow(false)
-    val isFullscreen: StateFlow<Boolean> = _isFullscreen.asStateFlow()
+    /**
+     * 【PR-B】全屏模式. 默认为 [FullscreenMode.OFF] (非全屏).
+     *
+     * 单击全屏按钮: 切 [FullscreenMode.WITH_SYSTEM_BARS] (带系统状态栏的全屏).
+     * 长按全屏按钮: 弹菜单, 用户选 [FullscreenMode.WITH_SYSTEM_BARS] 或
+     * [FullscreenMode.WITHOUT_SYSTEM_BARS] (隐藏系统状态栏的纯全屏).
+     * 退出全屏 (右上角 X 按钮): 设回 [FullscreenMode.OFF].
+     */
+    private val _fullscreenMode = MutableStateFlow(FullscreenMode.OFF)
+    val fullscreenMode: StateFlow<FullscreenMode> = _fullscreenMode.asStateFlow()
+
+    /**
+     * 【PR-B】true=处于全屏 (无论是否隐藏系统状态栏). 由 [fullscreenMode] 派生,
+     * 不需要单独维护. UI 用这个判断 toolbar 显示 / 隐藏 + 退出按钮.
+     */
+    val isFullscreen: StateFlow<Boolean> = _fullscreenMode
+        .map { it != FullscreenMode.OFF }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val sourceChanges = MutableSharedFlow<SourceUpdate>()
 
@@ -447,14 +465,25 @@ class ComposePreviewViewModel(
     }
 
     /**
-     * 【v3.2 / PR-B 占位】切换全屏. PR-B 实现完整行为:
-     * - true: 隐藏 toolbar
-     * - 切回: 顶部右上角 X 按钮恢复
-     * - 长按: 弹 "带/不带系统状态栏" 选择
+     * 【PR-B】切换全屏. 默认切到带系统状态栏的全屏. 长按全屏按钮调 [setFullscreenMode].
+     * - OFF -> WITH_SYSTEM_BARS
+     * - WITH_SYSTEM_BARS / WITHOUT_SYSTEM_BARS -> OFF
      */
     fun toggleFullscreen() {
-        _isFullscreen.value = !_isFullscreen.value
-        LOG.info("Fullscreen toggled: {}", _isFullscreen.value)
+        _fullscreenMode.value = if (_fullscreenMode.value == FullscreenMode.OFF) {
+            FullscreenMode.WITH_SYSTEM_BARS
+        } else {
+            FullscreenMode.OFF
+        }
+        LOG.info("Fullscreen toggled: {}", _fullscreenMode.value)
+    }
+
+    /**
+     * 【PR-B】设置全屏模式 (长按全屏按钮菜单调用).
+     */
+    fun setFullscreenMode(mode: FullscreenMode) {
+        _fullscreenMode.value = mode
+        LOG.info("Fullscreen mode set: {}", mode)
     }
 
     fun toggleSystemBars() {
@@ -496,4 +525,18 @@ class ComposePreviewViewModel(
         private val LOG = LoggerFactory.getLogger(ComposePreviewViewModel::class.java)
         private const val DEBOUNCE_MS = 500L
     }
+}
+
+/**
+ * 【PR-B】全屏模式.
+ *
+ * - [OFF]: 非全屏, 顶栏显示.
+ * - [WITH_SYSTEM_BARS]: 全屏, 但保留手机系统状态栏 (用户在 APK 安装运行后看到的样子).
+ * - [WITHOUT_SYSTEM_BARS]: 纯全屏, 隐藏系统状态栏, 适合查看实际应用沉浸式全屏效果.
+ */
+@Immutable
+enum class FullscreenMode {
+    OFF, WITH_SYSTEM_BARS, WITHOUT_SYSTEM_BARS;
+
+    val isFullscreen: Boolean get() = this != OFF
 }
