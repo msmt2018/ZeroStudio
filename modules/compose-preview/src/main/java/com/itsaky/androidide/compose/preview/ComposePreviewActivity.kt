@@ -71,6 +71,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
+import com.itsaky.androidide.compose.preview.ui.AttributeEditPanel
 import com.itsaky.androidide.compose.preview.ui.ComposableFunctionPicker
 import com.itsaky.androidide.compose.preview.ui.DebugToolbar
 import com.itsaky.androidide.compose.preview.ui.DebugToolbarActions
@@ -586,11 +587,55 @@ private fun ComposePreviewScreen(
 
     // 【v3.3】布局树底部抽屉
     if (showLayoutTreeSheet) {
+        // 【v3.3.1】属性编辑参数 — 从 previewState.Ready 拿 dexFile + className,
+        // 从 composableFunctions 找选中函数对应的行号.
+        val readyState = previewState as? PreviewState.Ready
+        val attrClass = readyState?.className
+        val attrMethod = selectedPreview
+        val attrLine = composableFunctions
+            .firstOrNull { it.name == attrMethod }
+            ?.line ?: -1
+        val attrs by viewModel.selectedNodeAttributes.collectAsStateWithLifecycle()
+        val editResult by viewModel.lastAttributeEditResult.collectAsStateWithLifecycle()
+        // 选中节点 / 函数变化时重新 load attributes
+        LaunchedEffect(attrClass, attrMethod) {
+            viewModel.loadAttributesForSelectedNode(readyState?.dexFile, attrClass, attrMethod)
+        }
         LayoutTreeBottomSheet(
             debugMode = debugMode,
+            layoutSnapshot = viewModel.layoutSnapshot.value,
+            attributeClassName = attrClass,
+            attributeMethodName = attrMethod,
+            attributeCallLine = attrLine,
+            attributes = attrs,
+            lastEditResult = editResult,
             onSelectNode = { nodeId -> viewModel.selectLayoutNode(nodeId) },
             onToggleHidden = { nodeId -> viewModel.toggleNodeHidden(nodeId) },
             onClearHidden = { viewModel.clearHiddenNodes() },
+            onEditAttribute = { paramName, newValue ->
+                val projectRoot = viewModel.getModulePath()
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { java.io.File(it) }
+                if (attrClass == null) return@LayoutTreeBottomSheet
+                viewModel.editAttribute(
+                    projectRoot = projectRoot,
+                    className = attrClass,
+                    callLine = attrLine,
+                    parameterName = paramName,
+                    newValue = newValue,
+                ) {
+                    // 触发 build — taskName 形如 "assembleDebug" / "assembleRelease",
+                    // 跟 triggerBuild(context, viewModel, modulePath, variantName) 一致.
+                    // ComposeAttributeEditor 默认返回 "assembleDebug", variantName 用 default.
+                    triggerBuild(
+                        context = context,
+                        viewModel = viewModel,
+                        modulePath = viewModel.getModulePath(),
+                        variantName = "debug",
+                    )
+                }
+            },
+            onClearEditResult = { viewModel.clearAttributeEditResult() },
             onDismiss = { showLayoutTreeSheet = false },
         )
     }
@@ -703,6 +748,14 @@ private fun ReadyPanel(
     onGoHome: () -> Unit,
     previewState: PreviewState,
 ) {
+    // 【v3.3.1】ComposeView 引用 — LayoutInspector 通过这个反射读 LayoutNode 树.
+    // 由 PreviewContainer 通过 onComposeViewReady 回调设置.
+    var composeView by remember { mutableStateOf<android.view.View?>(null) }
+
+    // 【v3.3.1】Activity-scoped ViewModel / debugMode (Composable 函数里取).
+    val viewModel = activity.viewModel
+    val debugModeState by viewModel.debugMode.collectAsStateWithLifecycle()
+
     // 设备框 + 内容
     Box(
         modifier = Modifier
@@ -710,26 +763,6 @@ private fun ReadyPanel(
             .padding(if (deviceConfig.deviceSimEnabled) 16.dp else 0.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // 【PR-B】zoom 应用:
-        // - 设备模式: 整个 device frame + content 一起缩放 (用户要求 #3 "真实设备模拟
-        //   时就需要直接将设备套壳以及内容显示区域等同步放大或者缩小").
-        // - 无设备模式: 仅缩放 content (compose UI), 以中心点缩放 (用户要求 #3
-        //   "以中心点逐渐放大").
-        // 用 graphicsLayer + TransformOrigin.Center 实现 GPU 缩放, 不触发重测量.
-        //
-        // 【PR-D】在 zoom 偏离 1.0 时, 用户可以触摸拖动平移 (pan) — 看到被裁掉的区域.
-        // 实现: 用 BoxWithConstraints 拿父容器尺寸, 算 maxPanX = parent * (zoom - 1) / 2
-        //      之后 graphicsLayer 加 translationX/Y.
-        //      pointerInput(detectDragGestures) 把 drag delta 累加到 viewport.offset.
-        val zoomScale = viewport.zoom
-        val canPan = viewport.canPan
-        val density = LocalDensity.current
-
-        // 【PR-D】deviceSimEnabled / profile 变化时重置 pan. previewState 变化 (重新
-        // 编译) 也重置, 避免旧的 offset 在新 dex 上残留.
-        LaunchedEffect(deviceConfig.deviceSimEnabled, deviceConfig.profile.id, previewState) {
-            viewModel.resetPan()
-        }
 
         // 【v3.2】用 key() 强制 deviceSimEnabled / profile 变化时整体重组.
         // 【PR-D】previewState 也加入 key, 重新编译时彻底重置 (LaunchedEffect 已经
@@ -813,13 +846,19 @@ private fun ReadyPanel(
                             onLaunchApp = onLaunchApp,
                             onGoHome = onGoHome,
                         ) {
-                            PreviewContainer(activity)
+                            PreviewContainer(
+                                activity = activity,
+                                onComposeViewReady = { v -> composeView = v },
+                            )
                         }
                     }
                 } else {
                     // 无设备模式: 缩放 compose UI 本身, 不缩放外层
                     Box(modifier = graphicsModifier) {
-                        PreviewContainer(activity)
+                        PreviewContainer(
+                            activity = activity,
+                            onComposeViewReady = { v -> composeView = v },
+                        )
                     }
                 }
 
@@ -844,11 +883,38 @@ private fun ReadyPanel(
                 }
             }
         }
+
+        // 【v3.3.1】Layout Inspector Overlay — 在分析 / 编辑模式下叠加在 preview 内容之上.
+        // 它本身用 Canvas 画虚线 + 节点类型角标, 同时把 layoutSnapshot 传给 LayoutTreeBottomSheet.
+        if (debugModeState.isInspectorActive && composeView != null) {
+            val snapshot = viewModel.layoutSnapshot.collectAsStateWithLifecycle().value
+            LayoutInspectorOverlay(
+                snapshot = snapshot,
+                selectedNodeId = debugModeState.selectedNodeId,
+                isInspectorActive = true,
+                showRecomposition = debugModeState.showRecompositionHighlight,
+                onNodeClick = { node -> viewModel.selectLayoutNode(node.id) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        // 【v3.3.1】布局快照 capture — 仅在分析 / 编辑模式下采集, 避免 layout 变化频繁时反射开销.
+        // 500ms debounce 足够用户感知 + 不卡顿.
+        if (debugModeState.isInspectorActive) {
+            LaunchedEffect(composeView, previewState, deviceConfig.profile.id, deviceConfig.deviceSimEnabled) {
+                if (composeView == null) return@LaunchedEffect
+                kotlinx.coroutines.delay(500)
+                viewModel.captureLayoutSnapshot(composeView, force = true)
+            }
+        }
     }
 }
 
 @Composable
-private fun PreviewContainer(activity: ComposePreviewActivity) {
+private fun PreviewContainer(
+    activity: ComposePreviewActivity,
+    onComposeViewReady: (android.view.View) -> Unit = {},
+) {
     // 容器 Box, 通过 AndroidView 嵌入一个 FrameLayout, 让 PreviewRenderEngine 把
     // 自己的 ComposeView addView 进去. 显式使用 MATCH_PARENT layoutParams 避免
     // SubcomposeLayout 嵌套测量把 ComposeView 的尺寸压成 0 (这是 v2.1 的根因).
@@ -862,6 +928,17 @@ private fun PreviewContainer(activity: ComposePreviewActivity) {
                 // 通知 Activity 创建引擎, 把这个容器给引擎.
                 // activity 由 ComposePreviewScreen 显式传入, 不会因重组失效.
                 activity.attachPreviewContainer(this)
+            }
+        },
+        // 【v3.3.1】layout 变化时通知 layout inspector 重新 capture.
+        // 用 update 回调 + onGloballyPositioned 拿真实 on-screen view 引用.
+        update = { frameLayout ->
+            // 拿 RenderEngine 注入的 ComposeView
+            val composeView = (0 until frameLayout.childCount)
+                .map { frameLayout.getChildAt(it) }
+                .firstOrNull { it is androidx.compose.ui.platform.ComposeView }
+            if (composeView != null) {
+                onComposeViewReady(composeView)
             }
         },
         modifier = Modifier.fillMaxSize(),

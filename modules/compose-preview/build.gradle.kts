@@ -93,6 +93,13 @@ dependencies {
   // kotlin-reflect 提供 kotlin-reflect API, 同时通过 setAccessible 拿私有字段.
   implementation(libs.org.jetbrains.kotlin.reflect)
 
+  // === 【v3.3.1】dex 反编译 + 字节码分析 (布局编辑模式用). ===
+  // google-smali-dexlib2 解析 dex 字节码, 找 @Composable 函数 + invoke 调用点.
+  // org-benf-cfr 把 dex 反编译为 java, 提取 named parameter.
+  // 二者配合实现 "选节点 → 改属性 → 写 .kt → build → 重新渲染" 端到端.
+  implementation(libs.google.smali.dexlib2)
+  implementation(libs.org.benf.cfr)
+
   // === AndroidIDE 内部模块 ===
   implementation(projects.core.common)
   implementation(projects.editor.impl)

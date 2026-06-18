@@ -26,15 +26,21 @@ import com.itsaky.androidide.compose.preview.data.device.DesktopApp
 import com.itsaky.androidide.compose.preview.data.device.DeviceCatalog
 import com.itsaky.androidide.compose.preview.data.model.DebugModeState
 import com.itsaky.androidide.compose.preview.data.model.DebugSubMode
+import com.itsaky.androidide.compose.preview.data.model.LayoutNodeSnapshot
 import com.itsaky.androidide.compose.preview.data.repository.CompilationException
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepository
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepositoryImpl
-import com.itsaky.androidide.compose.preview.data.repository.InitializationResult
+import com.itsaky.androidide.compose.preview.runtime.LayoutInspector
+import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
 import com.itsaky.androidide.compose.preview.data.source.ComposableFunctionInfo
 import com.itsaky.androidide.compose.preview.data.source.ComposableSymbolExtractor
 import com.itsaky.androidide.compose.preview.data.source.ProjectContextSource
 import com.itsaky.androidide.compose.preview.domain.PreviewSourceParser
 import com.itsaky.androidide.compose.preview.domain.model.ParsedPreviewSource
+import com.itsaky.androidide.compose.preview.editor.AttributeEdit
+import com.itsaky.androidide.compose.preview.editor.AttributeEditResult
+import com.itsaky.androidide.compose.preview.editor.ComposeAttributeEditor
+import com.itsaky.androidide.compose.preview.editor.NamedParameter
 import com.itsaky.androidide.compose.preview.ui.DeviceProfile
 import com.itsaky.androidide.compose.preview.ui.SystemBarsTheme
 import kotlinx.coroutines.FlowPreview
@@ -163,6 +169,10 @@ class ComposePreviewViewModel(
     private val projectContextSource: ProjectContextSource = ProjectContextSource(),
     // 【v3.3】调试模式: 从 .kt 源码中提取 @Composable 函数列表, 给调试 toolbar 下拉用.
     private val composableSymbolExtractor: ComposableSymbolExtractor = ComposableSymbolExtractor(),
+    // 【v3.3.1】布局检查器 — 反射读 ComposeView 真实 LayoutNode 树, 给 UI / 底部抽屉用.
+    val layoutInspector: LayoutInspector = LayoutInspector(),
+    // 【v3.3.1】属性编辑器 — dex → smali → java → 改 .kt → 重新 build, 给属性编辑模式用.
+    val attributeEditor: ComposeAttributeEditor = ComposeAttributeEditor(),
 ) : ViewModel() {
 
     private val _previewState = MutableStateFlow<PreviewState>(PreviewState.Idle)
@@ -230,6 +240,39 @@ class ComposePreviewViewModel(
      */
     private val _composableFunctions = MutableStateFlow<List<ComposableFunctionInfo>>(emptyList())
     val composableFunctions: StateFlow<List<ComposableFunctionInfo>> = _composableFunctions.asStateFlow()
+
+    /**
+     * 【v3.3.1】当前 ComposeView 真实运行时布局树快照.
+     * 通过反射访问 [LayoutNode] 私有字段 (`_children` / modifier chain) 捕获, 给:
+     * - 底部抽屉 Tab 1 (节点树) 真实嵌套显示
+     * - 节点点击命中检测
+     * - 属性面板 (后续接入)
+     *
+     * 每次 render 完成 / layout 变化时由 Activity / ReadyPanel 调 [captureLayoutSnapshot] 更新.
+     */
+    private val _layoutSnapshot = MutableStateFlow<LayoutNodeSnapshot?>(null)
+    val layoutSnapshot: StateFlow<LayoutNodeSnapshot?> = _layoutSnapshot.asStateFlow()
+
+    /**
+     * 【v3.3.1】快照最后更新时间 (epoch millis). 给"快照过期"判断用.
+     */
+    private val _layoutSnapshotUpdatedAt = MutableStateFlow(0L)
+    val layoutSnapshotUpdatedAt: StateFlow<Long> = _layoutSnapshotUpdatedAt.asStateFlow()
+
+    /**
+     * 【v3.3.1】当前选中节点的属性列表 (从 dex 反编译 + named parameter 解析得到).
+     * 编辑模式时, 属性面板显示这个. 用户修改后调 [editAttribute].
+     *
+     * 来自 [composableFunctions] + 当前 [dexFile] (如果 ready) + 选中节点 (暂时从 className 推断).
+     */
+    private val _selectedNodeAttributes = MutableStateFlow<List<NamedParameter>>(emptyList())
+    val selectedNodeAttributes: StateFlow<List<NamedParameter>> = _selectedNodeAttributes.asStateFlow()
+
+    /**
+     * 【v3.3.1】属性编辑结果 (最后一次).
+     */
+    private val _lastAttributeEditResult = MutableStateFlow<AttributeEditResult?>(null)
+    val lastAttributeEditResult: StateFlow<AttributeEditResult?> = _lastAttributeEditResult.asStateFlow()
 
     // === PR-C 桌面 launcher 模拟 ===
 
@@ -719,6 +762,130 @@ class ComposePreviewViewModel(
      */
     private fun refreshComposableFunctions(source: String) {
         _composableFunctions.value = composableSymbolExtractor.extract(source)
+    }
+
+    // === v3.3.1 布局快照 + 属性编辑 ===
+
+    /**
+     * 【v3.3.1】从给定的 [composeView] 捕获布局快照, 更新 [_layoutSnapshot].
+     * Activity / ReadyPanel 在 layout 变化时调. 失败 silent, 保留旧快照.
+     *
+     * @param composeView [androidx.compose.ui.platform.ComposeView], 已被 RenderEngine 注入.
+     * @param force 是否强制刷新 (默认 debounce 100ms, 避免 layout 变化频繁时开销过大).
+     */
+    fun captureLayoutSnapshot(composeView: android.view.View?, force: Boolean = false) {
+        if (composeView == null) {
+            _layoutSnapshot.value = null
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (!force && now - _layoutSnapshotUpdatedAt.value < 100) {
+            // debounce 100ms
+            return
+        }
+        val snapshot = layoutInspector.captureSnapshot(
+            composeView = composeView,
+            hiddenIds = _debugMode.value.hiddenNodeIds,
+        )
+        if (snapshot != null) {
+            _layoutSnapshot.value = snapshot
+            _layoutSnapshotUpdatedAt.value = now
+            LOG.debug("Layout snapshot captured: {} nodes total", countNodes(snapshot))
+        }
+    }
+
+    /**
+     * 【v3.3.1】计算 LayoutNodeSnapshot 树的总节点数.
+     */
+    private fun countNodes(root: LayoutNodeSnapshot): Int {
+        return 1 + root.children.sumOf { countNodes(it) }
+    }
+
+    /**
+     * 【v3.3.1】清空布局快照. render engine detach / 切换设备时调.
+     */
+    fun clearLayoutSnapshot() {
+        _layoutSnapshot.value = null
+        _layoutSnapshotUpdatedAt.value = 0L
+    }
+
+    // === v3.3.1 属性编辑 (dex → smali/java → .kt → build) ===
+
+    /**
+     * 【v3.3.1】从 dex 中提取选中节点的属性列表.
+     *
+     * @param dexFile 当前 preview 的 dex.
+     * @param className 当前 preview 的 class FQN.
+     * @param methodName 当前选中的 @Composable 方法名.
+     *
+     * 端到端:
+     * 1. [ComposeAttributeEditor.extractAttributesFromDex] 调 CFR 反编译 dex → java
+     * 2. 在 java 源码中找到 `methodName(...)` 内的 named parameter 调用
+     * 3. 输出 `List<NamedParameter>` 给 UI 属性面板显示
+     */
+    fun loadAttributesForSelectedNode(
+        dexFile: java.io.File?,
+        className: String?,
+        methodName: String?,
+    ) {
+        if (dexFile == null || className == null || methodName == null) {
+            _selectedNodeAttributes.value = emptyList()
+            return
+        }
+        try {
+            val attrs = attributeEditor.extractAttributesFromDex(dexFile, className, methodName)
+            _selectedNodeAttributes.value = attrs
+            LOG.info("Loaded {} attributes for {}.{}", attrs.size, className, methodName)
+        } catch (e: Throwable) {
+            LOG.warn("loadAttributesForSelectedNode failed: {}", e.message)
+            _selectedNodeAttributes.value = emptyList()
+        }
+    }
+
+    /**
+     * 【v3.3.1】修改属性 — 端到端:
+     * 1. [ComposeAttributeEditor.editKtFile] 写 .kt 源文件
+     * 2. 触发 BuildService.executeTasks("assembleDebug")
+     * 3. build 完成后, ViewModel 重新 load dex + render
+     *
+     * @param projectRoot .kt 源文件所在 module 的根目录.
+     * @param className class FQN, 用来反推 .kt 源文件路径.
+     * @param callLine 目标调用行 (从 dex line table 拿).
+     * @param parameterName 要修改的参数名.
+     * @param newValue 新值.
+     * @param onBuildTriggered build 触发后回调, Activity 调 BuildService.
+     */
+    fun editAttribute(
+        projectRoot: java.io.File?,
+        className: String,
+        callLine: Int,
+        parameterName: String,
+        newValue: String,
+        onBuildTriggered: (String) -> Unit = {},
+    ) {
+        if (projectRoot == null) {
+            _lastAttributeEditResult.value = AttributeEditResult.Failure("未配置 projectRoot")
+            return
+        }
+        val ktFile = attributeEditor.findKtFile(className, projectRoot)
+        if (ktFile == null) {
+            _lastAttributeEditResult.value =
+                AttributeEditResult.Failure("未找到 .kt 文件: $className (projectRoot=${projectRoot.absolutePath})")
+            return
+        }
+        val result = attributeEditor.editKtFile(ktFile, callLine, parameterName, newValue)
+        _lastAttributeEditResult.value = result
+        if (result is AttributeEditResult.Success) {
+            // 触发 build
+            onBuildTriggered(result.taskName)
+        }
+    }
+
+    /**
+     * 【v3.3.1】清空最后一次编辑结果.
+     */
+    fun clearAttributeEditResult() {
+        _lastAttributeEditResult.value = null
     }
 
     // === PR-C 桌面 launcher 方法 ===
