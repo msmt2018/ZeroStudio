@@ -138,13 +138,29 @@ sealed class PhysicalKey {
         )
 
         /**
-         * iPhone (左侧音量 + 静音, 右侧电源). 静音键用 VolUp 占位.
+         * iPhone (左侧音量 + Action Button, 右侧电源). 静音键被
+         * iPhone 15 Pro+ 替换为 Action Button.
+         *
+         * 按真实 iPhone 15 Pro Max 设备图物理键位置 (相对设备原始 dp):
+         * - 左侧 Action Button y ≈ screenHeight × 14%
+         * - 左侧 Vol+ y ≈ screenHeight × 18%
+         * - 左侧 Vol- y ≈ screenHeight × 22%
+         * - 右侧 Power y ≈ screenHeight × 18%
+         *
+         * 屏幕宽 / 高比例固定为 9:19.5, 因此 screenHeight ≈ screenWidthDp × 2.167.
+         * 实际 y 坐标用 screenWidthDp × 0.305 ~ 0.480 系数计算.
          */
-        fun iphoneKeys(screenWidthDp: Float): List<PhysicalKey> = listOf(
-            VolumeUp(positionXdp = -6f, positionYdp = 280f),
-            VolumeDown(positionXdp = -6f, positionYdp = 320f),
-            Power(positionXdp = screenWidthDp + 6f, positionYdp = 480f)
-        )
+        fun iphoneKeys(screenWidthDp: Float): List<PhysicalKey> {
+            val h = screenWidthDp * 2.167f
+            return listOf(
+                // 左侧 Action Button (iPhone 15 Pro+) — 替代静音键
+                Assistant(positionXdp = -6f, positionYdp = h * 0.14f),
+                VolumeUp(positionXdp = -6f, positionYdp = h * 0.18f),
+                VolumeDown(positionXdp = -6f, positionYdp = h * 0.22f),
+                // 右侧 Power (Side button) — 屏幕中上部
+                Power(positionXdp = screenWidthDp + 6f, positionYdp = h * 0.18f)
+            )
+        }
 
         /** 无按键 (平板 / 折叠屏内屏 / 桌面模式 / 自定义) */
         val NO_KEYS: List<PhysicalKey> = emptyList()

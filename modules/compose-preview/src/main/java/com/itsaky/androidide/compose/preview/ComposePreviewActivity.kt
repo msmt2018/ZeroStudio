@@ -164,9 +164,24 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
     /**
      * 由 ComposePreviewScreen 内 AndroidView 调用, 注入预览容器.
      * 引擎 attach 到此 container 后, container 会显示 Compose 渲染.
+     *
+     * 【v3.2】如果上次 attach 的 container 与当前不同 (切 deviceSim / 切 profile
+     * 触发 AndroidView 重建时), 强制 detach 旧引擎 + 新建引擎. 否则旧 ComposeView
+     * 仍然 addView 在旧 FrameLayout 上, 用户看到的是"切回后黑屏".
      */
     fun attachPreviewContainer(container: android.widget.FrameLayout) {
-        if (renderEngine == null) {
+        val existing = renderEngine
+        if (existing == null) {
+            renderEngine = PreviewRenderEngine(this, container).also { it.attach() }
+            return
+        }
+        if (existing.container !== container) {
+            LOG.info(
+                "Container changed ({} -> {}), recreating PreviewRenderEngine",
+                System.identityHashCode(existing.container),
+                System.identityHashCode(container),
+            )
+            existing.detach()
             renderEngine = PreviewRenderEngine(this, container).also { it.attach() }
         }
     }
@@ -235,6 +250,7 @@ private fun ComposePreviewScreen(
                         zoom = viewport.zoom,
                         showSystemBars = deviceConfig.showStatusBar,
                         debugEnabled = debugEnabled,
+                        deviceSimEnabled = deviceConfig.deviceSimEnabled,
                     ),
                     actions = PreviewToolbarActions(
                         onOpenDeviceSheet = { showDeviceSheet = true },
@@ -244,6 +260,8 @@ private fun ComposePreviewScreen(
                         onToggleSystemBars = { viewModel.toggleSystemBars() },
                         onToggleDebug = { viewModel.toggleDebug() },
                         onClose = onClose,
+                        onToggleDeviceSim = { viewModel.toggleDeviceSim() },
+                        onToggleFullscreen = { viewModel.toggleFullscreen() },
                     ),
                 )
 
@@ -406,38 +424,55 @@ private fun ReadyPanel(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(if (deviceConfig.deviceSimEnabled) 16.dp else 0.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // 用 DeviceFrame 包裹实际预览 ComposeView
-        DeviceFrame(
-            profile = deviceConfig.profile,
-            systemBarsTheme = deviceConfig.systemBarsTheme,
-            showStatusBar = deviceConfig.showStatusBar,
-            showNavigationBar = deviceConfig.showNavigationBar,
-            showCutout = deviceConfig.showCutout,
-            showChassis = deviceConfig.showChassis,
-            useGestureNav = deviceConfig.useGestureNav,
+        // 【v3.2】用 key() 强制 deviceSimEnabled / profile 变化时整体重组.
+        // 原因: AndroidView 的 factory 缓存 (默认按位置 key), 切 deviceSim 时
+        // 如果不重置, 旧 PreviewRenderEngine 引用的 ComposeView 还在新 container
+        // 之外, 切回时显示黑屏. key 强制整个子树重组, 触发 AndroidView 重建.
+        androidx.compose.runtime.key(
+            deviceConfig.deviceSimEnabled,
+            deviceConfig.profile.id
         ) {
-            // 容器 Box, 通过 AndroidView 嵌入一个 FrameLayout, 让 PreviewRenderEngine 把
-            // 自己的 ComposeView addView 进去. 显式使用 MATCH_PARENT layoutParams 避免
-            // SubcomposeLayout 嵌套测量把 ComposeView 的尺寸压成 0 (这是 v2.1 的根因).
-            AndroidView(
-                factory = { ctx ->
-                    android.widget.FrameLayout(ctx).apply {
-                        layoutParams = android.view.ViewGroup.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                        )
-                        // 通知 Activity 创建引擎, 把这个容器给引擎.
-                        // activity 由 ComposePreviewScreen 显式传入, 不会因重组失效.
-                        activity.attachPreviewContainer(this)
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+            if (deviceConfig.deviceSimEnabled) {
+                DeviceFrame(
+                    profile = deviceConfig.profile,
+                    systemBarsTheme = deviceConfig.systemBarsTheme,
+                    showStatusBar = deviceConfig.showStatusBar,
+                    showNavigationBar = deviceConfig.showNavigationBar,
+                    showCutout = deviceConfig.showCutout,
+                    showChassis = deviceConfig.showChassis,
+                    useGestureNav = deviceConfig.useGestureNav,
+                ) {
+                    PreviewContainer(activity)
+                }
+            } else {
+                PreviewContainer(activity)
+            }
         }
     }
+}
+
+@Composable
+private fun PreviewContainer(activity: ComposePreviewActivity) {
+    // 容器 Box, 通过 AndroidView 嵌入一个 FrameLayout, 让 PreviewRenderEngine 把
+    // 自己的 ComposeView addView 进去. 显式使用 MATCH_PARENT layoutParams 避免
+    // SubcomposeLayout 嵌套测量把 ComposeView 的尺寸压成 0 (这是 v2.1 的根因).
+    AndroidView(
+        factory = { ctx ->
+            android.widget.FrameLayout(ctx).apply {
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                // 通知 Activity 创建引擎, 把这个容器给引擎.
+                // activity 由 ComposePreviewScreen 显式传入, 不会因重组失效.
+                activity.attachPreviewContainer(this)
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 private fun triggerBuild(

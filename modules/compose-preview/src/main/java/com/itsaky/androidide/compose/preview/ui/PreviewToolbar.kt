@@ -35,7 +35,11 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.SmartphoneOff
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.ZoomIn
@@ -91,9 +95,25 @@ fun PreviewToolbar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // 设备 chip
+        // 【v3.2】真实设备模拟 toggle — 默认无设备模式 (chip 文字 "Device" 表示可切到套壳,
+        // selected 时 chip 高亮 = 当前已启用真实设备模拟).
+        FilterChip(
+            selected = state.deviceSimEnabled,
+            onClick = actions.onToggleDeviceSim,
+            label = { Text(if (state.deviceSimEnabled) "Device" else "Raw") },
+            leadingIcon = {
+                Icon(
+                    imageVector = if (state.deviceSimEnabled) Icons.Filled.Smartphone else Icons.Filled.SmartphoneOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+            },
+        )
+
+        // 设备 chip (只切到设备模拟时显示, 否则灰显)
         AssistChip(
             onClick = actions.onOpenDeviceSheet,
+            enabled = state.deviceSimEnabled,
             label = { Text(state.deviceName) },
             leadingIcon = {
                 Icon(
@@ -168,6 +188,14 @@ fun PreviewToolbar(
             },
         )
 
+        // 【PR-B 占位】全屏切换 (v3.2 先放按钮, 行为 PR-B 实现)
+        IconButton(onClick = actions.onToggleFullscreen) {
+            Icon(
+                Icons.Filled.Fullscreen,
+                contentDescription = "Fullscreen",
+            )
+        }
+
         Spacer(modifier = Modifier.width(8.dp))
 
         // 关闭
@@ -186,6 +214,10 @@ data class PreviewToolbarState(
     val zoom: Float = 1.0f,
     val showSystemBars: Boolean = true,
     val debugEnabled: Boolean = false,
+    /** v3.2: 是否启用真实设备模拟. 默认 false. */
+    val deviceSimEnabled: Boolean = false,
+    /** v3.2 / PR-B: 全屏模式. 默认 false. */
+    val fullscreen: Boolean = false,
 )
 
 /**
@@ -199,4 +231,8 @@ data class PreviewToolbarActions(
     val onToggleSystemBars: () -> Unit,
     val onToggleDebug: () -> Unit,
     val onClose: () -> Unit,
+    /** v3.2: 切换设备模拟开关. */
+    val onToggleDeviceSim: () -> Unit = {},
+    /** v3.2 / PR-B: 切换全屏. */
+    val onToggleFullscreen: () -> Unit = {},
 )

@@ -137,11 +137,10 @@ sealed class CutoutGeometry {
             cornerRadiusDp = 15f
         )
 
-        /** iPhone 15 Pro 风格 Dynamic Island (126 × 37 dp, 顶部居中) */
-        val DYNAMIC_ISLAND: Notch = Notch(
+        /** iPhone 14 Pro+ 灵动岛 (126 × 37 dp, 顶部居中) — v3.2 用独立类型 */
+        val DYNAMIC_ISLAND: DynamicIsland = DynamicIsland(
             widthDp = 126f,
             heightDp = 37f,
-            anchor = Anchor.TOP_CENTER,
             cornerRadiusDp = 18f
         )
 

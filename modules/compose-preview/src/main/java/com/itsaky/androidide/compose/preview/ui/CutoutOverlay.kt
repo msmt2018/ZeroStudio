@@ -63,10 +63,41 @@ fun CutoutOverlay(
     Canvas(modifier = modifier) {
         when (cutout) {
             is CutoutGeometry.Notch -> drawNotch(cutout, color)
+            is CutoutGeometry.DynamicIsland -> drawDynamicIsland(cutout, color)
             is CutoutGeometry.PunchHole -> drawPunchHole(cutout, color)
             is CutoutGeometry.WaterfallCurve -> drawWaterfall(cutout, color, screenSize)
         }
     }
+}
+
+/**
+ * 绘制灵动岛 (iPhone 14 Pro+ 风格).
+ *
+ * 视觉上是一个比 notch 更小、纯黑色的圆角药丸, 内部**无摄像头 / 听筒绘制**
+ * (因为真实 iPhone 灵动岛下面是传感器 + 摄像头, 但屏幕 UI 不需要看到细节).
+ *
+ * 关键: 灵动岛**两侧**屏幕仍然可显示状态栏 (时间 / 信号 / 电池), 这部分
+ * 由 [SystemBarsOverlay] 配合 [DeviceProfile.cutout] 类型识别处理.
+ */
+private fun DrawScope.drawDynamicIsland(island: CutoutGeometry.DynamicIsland, color: Color) {
+    val widthPx = withHpx(island.widthDp)
+    val heightPx = withHpx(island.heightDp)
+    val cornerRadiusPx = withHpx(island.cornerRadiusDp)
+
+    val x = (size.width - widthPx) / 2f
+    val y = withHpx(8f)  // iPhone 灵动岛顶端到屏幕顶端约 8dp
+
+    val path = Path().apply {
+        addRoundRect(
+            androidx.compose.ui.geometry.RoundRect(
+                left = x, top = y,
+                right = x + widthPx, bottom = y + heightPx,
+                radiusX = cornerRadiusPx, radiusY = cornerRadiusPx
+            )
+        )
+    }
+    // 灵动岛本体 — 纯黑
+    drawPath(path = path, color = Color(0xFF000000))
 }
 
 /**

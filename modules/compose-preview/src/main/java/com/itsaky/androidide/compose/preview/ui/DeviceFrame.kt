@@ -113,11 +113,19 @@ fun DeviceFrame(
             content = content,
         )
         DeviceProfile.FormFactor.DESKTOP,
-        DeviceProfile.FormFactor.NONE -> Box(
-            modifier = modifier
-                .clip(RoundedCornerShape(profile.cornerRadiusDp.dp))
-        ) {
-            content()
+        DeviceProfile.FormFactor.NONE -> {
+            // 【v3.2 修复 #1】DESKTOP / NONE 必须 fillMaxSize, 否则 Box 没有
+            // 尺寸约束, Compose 跳过绘制 (用户看到全透明 + 紫底透出).
+            // 之前版本只 .clip(RoundedCornerShape(...)) 没用 fillMaxSize, 在
+            // ComposePreviewScreen 内会被父容器测量为 0.
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(profile.cornerRadiusDp.dp))
+                    .background(Color.Transparent)
+            ) {
+                content()
+            }
         }
         else -> PhoneOrFoldableFrame(
             profile = profile,
@@ -159,15 +167,27 @@ private fun PhoneOrFoldableFrame(
     ) {
         val parentWidth = maxWidth
         val parentHeight = maxHeight
-
-        // 计算屏幕尺寸 (按设备纵横比 + 父容器约束)
-        val screenWidth = parentWidth
         val aspect = profile.aspectRatio
-        val screenHeight = screenWidth / aspect
+
+        // 【v3.2 修复 #3】按 maxWidth 和 maxHeight 双向约束, 选 min.
+        //
+        // 之前版本 val screenHeight = screenWidth / aspect 没用 maxHeight 限制,
+        // 当 device 纵横比很窄 (iPhone 15 Pro Max 0.461) 且父容器较扁时, 实际渲染
+        // 高度会超出 BoxWithConstraints 默认 clip 范围, 物理键 (y=480) 跟着被裁切
+        // 显示不出来. 现在按 maxHeight 双向约束, 物理键按实际渲染高度计算.
+        val maxScreenWidth = parentWidth
+        val maxScreenHeight = (parentHeight * 0.96f)  // 留 4% 余量防裁切
+        val screenWidth = maxScreenWidth
+        val screenHeight = (screenWidth / aspect).coerceAtMost(maxScreenHeight)
+        val finalScreenWidth = if (screenHeight == maxScreenHeight) {
+            screenHeight * aspect
+        } else {
+            screenWidth
+        }
 
         Box(
             modifier = Modifier
-                .width(screenWidth)
+                .width(finalScreenWidth)
                 .height(screenHeight)
         ) {
             // 1) 机身外壳
@@ -221,12 +241,13 @@ private fun PhoneOrFoldableFrame(
                 )
             }
 
-            // 7) 物理按键 (屏幕外侧)
+            // 7) 物理按键 (屏幕外侧) — 传实际渲染高度, 让按比例定位的按键不超范围
             if (showPhysicalKeys) {
                 profile.physicalKeys.forEach { key ->
                     PhysicalKeyIndicator(
                         key = key,
-                        screenHeightDp = with(density) { (parentHeight.value).dp },
+                        screenWidthDp = with(density) { finalScreenWidth },
+                        screenHeightDp = with(density) { screenHeight },
                     )
                 }
             }
@@ -241,8 +262,10 @@ private fun WatchFrame(
     systemBarsTheme: SystemBarsTheme,
     content: @Composable () -> Unit,
 ) {
+    // 【v3.2 修复 #2】撑开 BoxWithConstraints, 否则 maxWidth/maxHeight 都是 0,
+    // size = 0, 内层 Box size = 0, content() 渲染不到任何像素 = 全黑.
     BoxWithConstraints(
-        modifier = modifier,
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         val size = if (maxWidth < maxHeight) maxWidth else maxHeight
@@ -266,10 +289,15 @@ private fun WatchFrame(
 
 /**
  * 物理按键指示器 (在屏幕外侧画一个矩形 + 文字).
+ *
+ * 【v3.2 修复 #3】坐标基准改成"实际渲染屏幕尺寸" (而非父 BoxWithConstraints),
+ * 这样在窄高比 device (iPhone 15 Pro Max 0.461) 实际渲染高度被 maxHeight 限制
+ * 时, 物理键按"屏幕实际尺寸"百分比定位, 不会被父容器裁切.
  */
 @Composable
 private fun PhysicalKeyIndicator(
     key: PhysicalKey,
+    screenWidthDp: androidx.compose.ui.unit.Dp,
     screenHeightDp: androidx.compose.ui.unit.Dp,
 ) {
     val density = LocalDensity.current

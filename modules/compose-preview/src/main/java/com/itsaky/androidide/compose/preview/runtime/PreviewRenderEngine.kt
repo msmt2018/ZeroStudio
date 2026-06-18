@@ -67,7 +67,12 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class PreviewRenderEngine(
     private val context: Context,
-    private val container: ViewGroup,
+    /**
+     * 外部可见 (internal), 让 [com.itsaky.androidide.compose.preview.ComposePreviewActivity.attachPreviewContainer]
+     * 能判断 "container 是否改变" 来决定是否 detach + 重建引擎. v3.2 修复切
+     * deviceSim / profile 时显示黑屏的 bug.
+     */
+    internal val container: ViewGroup,
 ) {
 
     private val LOG = LoggerFactory.getLogger(PreviewRenderEngine::class.java)
@@ -85,6 +90,17 @@ class PreviewRenderEngine(
      */
     fun attach() {
         if (composeView != null) return
+        // 【v3.2】如果 container 已经有别的 engine 添加的 ComposeView, 先清理.
+        // 切 deviceSim / profile 时旧 engine 已经被 Activity.detach() 释放, 但
+        // 旧 ComposeView 可能仍残留 (Activity 是 main thread, GC 还没跑).
+        repeat(container.childCount) { i ->
+            val child = container.getChildAt(i)
+            if (child is ComposeView) {
+                container.removeViewAt(i)
+                LOG.debug("Removed orphan ComposeView from container before attach")
+                return@repeat
+            }
+        }
         val view = ComposeView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,

@@ -167,6 +167,9 @@ class ComposePreviewViewModel(
 
     private val _debugEnabled = MutableStateFlow(false)
     val debugEnabled: StateFlow<Boolean> = _debugEnabled.asStateFlow()
+    /** v3.2 / PR-B 占位: 全屏状态. */
+    private val _isFullscreen = MutableStateFlow(false)
+    val isFullscreen: StateFlow<Boolean> = _isFullscreen.asStateFlow()
 
     private val sourceChanges = MutableSharedFlow<SourceUpdate>()
 
@@ -424,12 +427,34 @@ class ComposePreviewViewModel(
     // === v2.1 新增方法 ===
 
     fun selectDevice(profile: DeviceProfile) {
-        _deviceConfig.value = _deviceConfig.value.copy(profile = profile)
+        _deviceConfig.value = _deviceConfig.value.copy(profile = profile, deviceSimEnabled = true)
         LOG.info("Device selected: {}", profile.displayName)
     }
 
     fun setSystemBarsTheme(theme: SystemBarsTheme) {
         _deviceConfig.value = _deviceConfig.value.copy(systemBarsTheme = theme)
+    }
+
+    /**
+     * 【v3.2】切换"真实设备模拟"开关. true=套壳显示, false=无外壳直接显示.
+     * 切到 false 时, profile 仍保留, 方便用户切回去.
+     */
+    fun toggleDeviceSim() {
+        _deviceConfig.value = _deviceConfig.value.copy(
+            deviceSimEnabled = !_deviceConfig.value.deviceSimEnabled
+        )
+        LOG.info("Device sim toggled: {}", _deviceConfig.value.deviceSimEnabled)
+    }
+
+    /**
+     * 【v3.2 / PR-B 占位】切换全屏. PR-B 实现完整行为:
+     * - true: 隐藏 toolbar
+     * - 切回: 顶部右上角 X 按钮恢复
+     * - 长按: 弹 "带/不带系统状态栏" 选择
+     */
+    fun toggleFullscreen() {
+        _isFullscreen.value = !_isFullscreen.value
+        LOG.info("Fullscreen toggled: {}", _isFullscreen.value)
     }
 
     fun toggleSystemBars() {
