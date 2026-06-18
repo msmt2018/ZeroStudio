@@ -27,21 +27,34 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Dex 运行时加载器 v3.
+ * Dex 运行时加载器 v3.1.
  *
- * 设计目标: **一次性、确定性地** 把构建产物 (preview dex + 项目 dex + compose runtime dex)
- * 全部加载到一个 ClassLoader 链中, 后续 [composableInvoker] 任意 [Class.forName] 都能命中.
+ * ## v3.1 vs v3 关键简化
  *
- * ## 关键改进 (相对 v2 [ComposeClassLoader])
+ * v3 还有 `previewDex / projectDex / runtimeDex` 三个独立参数, v3.1 合并成单一 `dexFiles`
+ * 列表. 因为 v3.1 不再走 K2 进程内编译, 也不再有 `assets/compose-jars.zip` 中的
+ * `compose-runtime.dex`, 唯一的 dex 来源就是 **gradle assemble 产物** —
+ * [com.itsaky.androidide.compose.preview.data.source.ProjectContext.projectDexFiles].
+ *
+ * ## 类加载链
+ *
+ * ```
+ *   InMemoryDexClassLoader / DexClassLoader
+ *       │
+ *       ├── dexFiles    <- 项目 dex (含用户 Composable + 用户项目其它代码)
+ *       │
+ *       └── parent      <- IDE 主 APK 的 PathClassLoader
+ *                          包含 androidx.compose.runtime / ui / foundation / material3
+ *                          等 IDE compile classpath. 用户 dex 引用 androidx.compose.*
+ *                          时, 通过 parent 委托解析. **不需要** 单独的 compose-runtime.dex.
+ * ```
+ *
+ * ## 关键特性
  *
  * 1. **API 26+ 优先 [InMemoryDexClassLoader]**: 不再依赖磁盘优化目录, 避免 ART odex 抖动.
- * 2. **三层 parent 链路**: 系统 ClassLoader → compose runtime dex (从 app path) → 项目 dex → preview dex.
- *    最末端的 preview dex 拥有最高优先级, 避免项目 dex 中的同名类遮蔽 preview 函数.
- * 3. **彻底删除 setProjectDexFiles/setRuntimeDex 的运行时切换**: 一经 [loadAll] 即确定不可变.
- *    重新加载只能通过 [release] + 新建 [DexRuntime]. 这避免了"渲染到一半 dex 路径变了"导致的
- *    `ClassNotFoundException` / `NoSuchMethodError`.
- * 4. **详细日志**: 每一步都输出 [LOG.info] 记录 dex 来源, 方便排查"为什么 dex 没加载".
- * 5. **可观测性**: 暴露 [loadedDexCount] / [classCacheSize] 给上层做监控.
+ * 2. **parent = context.classLoader**: 委托到 IDE 主 classpath, 让用户 dex 透明使用 compose runtime.
+ * 3. **详细日志**: 每一步都输出 [LOG.info] 记录 dex 来源, 方便排查"为什么 dex 没加载".
+ * 4. **可观测性**: 暴露 [loadedDexCount] / [classCacheSize] 给上层做监控.
  */
 class DexRuntime private constructor(
     private val context: Context,
@@ -54,7 +67,7 @@ class DexRuntime private constructor(
 
     private val classCache = ConcurrentHashMap<String, Class<*>>()
 
-    /** 全部加载的 dex 文件数 (preview + project + runtime). */
+    /** 全部加载的 dex 文件数. */
     val loadedDexCount: Int = dexSources.size
 
     /** 加载且缓存过的类数量. */
@@ -102,36 +115,22 @@ class DexRuntime private constructor(
         /**
          * 把给定 dex 文件一次性加载到一个 [ClassLoader] 链中, 返回 [DexRuntime].
          *
-         * @param previewDex    K2 编译产物 (单个 dex 文件). 优先最高.
-         * @param projectDex    项目运行时 dex 集合 (从 AGP build 输出目录扫描得到).
-         * @param runtimeDex    compose-runtime.dex (从 assets 解压). 优先最低.
+         * @param dexFiles  gradle assemble 产物的 dex 文件 (来自
+         *                  [com.itsaky.androidide.compose.preview.data.source.ProjectContext.projectDexFiles]).
          *
          * @return [DexRuntime] 实例; 若所有 dex 都加载失败则返回带空 loader 的实例,
          *         后续 [loadClass] 会持续返回 null, 由上层展示错误 UI.
          */
         fun loadAll(
             context: Context,
-            previewDex: File?,
-            projectDex: List<File>,
-            runtimeDex: File?,
+            dexFiles: List<File>,
         ): DexRuntime {
-            val allDex = buildList {
-                // 1) preview dex 最高优先级 (会覆盖同名项目类, 确保用户代码生效)
-                if (previewDex != null && previewDex.exists() && previewDex.length() > 0) {
-                    add(previewDex)
-                }
-                // 2) 项目运行时 dex
-                projectDex.filter { it.exists() && it.length() > 0 }.forEach { add(it) }
-                // 3) compose runtime dex 最后 (作为 fallback)
-                if (runtimeDex != null && runtimeDex.exists() && runtimeDex.length() > 0) {
-                    add(runtimeDex)
-                }
-            }
+            val allDex = dexFiles
+                .filter { it.exists() && it.length() > 0 }
+                .distinctBy { it.absolutePath }
 
             if (allDex.isEmpty()) {
-                LOG.error("DexRuntime: no dex files available. preview={}, project={}, runtime={}",
-                    previewDex?.absolutePath, projectDex.size, runtimeDex?.absolutePath)
-                // 返回一个永远找不到类的 DexRuntime
+                LOG.error("DexRuntime: no dex files available")
                 return DexRuntime(context, context.classLoader, context.classLoader, emptyList())
             }
 
@@ -139,11 +138,8 @@ class DexRuntime private constructor(
             val loader = createClassLoader(context, parent, allDex)
 
             LOG.info(
-                "DexRuntime: loaded {} dex files (preview={}, project={}, runtime={}); parent={}",
+                "DexRuntime: loaded {} dex files; parent={}",
                 allDex.size,
-                if (previewDex?.exists() == true) 1 else 0,
-                projectDex.count { it.exists() },
-                if (runtimeDex?.exists() == true) 1 else 0,
                 parent::class.java.name,
             )
             allDex.forEach { LOG.info("  - dex: {}", it.absolutePath) }
@@ -188,7 +184,8 @@ class DexRuntime private constructor(
             dexFiles: List<File>,
         ): ClassLoader {
             val optimizedDir = File(context.codeCacheDir, "compose_preview_dex_runtime").apply {
-                if (!exists()) mkdirs()
+                if (exists()) deleteRecursively()
+                mkdirs()
             }
             val dexPath = dexFiles.joinToString(File.pathSeparator) { it.absolutePath }
             return DexClassLoader(dexPath, optimizedDir.absolutePath, null, parent)

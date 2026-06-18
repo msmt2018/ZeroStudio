@@ -136,7 +136,6 @@ class ComposePreviewFragment : Fragment() {
                 engine.render(
                     previewDex = state.dexFile,
                     projectDex = state.projectDexFiles,
-                    runtimeDex = state.runtimeDex,
                     className = state.className,
                     functionName = config.functionName,
                 )

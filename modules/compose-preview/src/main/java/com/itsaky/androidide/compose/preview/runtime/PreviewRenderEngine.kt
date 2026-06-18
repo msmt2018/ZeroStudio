@@ -114,9 +114,12 @@ class PreviewRenderEngine(
     /**
      * 加载 dex 并渲染指定 Composable.
      *
-     * @param previewDex    K2 编译产物 (单个 dex).
-     * @param projectDex    项目运行时 dex 集合.
-     * @param runtimeDex    compose-runtime.dex (assets).
+     * @param previewDex    项目 dex 中包含用户 Composable 的那个 (通常是 mergeProjectDex*
+     *                      或 project_dex_archive 中的第一个). **v3.1 不再是 K2 编译产物**,
+     *                      而是 gradle assemble 的直接产物.
+     * @param projectDex    项目运行时 dex 集合 (含 previewDex + 其它 merge / archive dex).
+     *                      **v3.1 不再有 runtimeDex 参数** — compose runtime 类由 IDE 主
+     *                      APK 的 PathClassLoader 解析.
      * @param className     用户 Composable 所在类 (含 package).
      * @param functionName  Composable 函数名.
      * @param args          透传给 Composable 的 user 参数.
@@ -124,7 +127,6 @@ class PreviewRenderEngine(
     fun render(
         previewDex: File?,
         projectDex: List<File>,
-        runtimeDex: File?,
         className: String,
         functionName: String,
         args: Array<out Any?> = emptyArray(),
@@ -134,12 +136,17 @@ class PreviewRenderEngine(
             return
         }
 
-        // 1) 一次性加载所有 dex
+        // 1) 一次性加载所有 dex. v3.1 永远不传 runtimeDex; 内部合并到同一个 dex 列表.
+        val allDex = buildList {
+            if (previewDex != null && previewDex.exists() && previewDex.length() > 0) {
+                add(previewDex)
+            }
+            projectDex.filter { it.exists() && it.length() > 0 }.forEach { add(it) }
+        }.distinctBy { it.absolutePath }
+
         val runtime = DexRuntime.loadAll(
             context = context,
-            previewDex = previewDex,
-            projectDex = projectDex,
-            runtimeDex = runtimeDex,
+            dexFiles = allDex,
         )
 
         // 替换旧 runtime

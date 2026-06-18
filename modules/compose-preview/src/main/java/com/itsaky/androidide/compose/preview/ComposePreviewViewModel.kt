@@ -70,7 +70,6 @@ sealed class PreviewState {
         val dexFile: File,
         val className: String,
         val previewConfigs: List<PreviewConfig>,
-        val runtimeDex: File?,
         val projectDexFiles: List<File> = emptyList(),
         // v2.1 增字段
         val deviceConfig: DeviceConfig = DeviceConfig(),
@@ -304,20 +303,19 @@ class ComposePreviewViewModel(
         _previewState.value = PreviewState.Compiling
 
         repository.compilePreview(source, parsed)
-            .onSuccess { result ->
-                _previewState.value = PreviewState.Ready(
-                    dexFile = result.dexFile,
-                    className = result.className,
-                    previewConfigs = parsed.previewConfigs,
-                    runtimeDex = result.runtimeDex,
-                    projectDexFiles = result.projectDexFiles,
-                    // v2.1 注入新状态
-                    deviceConfig = _deviceConfig.value,
-                    viewport = _viewport.value,
-                    theme = _theme.value,
-                    debugEnabled = _debugEnabled.value,
-                )
-            }
+                .onSuccess { result ->
+                    _previewState.value = PreviewState.Ready(
+                        dexFile = result.dexFile,
+                        className = result.className,
+                        previewConfigs = parsed.previewConfigs,
+                        projectDexFiles = result.projectDexFiles,
+                        // v2.1 注入新状态
+                        deviceConfig = _deviceConfig.value,
+                        viewport = _viewport.value,
+                        theme = _theme.value,
+                        debugEnabled = _debugEnabled.value,
+                    )
+                }
             .onFailure { error ->
                 val diagnostics = if (error is CompilationException) error.diagnostics else emptyList()
                 _previewState.value = PreviewState.Error(

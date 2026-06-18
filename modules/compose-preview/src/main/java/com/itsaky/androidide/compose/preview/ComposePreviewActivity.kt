@@ -144,17 +144,16 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.previewState.collect { state ->
                     if (state is PreviewState.Ready) {
-                        renderEngine?.let { engine ->
-                            val config = state.previewConfigs.firstOrNull() ?: return@collect
-                            engine.render(
-                                previewDex = state.dexFile,
-                                projectDex = state.projectDexFiles,
-                                runtimeDex = state.runtimeDex,
-                                className = state.className,
-                                functionName = config.functionName,
-                            )
+                            renderEngine?.let { engine ->
+                                val config = state.previewConfigs.firstOrNull() ?: return@collect
+                                engine.render(
+                                    previewDex = state.dexFile,
+                                    projectDex = state.projectDexFiles,
+                                    className = state.className,
+                                    functionName = config.functionName,
+                                )
+                            }
                         }
-                    }
                 }
             }
         }

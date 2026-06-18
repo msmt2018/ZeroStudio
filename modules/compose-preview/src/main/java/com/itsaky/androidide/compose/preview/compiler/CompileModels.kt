@@ -17,34 +17,13 @@
 
 package com.itsaky.androidide.compose.preview.compiler
 
-import java.io.File
-
 /**
- * 编译 / dex 阶段产物的统一数据模型.
+ * 编译 / dex 阶段产物的诊断信息.
  *
- * 取代旧 [ComposeCompiler.CompilationResult] / [CompilerDaemon.CompilerResult] /
- * [CompilerDaemon.DexResult], 三个数据类合并为 [CompileResult] 和 [DexResult],
- * 字段命名一致 (errorMessage), UI 层 / Repository 层只需依赖这两个.
+ * v3.1 简化: 不再有 [CompileResult] / [DexResult] 数据类 (v2.1 进程内 K2 + D8 链路
+ * 删除后已无调用方), 仅保留 [CompileDiagnostic] 用于错误信息展示. gradle build
+ * 自身的错误由 [com.itsaky.androidide.projects.builder.BuildService] 处理.
  */
-data class CompileResult(
-    val success: Boolean,
-    val outputDir: File?,
-    val exitCode: Int = 0,
-    val diagnostics: List<CompileDiagnostic> = emptyList(),
-    val cancelled: Boolean = false,
-    val errorOutput: String = ""
-) {
-    companion object {
-        fun failure(message: String, diagnostics: List<CompileDiagnostic> = emptyList()) =
-            CompileResult(
-                success = false,
-                outputDir = null,
-                diagnostics = diagnostics,
-                errorOutput = message
-            )
-    }
-}
-
 data class CompileDiagnostic(
     val severity: Severity,
     val message: String,
@@ -53,14 +32,4 @@ data class CompileDiagnostic(
     val column: Int?
 ) {
     enum class Severity { ERROR, WARNING, INFO }
-}
-
-data class DexResult(
-    val success: Boolean,
-    val dexFile: File?,
-    val errorMessage: String = ""
-) {
-    companion object {
-        fun failure(message: String) = DexResult(success = false, dexFile = null, errorMessage = message)
-    }
 }
