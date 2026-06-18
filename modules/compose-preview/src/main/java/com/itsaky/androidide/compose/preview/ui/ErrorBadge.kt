@@ -141,7 +141,7 @@ fun ErrorDetailSheet(
                 androidx.compose.foundation.lazy.LazyColumn(
                     modifier = Modifier.padding(top = 4.dp),
                 ) {
-                    androidx.compose.foundation.lazy.items(diagnostics) { d ->
+                    items(diagnostics) { d: com.itsaky.androidide.compose.preview.compiler.CompileDiagnostic ->
                         androidx.compose.foundation.layout.Column(
                             modifier = Modifier.padding(vertical = 4.dp),
                         ) {

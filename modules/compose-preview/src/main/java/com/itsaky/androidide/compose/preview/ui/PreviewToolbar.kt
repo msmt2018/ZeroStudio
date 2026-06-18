@@ -45,7 +45,7 @@ import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.ScreenLockLandscape
 import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material.icons.filled.SmartphoneOff
+import androidx.compose.material.icons.filled.PhonelinkOff
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.ZoomIn
@@ -66,6 +66,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -116,7 +117,7 @@ fun PreviewToolbar(
             label = { Text(if (state.deviceSimEnabled) "Device" else "Raw") },
             leadingIcon = {
                 Icon(
-                    imageVector = if (state.deviceSimEnabled) Icons.Filled.Smartphone else Icons.Filled.SmartphoneOff,
+                    imageVector = if (state.deviceSimEnabled) Icons.Filled.Smartphone else Icons.Filled.PhonelinkOff,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )
@@ -156,7 +157,7 @@ fun PreviewToolbar(
                     )
                 },
                 modifier = Modifier.pointerInput(Unit) {
-                    androidx.compose.foundation.gestures.detectTapGestures(
+                    detectTapGestures(
                         onLongPress = { orientationMenuOpen = true },
                     )
                 },
@@ -286,7 +287,7 @@ fun PreviewToolbar(
             IconButton(
                 onClick = actions.onToggleFullscreen,
                 modifier = Modifier.pointerInput(Unit) {
-                    androidx.compose.foundation.gestures.detectTapGestures(
+                    detectTapGestures(
                         onLongPress = { fullscreenMenuOpen = true },
                     )
                 },

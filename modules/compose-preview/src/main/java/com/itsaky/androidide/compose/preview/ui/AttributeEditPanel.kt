@@ -134,7 +134,7 @@ fun AttributeEditPanel(
                 modifier = Modifier.size(32.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = isRefreshing,
                     enter = fadeIn(),
                     exit = fadeOut(),
@@ -144,7 +144,7 @@ fun AttributeEditPanel(
                         strokeWidth = 2.dp,
                     )
                 }
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = !isRefreshing,
                     enter = fadeIn(),
                     exit = fadeOut(),

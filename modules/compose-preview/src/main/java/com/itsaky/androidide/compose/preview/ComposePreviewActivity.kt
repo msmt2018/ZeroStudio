@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -81,6 +82,7 @@ import com.itsaky.androidide.compose.preview.ui.DeviceProfileSheet
 import com.itsaky.androidide.compose.preview.ui.ErrorBadge
 import com.itsaky.androidide.compose.preview.ui.ErrorDetailSheet
 import com.itsaky.androidide.compose.preview.ui.LayoutTreeBottomSheet
+import com.itsaky.androidide.compose.preview.ui.LayoutInspectorOverlay
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbar
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarActions
 import com.itsaky.androidide.compose.preview.ui.PreviewToolbarState
@@ -163,6 +165,7 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         if (sourceCode.isNotBlank()) {
             viewModel.onSourceChanged(sourceCode)
         }
+    }
 
         // 【PR-C】订阅 previewState 拿 modulePath, 第一次 Ready 时加载用户 app
     // (解析 manifest android:icon + label). 失败不阻塞, 桌面还能用.
@@ -784,6 +787,7 @@ private fun ReadyPanel(
     // 【v3.3.1】Activity-scoped ViewModel / debugMode (Composable 函数里取).
     val viewModel = activity.viewModel
     val debugModeState by viewModel.debugMode.collectAsStateWithLifecycle()
+    val density = LocalDensity.current
 
     // 设备框 + 内容
     Box(
@@ -811,6 +815,8 @@ private fun ReadyPanel(
                 val parentHeightDp = maxHeight.value
                 // zoom > 1 时, 内容宽度 = parent * zoom, 多出来的部分 = parent * (zoom - 1)
                 // 中心为 TransformOrigin.Center, 所以左右各溢出 (parent * (zoom - 1) / 2).
+                val zoomScale = viewport.zoom
+                val canPan = zoomScale != 1f
                 val overflowXDp = (parentWidthDp * (zoomScale - 1f) / 2f).coerceAtLeast(0f)
                 val overflowYDp = (parentHeightDp * (zoomScale - 1f) / 2f).coerceAtLeast(0f)
 

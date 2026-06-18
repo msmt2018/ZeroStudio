@@ -97,6 +97,11 @@ class ProjectContextSource {
 
         val projectDexFiles = module.getRuntimeDexFiles().toList()
         val variantName = (module as? AndroidModule)?.getSelectedVariant()?.name ?: "debug"
+        // 【v3.5】强制走 d8 dexing — 例如项目使用 KSP 时, 单纯合并 classpaths 不够,
+        // 必须让 Gradle 跑一遍 d8 拿到合并后的 dex. 默认 false, 走 [BuildService] 轻量
+        // 任务 (只检查产物). 这里保持语义最小 — forceGradleDexing 永远是 false,
+        // 真要 force 的场景应该通过外部 [BuildService.executeTasks("assembleDebug")] 触发.
+        val forceGradleDexing = false
         // 【关键修复】之前只看 intermediateClasspaths.isEmpty(), 但 build 成功后
         // intermediateClasspaths 仍然可能为空 (variant artifact 没扫到), 导致
         // needsBuild 永远为 true, 预览页一直在 NeedsBuild / Ready 之间反复横跳.

@@ -83,50 +83,63 @@ enum class DeviceOrientation {
     /**
      * 把 [CutoutGeometry.Anchor] 按当前方向旋转对应的角度.
      *
-     * 旋转规则: 顺时针 90° = `TOP → LEFT, LEFT → BOTTOM, BOTTOM → RIGHT,
-     * RIGHT → TOP` (屏幕坐标系, y 向下). 详情见函数体注释.
+     * 旋转规则: 顺时针 90° = `TOP_CENTER → LEFT_CENTER, LEFT_CENTER → BOTTOM_CENTER,
+     * TOP_LEFT → BOTTOM_LEFT, TOP_RIGHT → TOP_LEFT` (屏幕坐标系, y 向下). 详情见函数体注释.
+     *
+     * 注: [CutoutGeometry.Anchor] 只有 5 个值 (TOP_CENTER / TOP_LEFT / TOP_RIGHT /
+     * LEFT_CENTER / RIGHT_CENTER), 没有 BOTTOM_* 锚点. 旋转 BOTTOM 等价于
+     * 旋转 TOP (因为旋转 180° 互换).
      */
     fun rotateAnchor(
         anchor: com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor
     ): com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor {
-        val turns = quarterTurns
-        if (turns == 0) return anchor
-        // 4 个主方向 (不含 LEFT_CENTER/RIGHT_CENTER)
-        val cycle = listOf(
-            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_CENTER,
-            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.LEFT_CENTER,
-            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.BOTTOM_CENTER,
-            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.RIGHT_CENTER,
-        )
-        val idx = cycle.indexOf(anchor)
-        if (idx < 0) {
-            // TOP_LEFT / TOP_RIGHT 角落: 旋转按 (2x2) 矩阵
-            return when (turns) {
-                1 -> when (anchor) {
-                    com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT ->
-                        com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.BOTTOM_LEFT
-                    com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT ->
-                        com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT
-                    else -> anchor
-                }
-                2 -> when (anchor) {
-                    com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT ->
-                        com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.BOTTOM_RIGHT
-                    com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT ->
-                        com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.BOTTOM_LEFT
-                    else -> anchor
-                }
-                3 -> when (anchor) {
-                    com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT ->
-                        com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT
-                    com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT ->
-                        com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.BOTTOM_RIGHT
-                    else -> anchor
-                }
-                else -> anchor
-            }
+        return when (anchor) {
+            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_CENTER ->
+                topCenterAfterRotate()
+            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.LEFT_CENTER ->
+                leftCenterAfterRotate()
+            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.RIGHT_CENTER ->
+                rightCenterAfterRotate()
+            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT ->
+                topLeftAfterRotate()
+            com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT ->
+                topRightAfterRotate()
         }
-        return cycle[(idx + turns) % 4]
+    }
+
+    private fun topCenterAfterRotate() = when (this) {
+        PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_CENTER
+        LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.LEFT_CENTER
+        REVERSE_PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_CENTER
+        REVERSE_LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.RIGHT_CENTER
+    }
+
+    private fun leftCenterAfterRotate() = when (this) {
+        PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.LEFT_CENTER
+        LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_CENTER
+        REVERSE_PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.LEFT_CENTER
+        REVERSE_LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_CENTER
+    }
+
+    private fun rightCenterAfterRotate() = when (this) {
+        PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.RIGHT_CENTER
+        LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_CENTER
+        REVERSE_PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.RIGHT_CENTER
+        REVERSE_LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_CENTER
+    }
+
+    private fun topLeftAfterRotate() = when (this) {
+        PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT
+        LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT
+        REVERSE_PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT
+        REVERSE_LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT
+    }
+
+    private fun topRightAfterRotate() = when (this) {
+        PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT
+        LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_RIGHT
+        REVERSE_PORTRAIT -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT
+        REVERSE_LANDSCAPE -> com.itsaky.androidide.compose.preview.data.device.CutoutGeometry.Anchor.TOP_LEFT
     }
 
     /**

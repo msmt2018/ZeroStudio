@@ -30,6 +30,10 @@ import com.itsaky.androidide.compose.preview.data.model.LayoutNodeSnapshot
 import com.itsaky.androidide.compose.preview.data.repository.CompilationException
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepository
 import com.itsaky.androidide.compose.preview.data.repository.ComposePreviewRepositoryImpl
+import com.itsaky.androidide.compose.preview.data.repository.InitializationResult
+import com.itsaky.androidide.compose.preview.data.source.ProjectContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.itsaky.androidide.compose.preview.runtime.LayoutInspector
 import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
 import com.itsaky.androidide.compose.preview.data.source.ComposableFunctionInfo
@@ -1065,7 +1069,7 @@ class ComposePreviewViewModel(
 
         val app = DesktopApp(
             id = info.packageName ?: "user.app",
-            label = info.applicationLabel ?: "My App",
+            label = info.label ?: "My App",
             packageName = info.packageName,
             iconResName = info.iconResName,
             isClickable = true, // 用户 app 可点击

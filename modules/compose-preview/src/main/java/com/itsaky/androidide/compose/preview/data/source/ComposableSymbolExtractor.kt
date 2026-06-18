@@ -23,6 +23,7 @@ import com.itsaky.androidide.lexers.kotlin.KotlinParserBaseListener
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
 import org.antlr.v4.runtime.Parser
+import org.antlr.v4.runtime.ParserRuleContext
 import org.antlr.v4.runtime.tree.ParseTreeWalker
 import org.slf4j.LoggerFactory
 
@@ -109,10 +110,24 @@ class ComposableSymbolExtractor {
 
         private fun String.cleanWhitespace(): String =
             replace(Regex("\\s+"), " ").trim()
-    }
 
-    private fun <T : Parser> T.withoutErrorListeners(): T {
-        removeErrorListeners()
-        return this
+        /**
+         * 简化版 cleanedText: 拿这个 [ParserRuleContext] 跨越的原始 token 文本.
+         * 复用 TreeSitterSymbolResolver 同样的语义 (返回规则覆盖的源码 slice).
+         *
+         * 之前的实现依赖内部 helper, 这里用一个等价的 ANTLR 标准 API 重写 —
+         * start.startIndex / stop.stopIndex 给出在 input stream 中的字符索引.
+         * 多数 Kotlin 编辑器都以 char index 存 source, 切片后返回.
+         */
+        private fun ParserRuleContext.cleanedText(): String {
+            val start = this.start.startIndex
+            val stop = this.stop.stopIndex
+            return this@ComposableSymbolExtractor.source.substring(start, stop + 1)
+        }
+
+        private fun <T : Parser> T.withoutErrorListeners(): T {
+            removeErrorListeners()
+            return this
+        }
     }
 }

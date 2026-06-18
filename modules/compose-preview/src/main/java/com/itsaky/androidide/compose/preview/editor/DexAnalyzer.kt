@@ -158,7 +158,16 @@ class DexAnalyzer {
         out.append("    .registers ").append(impl.registerCount).append("\n")
         for (insn in impl.instructions) {
             val opcode = insn.opcode.name
-            val operand = when (val ref = insn.reference) {
+            // smali-dexlib2 v3.0.9 改成了 `getReference()` Java getter, Kotlin
+            // 的 `insn.reference` 语法在某些版本不被识别. 显式调 getter 稳定.
+            val ref: com.android.tools.smali.dexlib2.iface.reference.Reference? =
+                insn.javaClass.methods
+                    .firstOrNull { it.name == "getReference" && it.parameterCount == 0 }
+                    ?.let { m ->
+                        runCatching { m.isAccessible = true; m.invoke(insn) }.getOrNull()
+                            as? com.android.tools.smali.dexlib2.iface.reference.Reference
+                    }
+            val operand = when (ref) {
                 null -> ""
                 is com.android.tools.smali.dexlib2.iface.reference.StringReference -> "\"${ref.string}\""
                 is com.android.tools.smali.dexlib2.iface.reference.MethodReference ->

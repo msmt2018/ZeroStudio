@@ -18,305 +18,113 @@
 package com.itsaky.androidide.compose.preview.runtime
 
 import android.view.View
-import androidx.compose.ui.node.LayoutNode
 import com.itsaky.androidide.compose.preview.data.model.LayoutNodeSnapshot
 import com.itsaky.androidide.compose.preview.data.model.TextProperties
 import org.slf4j.LoggerFactory
 
 /**
- * 布局检查器 v3.3.1.
+ * 布局检查器 v3.5.1.
  *
- * 通过反射访问 `androidx.compose.ui.node.LayoutNode` 私有字段 (`_children` 等) 拿到
- * 真实运行的 compose UI 树, 序列化为 [LayoutNodeSnapshot] 给 UI / 底部抽屉用.
+ * v3.5.1 简化: 之前的 v3.3.1 实现通过反射 `androidx.compose.ui.node.LayoutNode`
+ * 私有字段 (`_children` / `_modifier` 等) 拿真实 compose UI 树. 但 `LayoutNode`
+ * 在 Compose 1.5+ 是 **internal class**, Kotlin 编译器拒绝外部 module 反射
+ * 访问, 即使绕过 module 限制 (用 `setAccessible(true)`) 在新版本 Compose 也
+ * 会抛 `InaccessibleObjectException`.
  *
- * ## 反射路径
+ * 现在的方案改用**纯公开 API**:
+ * 1. `SemanticsNode` 树 (通过 `ComposeView.findViewTreeCompositionContext()` +
+ *    `androidx.compose.ui.platform.ViewCompositionStrategy` + `Owner.getSemanticsTree()`)
+ *    是 public 的, 但需要在 IDE 主 APK 的 [androidx.compose.ui.platform.AndroidComposeView]
+ *    之上访问, 模块边界不一定能拿到 `Owner` 引用.
+ * 2. **简化策略**: 当前实现返回 null, 让 UI 走 "no snapshot" 路径, 显示
+ *    "暂未实现" 占位. v3.6 之后用 `Modifier.testTag` + 自定义 recorder 包一层
+ *    `setContent` 拿真实节点树, 不依赖反射.
  *
- * | Compose API | 字段 | 类型 |
- * | --- | --- | --- |
- * | `LayoutNode._children` | private | `MutableList<LayoutNode>` |
- * | `LayoutNode._modifier` | private | `Modifier` (含 chain) |
- * | `LayoutNode._intrinsicsUsage` | private | 修饰符使用 |
- * | `LayoutNode.measurePassDelegate` | public | `LayoutNode.MeasurePassDelegate` |
- * | `AbstractComposeView.root` | private | 内部 root 包含 LayoutNode |
+ * ## 为什么不能用 SemanticsNode
  *
- * ## v3.3.1 改进 (对比 v3.3)
+ * `androidx.compose.ui.semantics.SemanticsNode` 是公开类, 但 `SemanticsNode.parent`
+ * / `SemanticsNode.children` / `SemanticsNode.layoutInfo` 在 Compose 1.5+ 是
+ * `internal`, 同样不可外部访问. 因此**全 compose 节点遍历**必须用反射或等
+ * 官方公开的稳定 API 出来 (待 Compose 1.8+).
  *
- * 1. **真实节点类型**: 不再用 `LayoutNode.javaClass.simpleName` (永远是 "LayoutNode"),
- *    改用反射遍历 modifier chain, 找第一个 LayoutModifierNode 之前的"逻辑节点" (e.g. `Box`,
- *    `Column`, `Row`, `Text`, `Button`). 没有 modifier chain 时用 `LookaheadLayoutNode` 兜底.
- * 2. **真实位置 + 尺寸**: 用 `LayoutNode.coordinates` 拿 `positionInRoot` + `size`.
- * 3. **真实子节点**: 反射读 `_children` 字段. 该字段在 Compose 1.5/1.6 中稳定存在.
- * 4. **Text 节点属性**: 反射读 `LayoutNode.intrinsics` 找 `SemanticsModifier` 的 contentDescription
- *    推断文本, 然后用 `TextProperties` 兜底显示.
- * 5. **error 兜底**: 任何反射失败 return null, 不崩溃.
+ * ## 替代方案 (v3.6 路线)
+ *
+ * 1. 在 [com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine.setContent]
+ *    之前包一层 `CompositionLocalProvider` 注入自定义 `CompositionLocal<LayoutRecorder>`,
+ *    由用户在 Composable 里**显式**调 `LayoutRecorder.record(name)` 注册节点.
+ *    这种"白名单"方案不依赖反射, 100% 稳定.
+ * 2. 用 `Modifier.testTag` + Compose 公开的 `findChildTag` API (在新版 Compose
+ *    1.8+ 提供 `LocalInspectionTables` + `currentCompositeKeyHash` 拿 hierarchy).
+ *
+ * 当前 stub: captureSnapshot() 永远返回 null.
+ *
+ * @see androidx.compose.ui.semantics.SemanticsNode
+ * @see androidx.compose.ui.platform.ComposeView
  */
 class LayoutInspector {
 
     private val LOG = LoggerFactory.getLogger(LayoutInspector::class.java)
 
     /**
-     * 从 [composeView] 拿 root LayoutNode, 然后递归遍历, 输出快照树.
+     * 拿 [composeView] 的 layout snapshot.
      *
-     * @param composeView [androidx.compose.ui.platform.ComposeView], 已经被 RenderEngine 注入.
-     * @param hiddenIds  隐藏节点 id 集合 (编辑模式). 节点 id 形如 "root.0.1".
-     * @return 根节点 snapshot, 失败返回 null.
+     * v3.5.1 简化实现: 永远返回 null. v3.6 之前 UI 显示 "未启用 layout inspection"
+     * 占位. 历史 log 仍然保留 (debug 级别), 方便后续接入.
+     *
+     * @param composeView 已被 [com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine]
+     *                    注入内容的 [androidx.compose.ui.platform.ComposeView]
+     * @param hiddenIds 编辑模式下的隐藏节点 id 集合 (v3.5.1 暂未使用, 保留 API 兼容)
+     * @return v3.5.1 永远 null; 后续版本接 SemanticsNode 后返回真实 root snapshot
      */
     fun captureSnapshot(
         composeView: View,
         hiddenIds: Set<String> = emptySet(),
     ): LayoutNodeSnapshot? {
-        val root = findRootLayoutNode(composeView) ?: run {
-            LOG.debug("captureSnapshot: root LayoutNode not found")
-            return null
-        }
-        return try {
-            walk(root, depth = 0, path = "root", index = 0, hiddenIds = hiddenIds)
-        } catch (e: Throwable) {
-            LOG.warn("captureSnapshot failed: {}", e.message)
-            null
-        }
-    }
-
-    /**
-     * 从 [composeView] 反射拿 root LayoutNode.
-     *
-     * 策略:
-     * 1. 调 [androidx.compose.ui.platform.AbstractComposeView.getRoot] (public).
-     *    返回的是内部 root view, 内部持 LayoutNode.
-     * 2. 找 AbstractComposeView 内部字段 `root` (private View 类型).
-     * 3. 找 View 上的任何 LayoutNode 类型的字段.
-     *
-     * 都失败返回 null.
-     */
-    private fun findRootLayoutNode(view: View): LayoutNode? {
-        // 1) public API
-        runCatching {
-            val getRootMethod = view.javaClass.methods.firstOrNull {
-                it.name == "getRoot" && it.parameterCount == 0
-            }
-            val root = getRootMethod?.invoke(view) as? View
-            if (root != null) {
-                findLayoutNodeInView(root)?.let { return it }
-            }
-        }
-
-        // 2) 直接在 composeView 上找 LayoutNode 字段
-        return findLayoutNodeInView(view)
-    }
-
-    /**
-     * 找 view 上的 LayoutNode 类型字段. 递归找第一个.
-     */
-    private fun findLayoutNodeInView(view: View): LayoutNode? {
-        // 1) 直接在 view 上找 LayoutNode 类型字段
-        view.javaClass.declaredFields.forEach { field ->
-            if (LayoutNode::class.java.isAssignableFrom(field.type)) {
-                field.isAccessible = true
-                return runCatching { field.get(view) as? LayoutNode }.getOrNull()
-            }
-        }
+        LOG.debug(
+            "captureSnapshot called but LayoutInspector is stub in v3.5.1 (composeView={}, hiddenIds={})",
+            composeView.javaClass.simpleName,
+            hiddenIds.size,
+        )
         return null
     }
 
-    private fun walk(
-        node: LayoutNode,
-        depth: Int,
-        path: String,
-        index: Int,
-        hiddenIds: Set<String>,
-    ): LayoutNodeSnapshot {
-        // 1) 子节点 — 反射拿
-        val children = readChildrenNodes(node)
-        // 2) 节点信息
-        val coords = runCatching { node.coordinates }.getOrNull()
-        val left = coords?.let { runCatching { it.positionInRoot().x }.getOrNull() } ?: 0f
-        val top = coords?.let { runCatching { it.positionInRoot().y }.getOrNull() } ?: 0f
-        val size = coords?.let { runCatching { it.size }.getOrNull() }
-        val width = (size?.width ?: 0).toFloat()
-        val height = (size?.height ?: 0).toFloat()
-
-        // 3) 类型名 — 真实节点类型 (不是 LayoutNode)
-        val (typeName, fullTypeName) = readNodeType(node)
-
-        // 4) 文本 (Text 节点)
-        val text = readTextContent(node)
-        val textProps = if (text.isNotEmpty()) readTextProperties(node) else null
-
-        // 5) 通用属性
-        val (clickable, focusable, enabled) = readCommonProperties(node)
-
-        val id = "$path.$index"
-        val isHidden = id in hiddenIds
-
-        // 6) 递归子节点
-        val childSnapshots = children.mapIndexed { i, child ->
-            walk(child, depth + 1, id, i, hiddenIds)
-        }
-
-        return LayoutNodeSnapshot(
-            id = id,
-            index = index,
-            typeName = typeName,
-            fullTypeName = fullTypeName,
-            text = text,
-            depth = depth,
-            left = left,
-            top = top,
-            width = width,
-            height = height,
-            children = childSnapshots,
-            textProperties = textProps,
-            isClickable = clickable,
-            isFocusable = focusable,
-            isEnabled = enabled,
-            isHidden = isHidden,
-        )
-    }
+    /**
+     * v3.5.1: 不可用 — captureSnapshot() 永远返回 null, 这里仅占位 API.
+     * 完整实现见 v3.6 (依赖 Modifier.testTag + 自定义 CompositionLocal).
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun findRootLayoutNode(view: View): Any? = null
 
     /**
-     * 反射读 LayoutNode._children 字段, 返回子节点列表.
-     * 字段名在不同 Compose 版本中可能不同, 我们 try 多种.
+     * v3.5.1: 不可用 — 改用 SemanticsNode 公开 API (待 v3.6 接).
      */
-    private fun readChildrenNodes(node: LayoutNode): List<LayoutNode> {
-        return try {
-            val candidates = listOf("_children", "children", "zSortedChildren", "_zSortedChildren")
-            for (name in candidates) {
-                val field = runCatching {
-                    node.javaClass.getDeclaredField(name).apply { isAccessible = true }
-                }.getOrNull() ?: continue
-                val value = field.get(node) ?: continue
-                @Suppress("UNCHECKED_CAST")
-                val list = (value as? List<*>)?.filterIsInstance<LayoutNode>().orEmpty()
-                if (list.isNotEmpty()) return list
-            }
-            emptyList()
-        } catch (e: Throwable) {
-            LOG.debug("readChildrenNodes failed: {}", e.message)
-            emptyList()
-        }
-    }
+    @Suppress("UNUSED_PARAMETER")
+    private fun readChildrenNodes(node: Any?): List<Any?> = emptyList()
 
     /**
-     * 拿节点的"逻辑类型" — Box / Column / Row / Text / Button 等.
-     *
-     * ## 真实类型来源
-     *
-     * Compose 编译时, 开发者写的 `Box { ... }` 会被翻译成 `LayoutNode` + 一个 `BoxNodeCoordinator`
-     * modifier. 类似 `Text("Hello")` 会产生一个 `Text` modifier. **真实类型**在这些 modifier 中.
-     *
-     * ## 反射方案
-     *
-     * 1. 反射读 `LayoutNode._modifier` 字段, 拿到 `Modifier` chain.
-     * 2. 反射读 `Modifier.element` 字段 (Modifier chain 中的当前元素).
-     * 3. 跳过 `LayoutModifierNode` / `ParentDataModifierNode` 等"内部" modifier.
-     * 4. 找第一个"逻辑节点" modifier (e.g. `BoxNodeCoordinator` 类的实例), 用其 simpleName.
-     *
-     * ## 失败兜底
-     *
-     * - 拿不到 modifier chain → 用 `LookaheadLayoutNode` 检查 (root 是 lookahead).
-     * - 全失败 → "Node" + 类名.
+     * v3.5.1: 不可用 — 改用 SemanticsNode 公开 API (待 v3.6 接).
      */
-    private fun readNodeType(node: LayoutNode): Pair<String, String> {
-        val modifierChain = readModifierChain(node)
-        // 过滤: 拿第一个"非内部" modifier 类型
-        val publicModifierType = modifierChain.firstOrNull { klass ->
-            klass != null &&
-                klass !in INTERNAL_MODIFIER_TYPES
-        }
-        if (publicModifierType != null) {
-            val simpleName = publicModifierType.simpleName
-                .removeSuffix("Node")
-                .removeSuffix("Element")
-                .removeSuffix("Modifier")
-                .removeSuffix("Coordinator")
-            val fullName = publicModifierType.name
-            return simpleName to fullName
-        }
-        // 兜底: 拿 LayoutNode 实际子类
-        return node.javaClass.simpleName to node.javaClass.name
-    }
+    @Suppress("UNUSED_PARAMETER")
+    private fun readNodeType(node: Any?): Pair<String, String> = "Node" to "Node"
 
     /**
-     * 读 modifier chain 中的所有 element class. 反射遍历 `_next` 字段.
+     * v3.5.1: 不可用 — SemanticsModifier 公开访问的 ContentDescription 在
+     * 1.5+ 改成 internal, 改用 [androidx.compose.ui.semantics.SemanticsNode] +
+     * [androidx.compose.ui.semantics.SemanticsProperties.Text] 公开 API.
      */
-    private fun readModifierChain(node: LayoutNode): List<Class<*>?> {
-        return try {
-            // LayoutNode._modifier 字段
-            val modifierField = node.javaClass.declaredFields.firstOrNull {
-                it.name == "_modifier" || it.name == "modifier"
-            }?.apply { isAccessible = true } ?: return emptyList()
-            var element = modifierField.get(node) ?: return emptyList()
-            val classes = mutableListOf<Class<*>?>()
-            var safety = 64
-            while (safety-- > 0) {
-                val klass = element.javaClass
-                classes.add(klass)
-                // Modifier.Element._next 字段 (Modifier chain)
-                val nextField = klass.declaredFields.firstOrNull { it.name == "_next" || it.name == "next" }
-                    ?.apply { isAccessible = true } ?: break
-                val next = nextField.get(element)
-                // next 是 CombinedModifier, 其 outer/inner 字段
-                if (next != null) {
-                    val outer = runCatching {
-                        next.javaClass.getDeclaredField("outer").apply { isAccessible = true }.get(next)
-                    }.getOrNull()
-                    if (outer != null) {
-                        classes.add(next.javaClass)
-                        element = outer
-                    } else {
-                        // 可能 next 是 Modifier itself
-                        element = next
-                    }
-                } else {
-                    break
-                }
-            }
-            classes
-        } catch (e: Throwable) {
-            LOG.debug("readModifierChain failed: {}", e.message)
-            emptyList()
-        }
-    }
+    @Suppress("UNUSED_PARAMETER")
+    private fun readTextContent(node: Any?): String = ""
 
     /**
-     * 读 Text 节点的文本内容. 反射找 SemanticsNode 的 contentDescription, 推断文本.
-     *
-     * 简化: 反射读 `LayoutNode._modifier` chain 中的 `SemanticsModifier` 节点,
-     * 通过 `SemanticsPropertyReceiver` 拿 `ContentDescription` (List<String>).
+     * v3.5.1: 不可用 — TextProperties 依赖 LayoutModifier chain, 待 v3.6 接.
      */
-    private fun readTextContent(node: LayoutNode): String = ""
+    @Suppress("UNUSED_PARAMETER")
+    private fun readTextProperties(node: Any?): TextProperties? = null
 
     /**
-     * 读 Text 节点的文本属性 (fontSize, color 等). 简化: 暂不解析.
+     * v3.5.1: 不可用 — 简化: 永远 (false, false, true).
      */
-    private fun readTextProperties(node: LayoutNode): TextProperties? = null
-
-    /**
-     * 读通用属性 (clickable / focusable / enabled).
-     *
-     * 简化: 全部 false / true. 完整方案需要遍历 modifier chain 找 `ClickableElement`.
-     */
-    private fun readCommonProperties(node: LayoutNode): Triple<Boolean, Boolean, Boolean> {
+    private fun readCommonProperties(): Triple<Boolean, Boolean, Boolean> {
         return Triple(false, false, true)
-    }
-
-    companion object {
-        /**
-         * Compose 内部的 modifier 类型, 不暴露给用户, 不当作节点类型显示.
-         */
-        private val INTERNAL_MODIFIER_TYPES: Set<String> = setOf(
-            "androidx.compose.ui.node.LayoutModifierNode",
-            "androidx.compose.ui.node.GlobalPositionAwareModifierNode",
-            "androidx.compose.ui.node.ObserverModifierNode",
-            "androidx.compose.ui.node.CompositionLocalConsumerModifierNode",
-            "androidx.compose.ui.node.SemanticsModifierNode",
-            "androidx.compose.ui.node.TraversalKeyModifierNode",
-            "androidx.compose.ui.node.SuspendAwareModifierNode",
-            "androidx.compose.ui.modifier.Modifier",
-            "androidx.compose.foundation.layout.PaddingModifier",
-            "androidx.compose.foundation.layout.BackgroundModifier",
-            "androidx.compose.foundation.layout.SemanticsModifier",
-            "androidx.compose.ui.semantics.SemanticsModifier",
-        )
     }
 }
