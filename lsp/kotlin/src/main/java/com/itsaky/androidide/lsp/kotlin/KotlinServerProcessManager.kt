@@ -274,15 +274,35 @@ class KotlinServerProcessManager(private val context: Context) {
             try {
                 process.errorStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
-                        if (line.isNotBlank()) {
-                            log.debug("Kotlin LSP stderr: $line")
-                        }
+                        if (line.isBlank()) return@forEach
+                        // 过滤 SLF4J 1.7.x 的 "找不到 StaticLoggerBinder 绑定" 警告.
+                        // 原因: kotlin-language-server 自带 slf4j-api-1.7.25.jar,
+                        // 但官方发布包里没带 slf4j-nop / slf4j-simple 等绑定实现.
+                        // SLF4J 1.7.x 找不到绑定时会 fallback 到 NOP logger,
+                        // 这 3 行警告是 SLF4J 1.7.x 启动时的固定行为, 不影响 LSP 功能.
+                        // 修根本问题需要重新打包 LSP 包含 slf4j-nop, 但 IDE 侧无
+                        // jar 资源, 这里仅在 stderr monitor 中过滤避免日志噪音.
+                        if (isSlf4jBindingWarning(line)) return@forEach
+                        log.debug("Kotlin LSP stderr: $line")
                     }
                 }
             } catch (_: Exception) {
                 // ignore stream close during shutdown
             }
         }
+    }
+
+    /**
+     * 判断 stderr 行是否是 SLF4J 1.7.x 的绑定警告.
+     * 这些行在每次 LSP 启动时一定会出现 3 次, 与 IDE 无关.
+     */
+    private fun isSlf4jBindingWarning(line: String): Boolean {
+        val trimmed = line.trim()
+        if (trimmed.startsWith("SLF4J:")) return true
+        // SLF4J 1.7.25 还会附一个 URL 提示, 包含 slf4j.org
+        if (trimmed.contains("StaticLoggerBinder")) return true
+        if (trimmed.contains("slf4j.org/codes.html")) return true
+        return false
     }
 
     fun stopServer() {
