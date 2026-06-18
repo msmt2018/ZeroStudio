@@ -134,7 +134,15 @@ data class ViewportState(
     val offsetXdp: Float = 0f,
     val offsetYdp: Float = 0f,
     val fitMode: FitMode = FitMode.FIT_WIDTH,
-)
+) {
+    /**
+     * 是否处于"可平移"状态 — 即 zoom 偏离 1.0 (放大或缩小).
+     * 放大或缩小时用户都可以触摸拖动被裁掉的区域.
+     * zoom == 1.0 时不显示平移状态, 即便 [offsetXdp] / [offsetYdp] 也不变.
+     */
+    val canPan: Boolean
+        get() = zoom > 0.0001f && (zoom > 1.001f || zoom < 0.999f)
+}
 
 enum class FitMode { FIT_WIDTH, FIT_HEIGHT, ACTUAL_SIZE }
 
@@ -470,6 +478,9 @@ class ComposePreviewViewModel(
 
     fun selectDevice(profile: DeviceProfile) {
         _deviceConfig.value = _deviceConfig.value.copy(profile = profile, deviceSimEnabled = true)
+        // 【PR-D】换设备时重置 pan, 不同 profile 的宽高 / 宽高比不同, 旧的
+        // offset 在新设备下可能对应完全不同的位置.
+        resetPan()
         LOG.info("Device selected: {}", profile.displayName)
     }
 
@@ -485,6 +496,8 @@ class ComposePreviewViewModel(
         _deviceConfig.value = _deviceConfig.value.copy(
             deviceSimEnabled = !_deviceConfig.value.deviceSimEnabled
         )
+        // 【PR-D】设备/无设备切换: 父容器尺寸会变, 重置 pan
+        resetPan()
         LOG.info("Device sim toggled: {}", _deviceConfig.value.deviceSimEnabled)
     }
 
@@ -518,13 +531,53 @@ class ComposePreviewViewModel(
     }
 
     fun setZoom(zoom: Float) {
+        val coerced = zoom.coerceIn(0.1f, 5.0f)
+        // 【PR-D】zoom 回到 1.0 时清空 pan 偏移, 否则下次放大时会"跳"到之前
+        // 拖到的位置, 体验不自然. zoom 变化 (不是回到 1.0) 也保留 offset, 让用户
+        // 在缩放过程中能维持位置.
+        val newOffsetX = if (coerced in 0.999f..1.001f) 0f else _viewport.value.offsetXdp
+        val newOffsetY = if (coerced in 0.999f..1.001f) 0f else _viewport.value.offsetYdp
         _viewport.value = _viewport.value.copy(
-            zoom = zoom.coerceIn(0.1f, 5.0f)
+            zoom = coerced,
+            offsetXdp = newOffsetX,
+            offsetYdp = newOffsetY,
         )
     }
 
     fun fitZoom() {
-        _viewport.value = ViewportState() // reset to fit
+        // fitZoom 强制重置, 包括 offset
+        _viewport.value = ViewportState()
+    }
+
+    /**
+     * 【PR-D】触摸拖动平移. 上层 (ReadyPanel) 在 zoom 偏离 1.0 时给 zoomed 内容加
+     * `pointerInput + detectDragGestures`, 把 drag delta 转成 dp 后调这个方法.
+     *
+     * 重要: `deltaXDp` / `deltaYDp` 是**手指拖动**的位移 (不是绝对位置), 累加到
+     * 当前 offset 上. ReadyPanel 内需要根据"父容器宽 × zoom"算出 max pan 范围
+     * 做边界 clamp, 防止用户把内容完全拖出屏幕.
+     *
+     * @param maxXDp 父容器可平移的最大 X 范围 (单位 dp). 通常是 (parentWidthDp * (zoom - 1) / 2).
+     * @param maxYDp 父容器可平移的最大 Y 范围 (单位 dp).
+     */
+    fun panBy(deltaXDp: Float, deltaYDp: Float, maxXDp: Float, maxYDp: Float) {
+        val current = _viewport.value
+        if (!current.canPan) return
+        val newX = (current.offsetXdp + deltaXDp).coerceIn(-maxXDp, maxXDp)
+        val newY = (current.offsetYdp + deltaYDp).coerceIn(-maxYDp, maxYDp)
+        if (newX == current.offsetXdp && newY == current.offsetYdp) return
+        _viewport.value = current.copy(offsetXdp = newX, offsetYdp = newY)
+    }
+
+    /**
+     * 【PR-D】重置 pan 到中心 (offsetX=0, offsetY=0). 在以下时机调:
+     * - 切换 deviceSimEnabled (设备/无设备模式布局差异)
+     * - 切换 device profile
+     * - 重新编译完成
+     */
+    fun resetPan() {
+        if (_viewport.value.offsetXdp == 0f && _viewport.value.offsetYdp == 0f) return
+        _viewport.value = _viewport.value.copy(offsetXdp = 0f, offsetYdp = 0f)
     }
 
     fun cycleTheme() {

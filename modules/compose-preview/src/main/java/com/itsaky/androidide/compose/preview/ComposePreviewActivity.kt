@@ -22,8 +22,10 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,9 +56,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -363,6 +368,9 @@ private fun ComposePreviewScreen(
                             modulePath = viewModel.getModulePath(),
                             onLaunchApp = { app -> viewModel.launchDesktopApp(app) },
                             onGoHome = { viewModel.goToHome() },
+                            // 【PR-D】传 previewState 让 ReadyPanel 在重新编译
+                            // (新 Ready 进入) 时重置 pan, 避免旧 pan 在新 dex 上残留.
+                            previewState = s,
                         )
                     }
 
@@ -521,6 +529,7 @@ private fun ReadyPanel(
     modulePath: String,
     onLaunchApp: (DesktopApp) -> Unit,
     onGoHome: () -> Unit,
+    previewState: PreviewState,
 ) {
     // 设备框 + 内容
     Box(
@@ -535,42 +544,131 @@ private fun ReadyPanel(
         // - 无设备模式: 仅缩放 content (compose UI), 以中心点缩放 (用户要求 #3
         //   "以中心点逐渐放大").
         // 用 graphicsLayer + TransformOrigin.Center 实现 GPU 缩放, 不触发重测量.
+        //
+        // 【PR-D】在 zoom 偏离 1.0 时, 用户可以触摸拖动平移 (pan) — 看到被裁掉的区域.
+        // 实现: 用 BoxWithConstraints 拿父容器尺寸, 算 maxPanX = parent * (zoom - 1) / 2
+        //      之后 graphicsLayer 加 translationX/Y.
+        //      pointerInput(detectDragGestures) 把 drag delta 累加到 viewport.offset.
         val zoomScale = viewport.zoom
-        val graphicsModifier = Modifier.graphicsLayer(
-            scaleX = zoomScale,
-            scaleY = zoomScale,
-            transformOrigin = TransformOrigin.Center,
-        )
+        val canPan = viewport.canPan
+        val density = LocalDensity.current
+
+        // 【PR-D】deviceSimEnabled / profile 变化时重置 pan. previewState 变化 (重新
+        // 编译) 也重置, 避免旧的 offset 在新 dex 上残留.
+        LaunchedEffect(deviceConfig.deviceSimEnabled, deviceConfig.profile.id, previewState) {
+            viewModel.resetPan()
+        }
 
         // 【v3.2】用 key() 强制 deviceSimEnabled / profile 变化时整体重组.
+        // 【PR-D】previewState 也加入 key, 重新编译时彻底重置 (LaunchedEffect 已经
+        // resetPan, 但 key() 还能让 graphicsLayer 缓存的 layout 状态一起刷新).
         androidx.compose.runtime.key(
             deviceConfig.deviceSimEnabled,
-            deviceConfig.profile.id
+            deviceConfig.profile.id,
+            previewState,
         ) {
-            if (deviceConfig.deviceSimEnabled) {
-                // 设备模式: 整个 device frame 一起缩放
-                Box(modifier = graphicsModifier) {
-                    DeviceFrame(
-                        profile = deviceConfig.profile,
-                        systemBarsTheme = deviceConfig.systemBarsTheme,
-                        showStatusBar = deviceConfig.showStatusBar,
-                        showNavigationBar = deviceConfig.showNavigationBar,
-                        showCutout = deviceConfig.showCutout,
-                        showChassis = deviceConfig.showChassis,
-                        useGestureNav = deviceConfig.useGestureNav,
-                        desktopApps = desktopApps,
-                        foregroundApp = foregroundApp,
-                        modulePath = modulePath,
-                        onLaunchApp = onLaunchApp,
-                        onGoHome = onGoHome,
-                    ) {
+            // 把 zoom 后的内容 + pan 手势都包在 BoxWithConstraints 里, 这样能拿到
+            // 父容器尺寸, 计算 maxPan 范围.
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                val parentWidthDp = maxWidth.value
+                val parentHeightDp = maxHeight.value
+                // zoom > 1 时, 内容宽度 = parent * zoom, 多出来的部分 = parent * (zoom - 1)
+                // 中心为 TransformOrigin.Center, 所以左右各溢出 (parent * (zoom - 1) / 2).
+                val overflowXDp = (parentWidthDp * (zoomScale - 1f) / 2f).coerceAtLeast(0f)
+                val overflowYDp = (parentHeightDp * (zoomScale - 1f) / 2f).coerceAtLeast(0f)
+
+                val translationXDp = viewport.offsetXdp
+                val translationYDp = viewport.offsetYdp
+
+                // 把 dp 偏移转成 px 喂给 graphicsLayer (translationX/Y 用 px).
+                val translationXPx = with(density) { translationXDp.dp.toPx() }
+                val translationYPx = with(density) { translationYDp.dp.toPx() }
+
+                val graphicsModifier = Modifier
+                    .graphicsLayer(
+                        scaleX = zoomScale,
+                        scaleY = zoomScale,
+                        translationX = translationXPx,
+                        translationY = translationYPx,
+                        transformOrigin = TransformOrigin.Center,
+                    )
+                    // 【PR-D】触摸平移手势. 只在 canPan (zoom != 1.0) 时启用, 避免
+                    // 误吞点击事件 (例如设备模式下用户想点物理键/状态栏).
+                    .then(
+                        if (canPan) {
+                            Modifier.pointerInput(zoomScale, parentWidthDp, parentHeightDp) {
+                                // PointerInputScope 继承自 Density, 这里拿 px-per-dp
+                                // 把 dragAmount (px) 转成 dp.
+                                val pxPerDp = density
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    // dragAmount 是 px, 还原成 dp.
+                                    // 手指往右拖 → 内容跟随手指往右移 → offsetXdp
+                                    // 增大 → translationX 增大 (graphicsLayer 中
+                                    // 正值 = 向右). 所以 deltaXDp 保持原符号.
+                                    val deltaXDp = dragAmount.x / pxPerDp
+                                    val deltaYDp = dragAmount.y / pxPerDp
+                                    viewModel.panBy(
+                                        deltaXDp = deltaXDp,
+                                        deltaYDp = deltaYDp,
+                                        maxXDp = overflowXDp,
+                                        maxYDp = overflowYDp,
+                                    )
+                                }
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
+
+                if (deviceConfig.deviceSimEnabled) {
+                    // 设备模式: 整个 device frame 一起缩放 + 拖动
+                    Box(modifier = graphicsModifier) {
+                        DeviceFrame(
+                            profile = deviceConfig.profile,
+                            systemBarsTheme = deviceConfig.systemBarsTheme,
+                            showStatusBar = deviceConfig.showStatusBar,
+                            showNavigationBar = deviceConfig.showNavigationBar,
+                            showCutout = deviceConfig.showCutout,
+                            showChassis = deviceConfig.showChassis,
+                            useGestureNav = deviceConfig.useGestureNav,
+                            desktopApps = desktopApps,
+                            foregroundApp = foregroundApp,
+                            modulePath = modulePath,
+                            onLaunchApp = onLaunchApp,
+                            onGoHome = onGoHome,
+                        ) {
+                            PreviewContainer(activity)
+                        }
+                    }
+                } else {
+                    // 无设备模式: 缩放 compose UI 本身, 不缩放外层
+                    Box(modifier = graphicsModifier) {
                         PreviewContainer(activity)
                     }
                 }
-            } else {
-                // 无设备模式: 缩放 compose UI 本身, 不缩放外层
-                Box(modifier = graphicsModifier) {
-                    PreviewContainer(activity)
+
+                // 【PR-D 提示】缩放 != 1.0 时显示一个小提示 "拖动平移"
+                if (canPan) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.55f),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        androidx.compose.material3.Text(
+                            text = "${(zoomScale * 100).toInt()}% · 拖动平移",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                        )
+                    }
                 }
             }
         }
