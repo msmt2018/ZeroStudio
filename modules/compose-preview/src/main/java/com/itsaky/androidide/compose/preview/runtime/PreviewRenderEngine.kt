@@ -18,9 +18,11 @@
 package com.itsaky.androidide.compose.preview.runtime
 
 import android.content.Context
+import android.content.res.Configuration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +30,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.currentComposer
 import androidx.compose.ui.Alignment
@@ -36,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
+import com.itsaky.androidide.compose.preview.PreviewConfig
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
@@ -139,6 +144,8 @@ class PreviewRenderEngine(
      * @param className     用户 Composable 所在类 (含 package).
      * @param functionName  Composable 函数名.
      * @param args          透传给 Composable 的 user 参数.
+     * @param previewConfig v3.4 新增 — `@Preview` 标注的完整配置 (背景色 / showBackground /
+     *                      uiMode / showSystemUi). 为 null 时使用默认 (无背景色 / 浅色主题).
      */
     fun render(
         previewDex: File?,
@@ -146,6 +153,7 @@ class PreviewRenderEngine(
         className: String,
         functionName: String,
         args: Array<out Any?> = emptyArray(),
+        previewConfig: PreviewConfig? = null,
     ) {
         val view = composeView ?: run {
             LOG.error("render() called before attach()")
@@ -190,9 +198,9 @@ class PreviewRenderEngine(
             null
         }
 
-        // 4) setContent + 通过 currentComposer 注入
+        // 4) setContent + 通过 currentComposer 注入 (v3.4: 应用 PreviewConfig)
         view.setContent {
-            MaterialTheme {
+            PreviewConfigTheme(previewConfig) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
@@ -262,6 +270,39 @@ class PreviewRenderEngine(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
+        }
+    }
+}
+
+/**
+ * v3.4 新增: 应用 [PreviewConfig] 的 uiMode (浅色/深色) + showBackground 背景.
+ *
+ * 行为:
+ * - [PreviewConfig.uiMode] = `UI_MODE_NIGHT_YES` → 强制 darkColorScheme
+ * - [PreviewConfig.uiMode] = `UI_MODE_NIGHT_NO`  → 强制 lightColorScheme
+ * - [PreviewConfig.uiMode] = null                → 跟随系统 (isSystemInDarkTheme)
+ * - [PreviewConfig.showBackground] = true       → 整个预览包一层 [Color] 背景
+ * - [PreviewConfig.backgroundColor] 提供具体色值, 缺省 `0xFFFFFFFF` (白)
+ */
+@Composable
+private fun PreviewConfigTheme(
+    config: PreviewConfig?,
+    content: @Composable () -> Unit,
+) {
+    val isDark = when {
+        config?.uiMode == null -> isSystemInDarkTheme()
+        config.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES -> true
+        else -> false
+    }
+    val colorScheme = if (isDark) darkColorScheme() else lightColorScheme()
+    MaterialTheme(colorScheme = colorScheme) {
+        if (config?.showBackground == true) {
+            val bg = config.backgroundColor?.let { Color(it) } ?: Color(0xFFFFFFFF)
+            Box(modifier = Modifier.fillMaxSize().background(bg)) {
+                content()
+            }
+        } else {
+            content()
         }
     }
 }

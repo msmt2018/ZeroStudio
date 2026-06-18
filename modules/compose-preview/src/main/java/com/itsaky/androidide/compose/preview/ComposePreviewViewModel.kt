@@ -116,6 +116,28 @@ data class PreviewConfig(
     val fontScale: Float? = null,
     val isLightDark: Boolean = false,
     val parameterProviderName: String? = null,
+    // v3.4 增字段 — 完整 @Preview 标注支持
+    /**
+     * `@Preview(backgroundColor = 0xFFFFFFFFL)` — 预览背景色 (ARGB int).
+     * 为 null 时不应用背景色 (跟随设备套壳).
+     */
+    val backgroundColor: Int? = null,
+    /**
+     * `@Preview(showBackground = true)` — 是否显示背景色. 默认 false.
+     * `backgroundColor` 为 null 时, 默认白色.
+     */
+    val showBackground: Boolean = false,
+    /**
+     * `@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)` — 强制 UI 模式.
+     * 取值: `Configuration.UI_MODE_NIGHT_NO` (16) / `UI_MODE_NIGHT_YES` (32).
+     * null 时跟随系统主题.
+     */
+    val uiMode: Int? = null,
+    /**
+     * `@Preview(showSystemUi = true)` — 是否在 preview 中显示系统栏.
+     * 默认 false (我们的 v3.4 由 `DeviceConfig.showStatusBar` / `showNavigationBar` 控制).
+     */
+    val showSystemUi: Boolean = false,
 )
 
 /**
@@ -266,6 +288,17 @@ class ComposePreviewViewModel(
      */
     private val _selectedNodeAttributes = MutableStateFlow<List<NamedParameter>>(emptyList())
     val selectedNodeAttributes: StateFlow<List<NamedParameter>> = _selectedNodeAttributes.asStateFlow()
+
+    /**
+     * 【v3.4】属性加载中状态. true = 正在解析 dex 提取 named parameters (耗时操作,
+     * 可能在 IO 线程做 100ms ~ 数秒, 取决于 dex 大小). UI 用这个显示
+     * [CircularProgressIndicator] 替代 Refresh 图标.
+     *
+     * 由 [loadAttributesForSelectedNode] / [refreshAttributes] 内部维护. 外部
+     * Activity 通过 collectAsStateWithLifecycle() 订阅.
+     */
+    private val _isRefreshingAttributes = MutableStateFlow(false)
+    val isRefreshingAttributes: StateFlow<Boolean> = _isRefreshingAttributes.asStateFlow()
 
     /**
      * 【v3.3.1】属性编辑结果 (最后一次).
@@ -826,6 +859,10 @@ class ComposePreviewViewModel(
      * 注: 完整 named parameter 在 kotlin→dex 编译后已丢失, dex 里只有位置参数 +
      * 寄存器. 简化版只能拿到 const-string 值. 真实场景中要改属性应该走更可靠的
      * 路径 — 直接改 .kt 源文件, 由用户指定 methodName + line + parameterName.
+     *
+     * v3.4: 改在 viewModelScope (默认 Main 调度) 启动, 内部置
+     * [_isRefreshingAttributes] = true 让 UI 显示加载指示. 解析完成后 (无论
+     * 成功 / 失败) 都置回 false. 之前 v3.3.1 同步在调用方线程执行, UI 没反馈.
      */
     fun loadAttributesForSelectedNode(
         dexFile: java.io.File?,
@@ -836,14 +873,39 @@ class ComposePreviewViewModel(
             _selectedNodeAttributes.value = emptyList()
             return
         }
-        try {
-            val attrs = attributeEditor.extractAttributesFromDex(dexFile, className, methodName)
-            _selectedNodeAttributes.value = attrs
-            LOG.info("Loaded {} attributes for {}.{}", attrs.size, className, methodName)
-        } catch (e: Throwable) {
-            LOG.warn("loadAttributesForSelectedNode failed: {}", e.message)
-            _selectedNodeAttributes.value = emptyList()
+        viewModelScope.launch {
+            _isRefreshingAttributes.value = true
+            try {
+                val attrs = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    attributeEditor.extractAttributesFromDex(dexFile, className, methodName)
+                }
+                _selectedNodeAttributes.value = attrs
+                LOG.info("Loaded {} attributes for {}.{}", attrs.size, className, methodName)
+            } catch (e: Throwable) {
+                LOG.warn("loadAttributesForSelectedNode failed: {}", e.message)
+                _selectedNodeAttributes.value = emptyList()
+            } finally {
+                _isRefreshingAttributes.value = false
+            }
         }
+    }
+
+    /**
+     * 【v3.4】手动刷新属性列表. 由 [AttributeEditPanel] 头部 Refresh 按钮触发.
+     *
+     * 等价于 [loadAttributesForSelectedNode] (用当前 previewState 里的 dexFile +
+     * className + selectedPreview). 抽出独立方法避免 UI 层组装参数.
+     *
+     * 与 [loadAttributesForSelectedNode] 的区别: 这个方法**强制重新加载** (绕过
+     * "如果之前已加载过就跳过" 的优化). 用户主动点 Refresh 时总应该重读 dex,
+     * 因为 .kt 源文件可能已经改了, 但 dex 还没重建 (例如还没触发 build).
+     */
+    fun refreshAttributes() {
+        val readyState = _previewState.value as? PreviewState.Ready ?: return
+        val methodName = _selectedPreview.value
+            ?: readyState.previewConfigs.firstOrNull()?.functionName
+            ?: return
+        loadAttributesForSelectedNode(readyState.dexFile, readyState.className, methodName)
     }
 
     /**

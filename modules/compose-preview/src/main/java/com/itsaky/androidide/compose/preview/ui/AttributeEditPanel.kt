@@ -33,15 +33,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -66,7 +72,7 @@ import com.itsaky.androidide.compose.preview.editor.AttributeEditResult
 import com.itsaky.androidide.compose.preview.editor.NamedParameter
 
 /**
- * 属性编辑面板 v3.3.1.
+ * 属性编辑面板 v3.4.
  *
  * 调试模式 + 编辑模式开启时, 在底部抽屉 Tab 2 显示:
  * - 选中节点的 named parameter 列表 (从 dex 反编译得到)
@@ -75,6 +81,11 @@ import com.itsaky.androidide.compose.preview.editor.NamedParameter
  *   1. ViewModel.editAttribute -> ComposeAttributeEditor.editKtFile 写 .kt
  *   2. onBuildTriggered 回调 -> Activity 调 BuildService.executeTasks("assembleDebug")
  *   3. Build 完成后 preview 自动重新渲染
+ *
+ * v3.4 增: 头部加 [onRefresh] 按钮 + [isRefreshing] 加载状态指示.
+ * 点击 Refresh 触发 [onRefresh] 回调 (Activity 调 ViewModel.refreshAttributes),
+ * 加载时显示 [CircularProgressIndicator] 替代 Refresh 图标, 让用户感知 dex
+ * 重新解析过程 (可能耗时 100ms ~ 数秒, 取决于 dex 大小).
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -86,6 +97,8 @@ fun AttributeEditPanel(
     lastResult: AttributeEditResult?,
     onEditAttribute: (parameterName: String, newValue: String) -> Unit,
     onClearResult: () -> Unit,
+    onRefresh: () -> Unit = {},
+    isRefreshing: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var editingParam by remember { mutableStateOf<NamedParameter?>(null) }
@@ -97,7 +110,7 @@ fun AttributeEditPanel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "属性编辑 (v3.3.1)",
+                text = "属性编辑 (v3.4)",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
@@ -105,12 +118,50 @@ fun AttributeEditPanel(
             )
             if (attributes.isNotEmpty()) {
                 AssistChip(
-                    onClick = { /* TODO: 刷新 */ },
+                    onClick = onRefresh,
+                    enabled = !isRefreshing,
                     label = { Text("${attributes.size} 个属性") },
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
                     ),
                 )
+            }
+            // v3.4: 刷新按钮 — 加载中替换为 CircularProgressIndicator (小尺寸 16dp)
+            // 让用户看到 "正在重新解析 dex" 状态. 之前 v3.3.1 这里只有 /* TODO: 刷新 */.
+            // CircularProgressIndicator 自带 indeterminate 旋转, 不需要额外的 LaunchedEffect.
+            Spacer(modifier = Modifier.width(4.dp))
+            Box(
+                modifier = Modifier.size(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                AnimatedVisibility(
+                    visible = isRefreshing,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+                AnimatedVisibility(
+                    visible = !isRefreshing,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    IconButton(
+                        onClick = onRefresh,
+                        modifier = Modifier.size(32.dp),
+                        enabled = attributes.isNotEmpty() || className != null,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "刷新属性 (重新解析 dex)",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
         }
 

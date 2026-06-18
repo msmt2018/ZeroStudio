@@ -133,11 +133,14 @@ class ComposePreviewFragment : Fragment() {
             is PreviewState.Ready -> {
                 val engine = renderEngine ?: return
                 val config = state.previewConfigs.firstOrNull() ?: return
+                // v3.4: 把整个 PreviewConfig 传给 engine, 让 @Preview 的
+                // backgroundColor / showBackground / uiMode 真正生效.
                 engine.render(
                     previewDex = state.dexFile,
                     projectDex = state.projectDexFiles,
                     className = state.className,
                     functionName = config.functionName,
+                    previewConfig = config,
                 )
             }
             is PreviewState.Error -> {

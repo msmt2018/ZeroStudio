@@ -177,11 +177,16 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                         val functionName = viewModel.selectedPreview.value
                             ?: state.previewConfigs.firstOrNull()?.functionName
                             ?: return@collect
+                        // v3.4: 传入对应 @Composable 的 PreviewConfig, 让 uiMode /
+                        // showBackground / backgroundColor 真正生效.
+                        val previewConfig = state.previewConfigs
+                            .firstOrNull { it.functionName == functionName }
                         engine.render(
                             previewDex = state.dexFile,
                             projectDex = state.projectDexFiles,
                             className = state.className,
                             functionName = functionName,
+                            previewConfig = previewConfig,
                         )
                     }
                 }
@@ -198,11 +203,14 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                 val state = viewModel.previewState.value
                 if (state !is PreviewState.Ready) return@collect
                 renderEngine?.let { engine ->
+                    val previewConfig = state.previewConfigs
+                        .firstOrNull { it.functionName == functionName }
                     engine.render(
                         previewDex = state.dexFile,
                         projectDex = state.projectDexFiles,
                         className = state.className,
                         functionName = functionName,
+                        previewConfig = previewConfig,
                     )
                 }
             }
@@ -597,6 +605,8 @@ private fun ComposePreviewScreen(
             ?.line ?: -1
         val attrs by viewModel.selectedNodeAttributes.collectAsStateWithLifecycle()
         val editResult by viewModel.lastAttributeEditResult.collectAsStateWithLifecycle()
+        // 【v3.4】属性加载状态 — 给底部抽屉头部 Refresh 按钮显示加载动画.
+        val isRefreshingAttr by viewModel.isRefreshingAttributes.collectAsStateWithLifecycle()
         // 选中节点 / 函数变化时重新 load attributes
         LaunchedEffect(attrClass, attrMethod) {
             viewModel.loadAttributesForSelectedNode(readyState?.dexFile, attrClass, attrMethod)
@@ -636,6 +646,9 @@ private fun ComposePreviewScreen(
                 }
             },
             onClearEditResult = { viewModel.clearAttributeEditResult() },
+            // 【v3.4】用户主动重新解析 dex — 用于源文件改了但 dex 未重建的情况.
+            onRefreshAttributes = { viewModel.refreshAttributes() },
+            isRefreshingAttributes = isRefreshingAttr,
             onDismiss = { showLayoutTreeSheet = false },
         )
     }

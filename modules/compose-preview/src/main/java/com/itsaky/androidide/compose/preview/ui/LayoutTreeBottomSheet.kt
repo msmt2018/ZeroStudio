@@ -98,6 +98,8 @@ fun LayoutTreeBottomSheet(
     onClearHidden: () -> Unit,
     onEditAttribute: (parameterName: String, newValue: String) -> Unit,
     onClearEditResult: () -> Unit,
+    onRefreshAttributes: () -> Unit = {},
+    isRefreshingAttributes: Boolean = false,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -194,6 +196,8 @@ fun LayoutTreeBottomSheet(
                     lastResult = lastEditResult,
                     onEditAttribute = onEditAttribute,
                     onClearResult = onClearEditResult,
+                    onRefresh = onRefreshAttributes,
+                    isRefreshing = isRefreshingAttributes,
                 )
                 3 -> HiddenNodesTab(
                     debugMode = debugMode,

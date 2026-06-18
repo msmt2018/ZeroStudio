@@ -18,14 +18,18 @@
 package com.itsaky.androidide.compose.preview.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,10 +46,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import kotlinx.coroutines.delay
@@ -54,11 +58,17 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 系统状态栏 + 导航栏叠加层 v2.1.
+ * 系统状态栏 + 导航栏叠加层 v3.4.
  *
  * 模拟 Android / iOS 系统栏:
- * - 状态栏 (顶部): 时钟 + 信号 + Wi-Fi + 电池 + 通知红点
+ * - 状态栏 (顶部): 时钟 (HH:mm:ss) + 信号 + Wi-Fi + 电池 (含百分比) + 通知红点
  * - 导航栏 (底部): 返回 / Home / 最近 (传统三键) 或手势横杠
+ *
+ * v3.4 增:
+ * - 时钟刷新频率从 10s 改为 1s — 真实手机秒级跳变, 用户更易感知"在动"
+ * - 时钟格式从 `HH:mm` 改为 `HH:mm:ss` (秒级精度)
+ * - 电池显示百分比文字 (e.g. "85%") 而不仅是填充条
+ * - 电池低电阈值改为 20% (之前 15%) — 更符合 Android Material 指南
  *
  * 主题:
  * - [SystemBarsTheme.LIGHT]    : 深色图标 / 浅色背景
@@ -98,16 +108,16 @@ fun SystemBarsOverlay(
     }
     val (bg, fg) = resolvedTheme.colors()
 
-    // 时钟 10s 刷新
+    // v3.4: 时钟 1s 刷新 (秒级), 之前 v2.1 是 10s. 让用户能看见秒针跳.
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) {
         while (true) {
             now = clockProvider()
-            delay(10_000)
+            delay(1_000)
         }
     }
     val timeText = remember(now) {
-        SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
+        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now)
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -163,12 +173,15 @@ private fun StatusBarContent(
     notificationDot: Boolean,
 ) {
     val bg = if (isTranslucent) Color.Transparent else background
+    val density = LocalDensity.current
+    val cellH = with(density) { 16.dp.toPx() }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 8.dp)
     ) {
-        val density = LocalDensity.current
+        // 背景
         Canvas(modifier = Modifier.fillMaxSize()) {
             if (!isTranslucent) {
                 drawRect(color = background)
@@ -179,127 +192,164 @@ private fun StatusBarContent(
             }
         }
 
-        // 左侧: 时钟
+        // 左侧: 时钟 (秒级 HH:mm:ss)
         Text(
             text = time,
             color = foreground,
             fontSize = 12.sp,
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = 4.dp)
+                .padding(start = 4.dp),
         )
 
-        // 右侧: 信号 / Wi-Fi / 电池 / 通知
-        Canvas(
+        // 右侧: 信号 / Wi-Fi / 电池 (含百分比文字) / 通知红点
+        // v3.4: 用 Row + 子 composable 替代单一 Canvas, 这样能用 Text 画 "85%".
+        Row(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .fillMaxSize()
-                .padding(end = 4.dp)
+                .padding(end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            drawRightCluster(
+            // 信号 (4 格)
+            SignalCluster(foreground = foreground, cellH = cellH)
+            // Wi-Fi
+            WifiCluster(foreground = foreground, cellH = cellH)
+            // 电池 — 含 "85%" 文字
+            BatteryCluster(
                 foreground = foreground,
+                cellH = cellH,
                 batteryPercent = batteryPercent,
-                notificationDot = notificationDot,
+            )
+            // 通知红点
+            if (notificationDot) {
+                Canvas(modifier = Modifier.size(8.dp)) {
+                    drawCircle(color = Color(0xFFE53935))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * v3.4: 拆分右侧集群为可独立测试的小组件. 之前 v2.1 用单个 Canvas + drawRightCluster
+ * 绘制所有内容, 没法嵌入文字 (电池百分比).
+ *
+ * 每个 cluster 接收 cellH (状态栏图标区域的高度) 来自适应不同 status bar 高度.
+ */
+@Composable
+private fun SignalCluster(foreground: Color, cellH: Float) {
+    val cellW = cellH * 0.5f
+    Canvas(modifier = Modifier.size((cellW * 4 + 1.5f * 3).toDpCompat())) {
+        val signalBarW = cellW * 0.8f
+        for (i in 0 until 4) {
+            val h = cellH * (0.3f + i * 0.2f)
+            val x = size.width - (4 - i) * (signalBarW + 1.5f) - signalBarW
+            val y = size.height / 2f + cellH * 0.3f - h
+            drawRoundRect(
+                color = foreground,
+                topLeft = Offset(x, y),
+                size = Size(signalBarW, h),
+                cornerRadius = CornerRadius(1f, 1f),
             )
         }
     }
 }
 
-private fun DrawScope.drawRightCluster(
-    foreground: Color,
-    batteryPercent: Int?,
-    notificationDot: Boolean,
-) {
-    val right = size.width
-    val centerY = size.height / 2f
-    val cellH = size.height * 0.5f
-    val cellW = cellH
-
-    // 通知小红点 (在最右)
-    if (notificationDot) {
-        val dotR = cellH * 0.18f
+@Composable
+private fun WifiCluster(foreground: Color, cellH: Float) {
+    val cellW = cellH * 0.5f
+    Canvas(modifier = Modifier.size((cellW * 1.4f).toDpCompat())) {
+        for (i in 0 until 3) {
+            val r = (i + 1) * cellH * 0.18f
+            drawArc(
+                color = foreground.copy(alpha = (i + 1) * 0.3f),
+                startAngle = 220f,
+                sweepAngle = 100f,
+                useCenter = false,
+                topLeft = Offset(size.width / 2f - r, size.height - r - cellH * 0.1f),
+                size = Size(r * 2f, r * 2f),
+                style = Stroke(width = 1.4f),
+            )
+        }
         drawCircle(
-            color = Color(0xFFE53935),
-            radius = dotR,
-            center = Offset(right - dotR, centerY)
-        )
-        val consumed = dotR * 2f + 4f
-        // 不影响其他绘制, 仅占空间
-        @Suppress("UNUSED_VARIABLE")
-        val _x = consumed
-    }
-
-    // 电池 (最右第二个)
-    val batteryWidth = cellW * 1.2f
-    val batteryHeight = cellH * 0.55f
-    val batteryLeft = right - batteryWidth - 4f
-    val batteryTop = centerY - batteryHeight / 2f
-    // 电池外框
-    drawRoundRect(
-        color = foreground,
-        topLeft = Offset(batteryLeft, batteryTop),
-        size = Size(batteryWidth * 0.85f, batteryHeight),
-        cornerRadius = CornerRadius(2f, 2f),
-        style = Stroke(width = 1f)
-    )
-    // 电池正极
-    drawRoundRect(
-        color = foreground,
-        topLeft = Offset(batteryLeft + batteryWidth * 0.85f + 1f, centerY - batteryHeight * 0.18f),
-        size = Size(batteryWidth * 0.10f, batteryHeight * 0.36f),
-        cornerRadius = CornerRadius(0.5f, 0.5f),
-    )
-    // 电池填充
-    if (batteryPercent != null) {
-        val percent = batteryPercent.coerceIn(0, 100) / 100f
-        val fillColor = if (batteryPercent < 15) Color(0xFFE53935) else foreground
-        drawRoundRect(
-            color = fillColor,
-            topLeft = Offset(batteryLeft + 1.5f, batteryTop + 1.5f),
-            size = Size((batteryWidth * 0.85f - 3f) * percent, batteryHeight - 3f),
-            cornerRadius = CornerRadius(1f, 1f),
-        )
-    }
-
-    // Wi-Fi
-    val wifiRight = batteryLeft - 6f
-    val wifiCenterX = wifiRight - cellW * 0.4f
-    val wifiCenterY = centerY
-    // 简化为 3 个同心弧
-    for (i in 0 until 3) {
-        val r = (i + 1) * cellH * 0.18f
-        drawArc(
-            color = foreground.copy(alpha = (i + 1) * 0.3f),
-            startAngle = 220f,
-            sweepAngle = 100f,
-            useCenter = false,
-            topLeft = Offset(wifiCenterX - r, wifiCenterY - r),
-            size = Size(r * 2f, r * 2f),
-            style = Stroke(width = 1.4f)
-        )
-    }
-    drawCircle(
-        color = foreground,
-        radius = cellH * 0.1f,
-        center = Offset(wifiCenterX, wifiCenterY + cellH * 0.05f)
-    )
-
-    // 信号
-    val signalRight = wifiCenterX - cellW * 0.4f - 4f
-    val signalBarW = cellW * 0.16f
-    val signalBarH = cellH * 0.6f
-    for (i in 0 until 4) {
-        val h = signalBarH * (0.3f + i * 0.2f)
-        val x = signalRight - (4 - i) * (signalBarW + 1.5f) - signalBarW
-        val y = centerY + signalBarH / 2f - h
-        drawRoundRect(
             color = foreground,
-            topLeft = Offset(x, y),
-            size = Size(signalBarW, h),
-            cornerRadius = CornerRadius(1f, 1f),
+            radius = cellH * 0.1f,
+            center = Offset(size.width / 2f, size.height - cellH * 0.1f),
         )
     }
 }
+
+@Composable
+private fun BatteryCluster(
+    foreground: Color,
+    cellH: Float,
+    batteryPercent: Int?,
+) {
+    val cellW = cellH * 0.5f
+    val batteryWidthPx = cellW * 2.4f
+    val batteryHeightPx = cellH * 0.55f
+    val percentText = batteryPercent?.let { "$it%" }.orEmpty()
+    val isLow = (batteryPercent ?: 100) < 20
+    val fillColor = if (isLow) Color(0xFFE53935) else foreground
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        if (percentText.isNotEmpty()) {
+            Text(
+                text = percentText,
+                color = fillColor,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Canvas(
+            modifier = Modifier
+                .width(batteryWidthPx.toDpCompat())
+                .height(batteryHeightPx.toDpCompat()),
+        ) {
+            val w = size.width
+            val h = size.height
+            // 外框
+            drawRoundRect(
+                color = foreground,
+                topLeft = Offset(0f, 0f),
+                size = Size(w * 0.85f, h),
+                cornerRadius = CornerRadius(2f, 2f),
+                style = Stroke(width = 1f),
+            )
+            // 正极
+            drawRoundRect(
+                color = foreground,
+                topLeft = Offset(w * 0.85f + 1f, h * 0.32f),
+                size = Size(w * 0.08f, h * 0.36f),
+                cornerRadius = CornerRadius(0.5f, 0.5f),
+            )
+            // 填充
+            if (batteryPercent != null) {
+                val pct = batteryPercent.coerceIn(0, 100) / 100f
+                drawRoundRect(
+                    color = fillColor,
+                    topLeft = Offset(1.5f, 1.5f),
+                    size = Size((w * 0.85f - 3f) * pct, h - 3f),
+                    cornerRadius = CornerRadius(1f, 1f),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 工具: Float 转 Dp.
+ *
+ * 注意: 一定要在 Density 上下文内调 (用 `with(LocalDensity.current) { ... }`).
+ * `androidx.compose.ui.unit.Density` 自带 `Float.toDp(): Dp` 扩展, 我们这里
+ * 透传到那个, 不自己定义同名扩展避免遮蔽/递归.
+ */
+@Composable
+private fun Float.toDpCompat(): Dp = with(LocalDensity.current) { this@toDpCompat.toDp() }
 
 @Composable
 private fun NavigationBarContent(
