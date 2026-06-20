@@ -34,20 +34,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.itsaky.androidide.onboarding.bubble.GuideBubble
 import com.itsaky.androidide.onboarding.highlight.HighlightFrame
-import com.itsaky.androidide.onboarding.highlight.HighlightStyle
 import com.itsaky.androidide.onboarding.simulation.TouchSimulatorOverlay
 import kotlin.math.roundToInt
 
@@ -59,6 +64,8 @@ import kotlin.math.roundToInt
  *  - 渲染气泡 (根据 currentStep)
  *  - 渲染操作模拟 (如果 step 指定)
  *  - 处理点击事件 (下一步 / 跳过)
+ *  - 智能定位气泡 (BubblePlacement.Auto 自动选方向)
+ *  - 响应式目标追踪 ([rememberTargetRect] 订阅 OnboardingTarget.rectFlow)
  *
  * 用法:
  * ```
@@ -77,20 +84,60 @@ fun OnboardingOverlay(
   controller: OnboardingController,
   modifier: Modifier = Modifier,
 ) {
-  val currentStep = controller.currentStep
-  if (currentStep == null) return
+  // 持久化: 引导已完成则不渲染
+  if (controller.isFinished) return
+  val currentStep = controller.currentStep ?: return
 
   val config = controller.config
-  val highlightStyle = currentStep.highlightStyle ?: config.highlightStyle
+
+  // === 响应式目标追踪 (优先用 OnboardingTarget, 否则用 step.targetRect) ===
+  val targetRect = rememberTargetRect(currentStep)
+
+  // === 步骤间暂停 ===
+  // 跟踪上一个 step.id, 仅在 step 切换时暂停 (首次进入不算)
+  val prevStepId = remember { mutableStateOf<String?>(null) }
+  LaunchedEffect(currentStep.id) {
+    val prev = prevStepId.value
+    prevStepId.value = currentStep.id
+    if (prev != null && prev != currentStep.id && config.pauseBetweenStepsMs > 0) {
+      kotlinx.coroutines.delay(config.pauseBetweenStepsMs)
+    }
+    currentStep.onStepShown?.invoke()
+  }
+
+  // === 决定高亮三维度参数 (shape / theme / animation) ===
+  // 优先用 step 显式指定, 否则用 step.highlightStyle (旧 API), 否则用 config 全局默认
+  val (shape, theme, animation, padding) = remember(currentStep.id) {
+    val legacy = currentStep.highlightStyle
+    if (legacy != null) {
+      Quadruple(legacy.shape, legacy.theme, legacy.animation, legacy.padding)
+    } else {
+      Quadruple(
+        currentStep.highlightShape,
+        currentStep.highlightTheme,
+        currentStep.highlightAnimation,
+        8.dp,
+      )
+    }
+  }
 
   val interactionSource = remember { MutableInteractionSource() }
 
-  Box(modifier = modifier.fillMaxSize()) {
+  // 容器尺寸, 用于 BubblePlacement.Auto 算法
+  var containerSize by remember { mutableStateOf(Size.Zero) }
+
+  Box(
+    modifier = modifier
+      .fillMaxSize()
+      .onSizeChanged { containerSize = Size(it.width.toFloat(), it.height.toFloat()) },
+  ) {
     // 1. 高亮框 (始终在最底层)
     HighlightFrame(
-      targetRect = currentStep.targetRect,
-      style = highlightStyle,
-      shape = currentStep.bubbleShape,
+      targetRect = targetRect,
+      shape = shape,
+      theme = theme,
+      animation = animation,
+      padding = padding,
     )
 
     // 2. 点击外部区域 (可取消)
@@ -98,7 +145,7 @@ fun OnboardingOverlay(
       Box(
         modifier = Modifier
           .fillMaxSize()
-          .pointerInput(controller.currentStep.id) {
+          .pointerInput(controller.currentStep?.id) {
             // 整个 Overlay 都是点击区域
           }
           .clickable(
@@ -118,12 +165,13 @@ fun OnboardingOverlay(
     }
 
     // 4. 气泡
-    if (currentStep.targetRect != null) {
+    if (targetRect != null) {
       // 有目标: 气泡围绕 target 定位
       PositionedBubble(
         controller = controller,
         step = currentStep,
-        targetRect = currentStep.targetRect,
+        targetRect = targetRect,
+        containerSize = containerSize,
         onNext = { controller.next() },
         onPrevious = { controller.previous() },
       )
@@ -149,6 +197,9 @@ fun OnboardingOverlay(
     }
   }
 }
+
+/** 内部 4 元组用于解构高亮参数 (data class 自动生成 component1..4). */
+private data class Quadruple<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
 /**
  * 居中气泡 (无目标时).
@@ -179,7 +230,8 @@ private fun CenteredBubble(
  * 定位气泡 (有目标时).
  *
  * 根据 [BubblePlacement] 计算气泡位置:
- *  - Auto / Above: target 上方居中
+ *  - Auto: 自动选择空间最大的方向 (调用 [BubblePlacement.computeBest] + 测量的气泡尺寸)
+ *  - Above: target 上方居中
  *  - Below: target 下方居中
  *  - Left: target 左侧
  *  - Right: target 右侧
@@ -192,13 +244,32 @@ private fun PositionedBubble(
   controller: OnboardingController,
   step: OnboardingStep,
   targetRect: Rect,
+  containerSize: Size,
   onNext: () -> Unit,
   onPrevious: () -> Unit,
 ) {
   val density = LocalDensity.current
   val margin = with(density) { 16.dp.toPx() }
 
-  val offsetModifier = when (val placement = step.bubblePlacement) {
+  // 用于 Auto 计算: 测量气泡实际尺寸
+  var bubbleSize by remember(targetRect) { mutableStateOf(Size.Zero) }
+
+  // 解析实际 placement (Auto -> 实际方向)
+  val resolvedPlacement = remember(step.id, targetRect, containerSize, bubbleSize) {
+    if (step.bubblePlacement == BubblePlacement.Auto && containerSize.width > 0 && containerSize.height > 0) {
+      BubblePlacement.computeBest(
+        target = targetRect,
+        container = containerSize,
+        bubbleSize = bubbleSize.takeIf { it.width > 0 && it.height > 0 }
+          ?: Size(with(density) { 320.dp.toPx() }, with(density) { 140.dp.toPx() }),
+        margin = margin,
+      )
+    } else {
+      step.bubblePlacement
+    }
+  }
+
+  val offsetModifier = when (resolvedPlacement) {
     BubblePlacement.Auto,
     BubblePlacement.Above -> Modifier.absoluteOffsetByRect(
       targetRect = targetRect,
@@ -231,11 +302,14 @@ private fun PositionedBubble(
       .align(Alignment.BottomCenter)
       .padding(bottom = 32.dp)
     is BubblePlacement.Custom -> Modifier
-      .offset(x = placement.x.dp, y = placement.y.dp)
+      .offset(x = resolvedPlacement.x.dp, y = resolvedPlacement.y.dp)
   }
 
   Box(modifier = Modifier.fillMaxSize()) {
-    Box(modifier = offsetModifier) {
+    Box(
+      modifier = offsetModifier
+        .onSizeChanged { bubbleSize = Size(it.width.toFloat(), it.height.toFloat()) },
+    ) {
       GuideBubbleWithActions(
         step = step,
         controller = controller,
@@ -368,4 +442,26 @@ private fun Modifier.absoluteOffsetByRect(
     AlignV.Center -> targetCy - height / 2f
   }
   IntOffset(x.roundToInt(), y.roundToInt())
+}
+
+// =============================================================================
+// 顶层便捷入口 (Top-level convenience entry)
+// =============================================================================
+
+/**
+ * 在 [OnboardingController] 第一次组合时自动启动引导.
+ *
+ * 用法:
+ * ```
+ * val controller = LaunchOnboarding(steps, OnboardingConfig(guideId = "first_time"))
+ * Box(...) { OnboardingOverlay(controller) }
+ * ```
+ */
+@Composable
+fun rememberOnboardingStarted(controller: OnboardingController) {
+  LaunchedEffect(controller) {
+    if (!controller.isPlaying && !controller.isFinished) {
+      controller.start()
+    }
+  }
 }

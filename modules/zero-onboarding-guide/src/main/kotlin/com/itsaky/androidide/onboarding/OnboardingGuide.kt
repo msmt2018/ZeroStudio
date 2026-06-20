@@ -23,6 +23,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.itsaky.androidide.onboarding.bubble.BubbleContent
+import com.itsaky.androidide.onboarding.bubble.BubblePlacement
+import com.itsaky.androidide.onboarding.bubble.BubbleShape
+import com.itsaky.androidide.onboarding.bubble.BubbleStyle
+import com.itsaky.androidide.onboarding.highlight.HighlightAnimation
+import com.itsaky.androidide.onboarding.highlight.HighlightShape
+import com.itsaky.androidide.onboarding.highlight.HighlightStyle
+import com.itsaky.androidide.onboarding.highlight.HighlightTheme
+import com.itsaky.androidide.onboarding.simulation.TouchSimulator
 
 /**
  * OnboardingGuide — 引导 API 门面.
@@ -123,9 +131,13 @@ object OnboardingGuide {
   class StepBuilder internal constructor(val id: String) {
     var content: BubbleContent = BubbleContent(title = "")
     var targetRect: Rect? = null
+    var target: OnboardingTarget? = null
     var bubbleShape: BubbleShape = BubbleShape.Default
     var bubbleStyle: BubbleStyle = BubbleStyle.Default
     var bubblePlacement: BubblePlacement = BubblePlacement.Auto
+    var highlightShape: HighlightShape = HighlightShape.Auto
+    var highlightTheme: HighlightTheme = HighlightTheme.Default
+    var highlightAnimation: HighlightAnimation = HighlightAnimation.Default
     var highlightStyle: HighlightStyle? = null
     var touchSimulator: TouchSimulator? = null
     var autoAdvanceMs: Long? = null
@@ -136,9 +148,13 @@ object OnboardingGuide {
       id = id,
       content = content,
       targetRect = targetRect,
+      target = target,
       bubbleShape = bubbleShape,
       bubbleStyle = bubbleStyle,
       bubblePlacement = bubblePlacement,
+      highlightShape = highlightShape,
+      highlightTheme = highlightTheme,
+      highlightAnimation = highlightAnimation,
       highlightStyle = highlightStyle,
       touchSimulator = touchSimulator,
       autoAdvanceMs = autoAdvanceMs,
