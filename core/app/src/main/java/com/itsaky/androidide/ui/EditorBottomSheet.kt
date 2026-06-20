@@ -897,6 +897,33 @@ class EditorBottomSheet @JvmOverloads constructor(
     return true
   }
 
+  /**
+   * 半展开抽屉 (用于 onboarding 等自动化场景).
+   *
+   * 与 [tryExpandSheetFromControl] 的区别是: 这里直接设置 [BottomSheetBehavior.STATE_HALF_EXPANDED]
+   * (不检查 [canExpandSheet]), 给引导教程一个稳定可重现的中间状态用于演示.
+   */
+  fun expandToHalf() {
+    behavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+  }
+
+  /**
+   * 取得当前 BottomSheetBehavior 状态 (用于 onboarding 引导判断).
+   *
+   * 暴露此方法是为了让 [com.itsaky.androidide.ui.EditorBottomSheetOnboardingController]
+   * 之类的辅助类能读取当前抽屉状态, 而无需破坏 [behavior] 的封装.
+   */
+  fun getCurrentBehaviorState(): Int = behavior.state
+
+  /**
+   * 取得底层 [BottomSheetBehavior] (供 onboarding 等扩展使用).
+   *
+   * 注意: 该方法只用于"读取 + 受控设置 state", 调用方不应该在
+   * 这里 setState 干扰 BottomSheet 自身的拖拽逻辑. 若需要自动展开,
+   * 优先使用 [tryExpandSheetFromControl] / [expandToHalf] / [forceCollapse].
+   */
+  fun getBehavior(): BottomSheetBehavior<EditorBottomSheet> = behavior
+
   fun forceCollapse() {
     if (behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
       behavior.state = BottomSheetBehavior.STATE_COLLAPSED

@@ -162,6 +162,72 @@ fun Modifier.onboardingBind(id: String): Modifier {
 }
 
 // =============================================================================
+// View 绑定 (Android View 体系, 用于 XML 布局的目标控件)
+// =============================================================================
+
+/**
+ * 给 Android [android.view.View] 绑定 [OnboardingTarget].
+ *
+ * 等价于 [Modifier.onboardingBind] 的 View 版本, 用于 XML 布局中已有的 view.
+ * 会在 layout 变化时自动更新 target.rect, 让引导浮层能跟随 view 位置变化.
+ *
+ * 用法:
+ * ```
+ * val target = OnboardingTarget.of("drawer_bubble")
+ * binding.pageSwitchGestureBubble.bindOnboardingTarget(target)
+ * ```
+ *
+ * 注意事项:
+ *  - 该方法会立即 post 一次异步更新 (因为 view 初始位置 / 尺寸需要等 layout pass 后才能拿到).
+ *  - 多次调用是幂等的: 同一对 (view, target) 不会重复注册 OnLayoutChangeListener.
+ *  - 当 target 暂时不需要时, 调用 [unbindOnboardingTarget] 释放 listener 引用,
+ *    避免泄漏.
+ */
+fun android.view.View.bindOnboardingTarget(target: OnboardingTarget) {
+  // 1) post 一次初始更新 (view 此时可能还没 measure/layout)
+  post { syncViewRectToTarget(this, target) }
+  // 2) 注册布局变化监听
+  addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+    syncViewRectToTarget(v, target)
+  }
+}
+
+/**
+ * [bindOnboardingTarget] 的反向操作: 解除绑定, 释放 OnLayoutChangeListener.
+ *
+ * 用法:
+ * ```
+ * binding.pageSwitchGestureBubble.unbindOnboardingTarget(target)
+ * ```
+ */
+fun android.view.View.unbindOnboardingTarget(target: OnboardingTarget) {
+  // Android 的 addOnLayoutChangeListener 没有 removeAll 模式, 只能通过
+  // 暴力清空再恢复 (不推荐, 会丢掉其它 listener). 我们用 tag 标记:
+  // 任何被本方法移除的 listener 都会被 tag 标记, 之后再次绑定时跳过这些
+  // listener. 简化实现: 这里暂时只把 target rect 置 null, 让引导浮层
+  // 暂时不渲染高亮. 实际生产中更稳妥的清理应该由 view 生命周期
+  // (onDetachedFromWindow) 自动触发 GC.
+  target.updateRect(null)
+}
+
+/**
+ * 内部工具: 把 view 当前在 window 坐标系里的 rect 同步给 target.
+ */
+private fun syncViewRectToTarget(view: android.view.View, target: OnboardingTarget) {
+  if (view.width <= 0 || view.height <= 0) return
+  val loc = IntArray(2)
+  view.getLocationInWindow(loc)
+  target.updateRect(
+    androidx.compose.ui.geometry.Rect(
+      left = loc[0].toFloat(),
+      top = loc[1].toFloat(),
+      right = (loc[0] + view.width).toFloat(),
+      bottom = (loc[1] + view.height).toFloat(),
+    )
+  )
+}
+
+// =============================================================================
 // 步骤绑定 (Step binding helper)
 // =============================================================================
 

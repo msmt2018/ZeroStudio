@@ -766,4 +766,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">วิธีเปิดลิ้นชัก IDE</string>
+  <string name="onboarding_step1_subtitle">ปัดขึ้นที่นี่เพื่อเปิดลิ้นชัก IDE (เทอร์มินัล, เอาต์พุตบิลด์ ฯลฯ) ปัดลงเพื่อปิด
+👆 แตะคำแนะนำนี้เพื่อซ่อนข้อมูลบิลด์ด้านบนและสาธิตการแตะฟองตรงกลาง</string>
+  <string name="onboarding_step2_title">สถานะการบิลด์ &amp;amp; ตำแหน่งเคอร์เซอร์</string>
+  <string name="onboarding_step2_subtitle">พื้นที่นี้แสดงความคืบหน้าของการบิลด์และตำแหน่งเคอร์เซอร์ปัจจุบัน (บรรทัด:คอลัมน์) ในตัวแก้ไขโค้ด</string>
+  <string name="onboarding_step3_title">แถบเครื่องมือป้อนสัญลักษณ์</string>
+  <string name="onboarding_step3_subtitle">ปัดขึ้น/ลงที่นี่เพื่อเปิด/ปิดลิ้นชักป้อนสัญลักษณ์</string>
 </resources>

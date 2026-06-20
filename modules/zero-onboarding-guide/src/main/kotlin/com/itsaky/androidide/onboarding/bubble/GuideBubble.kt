@@ -25,6 +25,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -161,15 +163,38 @@ fun GuideBubble(
           )
         }
 
-        // 副标题
+        // 副标题 (可点击, 当 onSubtitleClick 不为 null 时整段可点击)
         if (content.subtitle.isNotEmpty()) {
-          Text(
-            text = content.subtitle,
-            style = style.subtitleStyle ?: BubbleContentDefaults.subtitleStyle(),
-            color = style.subtitleColor,
-            maxLines = 4,
-            overflow = TextOverflow.Ellipsis,
-          )
+          val onSubtitleClick = content.onSubtitleClick
+          if (onSubtitleClick != null) {
+            // 可点击副标题: 加 clickable, 让用户感知可点击.
+            // 用默认 LocalIndication (通常是 Material 涟漪) 即可.
+            Text(
+              text = content.subtitle,
+              style = style.subtitleStyle ?: BubbleContentDefaults.subtitleStyle(),
+              color = style.subtitleColor,
+              maxLines = 4,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape = animShape)
+                .clickable(
+                  interactionSource = null,
+                  indication = LocalIndication.current,
+                  onClick = onSubtitleClick,
+                )
+                .padding(vertical = 4.dp),
+            )
+          } else {
+            // 普通副标题: 不可点击
+            Text(
+              text = content.subtitle,
+              style = style.subtitleStyle ?: BubbleContentDefaults.subtitleStyle(),
+              color = style.subtitleColor,
+              maxLines = 4,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
         }
 
         // 底部操作行

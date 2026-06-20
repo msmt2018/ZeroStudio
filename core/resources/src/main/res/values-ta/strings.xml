@@ -764,4 +764,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">IDE டிராயரை எப்படி திறப்பது</string>
+  <string name="onboarding_step1_subtitle">IDE டிராயரை (டெர்மினல், பில்ட் வெளியீடு போன்றவை) திறக்க இங்கே மேலே ஸ்வைப் செய்யவும், மூட கீழே ஸ்வைப் செய்யவும்.
+👆 மேல் பில்ட் தகவலை மறைக்கவும், மைய பபிளை தட்டுவதை டெமோ செய்யவும் இந்த குறிப்பைத் தட்டவும்.</string>
+  <string name="onboarding_step2_title">பில்ட் நிலை மற்றும் கர்சர் நிலை</string>
+  <string name="onboarding_step2_subtitle">இந்தப் பகுதி கோட் எடிட்டரில் பில்ட் முன்னேற்றம் மற்றும் தற்போதைய கர்சர் நிலையை (வரி:நெடுவரிசை) காட்டுகிறது.</string>
+  <string name="onboarding_step3_title">சின்ன உள்ளீட்டு கருவிப்பட்டி</string>
+  <string name="onboarding_step3_subtitle">சின்ன உள்ளீட்டு டிராயரைத் திறக்க/மூட இங்கே மேலே/கீழே ஸ்வைப் செய்யவும்.</string>
 </resources>

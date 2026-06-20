@@ -778,4 +778,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">IDE ड्रॉवर कैसे खोलें</string>
+  <string name="onboarding_step1_subtitle">IDE ड्रॉवर (टर्मिनल, बिल्ड आउटपुट, आदि) खोलने के लिए यहां ऊपर स्वाइप करें, बंद करने के लिए नीचे स्वाइप करें।
+👆 शीर्ष बिल्ड जानकारी छिपाने और केंद्रीय बुलबुले पर टैप का डेमो देखने के लिए इस संकेत पर टैप करें।</string>
+  <string name="onboarding_step2_title">बिल्ड स्थिति और कर्सर स्थिति</string>
+  <string name="onboarding_step2_subtitle">यह क्षेत्र कोड एडिटर में बिल्ड प्रगति और वर्तमान कर्सर स्थिति (पंक्ति:स्तंभ) दिखाता है।</string>
+  <string name="onboarding_step3_title">सिंबल इनपुट टूलबार</string>
+  <string name="onboarding_step3_subtitle">सिंबल इनपुट ड्रॉवर खोलने/बंद करने के लिए यहां ऊपर/नीचे स्वाइप करें।</string>
 </resources>

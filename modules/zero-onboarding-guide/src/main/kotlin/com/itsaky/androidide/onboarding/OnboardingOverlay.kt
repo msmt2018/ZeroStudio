@@ -45,7 +45,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -140,21 +139,19 @@ fun OnboardingOverlay(
       padding = padding,
     )
 
-    // 2. 点击外部区域 (可取消)
-    if (config.cancellable) {
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .pointerInput(controller.currentStep?.id) {
-            // 整个 Overlay 都是点击区域
-          }
-          .clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            onClick = { controller.skip() },
-          ),
-      )
-    }
+    // 2. 点击外部区域 (推进)
+    // 点击非气泡区域: 推进到下一步 (最后一步则 finish).
+    // 这是高级 UX: 用户只需在屏幕任意位置轻点即可推进, 不必精确点中
+    // 气泡的"下一步"按钮. 与 dribbble 顶级 onboarding 教程交互一致.
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .clickable(
+          interactionSource = interactionSource,
+          indication = null,
+          onClick = { controller.next() },  // 推进到下一步 (非 skip)
+        ),
+    )
 
     // 3. 操作模拟
     if (currentStep.touchSimulator != null) {

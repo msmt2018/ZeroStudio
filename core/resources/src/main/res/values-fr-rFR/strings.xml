@@ -778,4 +778,16 @@ Dernier projet ouvert : \n%s</string>
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">Comment ouvrir le tiroir de l\'IDE</string>
+  <string name="onboarding_step1_subtitle">Glissez vers le haut ici pour ouvrir le tiroir de l\'IDE (terminal, sortie de build, etc.), vers le bas pour fermer.
+👆 Appuyez sur cette astuce pour masquer les informations de build en haut et démontrer un appui sur la bulle centrale.</string>
+  <string name="onboarding_step2_title">État du build &amp;amp; position du curseur</string>
+  <string name="onboarding_step2_subtitle">Cette zone affiche la progression du build et la position actuelle du curseur (ligne:colonne) dans l\'éditeur de code.</string>
+  <string name="onboarding_step3_title">Barre d\'entrée de symboles</string>
+  <string name="onboarding_step3_subtitle">Glissez vers le haut/bas ici pour ouvrir/fermer le tiroir d\'entrée de symboles.</string>
 </resources>

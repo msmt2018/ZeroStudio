@@ -778,4 +778,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">كيفية فتح درج IDE</string>
+  <string name="onboarding_step1_subtitle">اسحب لأعلى هنا لفتح درج IDE (الطرفية، مخرجات البناء، إلخ)، اسحب لأسفل للإغلاق.
+👆 انقر على هذا التلميح لإخفاء معلومات البناء العلوية وتجربة النقر على الفقاعة المركزية.</string>
+  <string name="onboarding_step2_title">حالة البناء وموضع المؤشر</string>
+  <string name="onboarding_step2_subtitle">تعرض هذه المنطقة تقدم البناء وموضع المؤشر الحالي (سطر:عمود) في محرر الكود.</string>
+  <string name="onboarding_step3_title">شريط إدخال الرموز</string>
+  <string name="onboarding_step3_subtitle">اسحب لأعلى/لأسفل هنا لفتح/إغلاق درج إدخال الرموز.</string>
 </resources>

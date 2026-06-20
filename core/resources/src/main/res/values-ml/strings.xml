@@ -764,4 +764,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">IDE ഡ്രോയർ എങ്ങനെ തുറക്കാം</string>
+  <string name="onboarding_step1_subtitle">IDE ഡ്രോയർ (ടെർമിനൽ, ബിൽഡ് ഔട്ട്‌പുട്ട് മുതലായവ) തുറക്കാൻ ഇവിടെ മുകളിലേക്ക് സ്വൈപ്പ് ചെയ്യുക, അടയ്ക്കാൻ താഴേക്ക് സ്വൈപ്പ് ചെയ്യുക।
+👆 മുകളിലെ ബിൽഡ് വിവരങ്ങൾ മറയ്ക്കാനും കേന്ദ്ര ബബിൾ ടാപ്പ് ഡെമോ കാണാനും ഈ സൂചന ടാപ്പ് ചെയ്യുക.</string>
+  <string name="onboarding_step2_title">ബിൽഡ് നിലയും കഴ്സർ സ്ഥാനവും</string>
+  <string name="onboarding_step2_subtitle">ഈ മേഖല കോഡ് എഡിറ്ററിലെ ബിൽഡ് പുരോഗതിയും നിലവിലെ കഴ്സർ സ്ഥാനവും (വരി:നിര) കാണിക്കുന്നു.</string>
+  <string name="onboarding_step3_title">ചിഹ്ന ഇൻപുട്ട് ടൂൾബാർ</string>
+  <string name="onboarding_step3_subtitle">ചിഹ്ന ഇൻപുട്ട് ഡ്രോയർ തുറക്കാനും അടയ്ക്കാനും ഇവിടെ മുകളിലേക്കും താഴേക്കും സ്വൈപ്പ് ചെയ്യുക.</string>
 </resources>

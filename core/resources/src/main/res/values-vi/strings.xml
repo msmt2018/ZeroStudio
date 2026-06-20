@@ -764,4 +764,16 @@ Bạn có chắc chắn muốn xóa caches không?</string>
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">Cách mở ngăn kéo IDE</string>
+  <string name="onboarding_step1_subtitle">Vuốt lên tại đây để mở ngăn kéo IDE (terminal, đầu ra build, v.v.), vuốt xuống để đóng.
+👆 Nhấn vào gợi ý này để ẩn thông tin build ở trên cùng và xem demo chạm vào bong bóng ở giữa.</string>
+  <string name="onboarding_step2_title">Trạng thái build &amp;amp; vị trí con trỏ</string>
+  <string name="onboarding_step2_subtitle">Khu vực này hiển thị tiến trình build và vị trí con trỏ hiện tại (dòng:cột) trong trình soạn thảo mã.</string>
+  <string name="onboarding_step3_title">Thanh công cụ nhập biểu tượng</string>
+  <string name="onboarding_step3_subtitle">Vuốt lên/xuống tại đây để mở/đóng ngăn kéo nhập biểu tượng.</string>
 </resources>

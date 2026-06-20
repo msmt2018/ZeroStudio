@@ -777,4 +777,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">So öffnen Sie die IDE-Schublade</string>
+  <string name="onboarding_step1_subtitle">Wischen Sie hier nach oben, um die IDE-Schublade zu öffnen (Terminal, Build-Ausgabe usw.), nach unten zum Schließen.
+👆 Tippen Sie auf diesen Hinweis, um die obere Build-Info auszublenden und einen Tipp auf die mittlere Blase zu demonstrieren.</string>
+  <string name="onboarding_step2_title">Build-Status &amp;amp; Cursor-Position</string>
+  <string name="onboarding_step2_subtitle">Dieser Bereich zeigt den Build-Fortschritt und die aktuelle Cursor-Position (Zeile:Spalte) im Code-Editor.</string>
+  <string name="onboarding_step3_title">Symbol-Eingabe-Symbolleiste</string>
+  <string name="onboarding_step3_subtitle">Wischen Sie hier nach oben/unten, um die Symbol-Eingabe-Schublade zu öffnen/schließen.</string>
 </resources>

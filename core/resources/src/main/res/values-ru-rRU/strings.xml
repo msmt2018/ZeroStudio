@@ -776,4 +776,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">Как открыть ящик IDE</string>
+  <string name="onboarding_step1_subtitle">Проведите здесь вверх, чтобы открыть ящик IDE (терминал, вывод сборки и т. д.), вниз, чтобы закрыть.
+👆 Коснитесь этой подсказки, чтобы скрыть информацию о сборке сверху и продемонстрировать нажатие центрального пузыря.</string>
+  <string name="onboarding_step2_title">Статус сборки и положение курсора</string>
+  <string name="onboarding_step2_subtitle">Эта область показывает ход сборки и текущее положение курсора (строка:столбец) в редакторе кода.</string>
+  <string name="onboarding_step3_title">Панель ввода символов</string>
+  <string name="onboarding_step3_subtitle">Проведите здесь вверх/вниз, чтобы открыть/закрыть ящик ввода символов.</string>
 </resources>
