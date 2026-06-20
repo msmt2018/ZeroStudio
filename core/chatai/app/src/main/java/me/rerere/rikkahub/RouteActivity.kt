@@ -12,12 +12,20 @@ import androidx.fragment.app.commit
 import me.rerere.rikkahub.ui.activity.SafeModeActivity
 import me.rerere.rikkahub.utils.CrashHandler
 
+/**
+ * Pure fragment host for the main chat experience. Anything that can live inside
+ * [RouteFragment] lives there — this activity only contains the bits that are
+ * impossible (or meaningless) to express from a Fragment:
+ *  - the window-level lifecycle callbacks ([dispatchKeyEvent], [onCreate], [onNewIntent])
+ *  - the [enableEdgeToEdge] / nav-bar contrast setup that targets the Activity window
+ *  - the [CrashHandler] redirect that decides whether the activity even opens
+ */
 class RouteActivity : FragmentActivity() {
 
-    // Volume key listener registry — last registered handler wins
+    // Volume key listener registry — last registered handler wins. Kept on the
+    // activity because it is consumed by [dispatchKeyEvent], which fragments
+    // cannot override.
     internal val volumeKeyListeners = mutableListOf<(isVolumeUp: Boolean) -> Boolean>()
-
-    private var navToConversation: ((String) -> Unit)? = null
 
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -54,11 +62,8 @@ class RouteActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.getStringExtra("conversationId")?.let { navToConversation?.invoke(it) }
-    }
-
-    internal fun registerConversationNavigator(navigator: ((String) -> Unit)?) {
-        navToConversation = navigator
+        (supportFragmentManager.findFragmentById(android.R.id.content) as? RouteFragment)
+            ?.onNewIntent(intent)
     }
 
     private fun disableNavigationBarContrast() {

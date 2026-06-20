@@ -178,14 +178,16 @@ class RouteFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        (activity as? RouteActivity)?.registerConversationNavigator { id ->
-            navStack?.add(Screen.Chat(id))
-        }
     }
 
-    override fun onDestroyView() {
-        (activity as? RouteActivity)?.registerConversationNavigator(null)
-        super.onDestroyView()
+    /**
+     * Handles a new intent delivered to the hosting activity. Currently used to
+     * push a chat screen for a specific conversation id.
+     */
+    fun onNewIntent(intent: Intent) {
+        intent.getStringExtra("conversationId")?.let { id ->
+            navStack?.add(Screen.Chat(id))
+        }
     }
 
     @Composable
