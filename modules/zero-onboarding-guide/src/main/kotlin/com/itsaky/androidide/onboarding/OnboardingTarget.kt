@@ -193,6 +193,62 @@ fun android.view.View.bindOnboardingTarget(target: OnboardingTarget) {
 }
 
 /**
+ * 把 [OnboardingTarget] 绑定到 view 的**子区域** (而非整 view).
+ *
+ * 适用场景: 某些 view 是 match_parent 宽 / wrap_content 高 (如底部抽屉的
+ * `page_switch_gesture_bubble` 24dp 高的横条), 但视觉上"被框选的目标"
+ * 只是横条中心的**一个小手柄**. 直接绑定整个 view 会让高亮过宽, 视觉很差.
+ * 用本函数可指定一个中心子区域, 让高亮只框选手柄本身.
+ *
+ * @param target 引导目标
+ * @param widthDp 子区域宽度 (dp). 会被限制在 view 宽度内.
+ * @param heightDp 子区域高度 (dp). null = 整 view 高度. 会被限制在 view 高度内.
+ * @param gravity 子区域在 view 内的对齐方式 (默认居中).
+ *                支持: [android.view.Gravity.CENTER] / TOP / BOTTOM / START / END.
+ */
+fun android.view.View.bindOnboardingTargetAsHandle(
+  target: OnboardingTarget,
+  widthDp: Float = 80f,
+  heightDp: Float? = null,
+  gravity: Int = android.view.Gravity.CENTER,
+) {
+  val density = resources.displayMetrics.density
+  val widthPx = (widthDp * density).toInt()
+  val heightPx = heightDp?.let { (it * density).toInt() }
+
+  val sync: (android.view.View) -> Unit = sync@{ v ->
+    if (v.width <= 0 || v.height <= 0) return@sync
+    val loc = IntArray(2)
+    v.getLocationInWindow(loc)
+    val subW = widthPx.coerceAtMost(v.width)
+    val subH = (heightPx ?: v.height).coerceAtMost(v.height)
+    val (subLeft, subTop) = when (gravity) {
+      android.view.Gravity.CENTER,
+      android.view.Gravity.CENTER_HORIZONTAL,
+      android.view.Gravity.CENTER_VERTICAL -> (v.width - subW) / 2 to (v.height - subH) / 2
+      android.view.Gravity.TOP -> 0 to 0
+      android.view.Gravity.BOTTOM -> 0 to v.height - subH
+      android.view.Gravity.START,
+      android.view.Gravity.LEFT -> 0 to (v.height - subH) / 2
+      android.view.Gravity.END,
+      android.view.Gravity.RIGHT -> v.width - subW to (v.height - subH) / 2
+      else -> (v.width - subW) / 2 to (v.height - subH) / 2
+    }
+    target.updateRect(
+      androidx.compose.ui.geometry.Rect(
+        left = (loc[0] + subLeft).toFloat(),
+        top = (loc[1] + subTop).toFloat(),
+        right = (loc[0] + subLeft + subW).toFloat(),
+        bottom = (loc[1] + subTop + subH).toFloat(),
+      )
+    )
+  }
+
+  post { sync(this) }
+  addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> sync(v) }
+}
+
+/**
  * [bindOnboardingTarget] 的反向操作: 解除绑定, 释放 OnLayoutChangeListener.
  *
  * 用法:

@@ -401,20 +401,23 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val shapeImpl = shape.toShape(rect, density)
       val outline = shapeImpl.createOutline(size, layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
-      // 外发光 (多圈渐变描边)
-      for (i in 4 downTo 1) {
-        val alpha = (0.4f / i).coerceAtMost(0.4f)
-        if (path != null) {
-          drawPath(
-            path = path,
-            color = t.glowColor.copy(alpha = alpha),
-            topLeft = Offset(rect.left, rect.top),
-            style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() / 2f * (i / 4f)),
-          )
-        }
-      }
-      // 实色
+      // 外发光 (2 圈, 比之前 4 圈更精细, 避免边框看起来粗糙)
+      // 第 1 圈 (外层): 模糊光晕
       if (path != null) {
+        drawPath(
+          path = path,
+          color = t.glowColor.copy(alpha = 0.18f),
+          topLeft = Offset(rect.left, rect.top),
+          style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() * 0.6f),
+        )
+        // 第 2 圈 (中层): 较亮光晕
+        drawPath(
+          path = path,
+          color = t.glowColor.copy(alpha = 0.35f),
+          topLeft = Offset(rect.left, rect.top),
+          style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() * 0.25f),
+        )
+        // 实色 (中心): 高对比主线
         drawPath(
           path = path,
           color = t.color,

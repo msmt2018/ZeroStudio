@@ -271,13 +271,15 @@ private fun PositionedBubble(
     BubblePlacement.Above -> Modifier.absoluteOffsetByRect(
       targetRect = targetRect,
       alignX = AlignH.Center,
-      alignY = AlignV.Below,
+      // 气泡显示在 target **上方**: y = targetRect.top - height - margin
+      alignY = AlignV.Above,
       margin = margin,
     )
     BubblePlacement.Below -> Modifier.absoluteOffsetByRect(
       targetRect = targetRect,
       alignX = AlignH.Center,
-      alignY = AlignV.Above,
+      // 气泡显示在 target **下方**: y = targetRect.bottom + margin
+      alignY = AlignV.Below,
       margin = margin,
     )
     BubblePlacement.Left -> Modifier.absoluteOffsetByRect(
