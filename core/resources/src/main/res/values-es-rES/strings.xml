@@ -777,4 +777,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">Cómo abrir el cajón del IDE</string>
+  <string name="onboarding_step1_subtitle">Desliza hacia arriba aquí para abrir el cajón del IDE (terminal, salida de compilación, etc.), desliza hacia abajo para cerrar.
+👆 Toca esta pista para ocultar la información de compilación superior y demostrar un toque en la burbuja central.</string>
+  <string name="onboarding_step2_title">Estado de compilación y posición del cursor</string>
+  <string name="onboarding_step2_subtitle">Esta área muestra el progreso de compilación y la posición actual del cursor (línea:columna) en el editor de código.</string>
+  <string name="onboarding_step3_title">Barra de entrada de símbolos</string>
+  <string name="onboarding_step3_subtitle">Desliza hacia arriba/abajo aquí para abrir/cerrar el cajón de entrada de símbolos.</string>
 </resources>

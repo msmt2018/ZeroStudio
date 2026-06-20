@@ -1094,4 +1094,16 @@ SHA256：%9$s</string>
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">如何打开 IDE 抽屉</string>
+  <string name="onboarding_step1_subtitle">上滑此处展开 IDE 抽屉(终端、构建输出等), 下滑关闭。
+👆 点击此提示可隐藏顶部构建信息并演示点击中间黑色气泡。</string>
+  <string name="onboarding_step2_title">构建状态与光标位置</string>
+  <string name="onboarding_step2_subtitle">此处显示构建进度, 以及代码编辑器中当前光标位置(行:列)。</string>
+  <string name="onboarding_step3_title">符号输入工具栏</string>
+  <string name="onboarding_step3_subtitle">上滑 / 下滑此处打开 / 关闭符号输入抽屉。</string>
 </resources>

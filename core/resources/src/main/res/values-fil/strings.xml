@@ -834,4 +834,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">Paano buksan ang IDE drawer</string>
+  <string name="onboarding_step1_subtitle">Mag-swipe pataas dito para buksan ang IDE drawer (terminal, build output, atbp.), mag-swipe pababa para isara.
+👆 I-tap ang hint na ito para itago ang top build info at i-demo ang pag-tap sa gitnang bubble.</string>
+  <string name="onboarding_step2_title">Build status at cursor position</string>
+  <string name="onboarding_step2_subtitle">Ipinapakita ng lugar na ito ang progress ng build at ang kasalukuyang posisyon ng cursor (line:column) sa code editor.</string>
+  <string name="onboarding_step3_title">Symbol input toolbar</string>
+  <string name="onboarding_step3_subtitle">Mag-swipe pataas/pababa dito para buksan/isara ang symbol input drawer.</string>
 </resources>

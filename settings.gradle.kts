@@ -232,6 +232,7 @@ include(
     ":modules:zero-Symbol-input-view",
     ":modules:zero-mcp-server",
     ":modules:zero-regular-preview",
+    ":modules:zero-onboarding-guide",
 
 )
 

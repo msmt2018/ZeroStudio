@@ -764,4 +764,16 @@ Czy na pewno chcesz usunąć cache?</string>
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">Jak otworzyć szufladę IDE</string>
+  <string name="onboarding_step1_subtitle">Przesuń w górę tutaj, aby otworzyć szufladę IDE (terminal, wyjście kompilacji itp.), przesuń w dół, aby zamknąć.
+👆 Dotknij tej podpowiedzi, aby ukryć górne informacje o kompilacji i zademonstrować dotknięcie środkowego bąbelka.</string>
+  <string name="onboarding_step2_title">Stan kompilacji i pozycja kursora</string>
+  <string name="onboarding_step2_subtitle">Ten obszar pokazuje postęp kompilacji i bieżącą pozycję kursora (wiersz:kolumna) w edytorze kodu.</string>
+  <string name="onboarding_step3_title">Pasek wprowadzania symboli</string>
+  <string name="onboarding_step3_subtitle">Przesuń w górę/w dół tutaj, aby otworzyć/zamknąć szufladę wprowadzania symboli.</string>
 </resources>

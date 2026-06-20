@@ -696,4 +696,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">IDE çekmecesini nädip açmaly</string>
+  <string name="onboarding_step1_subtitle">IDE çekmecesini (terminal, gurluş çykyşy we ş.m.) açmak üçin şu ýerde ýokaryka sürüň, ýapmak üçin aşak sürüň.
+👆 Ýokarky gurluş maglumatyny gizlemek we merkezi köpürjige basyşy görkezmek üçin bu ýollamada basyň.</string>
+  <string name="onboarding_step2_title">Gurluş ýagdaýy we kursor ýeri</string>
+  <string name="onboarding_step2_subtitle">Bu ýer kod redaktoryndaky gurluşyň ösüşini we häzirki kursor ýerini (setir: sütün) görkezýär.</string>
+  <string name="onboarding_step3_title">Simwol giriş gurallar paneli</string>
+  <string name="onboarding_step3_subtitle">Simwol giriş çekmecesini açmak/ýapmak üçin şu ýerde ýokaryka/aşak sürüň.</string>
 </resources>

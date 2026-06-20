@@ -763,4 +763,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">如何開啟 IDE 抽屜</string>
+  <string name="onboarding_step1_subtitle">上滑此處展開 IDE 抽屜(終端、建置輸出等), 下滑關閉。
+👆 點擊此提示可隱藏頂部建置資訊並示範點擊中間黑色氣泡。</string>
+  <string name="onboarding_step2_title">建置狀態與游標位置</string>
+  <string name="onboarding_step2_subtitle">此處顯示建置進度, 以及程式碼編輯器中目前游標位置(行:列)。</string>
+  <string name="onboarding_step3_title">符號輸入工具列</string>
+  <string name="onboarding_step3_subtitle">上滑 / 下滑此處開啟 / 關閉符號輸入抽屜。</string>
 </resources>

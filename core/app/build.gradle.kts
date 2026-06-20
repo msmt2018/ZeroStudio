@@ -215,6 +215,7 @@ dependencies {
   implementation(projects.core.projects)
   implementation(projects.core.resources)
   implementation(projects.modules.zeroMcpServer)
+  implementation(projects.modules.zeroOnboardingGuide)
   implementation(projects.editor.impl)
   implementation(projects.editor.lexers)
   implementation(projects.editor.editorLsp)

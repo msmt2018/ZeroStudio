@@ -763,4 +763,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">IDE 드로어를 여는 방법</string>
+  <string name="onboarding_step1_subtitle">IDE 드로어(터미널, 빌드 출력 등)를 열려면 여기서 위로 스와이프하고, 닫으려면 아래로 스와이프하세요.
+👆 이 힌트를 탭하여 상단 빌드 정보를 숨기고 중앙 버블 탭 시연을 확인하세요.</string>
+  <string name="onboarding_step2_title">빌드 상태 및 커서 위치</string>
+  <string name="onboarding_step2_subtitle">이 영역은 코드 편집기의 빌드 진행 상황과 현재 커서 위치(행:열)를 표시합니다.</string>
+  <string name="onboarding_step3_title">기호 입력 도구 모음</string>
+  <string name="onboarding_step3_subtitle">여기서 위/아래로 스와이프하여 기호 입력 드로어를 열거나 닫습니다.</string>
 </resources>

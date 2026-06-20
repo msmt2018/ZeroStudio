@@ -154,4 +154,23 @@
           android:id="@+id/diagnosticInfo"
           layout="@layout/layout_diagnostic_info" />
 
+     <!--
+       操作引导浮层宿主 (Onboarding overlay host).
+
+       这是一个覆盖整个屏幕的 ComposeView, 用于在编辑器界面之上渲染引导气泡
+       (高亮框选 + 引导气泡 + 操作模拟手指). 它放在 CoordinatorLayout 的
+       最顶层, 因此:
+         - 可以显示在 bottom_sheet 之上
+         - 可以显示在 AppBar / FAB 之上
+         - 不会拦截除自己以外的点击事件 (Compose setContent 自带命中测试)
+     -->
+     <androidx.compose.ui.platform.ComposeView
+          android:id="@+id/onboarding_overlay_host"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:elevation="20dp"
+          android:importantForAccessibility="no"
+          android:clickable="false"
+          android:focusable="false" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

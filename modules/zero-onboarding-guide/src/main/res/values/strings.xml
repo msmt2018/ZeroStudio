@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~  This file is part of ZeroStudio.
+  ~  ...
+  -->
+<resources>
+  <string name="og_guide_default_next">下一步 →</string>
+  <string name="og_guide_default_previous">← 上一步</string>
+  <string name="og_guide_default_done">完成 ✓</string>
+  <string name="og_guide_default_skip">跳过引导</string>
+  <string name="og_guide_progress_label">引导进度</string>
+</resources>

@@ -777,4 +777,16 @@
   <string name="git_token_dialog_title">Token Credential Settings</string>
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
+
+  <!--
+    Editor bottom sheet onboarding tutorial (操作引导气泡文案).
+    Used by EditorBottomSheetOnboardingController in core/app.
+  -->
+  <string name="onboarding_step1_title">IDE çekmecesi nasıl açılır</string>
+  <string name="onboarding_step1_subtitle">IDE çekmecesini (terminal, derleme çıktısı vb.) açmak için burada yukarı kaydırın, kapatmak için aşağı kaydırın.
+👆 Üstteki derleme bilgisini gizlemek ve merkezi balona dokunmayı göstermek için bu ipucuna dokunun.</string>
+  <string name="onboarding_step2_title">Derleme durumu ve imleç konumu</string>
+  <string name="onboarding_step2_subtitle">Bu alan, derleme ilerlemesini ve kod düzenleyicideki geçerli imleç konumunu (satır:sütun) gösterir.</string>
+  <string name="onboarding_step3_title">Sembol giriş araç çubuğu</string>
+  <string name="onboarding_step3_subtitle">Sembol giriş çekmecesini açmak/kapatmak için burada yukarı/aşağı kaydırın.</string>
 </resources>

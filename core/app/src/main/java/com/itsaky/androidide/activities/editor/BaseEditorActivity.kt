@@ -87,6 +87,7 @@ import com.itsaky.androidide.tasks.cancelIfActive
 import com.itsaky.androidide.tasks.runOnUiThread
 import com.itsaky.androidide.ui.CodeEditorView
 import com.itsaky.androidide.ui.ContentTranslatingDrawerLayout
+import com.itsaky.androidide.ui.EditorBottomSheetOnboardingController
 import com.itsaky.androidide.ui.SwipeRevealLayout
 import com.itsaky.androidide.utils.ActionMenuUtils.createMenu
 import com.itsaky.androidide.utils.ApkInstallationSessionCallback
@@ -141,6 +142,15 @@ abstract class BaseEditorActivity :
   protected val pidToDatasetIdxMap = MutableIntIntMap(initialCapacity = 3)
   
   private val bottomSheetHeaderHideReasons = mutableSetOf<String>()
+
+  /**
+   * 编辑器底部抽屉的操作引导控制器 (在 [setupBottomSheet] 后初始化).
+   *
+   * 该字段在 [setupEditorBottomSheetOnboarding] 中被赋值, 用于驱动 3 步操作
+   * 引导 (page_switch_gesture_bubble / header_container / external_symbol_input_view).
+   * 完成一次后通过 SharedPreferences 持久化, 后续自动跳过.
+   */
+  private var editorBottomSheetOnboarding: EditorBottomSheetOnboardingController? = null
 
   var isDestroying = false
     protected set
@@ -869,6 +879,36 @@ abstract class BaseEditorActivity :
     // binding 是 ActivityEditorBinding (从 activity_editor.xml 生成), FAB 实际定义在
     // content_editor.xml 里, 所以走 content.clearFab / content.shareOutputFab.
     content.bottomSheet.setLogActionFabButtons(content.clearFab, content.shareOutputFab)
+
+    // 启动底部抽屉的操作引导 (3 步教学: 抽屉 / 头部 / 符号输入).
+    // 仅首次启动会显示, 之后由 SharedPreferences 持久化跳过.
+    setupEditorBottomSheetOnboarding()
+  }
+
+  /**
+   * 启动底部抽屉的操作引导 (page_switch_gesture_bubble / header_container /
+   * external_symbol_input_view 三步教学).
+   *
+   * 引导通过 SharedPreferences 持久化: 完成一次后下次启动自动跳过. 该方法
+   * 是幂等的, 多次调用只会创建一次控制器. 内部捕获所有异常, 引导失败不会
+   * 影响主功能.
+   */
+  private fun setupEditorBottomSheetOnboarding() {
+    if (editorBottomSheetOnboarding != null) return
+    if (_binding == null) return
+    try {
+      val controller = EditorBottomSheetOnboardingController(
+        activity = this,
+        bottomSheet = content.bottomSheet,
+        overlayHost = content.onboardingOverlayHost,
+      )
+      controller.attach()
+      controller.startIfNeeded()
+      editorBottomSheetOnboarding = controller
+    } catch (t: Throwable) {
+      // 引导初始化失败不能影响主功能
+      android.util.Log.w("EditorBottomSheetOnboarding", "Failed to start onboarding", t)
+    }
   }
 
   private fun setupDiagnosticInfo() {
