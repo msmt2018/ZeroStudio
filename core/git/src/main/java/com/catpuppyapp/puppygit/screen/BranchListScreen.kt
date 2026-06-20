@@ -1366,7 +1366,7 @@ fun BranchListScreen(
                                 trueFetchFalsePush = false
                             )
 
-                            Libgit2Helper.push(repo, upstream!!.remote, listOf(upstream!!.pushRefSpec), credential, force)
+                            Libgit2Helper.pushSingleBranch(repo, upstream, credential, force)
 
                             // 更新修改workstatus的时间，只更新时间就行，状态会在查询repo时更新
                             val repoDb = AppModel.dbContainer.repoRepository

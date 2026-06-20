@@ -2492,7 +2492,7 @@ object Libgit2Helper {
      */
     fun createCommit(
         repo: Repository,
-        msg: String,
+        msg: String,  // empty to auto generate
         username: String,
         email: String,
         branchFullRefName:String="",
@@ -2504,7 +2504,7 @@ object Libgit2Helper {
         settings: AppSettings,
         // 若非空，自动生成的消息，会添加此前缀
         // prefix for auto generated commit msg
-        cmtMsgPrefix: String = "",
+        cmtMsgPrefix: String = "",  // prefix for auto generated msg
     ):Ret<Oid?> {
         val funName = "createCommit"
 
@@ -2896,6 +2896,7 @@ object Libgit2Helper {
     //操作成功返回true，发生异常返回false
     //remoteList元素为 Pair(remoteName, credentialObj)
     //入参requireUnshallow如果为真，会执行unshallowfetch，如果为假，会判断仓库是否是shallow，如果是则取出其depth值，否则会fetch all(depth=0，fetch的默认depth)
+    // TODO 加个force参数，若为true，确保refspec前有+号(无则添加)，不过，实际上仓库配置文件默认的refspec前都是有加号的，所以多数情况下无需指定 force fetch本身多数情况下的就是默认行为，除非用户手动改配置文件，删除+号
     fun fetchRemoteListForRepo(
         repo: Repository,
         remoteList:List<RemoteAndCredentials>,
@@ -3684,6 +3685,18 @@ object Libgit2Helper {
         }
         //返回 `prefix` 后面的部分
         return refspec.substring(indexOf+prefix.length)
+    }
+
+    fun pushSingleBranch(repo: Repository, upstream: Upstream, credential: CredentialEntity?, force: Boolean) {
+        push(repo, upstream.remote, listOf(upstream.pushRefSpec), credential, force)
+
+        // 推送完之后，需要检查本地和远程分支最新提交号是否一样，若不一样，报错
+        // 必须检查，因为实测如果平台报错，libgit2可能检测不到，比如token过期、仓库容量超额，都可能报错，远程会返回错误信息，但libgit2可能检测不到
+        val branchShortName = upstream.downstreamLocalBranchShortRefSpec
+        val requeriedUpstream = Libgit2Helper.getUpstreamOfBranch(repo, branchShortName)
+        if(requeriedUpstream.localOid != requeriedUpstream.remoteOid) {
+            throw RuntimeException("local branch and upstream branch are not same after pushing, branch: $branchShortName, local: ${requeriedUpstream.localOid}, upstream: ${requeriedUpstream.remoteOid}")
+        }
     }
 
     /**

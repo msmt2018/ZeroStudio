@@ -383,7 +383,7 @@ class MyCodeEditor(
             stylesUpdateRequest = StylesUpdateRequest(
                 ignoreThis = false,
                 targetEditorState = editorState,
-                act = { lang.analyzeManager.reset(ContentReference(Content(text)), Bundle()) }
+                act = { styleReceiver -> lang.analyzeManager.reset(ContentReference(Content(text)), Bundle(), styleReceiver) }
             ),
             language = lang
         )
@@ -580,14 +580,14 @@ data class StylesResult(
     val applied: AtomicBoolean = AtomicBoolean(false)
 ) {
     fun copyForEditorState(newFieldsId: String) = copy(
-        styles = styles,
+        styles = styles.copy(),
         from = StylesResultFrom.TEXT_EDITOR_STATE,
         uniqueId = getRandomUUID(),
         fieldsId = newFieldsId,
         applied = AtomicBoolean(false)
     )
 
-    fun copyWithDeepCopyStyles() = copy(styles = this.styles)
+    fun copyWithDeepCopyStyles() = copy(styles = this.styles.copy())
 }
 
 enum class StylesResultFrom {
@@ -609,7 +609,7 @@ class StylesUpdateRequest(
     // 很多时候需要对同一个state先执行删除，再执行新增，分别会调用两次增量更新，这时，忽略前面的操作，只响应最后一个
     val ignoreThis: Boolean,
     val targetEditorState: TextEditorState,
-    val act:()->Unit,
+    val act:(StyleReceiver)->Unit,
 )
 
 fun MyCodeEditor?.scopeInvalid() = this == null || PLScope.scopeInvalid(languageScope.scope)

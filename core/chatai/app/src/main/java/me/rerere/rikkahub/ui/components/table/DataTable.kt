@@ -7,16 +7,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,7 +27,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.ui.components.richtext.MarkdownBlock
+import me.rerere.rikkahub.ui.context.LocalSettings
 import kotlin.math.max
 
 /**
@@ -45,17 +50,25 @@ fun DataTable(
     columnMinWidths: List<Dp> = emptyList(),
     columnMaxWidths: List<Dp> = emptyList(),
     cellAlignment: Alignment = Alignment.CenterStart,
+    outerBorder: BorderStroke? = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    shape: Shape = MaterialTheme.shapes.small,
+    stretchToFillWidth: Boolean = true,
 ) {
     val hScroll = rememberScrollState()
     val surfaceContainer = MaterialTheme.colorScheme.surfaceContainer
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
-            .clip(MaterialTheme.shapes.small)
-            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), MaterialTheme.shapes.small)
-            .horizontalScroll(hScroll)
+            .clip(shape)
+            .then(
+                if (outerBorder != null) Modifier.border(outerBorder, shape) else Modifier
+            )
     ) {
-        SubcomposeLayout { constraints ->
+        // 捕获滚动视口的可用宽度，用于在内容较窄时把列宽拉伸铺满
+        val viewportMaxWidth = constraints.maxWidth
+
+        Box(modifier = Modifier.horizontalScroll(hScroll)) {
+            SubcomposeLayout { constraints ->
             val columnCount = max(headers.size, rows.maxOfOrNull { it.size } ?: 0)
             val rowCount = rows.size
             if (columnCount == 0) return@SubcomposeLayout layout(0, 0) {}
@@ -121,6 +134,26 @@ fun DataTable(
             }
             val headerHeight = headerP1.maxOf { it?.height ?: 0 }
 
+            // ---------- 列宽拉伸：内容较窄时按比例铺满视口宽度 ----------
+            val naturalWidth = colWidths.sum()
+            if (stretchToFillWidth &&
+                viewportMaxWidth != Constraints.Infinity &&
+                viewportMaxWidth > naturalWidth &&
+                naturalWidth > 0
+            ) {
+                val extra = viewportMaxWidth - naturalWidth
+                var distributed = 0
+                for (c in 0 until columnCount) {
+                    val add = if (c == columnCount - 1) {
+                        extra - distributed
+                    } else {
+                        (extra.toLong() * colWidths[c] / naturalWidth).toInt()
+                    }
+                    colWidths[c] += add
+                    distributed += add
+                }
+            }
+
             // ---------- 第二阶段：固定列宽 + 统一行高重新测量 ----------
             fun constraintsFor(colWidth: Int, minH: Int): Constraints {
                 val safeColWidth = colWidth.coerceAtLeast(0)
@@ -182,6 +215,7 @@ fun DataTable(
                     y += rowHeights[r]
                 }
             }
+            }
         }
     }
 }
@@ -209,37 +243,39 @@ private fun CellBox(
 @Preview(showBackground = true)
 @Composable
 private fun DataTablePreview() {
-    Surface {
-        val headers = listOf<@Composable () -> Unit>(
-            { Text("Semester", style = MaterialTheme.typography.labelLarge) },
-            { Text("Attendance", style = MaterialTheme.typography.labelLarge) },
-            { Text("Notes / Example", style = MaterialTheme.typography.labelLarge) },
-        )
+    CompositionLocalProvider(LocalSettings provides Settings()) {
+        Surface {
+            val headers = listOf<@Composable () -> Unit>(
+                { Text("Semester", style = MaterialTheme.typography.labelLarge) },
+                { Text("Attendance", style = MaterialTheme.typography.labelLarge) },
+                { Text("Notes / Example", style = MaterialTheme.typography.labelLarge) },
+            )
 
-        val rows = listOf<List<@Composable () -> Unit>>(
-            listOf<@Composable () -> Unit>(
-                { Text("Fall 2024") },
-                { Text("Excellent", style = MaterialTheme.typography.bodyMedium) },
-                { Text("x² + y² = 1") },
-            ),
-            listOf(
-                { Text("Fall 2024") },
-                { Text("Good", style = MaterialTheme.typography.bodyMedium) },
-                { Text("∑ k = n(n+1)/2", maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            ),
-            listOf(
-                { Text("Fall 2024") },
-                { Text("Fair", style = MaterialTheme.typography.bodyMedium) },
-                { MarkdownBlock("这行更高会把整行拉齐! 这是一个很长的文本用来测试换行功能!  \n>haha") },
-            ),
-        )
+            val rows = listOf<List<@Composable () -> Unit>>(
+                listOf<@Composable () -> Unit>(
+                    { Text("Fall 2024") },
+                    { Text("Excellent", style = MaterialTheme.typography.bodyMedium) },
+                    { Text("x² + y² = 1") },
+                ),
+                listOf(
+                    { Text("Fall 2024") },
+                    { Text("Good", style = MaterialTheme.typography.bodyMedium) },
+                    { Text("∑ k = n(n+1)/2", maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                ),
+                listOf(
+                    { Text("Fall 2024") },
+                    { Text("Fair", style = MaterialTheme.typography.bodyMedium) },
+                    { MarkdownBlock("这行更高会把整行拉齐! 这是一个很长的文本用来测试换行功能!  \n>haha") },
+                ),
+            )
 
-        DataTable(
-            headers = headers,
-            rows = rows,
-            columnMinWidths = listOf(60.dp, 100.dp, 80.dp),
-            columnMaxWidths = listOf(120.dp, 100.dp, 200.dp),
-            zebraStriping = false,
-        )
+            DataTable(
+                headers = headers,
+                rows = rows,
+                columnMinWidths = listOf(60.dp, 100.dp, 80.dp),
+                columnMaxWidths = listOf(120.dp, 100.dp, 200.dp),
+                zebraStriping = false,
+            )
+        }
     }
 }

@@ -9,6 +9,8 @@ import io.ktor.client.plugins.sse.SSE
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.util.StringValues
 import io.modelcontextprotocol.kotlin.sdk.client.Client
+import io.modelcontextprotocol.kotlin.sdk.client.SseClientTransport
+import io.modelcontextprotocol.kotlin.sdk.client.StreamableHttpClientTransport
 import io.modelcontextprotocol.kotlin.sdk.shared.AbstractTransport
 import io.modelcontextprotocol.kotlin.sdk.shared.RequestOptions
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
@@ -32,8 +34,6 @@ import kotlinx.serialization.json.JsonObject
 import me.rerere.ai.core.InputSchema
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.AppScope
-import me.rerere.rikkahub.data.ai.mcp.transport.SseClientTransport
-import me.rerere.rikkahub.data.ai.mcp.transport.StreamableHttpClientTransport
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.datastore.getCurrentAssistant
 import me.rerere.rikkahub.data.files.FilesManager
@@ -89,7 +89,7 @@ class McpManager(
                 .collect { mcpServerConfigs ->
                     runCatching {
                         Log.i(TAG, "update configs: $mcpServerConfigs")
-                        val newConfigs = mcpServerConfigs.filter { it.commonOptions.enable }
+                        val newConfigs = mcpServerConfigs.filter { it.commonOptions.enable && it.commonOptions.name.isNotBlank() }
                         val currentConfigs = clients.keys.toList()
                         val (toAdd, toRemove) = currentConfigs.checkDifferent(
                             other = newConfigs,
@@ -117,7 +117,7 @@ class McpManager(
         return clients.entries.find { it.key.id == config.id }?.value
     }
 
-    fun getAllAvailableTools(): List<Pair<Uuid, McpTool>> {
+    fun getAllAvailableTools(): List<Triple<Uuid, String, McpTool>> {
         val settings = settingsStore.settingsFlow.value
         val assistant = settings.getCurrentAssistant()
         return settings.mcpServers
@@ -127,7 +127,7 @@ class McpManager(
             .flatMap { server ->
                 server.commonOptions.tools
                     .filter { tool -> tool.enable }
-                    .map { tool -> server.id to tool }
+                    .map { tool -> Triple(server.id, server.commonOptions.name, tool) }
             }
     }
 
@@ -256,7 +256,7 @@ class McpManager(
         if (client.transport == null) {
             client.connect(getTransport(config))
         }
-        val serverTools = client.listTools()?.tools ?: emptyList()
+        val serverTools = client.listTools().tools
         Log.i(TAG, "sync: tools: $serverTools")
         settingsStore.update { old ->
             old.copy(
@@ -318,6 +318,7 @@ class McpManager(
                 sync(config)
             }.onFailure {
                 it.printStackTrace()
+                setStatus(config, McpStatus.Error(it.message ?: it.javaClass.name))
             }
         }
     }

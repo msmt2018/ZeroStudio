@@ -254,7 +254,7 @@ class ChatCompletionsAPI(
         val host = providerSetting.baseUrl.toHttpUrl().host
         return buildJsonObject {
             put("model", params.model.modelId)
-            put("messages", buildMessages(messages))
+            put("messages", buildMessages(messages, providerSetting.includeHistoryReasoning))
 
             if (isModelAllowTemperature(params.model)) {
                 if (params.temperature != null) put("temperature", params.temperature)
@@ -354,6 +354,10 @@ class ChatCompletionsAPI(
                         }
                     }
 
+                    "aiping.cn" -> {
+                        put("enable_thinking", level.isEnabled)
+                    }
+
                     "open.bigmodel.cn" -> {
                         put("thinking", buildJsonObject {
                             put("type", if (!level.isEnabled) "disabled" else "enabled")
@@ -389,6 +393,12 @@ class ChatCompletionsAPI(
                             if (level != ReasoningLevel.AUTO) {
                                 put("reasoning_effort", if (level.effort == "none") "low" else level.effort)
                             }
+                        }
+                    }
+
+                    "opencode.ai" -> {
+                        if (level != ReasoningLevel.AUTO) {
+                            put("reasoning_effort", level.effort)
                         }
                     }
 
@@ -428,12 +438,12 @@ class ChatCompletionsAPI(
         return !ModelRegistry.OPENAI_O_MODELS.match(model.modelId) && !ModelRegistry.GPT_5.match(model.modelId)
     }
 
-    private fun buildMessages(messages: List<UIMessage>) = buildJsonArray {
+    private fun buildMessages(messages: List<UIMessage>, includeHistoryReasoning: Boolean = true) = buildJsonArray {
         val filteredMessages = messages.filter { it.isValidToUpload() }
 
         filteredMessages.forEach { message ->
             if (message.role == MessageRole.ASSISTANT) {
-                addAssistantMessages(message, includeReasoning = true)
+                addAssistantMessages(message, includeReasoning = includeHistoryReasoning)
             } else {
                 addNonAssistantMessage(message)
             }

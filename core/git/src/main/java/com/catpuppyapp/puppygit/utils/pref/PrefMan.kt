@@ -74,6 +74,8 @@ object PrefMan {
         const val globalGitConfigUser = "globalGitConfigUser"
         const val globalGitConfigEmail = "globalGitConfigEmail"
         const val globalGitConfigPullWithRebase = "globalGitConfigPullWithRebase"
+        const val globalGitConfigCommitOnPush = "globalGitConfigCommitOnPush"
+        const val globalGitConfigLfsEnabled = "globalGitConfigLfsEnabled"
     }
 
     private fun getPrefs(appContext: Context) = appContext.getSharedPreferences(fileName, MODE_PRIVATE)

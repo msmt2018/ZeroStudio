@@ -64,6 +64,8 @@ import com.catpuppyapp.puppygit.constants.Cons
 import com.catpuppyapp.puppygit.constants.StrCons
 import com.catpuppyapp.puppygit.dev.DevFeature
 import com.catpuppyapp.puppygit.dev.DevItem
+import com.catpuppyapp.puppygit.dev.lfsTestPassed
+import com.catpuppyapp.puppygit.jni.LibgitTwo
 import com.catpuppyapp.puppygit.play.pro.R
 import com.catpuppyapp.puppygit.settings.SettingsCons
 import com.catpuppyapp.puppygit.settings.SettingsUtil
@@ -73,6 +75,7 @@ import com.catpuppyapp.puppygit.utils.ActivityUtil
 import com.catpuppyapp.puppygit.utils.AppModel
 import com.catpuppyapp.puppygit.utils.ComposeHelper
 import com.catpuppyapp.puppygit.utils.EditCache
+import com.catpuppyapp.puppygit.utils.FsUtils
 import com.catpuppyapp.puppygit.utils.HashUtil
 import com.catpuppyapp.puppygit.utils.LanguageUtil
 import com.catpuppyapp.puppygit.utils.Lg2HomeUtils
@@ -157,6 +160,8 @@ fun SettingsInnerPage(
     val enableSnapshot_Content = rememberSaveable { mutableStateOf(settingsState.value.editor.enableContentSnapshot) }
     val diff_CreateSnapShotForOriginFileBeforeSave = rememberSaveable { mutableStateOf(settingsState.value.diff.createSnapShotForOriginFileBeforeSave) }
     val pullWithRebase = rememberSaveable { mutableStateOf(PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext)) }
+    val commitOnPush = rememberSaveable { mutableStateOf(PrefUtil.getGlobalGitConfigCommitOnPush(AppModel.realAppContext)) }
+    val lfsEnabled = rememberSaveable { mutableStateOf(PrefUtil.getGlobalGitConfigLfsEnabled(AppModel.realAppContext)) }
 
 
     val fileAssociationList = mutableCustomStateListOf(stateKeyTag, "fileAssociationList") { settingsState.value.editor.fileAssociationList }
@@ -1325,6 +1330,57 @@ fun SettingsInnerPage(
                 PrefUtil.setGlobalGitConfigPullWithRebase(AppModel.realAppContext, newValue)
             }
         )
+
+        SettingsContentSwitcher(
+            left = {
+                Text(stringResource(R.string.commit_on_push), fontSize = itemFontSize)
+            },
+            right = {
+                Switch(
+                    checked = commitOnPush.value,
+                    onCheckedChange = null
+                )
+            },
+            onClick = {
+                val newValue = !commitOnPush.value
+
+                //save
+                commitOnPush.value = newValue
+                PrefUtil.setGlobalGitConfigCommitOnPush(AppModel.realAppContext, newValue)
+            }
+        )
+
+        if(lfsTestPassed) {
+            SettingsContentSwitcher(
+                left = {
+                    Text(stringResource(R.string.lfs), fontSize = itemFontSize)
+                },
+                right = {
+                    Switch(
+                        checked = lfsEnabled.value,
+                        onCheckedChange = null
+                    )
+                },
+                onClick = {
+                    val newValue = !lfsEnabled.value
+
+                    //save
+                    lfsEnabled.value = newValue
+                    PrefUtil.setGlobalGitConfigLfsEnabled(AppModel.realAppContext, newValue)
+
+                    try {
+                        if(newValue) {
+                            LibgitTwo.registerLfsFilter(FsUtils.getLfsBinPath())
+                        }else {
+                            LibgitTwo.unregisterLfsFilter()
+                        }
+                    }catch (e: Exception) {
+                        Msg.requireShowLongDuration("err: ${e.localizedMessage}")
+                        MyLog.e(TAG, "register or unregister lfs filter err: register=$newValue, err:\n${e.stackTraceToString()}")
+                    }
+                }
+            )
+        }
 
 
 

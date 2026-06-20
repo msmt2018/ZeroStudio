@@ -63,7 +63,10 @@ open class BaseComposeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        AppModel.updateExitApp { finish() }
+        // 销毁Activity（并不会杀进程，所以是假退出，下次启动还会重建Activity还不如切换到后台好）
+//        AppModel.updateExitApp { finish() }
+
+        AppModel.updateExitApp { moveTaskToBack(true) }
     }
 
     /**

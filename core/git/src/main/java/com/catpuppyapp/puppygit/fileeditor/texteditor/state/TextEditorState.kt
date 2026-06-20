@@ -2450,7 +2450,7 @@ class TextEditorState(
                 StylesUpdateRequest(
                     ignoreThis = ignoreThis,
                     targetEditorState = newTextEditorState,
-                    act = { lang.analyzeManager.delete(start, end, selectedText) }
+                    act = { lang.analyzeManager.delete(start, end, selectedText, it) }
                 )
             )
         }
@@ -2539,7 +2539,7 @@ class TextEditorState(
                 StylesUpdateRequest(
                     ignoreThis = ignoreThis,
                     targetEditorState = newTextEditorState,
-                    act = { lang.analyzeManager.delete(start, end, deletedContent) }
+                    act = { lang.analyzeManager.delete(start, end, deletedContent, it) }
                 )
             )
         }
@@ -2608,7 +2608,9 @@ class TextEditorState(
                 StylesUpdateRequest(
                     ignoreThis = ignoreThis,
                     targetEditorState = newTextEditorState,
-                    act = { lang.analyzeManager.insert(start, end, selectedText) }
+                    act = {
+                        lang.analyzeManager.insert(start, end, selectedText, it)
+                    }
                 )
             )
         }

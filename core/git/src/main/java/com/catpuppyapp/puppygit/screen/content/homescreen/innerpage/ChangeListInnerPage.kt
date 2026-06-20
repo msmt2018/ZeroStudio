@@ -645,6 +645,75 @@ fun ChangeListInnerPage(
     }
 
 
+    val forcePull_ShowDialog = rememberSaveable { mutableStateOf(false) }
+    val initForcePullDialog = {
+        val curRepo = curRepoFromParentPage.value;
+        doTaskOrShowSetUsernameAndEmailDialog(curRepo) {
+            forcePull_ShowDialog.value = true
+        }
+    }
+
+    if(forcePull_ShowDialog.value) {
+        ConfirmDialog2(
+            title = stringResource(R.string.pull_force),
+            requireShowTextCompose = true,
+            textCompose = {
+                ScrollableColumn {
+                    MySelectionContainer {
+                        PaddingText(
+                            stringResource(R.string.force_pull_desc),
+                            color = MyStyleKt.TextColor.danger(),
+                            fontWeight = null, // 默认字体宽度
+                        )
+                    }
+                }
+            },
+            okTextColor = MyStyleKt.TextColor.danger(),
+            okBtnText = stringResource(R.string.pull),
+            onCancel = { forcePull_ShowDialog.value = false }
+        ) {
+            forcePull_ShowDialog.value = false
+
+            val curRepo = curRepoFromParentPage.value
+
+            doJobThenOffLoading(
+                loadingOn,  //注：这函数内会自动禁用顶栏按钮，无需手动 `enableActionFromParent.value=false`
+                loadingOff,
+                activityContext.getString(R.string.force_pulling)
+            ) {
+                doActWithLock(curRepo) {
+                    try {
+                        ChangeListFunctions.doPull(
+                            curRepo = curRepo,
+                            activityContext = activityContext,
+                            dbContainer = dbContainer,
+                            requireShowToast = requireShowToast,
+                            loadingText = loadingText,
+                            bottomBarActDoneCallback = bottomBarActDoneCallback,
+                            changeListRequireRefreshFromParentPage = changeListRequireRefreshFromParentPage,
+                            trueMergeFalseRebase = !PrefUtil.getGlobalGitConfigPullWithRebase(AppModel.realAppContext),
+                            requireCloseBottomBar = true,
+                            force = true,
+                        )
+
+                    }catch (e:Exception){
+                        showErrAndSaveLog(
+                            logTag = TAG,
+                            logMsg = "Pull(Force) error: "+e.stackTraceToString(),
+                            showMsg = activityContext.getString(R.string.pull_force_failed)+": "+e.localizedMessage,
+                            showMsgMethod = requireShowToast,
+                            repoId = curRepo.id
+                        )
+                    }finally {
+                        changeListRequireRefreshFromParentPage(curRepo)
+                    }
+                }
+            }
+        }
+    }
+
+
+
     val forcePush_ShowDialog = rememberSaveable { mutableStateOf(false) }
     val forcePush_pushWithLease = rememberSaveable { mutableStateOf(false) }
     val forcePush_expectedRefspecForLease = rememberSaveable { mutableStateOf("") }
@@ -957,6 +1026,8 @@ fun ChangeListInnerPage(
 
                     }else if(requireAct == PageRequest.pushForce) {
                         initForcePushDialog()
+                    }else if(requireAct == PageRequest.pullForce) {
+                        initForcePullDialog()
                     }else if(requireAct == PageRequest.mergeAbort) {
                         initMergeAbortDialog()
                     }else if(requireAct == PageRequest.stageAll) {
@@ -4272,7 +4343,7 @@ private fun getBackHandler(
                 }
             }else {  //WorkTree，顶级页面，双击退出app
                 //如果在两秒内按返回键，就会退出，否则会提示再按一次可退出程序
-                if (backStartSec.longValue > 0 && getSecFromTime() <= backStartSec.longValue) {  //大于0说明不是第一次执行此方法，那检测是上次获取的秒数，否则直接显示“再按一次退出app”的提示
+                if (Cons.disableDoublePressBackToExit || (backStartSec.longValue > 0 && getSecFromTime() <= backStartSec.longValue)) {  //大于0说明不是第一次执行此方法，那检测是上次获取的秒数，否则直接显示“再按一次退出app”的提示
                     exitApp()
                 } else {
                     showTextAndUpdateTimeForPressBackBtn()

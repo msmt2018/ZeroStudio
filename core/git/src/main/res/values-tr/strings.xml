@@ -1219,4 +1219,11 @@
 
     <string name="progress_notification_auto_dismiss">Bildirim Otomatik Kapatma</string>
     <string name="progress_notification_auto_dismiss_desc">Bildirimler gösterildikten sonra otomatik olarak kapatılacaktır</string>
+    <string name="pull_force">Çekme(Zorla)</string>
+    <string name="force_pull_desc">Önce fetch yapılacak, ardından yerel dal upstream\'e hard reset lenecek</string>
+    <string name="force_pulling">Zorla çekiliyor (Force Pulling)…</string>
+    <string name="pull_force_success">Çekme(Zorla) Başarılı</string>
+    <string name="pull_force_failed">Çekme(Zorla) Başarısız</string>
+    <string name="lfs">LFS</string>
+    <string name="commit_on_push">Gönderirken Taahhüt Et</string>
 </resources>

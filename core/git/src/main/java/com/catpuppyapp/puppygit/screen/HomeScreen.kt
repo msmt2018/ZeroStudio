@@ -500,10 +500,14 @@ fun HomeScreen(
     }
     val editorPreviewNavStack = mutableCustomStateOf(stateKeyTag, "editorPreviewNavStack") { EditorPreviewNavStack("") }
 
-    val editorQuitPreviewMode = {
+    val editorQuitPreviewModeWithoutReloadCheck = {
         editorBasePath.value = ""
         editorMdText.value = ""
         editorIsPreviewModeOn.value = false
+    }
+
+    val editorQuitPreviewMode = {
+        editorQuitPreviewModeWithoutReloadCheck()
 
         editorPageRequestFromParent.value = PageRequest.reloadIfChanged
     }
@@ -653,15 +657,22 @@ fun HomeScreen(
     //给Files页面点击打开文件用的
     //第2个参数是期望值，只有当文件路径不属于app内置禁止edit的目录时才会使用那个值，否则强制开启readonly模式
     val requireInnerEditorOpenFileWithFileName = r@{ fullPath:String, expectReadOnly:Boolean ->
+        // 切换页面
+        currentHomeScreen.intValue = Cons.selectedItem_Editor
+
+        val filePath = FilePath(fullPath)
+        // 路径相同，跳过重载
+        if(filePath.ioPath == editorPageShowingFilePath.value.ioPath) {
+            return@r
+        }
 
         //请求打开文件，先退出预览模式
-        editorQuitPreviewMode()
+        editorQuitPreviewModeWithoutReloadCheck()
 
 
         editorPageShowingFileIsReady.value=false
-        editorPageShowingFilePath.value = FilePath(fullPath)
+        editorPageShowingFilePath.value = filePath
         editorPageShowingFileDto.value.fullPath = ""
-        currentHomeScreen.intValue = Cons.selectedItem_Editor
 
         editorPageMergeMode.value = false  //这个页面不负责打开ChangeList页面的diff条目，所以MergeMode状态直接初始化为关即可，用户需要用的时候打开文件后再手动开即可
         //如果路径是app内置禁止修改的目录，则强制开启readonly，否则使用入参值
@@ -918,15 +929,19 @@ fun HomeScreen(
 //        {},  //Subscription页面
     )
 
-    val openDrawer = {  //打开侧栏(抽屉)
-        scope.launch {
-            drawerState.apply {
-                if (isClosed) open()
-            }
-        }
+    // 由于打开抽屉，退出app，实际上只是销毁Activity，而改成杀进程又容易误操作中止正在执行的操作（比如正在pull，一按返回进程直接被杀了，很无语）
+    // 所以，禁用按返回退出app（假退出，只是销毁Activity）的逻辑了，改成切换到后台，但如果切换到后台，下次打开页面时抽屉还会保持打开状态，很难看，所以取消按返回打开抽屉的逻辑
+//    val openDrawer = {  //打开侧栏(抽屉)
+//        scope.launch {
+//            drawerState.apply {
+//                if (isClosed) open()
+//            }
+//        }
+//
+//        Unit
+//    }
 
-        Unit
-    }
+    val openDrawer = {}
 
     val menuButton:@Composable ()->Unit = {
         LongPressAbleIconBtn(
@@ -967,7 +982,7 @@ fun HomeScreen(
                     drawIdList = drawIdList,
                     drawIconList = drawIconList,
                     drawerItemOnClick = drawerItemOnClick,
-                    showExit = true,
+                    showExit = false,
                     filesPageKeepFilterResultOnce = filesPageKeepFilterResultOnce,
 
                 )
@@ -1066,6 +1081,7 @@ fun HomeScreen(
                                 isEdited = editorPageIsEdited,
                                 showReloadDialog = showReloadDialog,
                                 showCloseDialog = editorPageShowCloseDialog,
+                                editorPageTextEditorState = editorPageTextEditorState,
                                 editorNeedSave = editorNeedSave,
                             )
                         } else if (currentHomeScreen.intValue == Cons.selectedItem_ChangeList) {

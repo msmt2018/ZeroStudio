@@ -193,10 +193,14 @@ fun SubPageEditor(
     val editorPreviewNavStack = mutableCustomStateOf(stateKeyTag, "editorPreviewNavStack") { EditorPreviewNavStack("") }
     val editorPagePreviewLoading = rememberSaveable { mutableStateOf(false) }
 
-    val editorQuitPreviewMode = {
+    val editorQuitPreviewModeWithoutReloadCheck = {
         editorBasePath.value = ""
         editorMdText.value = ""
         editorIsPreviewModeOn.value = false
+    }
+
+    val editorQuitPreviewMode = {
+        editorQuitPreviewModeWithoutReloadCheck()
 
         editorPageRequestFromParent.value = PageRequest.reloadIfChanged
     }
@@ -362,7 +366,7 @@ fun SubPageEditor(
                         isEdited = editorPageIsEdited,
                         showReloadDialog = showReloadDialog,
                         showCloseDialog = showCloseDialog,
-
+                        editorPageTextEditorState = editorPageTextEditorState,
                         editorNeedSave = editorNeedSave,
                     )
 

@@ -46,11 +46,13 @@ class SkillManager(
     }
 
     fun saveSkill(name: String, content: String): SkillMetadata? {
+        // 通过原子写入(staging + rename)落盘，避免直接 mkdirs 失败时
+        // writeText 抛出 FileNotFoundException 导致崩溃
+        if (!saveSkillFileBytesAtomically(name, mapOf("SKILL.md" to content.toByteArray()))) {
+            return null
+        }
         val skillDir = resolveSkillDir(name) ?: return null
-        skillDir.mkdirs()
-        val skillFile = skillDir.resolve("SKILL.md")
-        skillFile.writeText(content)
-        return parseSkillFile(skillFile, skillDir)
+        return parseSkillFile(skillDir.resolve("SKILL.md"), skillDir)
     }
 
     suspend fun deleteSkill(name: String): Boolean = withContext(Dispatchers.IO) {
@@ -83,6 +85,13 @@ class SkillManager(
     }
 
     fun saveSkillFilesAtomically(skillName: String, files: Map<String, String>): Boolean {
+        return saveSkillFileBytesAtomically(
+            skillName = skillName,
+            files = files.mapValues { it.value.toByteArray() },
+        )
+    }
+
+    fun saveSkillFileBytesAtomically(skillName: String, files: Map<String, ByteArray>): Boolean {
         val skillsDir = getSkillsDir()
         val targetDir = resolveSkillDir(skillName) ?: return false
         val stagingDir = createTempSkillDir(skillsDir, skillName, "staging") ?: return false
@@ -92,7 +101,7 @@ class SkillManager(
             for ((relativePath, content) in files) {
                 val target = SkillPaths.resolveSkillFile(stagingDir, relativePath) ?: return false
                 target.parentFile?.mkdirs()
-                target.writeText(content)
+                target.writeBytes(content)
             }
 
             if (!stagingDir.resolve("SKILL.md").exists()) return false

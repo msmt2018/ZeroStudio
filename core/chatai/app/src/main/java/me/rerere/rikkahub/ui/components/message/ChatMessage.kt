@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +49,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
@@ -87,8 +87,9 @@ import me.rerere.rikkahub.ui.components.ui.Favicon
 import me.rerere.rikkahub.ui.context.LocalNavController
 import me.rerere.rikkahub.ui.modifier.shimmer
 import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.ui.theme.LocalChatFontFamily
+import me.rerere.rikkahub.ui.theme.rememberChatFontFamily
 import me.rerere.rikkahub.ui.theme.extendColors
-import me.rerere.rikkahub.data.datastore.ChatFontFamily
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.rikkahub.utils.base64Encode
 import me.rerere.rikkahub.utils.openUrl
@@ -119,14 +120,11 @@ fun ChatMessage(
 ) {
     val message = node.messages[node.selectIndex]
     val settings = LocalSettings.current.displaySetting
+    val chatFontFamily = LocalChatFontFamily.current ?: rememberChatFontFamily(settings)
     val textStyle = LocalTextStyle.current.copy(
         fontSize = LocalTextStyle.current.fontSize * settings.fontSizeRatio,
         lineHeight = LocalTextStyle.current.lineHeight * settings.fontSizeRatio,
-        fontFamily = when (settings.chatFontFamily) {
-            ChatFontFamily.DEFAULT -> FontFamily.Default
-            ChatFontFamily.SERIF -> FontFamily.Serif
-            ChatFontFamily.MONOSPACE -> FontFamily.Monospace
-        }
+        fontFamily = chatFontFamily
     )
     var showActionsSheet by remember { mutableStateOf(false) }
     var showSelectCopySheet by remember { mutableStateOf(false) }
@@ -209,9 +207,15 @@ fun ChatMessage(
             }
         }
 
+        EditedFilesList(
+            parts = message.parts,
+            assistant = assistant,
+        )
+
         ProvideTextStyle(textStyle) {
             ChatMessageNerdLine(message = message)
         }
+
     }
     if (showActionsSheet) {
         ChatMessageActionsSheet(
@@ -318,6 +322,9 @@ private fun MessagePartsBlock(
                         modifier = Modifier.animateContentSize(),
                         steps = block.steps,
                         collapsedAdaptiveWidth = isReasoningOnlyBlock,
+                        cardColors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
+                        ),
                     ) { step ->
                         when (step) {
                             is ThinkingStep.ReasoningStep -> {
@@ -349,12 +356,12 @@ private fun MessagePartsBlock(
             is MessagePartBlock.ContentBlock -> key(block.index) {
                 when (val part = block.part) {
                     is UIMessagePart.Text -> {
-                        SelectionContainer {
+                        val textContent = @Composable {
                             if (role == MessageRole.USER) {
                                 Surface(
                                     modifier = Modifier.animateContentSize(),
                                     shape = RoundedCornerShape(16.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = settings.displaySetting.bubbleOpacity),
                                     onClick = { onUserMessageClick?.invoke() },
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp)) {
@@ -373,7 +380,7 @@ private fun MessagePartsBlock(
                                     Surface(
                                         modifier = Modifier.animateContentSize(),
                                         shape = RoundedCornerShape(16.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.displaySetting.bubbleOpacity),
                                     ) {
                                         Column(modifier = Modifier.padding(8.dp)) {
                                             MarkdownBlock(
@@ -398,6 +405,18 @@ private fun MessagePartsBlock(
                                             .animateContentSize()
                                     )
                                 }
+                            }
+                        }
+
+                        // 流式生成期间不启用 SelectionContainer：Markdown 在不断重渲染，
+                        // 内部可选择的 Text 会频繁注册/注销，与 Compose 选择工具栏在绘制阶段
+                        // 对 selectable 列表的排序产生并发修改，导致 ConcurrentModificationException。
+                        // 生成结束后内容稳定，再启用文本选择。
+                        if (loading) {
+                            textContent()
+                        } else {
+                            SelectionContainer {
+                                textContent()
                             }
                         }
                     }

@@ -1644,4 +1644,40 @@ object FsUtils {
         ActivityUtil.startActivitySafe(activityContext.findActivity(), intent)
     }
 
+    fun getInnerFilesBinDir(): File {
+        val filesDir = getInnerDataFilesDirOrThrowException(AppModel.realAppContext)
+        val binDir = File(filesDir.canonicalPath+"/bin")
+        if(!binDir.exists()) {
+            binDir.mkdirs()
+        }
+        return binDir
+    }
+
+    fun getLfsBinPath(): String {
+        return "${getNativeLibraryDir(AppModel.realAppContext)}/libgitlfs.so"
+    }
+
+    // copy from:
+    // https://github.com/lhear/SimpleXray/blob/4c7890114a46d33a8beb50c6e8b7404e45f874b6/app/src/main/kotlin/com/simplexray/an/service/TProxyService.kt#L414
+    fun getNativeLibraryDir(context: Context?): String? {
+        if (context == null) {
+            MyLog.e(TAG, "Context is null")
+            return null
+        }
+
+        try {
+            val applicationInfo = context.applicationInfo
+            if (applicationInfo != null) {
+                val nativeLibraryDir = applicationInfo.nativeLibraryDir
+                MyLog.d(TAG, "Native Library Directory: $nativeLibraryDir")
+                return nativeLibraryDir
+            } else {
+                MyLog.e(TAG, "ApplicationInfo is null")
+                return null
+            }
+        } catch (e: Exception) {
+            MyLog.e(TAG, "Error getting native library dir: ${e.stackTraceToString()}")
+            return null
+        }
+    }
 }

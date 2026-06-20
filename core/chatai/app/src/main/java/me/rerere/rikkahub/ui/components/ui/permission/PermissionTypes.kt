@@ -8,8 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import me.rerere.rikkahub.R
 
-private const val ACCESS_LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
-
 /**
  * 权限信息数据类
  * @param permission Android权限字符串 (如 android.permission.CAMERA)
@@ -79,7 +77,7 @@ val PermissionNotification = PermissionInfo(
 
 @RequiresApi(37)
 val PermissionLocalNetwork = PermissionInfo(
-    permission = ACCESS_LOCAL_NETWORK_PERMISSION,
+    permission = Manifest.permission.ACCESS_LOCAL_NETWORK,
     displayName = { Text(stringResource(R.string.permission_local_network)) },
     usage = { Text(stringResource(R.string.permission_local_network_desc)) },
     required = true

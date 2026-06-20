@@ -10,7 +10,6 @@ import kotlinx.serialization.json.JsonObject
 import me.rerere.ai.core.MessageRole
 import me.rerere.ai.core.TokenUsage
 import me.rerere.ai.provider.Model
-import me.rerere.ai.util.KotlinInstantSerializer
 import me.rerere.ai.util.json
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -148,13 +147,14 @@ data class UIMessage(
         } ?: this
     }
 
-    fun summaryAsText(): String {
-        return "[${role.name}]: " + parts.joinToString(separator = "\n") { part ->
+    fun summaryAsText(maxLength: Int = Int.MAX_VALUE): String {
+        val text = "[${role.name}]: " + parts.joinToString(separator = "\n") { part ->
             when (part) {
                 is UIMessagePart.Text -> part.text
                 else -> ""
             }
         }
+        return if (text.length > maxLength) text.take(maxLength) + "..." else text
     }
 
     fun toText() = parts.joinToString(separator = "\n") { part ->
@@ -393,9 +393,7 @@ sealed class UIMessagePart {
     @SerialName("reasoning")
     data class Reasoning(
         val reasoning: String,
-        @Serializable(with = KotlinInstantSerializer::class)
         val createdAt: Instant = Clock.System.now(),
-        @Serializable(with = KotlinInstantSerializer::class)
         val finishedAt: Instant? = Clock.System.now(),
         override var metadata: JsonObject? = null
     ) : UIMessagePart()

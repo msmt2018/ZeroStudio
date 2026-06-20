@@ -154,7 +154,7 @@
 <!--    will replace "ph_a3f241dc_1" to a number of files count ,the final str will shown looks like: "5 files staged" -->
     <string name="n_files_staged">ph_a3f241dc_1 个文件已暂存</string>
     <string name="revert_n_and_del_m_files">已恢复 ph_a3f241dc_1 并删除 ph_a3f241dc_2 个文件</string>
-    <string name="will_revert_modified_or_deleted_and_rm_new_files_are_you_sure">将恢复 \"已修改\" 或 \"删除\" 并 [移除] \"新\" 文件, 你确定吗?(\"冲突\" 条目将被忽略)</string>
+    <string name="will_revert_modified_or_deleted_and_rm_new_files_are_you_sure">将恢复 \"已修改\" 或 \"已删除\" 并 [移除] \"新增文件\", 你确定吗?(\"冲突\" 条目将被忽略)</string>
     <string name="must_resolved_conflict_and_select_them_before_commit">提交之前必须解决冲突并选中它们</string>
     <string name="err_when_querying_settings_from_db">从数据库查询设置时失败</string>
     <string name="global">全局</string>
@@ -1291,4 +1291,11 @@
 
     <string name="progress_notification_auto_dismiss">进度通知自动消除</string>
     <string name="progress_notification_auto_dismiss_desc">通知显示后将自动清除</string>
+    <string name="pull_force">拉取(强制)</string>
+    <string name="force_pull_desc">将进行下载（fetch）然后硬重置（hard reset）本地分支到上游分支</string>
+    <string name="force_pulling">正在强制拉取…</string>
+    <string name="pull_force_success">拉取(强制) 成功</string>
+    <string name="pull_force_failed">拉取(强制) 失败</string>
+    <string name="lfs">LFS</string>
+    <string name="commit_on_push">推送时提交</string>
 </resources>

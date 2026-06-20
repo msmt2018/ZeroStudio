@@ -280,6 +280,8 @@ object Cons {
     //在这个时间内按两次返回就会退出app，单位秒
     const val pressBackDoubleTimesInThisSecWillExit = 3;
 
+    const val disableDoublePressBackToExit = true
+
     // represent fetch all branches
     const val gitFetchAllBranchSign = "*"
 

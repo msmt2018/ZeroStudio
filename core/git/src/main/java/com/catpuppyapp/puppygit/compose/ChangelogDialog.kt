@@ -16,10 +16,8 @@ import com.catpuppyapp.puppygit.utils.AppModel
 private const val hahaNoteLink = "https://github.com/catpuppyapp/HahaNote-Release"
 
 private val changelog = """
-- support create bare repo
-- support rename remotes (issue #136)
-- 支持创建bare仓库
-- 支持重命名远程仓库 (issue #136)
+- support pin repos (issue #141)
+- 支持置顶仓库 (issue #141)
 """.trimIndent()
 
 

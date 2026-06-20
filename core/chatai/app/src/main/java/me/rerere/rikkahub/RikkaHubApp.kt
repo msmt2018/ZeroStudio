@@ -17,6 +17,8 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import me.rerere.rikkahub.data.files.FileFolders
+import java.io.File
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -33,17 +35,17 @@ import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.service.WebServerService
 import me.rerere.rikkahub.utils.CrashHandler
 import me.rerere.rikkahub.utils.DatabaseUtil
+import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.workspace.WorkspaceManager
 import org.koin.android.ext.android.get
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.androidx.workmanager.koin.workManagerFactory
-import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import com.termux.app.TermuxApplication
 
 
 private const val TAG = "RikkaHubApp"
-private const val ACCESS_LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
 
 const val CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID = "chat_completed"
 const val CHAT_LIVE_UPDATE_NOTIFICATION_CHANNEL_ID = "chat_live_update"
@@ -52,7 +54,12 @@ const val WEB_SERVER_NOTIFICATION_CHANNEL_ID = "web_server"
 class RikkaHubApp : TermuxApplication() {
     override fun onCreate() {
         super.onCreate()
-        RikkaHubRuntime.ensureKoinStarted(this)
+        startKoin {
+            androidLogger()
+            androidContext(this@RikkaHubApp)
+            workManagerFactory()
+            modules(appModule, viewModelModule, dataSourceModule, repositoryModule)
+        }
         this.createNotificationChannel()
 
         // set cursor window size to 32MB
@@ -66,6 +73,15 @@ class RikkaHubApp : TermuxApplication() {
 
         // delete temp files
         deleteTempFiles()
+
+        // cleanup stale tool output files
+        cleanupToolOutputs()
+
+        // cleanup workspace temp dirs (proot + rootfs /tmp)
+        cleanupWorkspaceTempDirs()
+
+        // check workspace integrity (remove orphaned DB records after backup restore)
+        checkWorkspaceIntegrity()
 
         // sync upload files to DB
         syncManagedFiles()
@@ -101,11 +117,42 @@ class RikkaHubApp : TermuxApplication() {
         }
     }
 
+    private fun cleanupWorkspaceTempDirs() {
+        get<AppScope>().launch(Dispatchers.IO) {
+            runCatching {
+                get<WorkspaceManager>().cleanupAllTempDirs()
+            }.onFailure {
+                Log.e(TAG, "cleanupWorkspaceTempDirs failed", it)
+            }
+        }
+    }
+
+    private fun checkWorkspaceIntegrity() {
+        get<AppScope>().launch(Dispatchers.IO) {
+            runCatching {
+                get<WorkspaceRepository>().checkIntegrity()
+            }.onFailure {
+                Log.e(TAG, "checkWorkspaceIntegrity failed", it)
+            }
+        }
+    }
+
     private fun deleteTempFiles() {
         get<AppScope>().launch(Dispatchers.IO) {
             val dir = appTempFolder
             if (dir.exists()) {
                 dir.deleteRecursively()
+            }
+        }
+    }
+
+    private fun cleanupToolOutputs() {
+        get<AppScope>().launch(Dispatchers.IO) {
+            runCatching {
+                val dir = File(filesDir, FileFolders.TOOL_OUTPUTS)
+                if (dir.exists()) {
+                    dir.deleteRecursively()
+                }
             }
         }
     }
@@ -139,7 +186,7 @@ class RikkaHubApp : TermuxApplication() {
                         !settings.webServerLocalhostOnly &&
                         ContextCompat.checkSelfPermission(
                             this@RikkaHubApp,
-                            ACCESS_LOCAL_NETWORK_PERMISSION
+                            android.Manifest.permission.ACCESS_LOCAL_NETWORK
                         ) != PackageManager.PERMISSION_GRANTED
                     ) {
                         Log.w(TAG, "startWebServerIfEnabled: local network permission not granted, skipping")
@@ -193,33 +240,6 @@ class RikkaHubApp : TermuxApplication() {
         super.onTerminate()
         get<AppScope>().cancel()
         stopService(Intent(this, WebServerService::class.java))
-    }
-}
-
-
-object RikkaHubRuntime {
-    @Volatile
-    private var koinStarted = false
-
-    fun ensureKoinStarted(application: Application) {
-        if (koinStarted || GlobalContext.getOrNull() != null) {
-            koinStarted = true
-            return
-        }
-
-        synchronized(this) {
-            if (koinStarted || GlobalContext.getOrNull() != null) {
-                koinStarted = true
-                return
-            }
-            startKoin {
-                androidLogger()
-                androidContext(application)
-                workManagerFactory()
-                modules(appModule, viewModelModule, dataSourceModule, repositoryModule)
-            }
-            koinStarted = true
-        }
     }
 }
 

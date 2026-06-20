@@ -417,6 +417,16 @@ fun getInnerDataDirOrThrowException(context:Context):File {
     return getDirIfNullThenShowToastAndThrowException(context, context.dataDir, Cons.errorCantGetInnerDataDir)
 }
 
+fun getInnerDataFilesDirOrThrowException(context:Context):File {
+    val dataDir = getInnerDataDirOrThrowException(context)
+    val filesDir = File(dataDir.canonicalPath+"/files")
+    if(!filesDir.exists()) {
+        filesDir.mkdirs()
+    }
+
+    return filesDir
+}
+
 fun getExternalDataDirOrNull(context:Context):File? {
     return try {
         val dir = context.getExternalFilesDir(null) ?: throw RuntimeException("`context.getExternalFilesDir(null)` returned `null`")

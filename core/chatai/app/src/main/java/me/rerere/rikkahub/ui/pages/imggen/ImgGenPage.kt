@@ -54,7 +54,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -247,7 +248,7 @@ private fun ImageGenScreen(
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
     var showSettingsSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
 
     LaunchedEffect(error) {
         error?.let { errorMessage ->
@@ -269,36 +270,35 @@ private fun ImageGenScreen(
                 .weight(1f)
                 .verticalScroll(rememberScrollState()),
         ) {
-            if (isGenerating && currentGeneratedImages.isEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                (0 until minOf(2, currentGeneratedImages.size)).forEach { index ->
+                    val image = currentGeneratedImages[index]
+                    var showPreview by remember { mutableStateOf(false) }
+                    AsyncImage(
+                        model = File(image.filePath),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showPreview = true },
+                        contentScale = ContentScale.Crop
+                    )
+
+                    if (showPreview) {
+                        ImagePreviewDialog(
+                            images = listOf(image.filePath),
+                            onDismissRequest = { showPreview = false },
+                        )
+                    }
+                }
+            }
+            if (isGenerating) {
                 ContainedLoadingIndicator(
                     modifier = Modifier.align(Alignment.Center)
                 )
-            } else {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    (0 until minOf(2, currentGeneratedImages.size)).forEach { index ->
-                        val image = currentGeneratedImages[index]
-                        var showPreview by remember { mutableStateOf(false) }
-                        AsyncImage(
-                            model = File(image.filePath),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { showPreview = true },
-                            contentScale = ContentScale.Crop
-                        )
-
-                        if (showPreview) {
-                            ImagePreviewDialog(
-                                images = listOf(image.filePath),
-                                onDismissRequest = { showPreview = false },
-                            )
-                        }
-                    }
-                }
             }
         }
         InputBar(

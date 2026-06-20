@@ -1209,4 +1209,11 @@
 
     <string name="progress_notification_auto_dismiss">إغلاق الإشعار تلقائيًا</string>
     <string name="progress_notification_auto_dismiss_desc">سيتم إغلاق الإشعارات تلقائيًا بعد عرضها</string>
+    <string name="pull_force"> سحب(إجباري)</string>
+    <string name="force_pull_desc">سيتم الجلب (fetch) ثم إعادة التعيين القسري (hard reset) للفرع المحلي إلى المنبع (upstream)</string>
+    <string name="force_pulling">جاري السحب الإجباري…</string>
+    <string name="pull_force_success">نجح السحب(الإجباري)</string>
+    <string name="pull_force_failed">فشل السحب(الإجباري)</string>
+    <string name="lfs">LFS</string>
+    <string name="commit_on_push">التزام عند الدفع</string>
 </resources>

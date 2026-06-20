@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import me.rerere.rikkahub.BuildConfig
 import me.rerere.rikkahub.RouteActivity
 import java.io.File
 
@@ -41,7 +42,7 @@ class ShortcutHandlerActivity : ComponentActivity() {
 
     private fun launchCamera() {
         val imageFile = File(cacheDir, "shortcut_camera_image.jpg")
-        photoURI = FileProvider.getUriForFile(this, "$packageName.fileprovider", imageFile)
+        photoURI = FileProvider.getUriForFile(this, "${BuildConfig.APPLICATION_ID}.fileprovider", imageFile)
         photoURI?.let {
             takePictureLauncher.launch(it)
         } ?: finish()

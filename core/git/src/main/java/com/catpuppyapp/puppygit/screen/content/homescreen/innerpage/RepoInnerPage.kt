@@ -662,9 +662,56 @@ fun RepoInnerPage(
                     throw RuntimeException(activityContext.getString(R.string.err_upstream_invalid_plz_go_branches_page_set_it_then_try_again))
                 }
             }
+
+            // 执行到这里，必定有上游
+            // 检查是否需要先提交
+            if(PrefUtil.getGlobalGitConfigCommitOnPush(AppModel.realAppContext)) {
+                val settings = SettingsUtil.getSettingsSnapshot()
+
+                val (username, email) = Libgit2Helper.getGitUsernameAndEmail(repo)
+
+                if (username == null || username.isBlank() || email == null || email.isBlank()) {
+                    throw RuntimeException("push err(from repo page): auto commit err: username or email invalid")
+                } else {
+                    //检查是否存在冲突，如果存在，将不会创建提交
+                    if (Libgit2Helper.hasConflictItemInRepo(repo)) {
+                        throw RuntimeException("push err(from repo page): auto commit enabled but have conflicts, please resolve conflicts first")
+                    } else {
+                        // 有username 和 email，且无冲突
+
+                        // stage worktree changes
+                        Libgit2Helper.stageAll(repo, curRepo.id)
+
+
+                        //如果index不为空，则创建提交
+                        if (!Libgit2Helper.indexIsEmpty(repo)) {
+                            val ret = Libgit2Helper.createCommit(
+                                repo = repo,
+                                msg = "",  // empty to auto generate
+                                cmtMsgPrefix = "",  // prefix for auto generated msg
+                                username = username,
+                                email = email,
+                                indexItemList = null,
+                                amend = false,
+                                overwriteAuthorWhenAmend = false,
+                                settings = settings,
+                                cleanRepoStateIfSuccess = true,
+                            )
+
+                            if (ret.hasError()) {
+                                throw RuntimeException("commit on push error(from repo page): ${ret.msg}")
+                            } else if(ret.data != null){
+                                //更新上游本地oid为最新值
+                                upstream!!.localOid = ret.data!!.toString()
+                            }
+                        }
+                    }
+                }
+            }
+
             MyLog.d(TAG, "#doPush: upstream.remote="+upstream!!.remote+", upstream.branchFullRefSpec="+upstream!!.branchRefsHeadsFullRefSpec)
 
-            //执行到这里，必定有上游，push
+            // push
             val credential = Libgit2Helper.getRemoteCredential(
                 dbContainer.remoteRepository,
                 dbContainer.credentialRepository,
@@ -673,7 +720,7 @@ fun RepoInnerPage(
                 trueFetchFalsePush = false
             )
 
-            Libgit2Helper.push(repo, upstream!!.remote, listOf(upstream!!.pushRefSpec), credential, force = false)
+            Libgit2Helper.pushSingleBranch(repo, upstream, credential, force = false)
 
             // 更新修改workstatus的时间，只更新时间就行，状态会在查询repo时更新
             val repoDb = AppModel.dbContainer.repoRepository
@@ -941,6 +988,7 @@ fun RepoInnerPage(
                     val tmpPackageNameAndRepoIdMap = mutableMapOf<String, List<String>>()
                     var updatedPackageNameAndRepoSettingsMap = settings.automation.packageNameAndRepoAndSettingsMap
                     val tmpPackageNameAndRepoSettingsMap = mutableMapOf<String, PackageNameAndRepoSettings>()
+                    val pinnedRepos = settings.pinnedRepos
 
                     deleteList.value.toList().forEachBetter { willDeleteRepo ->
                         curRepo = willDeleteRepo
@@ -952,6 +1000,9 @@ fun RepoInnerPage(
                             requireDelFilesOnDisk = requireDelFilesOnDisk,
                             requireTransaction = requireTransaction
                         )
+
+                        // remove pinned
+                        pinnedRepos.remove(willDeleteRepo.id)
 
                         // update settings and app linked info
                         for(i in updatedPackageNameAndRepoIdMap) {
@@ -975,6 +1026,7 @@ fun RepoInnerPage(
                     // save updated settings
                     settings.automation.packageNameAndRepoIdsMap = updatedPackageNameAndRepoIdMap
                     settings.automation.packageNameAndRepoAndSettingsMap = updatedPackageNameAndRepoSettingsMap
+                    settings.pinnedRepos = pinnedRepos
                     SettingsUtil.updateSettings(settings)
 
                     Msg.requireShow(activityContext.getString(R.string.success))
@@ -1979,6 +2031,7 @@ fun RepoInnerPage(
                             isSelectionMode = isSelectionMode.value,
                             itemSelected = containsForSelected(selectedItems.value, element),
                             titleOnClick = repoCardTitleOnClick,
+                            pinnedRepos = settings.pinnedRepos,
 
                             goToFilesPage = goToFilesPage,
                             requireBlinkIdx = requireBlinkIdx,
@@ -2011,6 +2064,9 @@ fun RepoInnerPage(
                             doCloneSingle = doCloneSingle,
                             initErrMsgDialog = initErrMsgDialog,
                             initCommitMsgDialog = showItemMsg,
+                            refreshPage = {
+                                changeStateTriggerRefreshPage(needRefreshRepoPage)
+                            }
 
                         ) workStatusOnclick@{ clickedRepo, status ->  //这个是点击status的callback，这个status其实可以不传，因为这里的lambda能捕获到数组的元素，就是当前仓库
 
@@ -2665,9 +2721,11 @@ private suspend fun doInit(
     //貌似如果用Flow，后续我更新数据库，不需要再次手动更新State数据就会自动刷新，也就是Flow会观测数据，如果改变，重新执行sql获取最新的数据，但最好还是手动更新，避免资源浪费
     val willReloadTheseRepos = specifiedRefreshRepoList.ifEmpty { repoRepository.getAll() }
 
+
     if(specifiedRefreshRepoList.isEmpty()) {
         repoDtoList.value.clear()
-        repoDtoList.value.addAll(willReloadTheseRepos)
+        // sort repos by pinned time then add to repo dto list
+        repoDtoList.value.addAll(sortReposByPinnedTime(willReloadTheseRepos, settings))
     }else {
         val spCopy = specifiedRefreshRepoList.toList()
         specifiedRefreshRepoList.clear()
@@ -2881,4 +2939,46 @@ private fun checkGitStatusAndUpdateItemInList(
         }
     }
 
+}
+
+// TODO 这个循环有点多，我假设用户仓库应该不会太多（小于20），所以性能应该问题不大，但以后可以优化下这个代码减少循环次数
+private fun sortReposByPinnedTime(repos: List<RepoEntity>, settings: AppSettings): List<RepoEntity> {
+    val pinnedRepos = settings.pinnedRepos
+    if(pinnedRepos.isEmpty()) {
+        return repos
+    }
+
+    // 排序pinned repos
+    val sortedRepos = pinnedRepos.toSortedMap({ k1, k2 ->
+        val r = pinnedRepos[k2]!!.compareTo(pinnedRepos[k1]!!)
+        if(r != 0) {
+            r
+        }else {
+            1
+        }
+    })
+
+    // 创建 repoId to RepoEntity 的map，方便下面查询
+    val reposMap = mutableMapOf<String, RepoEntity>()
+    for(r in repos) {
+        reposMap[r.id] = r
+    }
+
+    val repos2 = mutableListOf<RepoEntity>()
+    // 先添加pinned仓库
+    for(repoId in sortedRepos.keys) {
+        // 一般不会为null，除非删除仓库时没更新settings里的map，不过?.let判断下保险
+        reposMap[repoId]?.let {
+            repos2.add(it)
+        }
+    }
+
+    // 添加其余仓库
+    for(r in repos) {
+        if(!pinnedRepos.contains(r.id)) {
+            repos2.add(r)
+        }
+    }
+
+    return repos2
 }

@@ -1315,4 +1315,11 @@
 
     <string name="progress_notification_auto_dismiss">Notification Auto Dismiss</string>
     <string name="progress_notification_auto_dismiss_desc">Notifications will be dismissed automatically after being shown</string>
+    <string name="pull_force">Pull(Force)</string>
+    <string name="force_pull_desc">Will fetch then hard reset local branch to upstream</string>
+    <string name="force_pulling">Force Pulling…</string>
+    <string name="pull_force_success">Pull(Force) Success</string>
+    <string name="pull_force_failed">Pull(Force) Failed</string>
+    <string name="lfs">LFS</string>
+    <string name="commit_on_push">Commit on Push</string>
 </resources>

@@ -140,6 +140,11 @@ data class AppSettings(
 
     val httpSetting: HttpSettings = HttpSettings(),
 
+    /**
+     * key is repo id, value is pinned time in utc milliseconds
+     * value can be got by call `System.currentTimeMillis()`
+     */
+    var pinnedRepos: MutableMap<String, Long> = mutableMapOf(),
 ) {
 
     override fun equals(other: Any?): Boolean {

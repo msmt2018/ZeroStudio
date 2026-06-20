@@ -39,7 +39,10 @@ import com.catpuppyapp.puppygit.compose.SimpleCheckBox
 import com.catpuppyapp.puppygit.compose.SmallIcon
 import com.catpuppyapp.puppygit.constants.PageRequest
 import com.catpuppyapp.puppygit.dev.dev_EnableUnTestedFeature
+import com.catpuppyapp.puppygit.dev.editorEnableLineSelecteModeFromMenuTestPassed
 import com.catpuppyapp.puppygit.dev.editorMergeModeTestPassed
+import com.catpuppyapp.puppygit.dev.proFeatureEnabled
+import com.catpuppyapp.puppygit.fileeditor.texteditor.state.TextEditorState
 import com.catpuppyapp.puppygit.play.pro.R
 import com.catpuppyapp.puppygit.screen.functions.defaultTitleDoubleClick
 import com.catpuppyapp.puppygit.screen.functions.defaultTitleDoubleClickRequest
@@ -87,6 +90,7 @@ fun EditorTitle(
     isEdited: MutableState<Boolean>,
     showReloadDialog: MutableState<Boolean>,
     showCloseDialog: MutableState<Boolean>,
+    editorPageTextEditorState: CustomStateSaveable<TextEditorState>,
 
     editorNeedSave: () -> Boolean,
 ) {
@@ -159,36 +163,36 @@ fun EditorTitle(
                 .widthIn(min = MyStyleKt.Title.clickableTitleMinWidth)
         ) {
             if(editorSearchMode) {
-                    FilterTextField(
-                        filterKeyWord = editorSearchKeyword,
-                        // avoid mistake clicked
-                        showClear = false,
-                        containerModifier = Modifier
-                            .fillMaxWidth()
-                            .onPreviewKeyEvent opke@{ keyEvent ->
+                FilterTextField(
+                    filterKeyWord = editorSearchKeyword,
+                    // avoid mistake clicked
+                    showClear = false,
+                    containerModifier = Modifier
+                        .fillMaxWidth()
+                        .onPreviewKeyEvent opke@{ keyEvent ->
 
-                                // return true to stop key event propaganda
-                                if (keyEvent.type != KeyEventType.KeyDown) {
-                                    return@opke false
-                                }
-
-
-                                // F3
-                                if(keyEvent.key == Key.F3 && !keyEvent.isShiftPressed) {
-                                    editorPageRequestFromParent.value = PageRequest.findNext
-                                    return@opke true
-                                }
-
-                                // Shift+F3
-                                if(keyEvent.key == Key.F3 && keyEvent.isShiftPressed) {
-                                    editorPageRequestFromParent.value = PageRequest.findPrevious
-                                    return@opke true
-                                }
-
-
+                            // return true to stop key event propaganda
+                            if (keyEvent.type != KeyEventType.KeyDown) {
                                 return@opke false
                             }
-                    )
+
+
+                            // F3
+                            if(keyEvent.key == Key.F3 && !keyEvent.isShiftPressed) {
+                                editorPageRequestFromParent.value = PageRequest.findNext
+                                return@opke true
+                            }
+
+                            // Shift+F3
+                            if(keyEvent.key == Key.F3 && keyEvent.isShiftPressed) {
+                                editorPageRequestFromParent.value = PageRequest.findPrevious
+                                return@opke true
+                            }
+
+
+                            return@opke false
+                        }
+                )
             }else {
                 ScrollableRow {
                     if(isPreviewModeOn) {
@@ -341,7 +345,6 @@ fun EditorTitle(
 
 
             DropdownMenuItem(
-                //非readOnly目录才允许开启或关闭readonly状态，否则强制启用readonly状态且不允许关闭
                 enabled = enableMenuItem,
                 text = { Text(stringResource(R.string.software_keyboard)) },
                 trailingIcon = {
@@ -356,9 +359,25 @@ fun EditorTitle(
 
             )
 
+            if(proFeatureEnabled(editorEnableLineSelecteModeFromMenuTestPassed)) {
+                val selectModeOn = editorPageTextEditorState.value.isMultipleSelectionMode
+
+                DropdownMenuItem(
+                    enabled = enableMenuItem,
+                    text = { Text(stringResource(R.string.select_mode)) },
+                    trailingIcon = {
+                        SimpleCheckBox(selectModeOn)
+                    },
+                    onClick = {
+                        closeMenu()
+
+                        editorPageRequestFromParent.value = PageRequest.editorSwitchSelectMode
+                    }
+
+                )
+            }
 
             DropdownMenuItem(
-                //非readOnly目录才允许开启或关闭readonly状态，否则强制启用readonly状态且不允许关闭
                 enabled = enableMenuItem,
                 text = { Text(stringResource(R.string.details)) },
                 onClick = {

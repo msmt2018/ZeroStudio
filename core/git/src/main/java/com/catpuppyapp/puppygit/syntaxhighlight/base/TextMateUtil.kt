@@ -111,10 +111,10 @@ object TextMateUtil {
     fun setReceiverThenDoAct(
         language: Language?,
         receiver: StyleReceiver,
-        act: ()->Unit,
+        act: (StyleReceiver)->Unit,
     ) {
         language?.analyzeManager?.setReceiver(receiver)
-        act()
+        act(receiver)
     }
 
 
@@ -205,3 +205,4 @@ object TextMateUtil {
         }
     }
 }
+

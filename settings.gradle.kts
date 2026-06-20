@@ -152,6 +152,8 @@ include(
     ":core:chatai:search",
     ":core:chatai:speech",
     ":core:chatai:web",
+    ":core:chatai:workspac",
+    ":core:chatai:material3",
 
     ":editor:api",
     ":editor:impl",

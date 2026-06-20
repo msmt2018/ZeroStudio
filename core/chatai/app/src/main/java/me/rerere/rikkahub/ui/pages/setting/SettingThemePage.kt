@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.pages.setting
 
+import android.content.ClipData
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -36,12 +38,14 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,32 +54,56 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dokar.sonner.ToastType
+import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.Copy01
 import me.rerere.hugeicons.stroke.Delete02
 import me.rerere.hugeicons.stroke.Edit02
+import me.rerere.hugeicons.stroke.FileImport
 import me.rerere.hugeicons.stroke.PlusSign
 import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.nav.BackButton
+import me.rerere.rikkahub.ui.components.ui.RikkaConfirmDialog
+import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.pages.setting.components.PresetThemeButtonGroup
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.ui.theme.CustomTheme
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import me.rerere.rikkahub.utils.plus
 import org.koin.androidx.compose.koinViewModel
+import kotlin.math.roundToInt
+import kotlin.uuid.Uuid
+
+private val themeJson = Json {
+    ignoreUnknownKeys = true
+    prettyPrint = true
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingThemePage(vm: SettingVM = koinViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val clipboardManager = LocalClipboard.current
+    val toaster = LocalToaster.current
+    val scope = rememberCoroutineScope()
+    val exportSuccessMsg = stringResource(R.string.setting_theme_page_export_success)
+    val importSuccessMsg = stringResource(R.string.setting_theme_page_import_success)
 
     var showEditSheet by remember { mutableStateOf(false) }
     var editingTheme by remember { mutableStateOf<CustomTheme?>(null) }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var deletingTheme by remember { mutableStateOf<CustomTheme?>(null) }
 
     Scaffold(
         topBar = {
@@ -152,15 +180,24 @@ fun SettingThemePage(vm: SettingVM = koinViewModel()) {
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        FilledTonalButton(
-                            onClick = {
-                                editingTheme = null
-                                showEditSheet = true
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilledTonalButton(
+                                onClick = { showImportDialog = true }
+                            ) {
+                                Icon(HugeIcons.FileImport, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(R.string.setting_theme_page_import_theme))
                             }
-                        ) {
-                            Icon(HugeIcons.PlusSign, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.setting_theme_page_add_theme))
+                            FilledTonalButton(
+                                onClick = {
+                                    editingTheme = null
+                                    showEditSheet = true
+                                }
+                            ) {
+                                Icon(HugeIcons.PlusSign, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(R.string.setting_theme_page_add_theme))
+                            }
                         }
                     }
                 }
@@ -189,23 +226,21 @@ fun SettingThemePage(vm: SettingVM = koinViewModel()) {
                         onSelect = {
                             vm.updateSettings(settings.copy(themeId = theme.id))
                         },
+                        onExport = {
+                            val json = themeJson.encodeToString(theme)
+                            scope.launch {
+                                clipboardManager.setClipEntry(
+                                    ClipEntry(ClipData.newPlainText("theme", json))
+                                )
+                            }
+                            toaster.show(exportSuccessMsg, type = ToastType.Success)
+                        },
                         onEdit = {
                             editingTheme = theme
                             showEditSheet = true
                         },
                         onDelete = {
-                            val newThemes = settings.customThemes.filter { it.id != theme.id }
-                            val newThemeId = if (settings.themeId == theme.id) {
-                                "sakura"
-                            } else {
-                                settings.themeId
-                            }
-                            vm.updateSettings(
-                                settings.copy(
-                                    customThemes = newThemes,
-                                    themeId = newThemeId
-                                )
-                            )
+                            deletingTheme = theme
                         }
                     )
                 }
@@ -233,6 +268,42 @@ fun SettingThemePage(vm: SettingVM = koinViewModel()) {
             }
         )
     }
+
+    if (showImportDialog) {
+        ImportThemeDialog(
+            onDismiss = { showImportDialog = false },
+            onImport = { theme ->
+                val importedTheme = theme.copy(id = Uuid.random().toString())
+                vm.updateSettings(
+                    settings.copy(
+                        customThemes = settings.customThemes + importedTheme,
+                        themeId = importedTheme.id
+                    )
+                )
+                showImportDialog = false
+                toaster.show(importSuccessMsg, type = ToastType.Success)
+            }
+        )
+    }
+
+    RikkaConfirmDialog(
+        show = deletingTheme != null,
+        title = stringResource(R.string.setting_theme_page_delete_theme_title),
+        confirmText = stringResource(android.R.string.ok),
+        dismissText = stringResource(android.R.string.cancel),
+        onConfirm = {
+            deletingTheme?.let { theme ->
+                val newThemes = settings.customThemes.filter { it.id != theme.id }
+                val newThemeId = if (settings.themeId == theme.id) "sakura" else settings.themeId
+                vm.updateSettings(settings.copy(customThemes = newThemes, themeId = newThemeId))
+            }
+            deletingTheme = null
+        },
+        onDismiss = { deletingTheme = null },
+        text = {
+            Text(stringResource(R.string.setting_theme_page_delete_theme_message))
+        }
+    )
 }
 
 @Composable
@@ -240,6 +311,7 @@ private fun CustomThemeItem(
     theme: CustomTheme,
     isSelected: Boolean,
     onSelect: () -> Unit,
+    onExport: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -288,6 +360,9 @@ private fun CustomThemeItem(
         },
         trailingContent = {
             Row {
+                IconButton(onClick = onExport) {
+                    Icon(HugeIcons.Copy01, null)
+                }
                 IconButton(onClick = onEdit) {
                     Icon(HugeIcons.Edit02, null)
                 }
@@ -311,7 +386,7 @@ private fun CustomThemeEditSheet(
     onDismiss: () -> Unit,
     onSave: (CustomTheme) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
     var currentTheme by remember {
         mutableStateOf(theme ?: CustomTheme())
     }
@@ -415,6 +490,57 @@ private fun CustomThemeEditSheet(
 }
 
 @Composable
+private fun ImportThemeDialog(
+    onDismiss: () -> Unit,
+    onImport: (CustomTheme) -> Unit,
+) {
+    var jsonText by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.setting_theme_page_import_theme)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = jsonText,
+                    onValueChange = {
+                        jsonText = it
+                        errorMessage = null
+                    },
+                    label = { Text("JSON") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                    maxLines = 8,
+                    isError = errorMessage != null,
+                    supportingText = errorMessage?.let { msg -> { Text(msg) } },
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    try {
+                        val theme = themeJson.decodeFromString<CustomTheme>(jsonText)
+                        onImport(theme)
+                    } catch (e: Exception) {
+                        errorMessage = e.message
+                    }
+                },
+                enabled = jsonText.isNotBlank()
+            ) {
+                Text(stringResource(R.string.setting_theme_page_import_theme))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
 private fun ColorPickerRow(
     color: Color,
     onColorChange: (Color) -> Unit,
@@ -425,6 +551,17 @@ private fun ColorPickerRow(
     var hue by remember(color) { mutableFloatStateOf(hsl[0]) }
     var saturation by remember(color) { mutableFloatStateOf(hsl[1]) }
     var lightness by remember(color) { mutableFloatStateOf(hsl[2]) }
+    var hslCode by remember(color) { mutableStateOf(formatHslCode(hsl[0], hsl[1], hsl[2])) }
+    var hslCodeError by remember(color) { mutableStateOf(false) }
+
+    fun updateColor(newHue: Float, newSaturation: Float, newLightness: Float) {
+        hue = newHue
+        saturation = newSaturation
+        lightness = newLightness
+        hslCode = formatHslCode(newHue, newSaturation, newLightness)
+        hslCodeError = false
+        onColorChange(Color(ColorUtils.HSLToColor(floatArrayOf(newHue, newSaturation, newLightness))))
+    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -446,8 +583,7 @@ private fun ColorPickerRow(
                     Slider(
                         value = hue,
                         onValueChange = {
-                            hue = it
-                            onColorChange(Color(ColorUtils.HSLToColor(floatArrayOf(hue, saturation, lightness))))
+                            updateColor(it, saturation, lightness)
                         },
                         valueRange = 0f..360f,
                         modifier = Modifier.weight(1f),
@@ -458,8 +594,7 @@ private fun ColorPickerRow(
                     Slider(
                         value = saturation,
                         onValueChange = {
-                            saturation = it
-                            onColorChange(Color(ColorUtils.HSLToColor(floatArrayOf(hue, saturation, lightness))))
+                            updateColor(hue, it, lightness)
                         },
                         valueRange = 0f..1f,
                         modifier = Modifier.weight(1f),
@@ -470,8 +605,7 @@ private fun ColorPickerRow(
                     Slider(
                         value = lightness,
                         onValueChange = {
-                            lightness = it
-                            onColorChange(Color(ColorUtils.HSLToColor(floatArrayOf(hue, saturation, lightness))))
+                            updateColor(hue, saturation, it)
                         },
                         valueRange = 0f..1f,
                         modifier = Modifier.weight(1f),
@@ -479,7 +613,64 @@ private fun ColorPickerRow(
                 }
             }
         }
+
+        OutlinedTextField(
+            value = hslCode,
+            onValueChange = { value ->
+                hslCode = value
+                val parsedHsl = parseHslCode(value)
+                hslCodeError = parsedHsl == null
+                if (parsedHsl != null) {
+                    hue = parsedHsl[0]
+                    saturation = parsedHsl[1]
+                    lightness = parsedHsl[2]
+                    onColorChange(Color(ColorUtils.HSLToColor(parsedHsl)))
+                }
+            },
+            label = { Text("HSL") },
+            placeholder = { Text("hsl(267 36% 48%)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            isError = hslCodeError,
+            supportingText = if (hslCodeError) {
+                { Text("Use hsl(267 36% 48%)") }
+            } else {
+                null
+            },
+        )
     }
+}
+
+private val hslNumberRegex = Regex("""[-+]?\d*\.?\d+""")
+
+private fun parseHslCode(value: String): FloatArray? {
+    val values = buildList {
+        for (match in hslNumberRegex.findAll(value)) {
+            add(match.value.toFloatOrNull() ?: return null)
+            if (size == 3) break
+        }
+    }
+
+    if (values.size != 3) return null
+
+    val hue = values[0].coerceIn(0f, 360f)
+    val saturation = parseHslPercentOrFraction(values[1]) ?: return null
+    val lightness = parseHslPercentOrFraction(values[2]) ?: return null
+
+    return floatArrayOf(hue, saturation, lightness)
+}
+
+private fun parseHslPercentOrFraction(value: Float): Float? {
+    if (!value.isFinite()) return null
+    return if (value > 1f) {
+        (value / 100f).coerceIn(0f, 1f)
+    } else {
+        value.coerceIn(0f, 1f)
+    }
+}
+
+private fun formatHslCode(hue: Float, saturation: Float, lightness: Float): String {
+    return "hsl(${hue.roundToInt()} ${(saturation * 100).roundToInt()}% ${(lightness * 100).roundToInt()}%)"
 }
 
 @Composable

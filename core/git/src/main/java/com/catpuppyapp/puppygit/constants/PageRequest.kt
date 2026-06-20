@@ -88,6 +88,7 @@ object PageRequest {
     const val pullRebase ="pullRebase"
     const val push ="push"
     const val pushForce ="pushForce"
+    const val pullForce ="pullForce"
     const val sync ="sync"
     const val syncRebase ="syncRebase"
     const val commit ="commit"

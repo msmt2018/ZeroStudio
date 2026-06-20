@@ -867,7 +867,13 @@ internal class HttpServer(
 
     fun isServerRunning():Boolean {
         //这检查的是协程是否Active，协程还在运行，服务器就在运行，大概是这个逻辑吧？
-        return server?.application?.isActive == true
+        try {
+            // if server stopped, even not null, still throw, so need catch
+            return server?.application?.isActive == true
+        }catch (e: Exception) {
+            MyLog.e(TAG, "check server running err, will return false to treat as server is not running: ${e.stackTraceToString()}")
+            return false;
+        }
 
         //这个不行，服务器正在启动，连接不通，但不久就上线了，用这个会误认为服务器不在线，误启动
 //        val settings = SettingsUtil.getSettingsSnapshot()

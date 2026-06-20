@@ -63,4 +63,19 @@ object PrefUtil {
         return getBoolean(context, PrefMan.Key.globalGitConfigPullWithRebase, false)
     }
 
+    fun setGlobalGitConfigCommitOnPush(context: Context, enable:Boolean) {
+        setBoolean(context, PrefMan.Key.globalGitConfigCommitOnPush, enable)
+    }
+
+    fun getGlobalGitConfigCommitOnPush(context: Context): Boolean {
+        return getBoolean(context, PrefMan.Key.globalGitConfigCommitOnPush, false)
+    }
+
+    fun setGlobalGitConfigLfsEnabled(context: Context, enable:Boolean) {
+        setBoolean(context, PrefMan.Key.globalGitConfigLfsEnabled, enable)
+    }
+
+    fun getGlobalGitConfigLfsEnabled(context: Context): Boolean {
+        return getBoolean(context, PrefMan.Key.globalGitConfigLfsEnabled, false)
+    }
 }

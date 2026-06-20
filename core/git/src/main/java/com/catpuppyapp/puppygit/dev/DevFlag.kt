@@ -50,6 +50,7 @@ fun printIncrementalSyntaxHighlightText():Boolean {
  * untested features or tested but not enough tested
  */
 //TODO 测试功能完毕后设为true
+val lfsTestPassed = false
 val submoduleTestPassed = true
 val ignoreWorktreeFilesTestPassed = true
 val initRepoFromFilesPageTestPassed = true

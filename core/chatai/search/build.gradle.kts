@@ -49,6 +49,7 @@ android {
 
 dependencies {
     implementation(projects.core.chatai.ai)
+    implementation(projects.core.chatai.common)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)

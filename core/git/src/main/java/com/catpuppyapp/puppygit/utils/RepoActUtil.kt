@@ -569,6 +569,9 @@ object RepoActUtil {
                 //注意：只有 `非force` 且 `上游已发布` 才检查，否则 `强推` 或者 `使用普通推送发布上游`。
                 // 检查是否已发布是因为如果未发布则remoteOid无效，所以无法检查ahead和behind，
                 // 并且若未发布，无需force也可push，所以若未发布分支，不管是否带了force参数，都直接执行push即可。
+                // 注：因为调 http api往往在不久前调用过pull，并且会先创建提交，
+                // 所以如果未勾选force则在推送前检查下是否领先或落后才绝对是否执行推送，以避免无意义的推送被执行，
+                // 但在UI上的推送操作并不需要做此判断，直接执行推送即可
                 if (!force && upstream.isPublished) {
                     val (ahead, behind) = Libgit2Helper.getAheadBehind(gitRepo, Oid.of(upstream.localOid), Oid.of(upstream.remoteOid))
 
@@ -600,7 +603,7 @@ object RepoActUtil {
                 )
 
                 try {
-                    Libgit2Helper.push(gitRepo, upstream.remote, listOf(upstream.pushRefSpec), credential, force)
+                    Libgit2Helper.pushSingleBranch(gitRepo, upstream, credential, force)
                 }catch (e: Exception) {
                     // 若为真，push出错时，尝试reset
                     if(resetIfErr.isNotBlank()) {

@@ -373,6 +373,7 @@ private fun HighlightCodeActions(
             text = language,
             fontSize = 12.sp,
             lineHeight = 12.sp,
+            fontFamily = JetbrainsMono,
             color = MaterialTheme.colorScheme.onSurfaceVariant
                 .copy(alpha = 0.5f),
         )
@@ -483,6 +484,8 @@ private fun CodeBlockPreview(
         settings = {
             builtInZoomControls = true
             displayZoomControls = false
+            useWideViewPort = true
+            loadWithOverviewMode = true
         }
     )
 

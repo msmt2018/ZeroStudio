@@ -21,11 +21,15 @@ import androidx.compose.material.icons.filled.Commit
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.outlined.Dangerous
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,14 +52,17 @@ import androidx.compose.ui.unit.dp
 import com.catpuppyapp.puppygit.constants.Cons
 import com.catpuppyapp.puppygit.constants.PageRequest
 import com.catpuppyapp.puppygit.data.entity.RepoEntity
+import com.catpuppyapp.puppygit.dev.lfsTestPassed
 import com.catpuppyapp.puppygit.play.pro.R
 import com.catpuppyapp.puppygit.screen.functions.goToCloneScreen
 import com.catpuppyapp.puppygit.screen.functions.goToCommitListScreen
 import com.catpuppyapp.puppygit.screen.functions.goToErrScreen
 import com.catpuppyapp.puppygit.screen.shared.CommitListFrom
+import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.style.MyStyleKt
 import com.catpuppyapp.puppygit.ui.theme.Theme
 import com.catpuppyapp.puppygit.utils.AppModel
+import com.catpuppyapp.puppygit.utils.LfsUtil
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.catpuppyapp.puppygit.utils.Msg
 import com.catpuppyapp.puppygit.utils.UIHelper
@@ -86,6 +93,7 @@ fun RepoCard(
     requireBlinkIdx:MutableIntState,
     pageRequest:MutableState<String>,
     isSelectionMode:Boolean,
+    pinnedRepos: Map<String, Long>,
     onClick: (RepoEntity) -> Unit,
     onLongClick:(RepoEntity)->Unit,
     copyErrMsg: (String) -> Unit,
@@ -93,7 +101,8 @@ fun RepoCard(
     doCloneSingle:(RepoEntity)->Unit,
     initErrMsgDialog:(RepoEntity, errMsg: String)->Unit,
     initCommitMsgDialog:(RepoEntity)->Unit,
-    workStatusOnclick:(clickedRepo:RepoEntity, status:Int)->Unit
+    refreshPage:()->Unit,
+    workStatusOnclick:(clickedRepo:RepoEntity, status:Int)->Unit,
 ) {
     val navController = AppModel.navController
     val haptic = LocalHapticFeedback.current
@@ -178,11 +187,27 @@ fun RepoCard(
                 repoDto = repoDto,
                 isSelectionMode = isSelectionMode,
                 itemSelected = itemSelected,
+                pinnedRepos = pinnedRepos,
+                refreshPage = refreshPage,
                 titleOnClick = titleOnClick,
-                titleOnLongClick = onLongClick
+                titleOnLongClick = onLongClick,
             )
 
             MyHorizontalDivider()
+
+            // 若测试通过就不要显示这个按钮了
+            if(lfsTestPassed) {
+                // 测试的按钮，以后真测试通过的时候把这个删除
+                Button(
+                    onClick = {
+//                        LfsUtil.makeGitLfsBinExecutable()
+                        LfsUtil.test()
+//                        LfsUtil.runGitLfs(repoDto.fullSavePath)
+                    }
+                ) {
+                    Text("LFS TEST")
+                }
+            }
 
             //以下开始区分 正常仓库 和 出错的仓库(一般是克隆出错)
             if (Libgit2Helper.isRepoStatusNoErr(repoDto)) {
@@ -614,6 +639,8 @@ private fun RepoTitle(
     repoDto: RepoEntity,
     isSelectionMode:Boolean,
     itemSelected: Boolean,
+    pinnedRepos: Map<String, Long>,
+    refreshPage: () -> Unit,
     // title的onClick和卡片主体的onClick区别在于卡片的onClick仅在启用选择模式时才可切换选择；title的即使没启用选择模式也可单击选择仓库并启用选择模式。
     titleOnClick: (RepoEntity) -> Unit,
     //title的onLongClick和卡片主体的没区别，都是长按启用选择模式，若选择模式已启用则执行区域选择
@@ -648,6 +675,22 @@ private fun RepoTitle(
                 .padding(start = 5.dp, end = MyStyleKt.defaultIconSize),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                if (pinnedRepos.contains(repoDto.id)) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                contentDescription = if (pinnedRepos.contains(repoDto.id)) "pinned" else "not pinned",
+                modifier = Modifier.size(18.dp).clickable {
+                    SettingsUtil.update {
+                        if(it.pinnedRepos.contains(repoDto.id)) {
+                            it.pinnedRepos.remove(repoDto.id)
+                        }else {
+                            it.pinnedRepos[repoDto.id] = System.currentTimeMillis()
+                        }
+                    }
+
+                    refreshPage()
+                }
+            )
+
             RepoCardTitleText(repoDto.repoName)
         }
 

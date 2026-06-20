@@ -1284,4 +1284,11 @@
 
     <string name="progress_notification_auto_dismiss">বিজ্ঞপ্তি স্বয়ংক্রিয়ভাবে বন্ধ হবে</string>
     <string name="progress_notification_auto_dismiss_desc">বিজ্ঞপ্তি প্রদর্শিত হওয়ার পর স্বয়ংক্রিয়ভাবে বন্ধ করা হবে</string>
+    <string name="pull_force">পুল(জোরপূর্বক)</string>
+    <string name="force_pull_desc">প্রথমে fetch করা হবে এবং তারপর লোকাল ব্রাঞ্চকে আপস্ট্রিমে hard reset করা হবে</string>
+    <string name="force_pulling">জোরপূর্বক পুল (Force Pull) করা হচ্ছে…</string>
+    <string name="pull_force_success">পুল(জোরপূর্বক) সফল হয়েছে</string>
+    <string name="pull_force_failed">পুল(জোরপূর্বক) ব্যর্থ হয়েছে</string>
+    <string name="lfs">LFS</string>
+    <string name="commit_on_push">পুশ করার সময় কমিট</string>
 </resources>

@@ -20,8 +20,8 @@ android {
         // applicationId = "me.rerere.rikkahub"
         minSdk = 26
         // targetSdk = 37
-        // versionCode = 159
-        // versionName = "2.2.3"
+        // versionCode = 165
+        // versionName = "2.3.2"
 
         buildConfigField("String", "VERSION_NAME", "\"2.2.3\"")
         buildConfigField("int", "VERSION_CODE", "159")
@@ -120,6 +120,7 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            pickFirsts += "lib/*/libtermux.so"
         }
     }
     tasks.withType<KotlinCompile>().configureEach {
@@ -163,6 +164,8 @@ dependencies {
     implementation(libs.androidx.work.ktx)
     implementation(libs.androidx.browser)
     implementation(libs.androidx.profileinstaller)
+    implementation(libs.termux.terminal.view)
+    implementation(libs.guava.listenablefuture)
 
     // Compose
     implementation(libs.androidx.activity.compose)
@@ -196,6 +199,7 @@ dependencies {
     // Haze (background blur)
     implementation(libs.haze)
     implementation(libs.haze.materials)
+    implementation(libs.haze.blur)
 
     // koin
     implementation(platform(libs.koin.bom))
@@ -223,6 +227,9 @@ dependencies {
 
     // pebble (template engine)
     implementation(libs.pebble)
+
+    // java-diff-utils (unified diff)
+    implementation(libs.diffutils)
 
     // coil
     implementation(libs.io.coil.compose)
@@ -299,6 +306,8 @@ dependencies {
     implementation(projects.core.chatai.search)
     implementation(projects.core.chatai.speech)
     implementation(projects.core.chatai.common)
+    implementation(projects.core.chatai.material3)
+    implementation(projects.core.chatai.workspac)
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
     implementation(kotlin("reflect"))
 

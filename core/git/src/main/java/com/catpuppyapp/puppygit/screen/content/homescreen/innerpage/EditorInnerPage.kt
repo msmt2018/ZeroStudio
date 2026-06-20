@@ -2389,7 +2389,7 @@ private fun getBackHandler(
     requestFromParent: MutableState<String>
 
 ): () -> Unit {
-    val backStartSec = rememberSaveable { mutableLongStateOf( 0) }
+    val backStartSec = rememberSaveable { mutableLongStateOf(0) }
     val pressBackAgainForExitText = stringResource(R.string.press_back_again_to_exit);
     val showTextAndUpdateTimeForPressBackBtn = {
         openDrawer()
@@ -2428,7 +2428,7 @@ private fun getBackHandler(
                     }
                 }else {  //一级页面
                     //如果在两秒内按返回键，就会退出，否则会提示再按一次可退出程序
-                    if (backStartSec.longValue > 0 && getSecFromTime() <= backStartSec.longValue) {  //大于0说明不是第一次执行此方法，那检测是上次获取的秒数，否则直接显示“再按一次退出app”的提示
+                    if (Cons.disableDoublePressBackToExit || (backStartSec.longValue > 0 && getSecFromTime() <= backStartSec.longValue)) {  //大于0说明不是第一次执行此方法，那检测是上次获取的秒数，否则直接显示“再按一次退出app”的提示
                         exitApp()
                     } else {
                         withMainContext {

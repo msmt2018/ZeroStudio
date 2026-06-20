@@ -100,12 +100,12 @@ fun IconOfItem(
 }
 
 @Composable
-private fun ShowThumbnailForImage(
+fun ShowThumbnailForImage(
     context:Context,
-    filePath:String,
+    filePath:String, // 网址或本地路径都行
     contentDescription: String?,
     fallbackIcon: ImageVector,
-    fallbackIconColor: Color,
+    fallbackIconColor: Color = LocalContentColor.current,
     modifier: Modifier
 ) {
     // 这个要在lazy column里用，所以最好别用rememberSaveable

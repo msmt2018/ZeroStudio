@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -259,6 +260,17 @@ fun EditorPageActions(
             ) {
                 editorPageRequest.value = PageRequest.nextConflict
             }
+        }else {
+            // 若非合并模式，显示预览markdown按钮
+            // 若是合并模式，可能 撤销重做 加上 合并按钮，顶栏已经有超过4个按钮，
+            // 所以就不显示这个预览了，而且合并时一般不会有预览的需求
+            LongPressAbleIconBtn(
+                tooltipText = stringResource(R.string.preview),
+                icon = Icons.Filled.RemoveRedEye,
+                iconContentDesc = stringResource(R.string.preview),
+            ) {
+                initPreviewMode()
+            }
         }
     }
 
@@ -428,7 +440,6 @@ fun EditorPageActions(
 
             if(!isSubPageMode) {
                 DropdownMenuItem(
-                    //非readOnly目录才允许开启或关闭readonly状态，否则强制启用readonly状态且不允许关闭
                     enabled = enableMenuItem,
                     text = { Text(stringResource(R.string.show_in_files)) },
                     onClick = {
@@ -442,8 +453,6 @@ fun EditorPageActions(
             }
 
             DropdownMenuItem(
-                //非readOnly目录才允许开启或关闭readonly状态，否则强制启用readonly状态且不允许关闭
-//                enabled = enableMenuItem && !FsUtils.isReadOnlyDir(editorPageShowingFilePath.value),
                 enabled = enableMenuItem,
                 text = { Text(stringResource(R.string.show_undo_redo)) },
                 trailingIcon = {
@@ -468,7 +477,6 @@ fun EditorPageActions(
 
 
             DropdownMenuItem(
-                //非readOnly目录才允许开启或关闭readonly状态，否则强制启用readonly状态且不允许关闭
                 enabled = enableMenuItem,
                 text = { Text(stringResource(R.string.show_line_num)) },
                 trailingIcon = {
@@ -522,7 +530,6 @@ fun EditorPageActions(
 
             val autoCloseSymbolPair = remember { mutableStateOf(SettingsUtil.isEditorAutoCloseSymbolPairEnabled()) }
             DropdownMenuItem(
-                //非readOnly目录才允许开启或关闭readonly状态，否则强制启用readonly状态且不允许关闭
                 enabled = enableMenuItem,
                 text = { Text(stringResource(R.string.symbol_pair)) },
                 trailingIcon = {
@@ -547,16 +554,14 @@ fun EditorPageActions(
                 val selectModeOn = editorPageTextEditorState.value.isMultipleSelectionMode
 
                 DropdownMenuItem(
-                    //非readOnly目录才允许开启或关闭readonly状态，否则强制启用readonly状态且不允许关闭
                     enabled = enableMenuItem,
                     text = { Text(stringResource(R.string.select_mode)) },
                     trailingIcon = {
                         SimpleCheckBox(selectModeOn)
                     },
                     onClick = {
-//                        closeMenu()
+                        closeMenu()
 
-                        //如果是从非readonly mode切换到readonly mode，则执行一次保存，然后再切换readonly mode
                         editorPageRequest.value = PageRequest.editorSwitchSelectMode
                     }
 

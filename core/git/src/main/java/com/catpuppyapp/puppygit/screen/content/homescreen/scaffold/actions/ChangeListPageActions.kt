@@ -236,6 +236,19 @@ fun ChangeListPageActions(
 
             DropdownMenuItem(
                 enabled = enableRepoAction,
+                text = { Text(stringResource(R.string.pull_force)) },
+                onClick = {
+                    Cache.set(Cache.Key.changeListInnerPage_requireDoActFromParent, PageRequest.pullForce)
+                    requireDoActFromParentShowTextWhenDoingAct.value = activityContext.getString(R.string.pulling)
+                    requireDoActFromParent.value = true
+                    enableAction.value=false
+
+                    dropDownMenuExpandState.value=false
+                }
+            )
+
+            DropdownMenuItem(
+                enabled = enableRepoAction,
 
                 text = { Text(stringResource(R.string.push)) },
                 onClick = {
