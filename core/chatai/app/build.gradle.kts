@@ -164,7 +164,7 @@ dependencies {
     implementation(libs.androidx.work.ktx)
     implementation(libs.androidx.browser)
     implementation(libs.androidx.profileinstaller)
-    implementation(libs.termux.terminal.view)
+    implementation(projects.termux.view)
     implementation(libs.guava.listenablefuture)
 
     // Compose
