@@ -525,7 +525,7 @@ quickjs = { group = "wang.harlon.quickjs", name = "wrapper-android", version.ref
 dom4j = { module = "org.dom4j:dom4j", version.ref = "dom4j" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
-haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
+haze-blur-materials = { module = "dev.chrisbanes.haze:haze-blur-materials", version.ref = "haze" }
 jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
 slf4j-android = { module = "org.slf4j:slf4j-android", version.ref = "slf4j-android" }
 sqlite-android = { module = "com.github.rikkahub:sqlite-android", version.ref = "sqlite-android" }

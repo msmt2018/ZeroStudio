@@ -53,7 +53,7 @@ dependencies {
 
   // Haze — 偏白半透明磨砂玻璃的高斯模糊效果
   implementation(libs.haze)
-  implementation(libs.haze.materials)
+  implementation(libs.haze.blur.materials)
 
   // AndroidX 基础 UI
   implementation(libs.androidx.core.ktx)
