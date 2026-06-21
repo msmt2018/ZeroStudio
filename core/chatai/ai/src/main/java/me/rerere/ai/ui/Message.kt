@@ -3,8 +3,14 @@ package me.rerere.ai.ui
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import me.rerere.ai.core.MessageRole
@@ -14,6 +20,28 @@ import me.rerere.ai.util.json
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
+
+/**
+ * kotlin.time.Instant 的 kotlinx.serialization 序列化器.
+ *
+ * kotlin.time.Instant (Kotlin 2.0+ 标准库) 自身没有内置的 KSerializer,
+ * 但 kotlinx-serialization 不会自动 fallback, 必须显式提供.
+ *
+ * 用 ISO-8601 字符串 (Instant.toString() 的格式) 序列化, 与 kotlinx-datetime 的 Instant 兼容,
+ * 便于跨服务/跨进程传递.
+ */
+object KotlinInstantSerializer : KSerializer<Instant> {
+  override val descriptor: SerialDescriptor =
+    PrimitiveSerialDescriptor("kotlin.time.Instant", PrimitiveKind.STRING)
+
+  override fun serialize(encoder: Encoder, value: Instant) {
+    encoder.encodeString(value.toString())
+  }
+
+  override fun deserialize(decoder: Decoder): Instant {
+    return Instant.parse(decoder.decodeString())
+  }
+}
 
 // 公共消息抽象, 具体的Provider实现会转换为API接口需要的DTO
 @Serializable
@@ -393,7 +421,9 @@ sealed class UIMessagePart {
     @SerialName("reasoning")
     data class Reasoning(
         val reasoning: String,
+        @Serializable(with = KotlinInstantSerializer::class)
         val createdAt: Instant = Clock.System.now(),
+        @Serializable(with = KotlinInstantSerializer::class)
         val finishedAt: Instant? = Clock.System.now(),
         override var metadata: JsonObject? = null
     ) : UIMessagePart()
