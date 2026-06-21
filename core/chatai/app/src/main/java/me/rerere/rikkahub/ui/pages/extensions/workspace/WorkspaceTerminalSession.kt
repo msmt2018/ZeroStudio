@@ -125,7 +125,8 @@ internal class WorkspaceTerminalSessionClient(
         clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
     }
 
-    override fun onPasteTextFromClipboard(session: TerminalSession) {
+    override fun onPasteTextFromClipboard(session: TerminalSession?) {
+        val s = session ?: return
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val text = clipboard.primaryClip
             ?.takeIf { it.itemCount > 0 }
@@ -134,7 +135,11 @@ internal class WorkspaceTerminalSessionClient(
             ?.toString()
             ?: return
         val bytes = text.toByteArray()
-        session.write(bytes, 0, bytes.size)
+        s.write(bytes, 0, bytes.size)
+    }
+
+    override fun setTerminalShellPid(session: TerminalSession, pid: Int) {
+        // No-op: shell pid is managed by proot, not exposed via this client.
     }
 
     override fun onBell(session: TerminalSession) = Unit
