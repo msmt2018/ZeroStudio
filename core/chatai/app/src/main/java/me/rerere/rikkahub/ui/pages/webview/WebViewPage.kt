@@ -24,7 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,7 +69,7 @@ fun WebViewPage(url: String, content: String) {
 
     var showDropdown by remember { mutableStateOf(false) }
     var showConsoleSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
+    val sheetState = rememberModalBottomSheetState()
 
     BackHandler(state.canGoBack) {
         state.goBack()

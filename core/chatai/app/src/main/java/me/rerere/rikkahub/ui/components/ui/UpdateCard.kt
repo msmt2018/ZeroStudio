@@ -18,7 +18,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -129,7 +129,7 @@ fun UpdateCard(vm: ChatVM) {
             }
             ModalBottomSheet(
                 onDismissRequest = { showDetail = false },
-                sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             ) {
                 Column(
                     modifier = Modifier

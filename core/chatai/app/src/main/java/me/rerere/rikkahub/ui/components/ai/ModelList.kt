@@ -35,7 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -249,10 +249,7 @@ fun ModelListSheet(
     if (!state.visible) return
 
     val coroutineScope = rememberCoroutineScope()
-    val sheetState = rememberBottomSheetState(
-        initialValue = SheetValue.Hidden,
-        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
-    )
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     fun dismiss() {
         coroutineScope.launch {

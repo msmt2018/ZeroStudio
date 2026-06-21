@@ -55,7 +55,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -248,7 +248,7 @@ private fun ImageGenScreen(
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
     var showSettingsSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
+    val sheetState = rememberModalBottomSheetState()
 
     LaunchedEffect(error) {
         error?.let { errorMessage ->
