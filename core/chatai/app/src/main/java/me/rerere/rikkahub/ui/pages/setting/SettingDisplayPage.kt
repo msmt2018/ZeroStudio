@@ -343,12 +343,12 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                                 )
                             },
                         )
-                        val chatFontFamilyOptions = remember {
-                            listOf(ChatFontFamily.DEFAULT, ChatFontFamily.SERIF, ChatFontFamily.MONOSPACE)
-                        }
                         item(
                             headlineContent = { Text(stringResource(R.string.setting_display_page_chat_font_family_title)) },
                             supportingContent = {
+                                val chatFontFamilyOptions = remember {
+                                    listOf(ChatFontFamily.DEFAULT, ChatFontFamily.SERIF, ChatFontFamily.MONOSPACE)
+                                }
                                 SingleChoiceSegmentedButtonRow(
                                     modifier = Modifier
                                         .padding(top = 4.dp)
