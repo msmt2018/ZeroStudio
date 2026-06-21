@@ -516,6 +516,7 @@ hamcrest-all = { module = "org.hamcrest:hamcrest-all", version = "1.3" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 modelcontextprotocol-kotlin-sdk = { module = "io.modelcontextprotocol:kotlin-sdk", version.ref = "mcp" }
 pebble = { module = "io.pebbletemplates:pebble", version.ref = "pebble" }
+diffutils = { module = "io.github.java-diff-utils:java-diff-utils", version.ref = "diffutils" }
 lucide-icons = { group = "com.composables", name = "icons-lucide", version.ref = "lucide-icons" }
 image-viewer = { group = "com.jvziyaoyao.scale", name = "image-viewer", version.ref = "image-viewer" }
 metadata-extractor = { module = "com.drewnoakes:metadata-extractor", version.ref = "metadataExtractor" }
