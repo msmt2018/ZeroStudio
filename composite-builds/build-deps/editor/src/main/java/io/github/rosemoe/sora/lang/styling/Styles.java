@@ -72,6 +72,33 @@ public class Styles {
         this(null);
     }
 
+    /**
+     * Create a shallow copy of this Styles instance.
+     * <p>
+     * The returned {@link Styles} is a new object whose collection fields
+     * ({@link #lineStyles}, {@link #styleTypeCount}, {@link #blocks},
+     * {@link #blocksByStart}) are new mutable containers holding the same
+     * elements, so editing them will not affect the original.
+     * <p>
+     * The {@link #spans} field is shared because {@link Spans} is an
+     * interface without a defined copy operation; callers that need an
+     * independent spans instance should reset/replace it explicitly.
+     * <p>
+     * The {@link #suppressSwitch} and {@link #indentCountMode} primitive
+     * fields are copied by value.
+     */
+    public Styles copy() {
+        Styles result = new Styles();
+        result.spans = this.spans;
+        result.lineStyles = this.lineStyles == null ? null : new ArrayList<>(this.lineStyles);
+        result.styleTypeCount = this.styleTypeCount == null ? null : new ConcurrentHashMap<>(this.styleTypeCount);
+        result.blocks = this.blocks == null ? null : new ArrayList<>(this.blocks);
+        result.blocksByStart = this.blocksByStart == null ? null : new ArrayList<>(this.blocksByStart);
+        result.suppressSwitch = this.suppressSwitch;
+        result.indentCountMode = this.indentCountMode;
+        return result;
+    }
+
     public Styles(@Nullable Spans spans) {
         this(spans, true);
     }
