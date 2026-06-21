@@ -143,7 +143,7 @@ fun ErrorDetailSheet(
                 androidx.compose.foundation.lazy.LazyColumn(
                     modifier = Modifier.padding(top = 4.dp),
                 ) {
-                    androidx.compose.foundation.lazy.items(
+                    items(
                         items = diagnostics,
                         key = { d -> "${d.file}:${d.line}:${d.column}:${d.message}" },
                     ) { d ->
