@@ -19,7 +19,6 @@ package com.itsaky.androidide.onboarding.bubble
 
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.geometry.LayoutDirection
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
@@ -29,7 +28,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection as UnitLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
 
@@ -173,7 +172,7 @@ sealed class BubbleShape {
 private class HexagonShape(private val inset: Dp) : Shape {
   override fun createOutline(
     size: Size,
-    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    layoutDirection: LayoutDirection,
     density: Density,
   ): Outline = Outline.Generic(Path().apply {
     with(density) {
@@ -194,7 +193,7 @@ private class HexagonShape(private val inset: Dp) : Shape {
 private class DiamondShape(private val inset: Dp) : Shape {
   override fun createOutline(
     size: Size,
-    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    layoutDirection: LayoutDirection,
     density: Density,
   ): Outline = Outline.Generic(Path().apply {
     with(density) {
@@ -216,7 +215,7 @@ private class SpeechBubbleShape(
 ) : Shape {
   override fun createOutline(
     size: Size,
-    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    layoutDirection: LayoutDirection,
     density: Density,
   ): Outline = Outline.Generic(Path().apply {
     with(density) {
@@ -287,7 +286,7 @@ private class TabbedShape(
 ) : Shape {
   override fun createOutline(
     size: Size,
-    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    layoutDirection: LayoutDirection,
     density: Density,
   ): Outline = Outline.Generic(Path().apply {
     with(density) {
