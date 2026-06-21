@@ -307,7 +307,7 @@ dependencies {
     implementation(projects.core.chatai.speech)
     implementation(projects.core.chatai.common)
     implementation(projects.core.chatai.material3)
-    implementation(projects.core.chatai.workspac)
+    implementation(projects.core.chatai.workspace)
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
     implementation(kotlin("reflect"))
 

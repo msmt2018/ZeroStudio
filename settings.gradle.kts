@@ -152,7 +152,7 @@ include(
     ":core:chatai:search",
     ":core:chatai:speech",
     ":core:chatai:web",
-    ":core:chatai:workspac",
+    ":core:chatai:workspace",
     ":core:chatai:material3",
 
     ":editor:api",
