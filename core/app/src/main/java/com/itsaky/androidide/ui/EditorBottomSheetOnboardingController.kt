@@ -31,7 +31,6 @@ import com.itsaky.androidide.onboarding.BubblePlacement
 import com.itsaky.androidide.onboarding.OnboardingConfig
 import com.itsaky.androidide.onboarding.OnboardingController
 import com.itsaky.androidide.onboarding.OnboardingOverlay
-import com.itsaky.androidide.onboarding.OnboardingPreferences
 import com.itsaky.androidide.onboarding.OnboardingStep
 import com.itsaky.androidide.onboarding.OnboardingTarget
 import com.itsaky.androidide.onboarding.LaunchOnboarding
@@ -43,6 +42,7 @@ import com.itsaky.androidide.onboarding.bubble.BubbleStyle
 import com.itsaky.androidide.onboarding.highlight.HighlightAnimation
 import com.itsaky.androidide.onboarding.highlight.HighlightShape
 import com.itsaky.androidide.onboarding.highlight.HighlightTheme
+import com.itsaky.androidide.onboarding.prefs.OnboardingPreferences
 import com.itsaky.androidide.onboarding.prefs.SharedPreferencesOnboardingPreferences
 import com.itsaky.androidide.onboarding.simulation.GestureType
 import com.itsaky.androidide.onboarding.simulation.PathPoint
@@ -135,17 +135,17 @@ class EditorBottomSheetOnboardingController(
   fun startIfNeeded() {
     if (controller?.isPlaying == true) return
     val steps = buildSteps()
-    controller = LaunchOnboarding(
-      steps = steps,
-      config = OnboardingConfig(
-        guideId = GUIDE_ID,
-        preferences = preferences,
-        skipIfCompleted = true,
-      ),
-      autoStart = true,
+    val config = OnboardingConfig(
+      guideId = GUIDE_ID,
+      preferences = preferences,
+      skipIfCompleted = true,
     )
     overlayHost.setContent {
-      ComposeOverlay(controller = controller)
+      ComposeOverlay(
+        steps = steps,
+        config = config,
+        onControllerReady = { controller = it },
+      )
     }
   }
 
@@ -160,10 +160,23 @@ class EditorBottomSheetOnboardingController(
 
   /**
    * Compose 层 (在 overlayHost ComposeView 中渲染引导浮层).
+   *
+   * 把 [LaunchOnboarding] 放在 @Composable lambda 里, 这样既能从 ComposeView
+   * 启动引导, 又能把控制器回调出来供 Java/Activity 端持有.
    */
   @Composable
-  private fun ComposeOverlay(controller: OnboardingController?) {
-    controller?.let { OnboardingOverlay(controller = it) }
+  private fun ComposeOverlay(
+    steps: List<OnboardingStep>,
+    config: OnboardingConfig,
+    onControllerReady: (OnboardingController) -> Unit,
+  ) {
+    val c = LaunchOnboarding(
+      steps = steps,
+      config = config,
+      autoStart = true,
+      onControllerReady = onControllerReady,
+    )
+    OnboardingOverlay(controller = c)
   }
 
   // =============================================================================
@@ -227,8 +240,8 @@ class EditorBottomSheetOnboardingController(
       // 演示"点按这里可以切换抽屉"
       // (TouchSimulator.tap 工厂保证 1 point + TAP 类型, 满足 init 校验; 再 copy 自定义颜色)
       touchSimulator = TouchSimulator.tap(
-        x = tap.x,
-        y = tap.y,
+        x = tap.fromX,
+        y = tap.fromY,
         durationMs = 380,
         loop = true,
       ).copy(
