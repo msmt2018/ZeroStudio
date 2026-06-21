@@ -36,10 +36,10 @@ android {
 dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
-    implementation(libs.material)
+    implementation(libs.google.material)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.xz)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
+    implementation(libs.common.org.tukaani.tarxzip)
+    testImplementation(libs.tests.junit)
+    androidTestImplementation(libs.tests.androidx.espresso.core)
+    androidTestImplementation(libs.tests.androidx.junit)
 }
