@@ -344,12 +344,8 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                             },
                         )
                         val chatFontFamilyOptions = remember {
-                            listOf(
-                                ChatFontFamily.DEFAULT to R.string.setting_display_page_chat_font_family_default,
-                                ChatFontFamily.SERIF to R.string.setting_display_page_chat_font_family_serif,
-                                ChatFontFamily.MONOSPACE to R.string.setting_display_page_chat_font_family_monospace,
-                            )
-                        }.map { (family, resId) -> family to stringResource(resId) }
+                            listOf(ChatFontFamily.DEFAULT, ChatFontFamily.SERIF, ChatFontFamily.MONOSPACE)
+                        }
                         item(
                             headlineContent = { Text(stringResource(R.string.setting_display_page_chat_font_family_title)) },
                             supportingContent = {
@@ -358,7 +354,7 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                                         .padding(top = 4.dp)
                                         .fillMaxWidth()
                                 ) {
-                                    chatFontFamilyOptions.forEachIndexed { index, (family, label) ->
+                                    chatFontFamilyOptions.forEachIndexed { index, family ->
                                         SegmentedButton(
                                             selected = displaySetting.chatFontFamily == family,
                                             onClick = { updateDisplaySetting(displaySetting.copy(chatFontFamily = family)) },
@@ -367,6 +363,14 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                                                 chatFontFamilyOptions.size
                                             ),
                                         ) {
+                                            val label = stringResource(
+                                                when (family) {
+                                                    ChatFontFamily.DEFAULT -> R.string.setting_display_page_chat_font_family_default
+                                                    ChatFontFamily.SERIF -> R.string.setting_display_page_chat_font_family_serif
+                                                    ChatFontFamily.MONOSPACE -> R.string.setting_display_page_chat_font_family_monospace
+                                                    ChatFontFamily.CUSTOM -> R.string.setting_display_page_chat_font_family_default
+                                                }
+                                            )
                                             Text(
                                                 text = label,
                                                 fontFamily = when (family) {
