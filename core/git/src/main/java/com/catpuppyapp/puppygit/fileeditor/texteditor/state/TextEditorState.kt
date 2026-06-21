@@ -2539,7 +2539,7 @@ class TextEditorState(
                 StylesUpdateRequest(
                     ignoreThis = ignoreThis,
                     targetEditorState = newTextEditorState,
-                    act = { lang.analyzeManager.delete(start, end, deletedContent, it) }
+                    act = { lang.analyzeManager.delete(start, end, deletedContent) }
                 )
             )
         }
