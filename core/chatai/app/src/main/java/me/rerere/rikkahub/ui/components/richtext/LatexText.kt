@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.TextUnit
 import ru.noties.jlatexmath.JLatexMathDrawable
-import ru.noties.jlatexmath.JLatexMathSplitter
 
 fun assumeLatexSize(latex: String, fontSize: Float): Rect {
     return runCatching {
@@ -99,7 +98,10 @@ fun getLatexDrawable(
 /**
  * 将一条行内公式按顶层运算符水平拆分为多段 Drawable，
  * 以便在文本流中换行，避免单体公式过长被挤出屏幕。
- * 拆分失败时返回空列表，调用方需自行回退。
+ * 拆分失败或 JLatexMathSplitter 类不可用时返回空列表，调用方需自行回退。
+ *
+ * 通过反射调用 ru.noties.jlatexmath.JLatexMathSplitter#split，
+ * 以兼容未提供该类的 jlatexmath-android 版本。
  */
 fun splitLatex(
     latex: String,
@@ -108,7 +110,17 @@ fun splitLatex(
     color: Int
 ): List<JLatexMathDrawable> {
     return runCatching {
-        JLatexMathSplitter.split(processLatex(latex), maxWidthPx, fontSize, color)
+        val processed = processLatex(latex)
+        val cls = Class.forName("ru.noties.jlatexmath.JLatexMathSplitter")
+        val method = cls.getMethod(
+            "split",
+            String::class.java,
+            java.lang.Float.TYPE,
+            java.lang.Float.TYPE,
+            Integer.TYPE
+        )
+        @Suppress("UNCHECKED_CAST")
+        method.invoke(null, processed, maxWidthPx, fontSize, color) as List<JLatexMathDrawable>
     }.onFailure {
         it.printStackTrace()
     }.getOrElse { emptyList() }
