@@ -427,6 +427,7 @@ private enum class AlignV { Above, Below, Center }
  * 签名已改为 `Modifier.offset { IntOffset(...) }` (接收 Density, 不再接 intSize),
  * 因此这里改成基于 bubbleSize 计算后再用 `offset(x, y)` 应用.
  */
+@Composable
 private fun Modifier.absoluteOffsetByRect(
   targetRect: Rect,
   bubbleSize: Size,

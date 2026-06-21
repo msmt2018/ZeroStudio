@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
@@ -306,11 +307,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawScrimWithCutout
     else -> null
   }
   if (path != null) {
-    drawPath(
-      path = path.translate(Offset(rect.left, rect.top)),
-      color = Color.Black,
-      blendMode = BlendMode.DstOut,
-    )
+    translate(left = rect.left, top = rect.top) {
+      drawPath(
+        path = path,
+        color = Color.Black,
+        blendMode = BlendMode.DstOut,
+      )
+    }
   }
 }
 
@@ -338,11 +341,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val outline = shapeImpl.createOutline(size, layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = t.borderColor.copy(alpha = t.borderAlpha),
-          style = Stroke(width = t.borderWidth.toPx()),
-        )
+        translate(left = rect.left, top = rect.top) {
+          drawPath(
+            path = path,
+            color = t.borderColor.copy(alpha = t.borderAlpha),
+            style = Stroke(width = t.borderWidth.toPx()),
+          )
+        }
       } else {
         drawRoundRect(
           color = t.borderColor.copy(alpha = t.borderAlpha),
@@ -361,11 +366,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val outline = shapeImpl.createOutline(size, layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = t.borderColor,
-          style = Stroke(width = t.borderWidth.toPx(), pathEffect = effect),
-        )
+        translate(left = rect.left, top = rect.top) {
+          drawPath(
+            path = path,
+            color = t.borderColor,
+            style = Stroke(width = t.borderWidth.toPx(), pathEffect = effect),
+          )
+        }
       } else {
         drawRoundRect(
           color = t.borderColor,
@@ -385,11 +392,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val outline = shapeImpl.createOutline(size, layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = t.borderColor,
-          style = Stroke(width = t.borderWidth.toPx(), pathEffect = effect),
-        )
+        translate(left = rect.left, top = rect.top) {
+          drawPath(
+            path = path,
+            color = t.borderColor,
+            style = Stroke(width = t.borderWidth.toPx(), pathEffect = effect),
+          )
+        }
       }
     }
     is HighlightTheme.Neon -> {
@@ -397,25 +406,27 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val outline = shapeImpl.createOutline(size, layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
       // 外发光 (2 圈, 比之前 4 圈更精细, 避免边框看起来粗糙)
-      // 第 1 圈 (外层): 模糊光晕
       if (path != null) {
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = t.glowColor.copy(alpha = 0.18f),
-          style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() * 0.6f),
-        )
-        // 第 2 圈 (中层): 较亮光晕
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = t.glowColor.copy(alpha = 0.35f),
-          style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() * 0.25f),
-        )
-        // 实色 (中心): 高对比主线
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = t.color,
-          style = Stroke(width = t.borderWidth.toPx()),
-        )
+        translate(left = rect.left, top = rect.top) {
+          // 第 1 圈 (外层): 模糊光晕
+          drawPath(
+            path = path,
+            color = t.glowColor.copy(alpha = 0.18f),
+            style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() * 0.6f),
+          )
+          // 第 2 圈 (中层): 较亮光晕
+          drawPath(
+            path = path,
+            color = t.glowColor.copy(alpha = 0.35f),
+            style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() * 0.25f),
+          )
+          // 实色 (中心): 高对比主线
+          drawPath(
+            path = path,
+            color = t.color,
+            style = Stroke(width = t.borderWidth.toPx()),
+          )
+        }
       }
     }
     is HighlightTheme.Tape -> {
@@ -517,11 +528,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val outline = shapeImpl.createOutline(size, layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = t.ringColor,
-          style = Stroke(width = t.ringWidth.toPx()),
-        )
+        translate(left = rect.left, top = rect.top) {
+          drawPath(
+            path = path,
+            color = t.ringColor,
+            style = Stroke(width = t.ringWidth.toPx()),
+          )
+        }
       }
     }
     is HighlightTheme.Frosted -> {
@@ -529,17 +542,19 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val outline = shapeImpl.createOutline(size, layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
-        // 微白色磨砂边
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          brush = Brush.verticalGradient(
-            colors = listOf(
-              t.borderColor.copy(alpha = t.blurAlpha + 0.3f),
-              t.borderColor.copy(alpha = t.blurAlpha * 0.5f),
+        translate(left = rect.left, top = rect.top) {
+          // 微白色磨砂边
+          drawPath(
+            path = path,
+            brush = Brush.verticalGradient(
+              colors = listOf(
+                t.borderColor.copy(alpha = t.blurAlpha + 0.3f),
+                t.borderColor.copy(alpha = t.blurAlpha * 0.5f),
+              ),
             ),
-          ),
-          style = Stroke(width = t.borderWidth.toPx()),
-        )
+            style = Stroke(width = t.borderWidth.toPx()),
+          )
+        }
       }
     }
     is HighlightTheme.Custom -> drawThemeBorder(t.theme, rect, shape, density)
@@ -569,11 +584,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimationEffect
       )
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = Color.White.copy(alpha = glowAlpha * 0.3f),
-          style = Stroke(width = animation.maxScale * 8f),
-        )
+        translate(left = rect.left, top = rect.top) {
+          drawPath(
+            path = path,
+            color = Color.White.copy(alpha = glowAlpha * 0.3f),
+            style = Stroke(width = animation.maxScale * 8f),
+          )
+        }
       }
     }
     is HighlightAnimation.Rotate -> {
@@ -583,14 +600,16 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimationEffect
         val outline = shapeImpl.createOutline(Size(rect.width, rect.height), layoutDirection, density)
         val path = (outline as? Outline.Generic)?.path
         if (path != null) {
-          drawPath(
-            path = path.translate(Offset(rect.left - (rect.width * (glowSize - 1f)) / 2f, rect.top - (rect.height * (glowSize - 1f)) / 2f)),
-            color = Color.White.copy(alpha = 0.6f),
-            style = Stroke(
-              width = 2f,
-              pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f),
-            ),
-          )
+          translate(left = rect.left, top = rect.top) {
+            drawPath(
+              path = path,
+              color = Color.White.copy(alpha = 0.6f),
+              style = Stroke(
+                width = 2f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f),
+              ),
+            )
+          }
         }
       }
     }
@@ -599,11 +618,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimationEffect
       val outline = shapeImpl.createOutline(Size(rect.width, rect.height), layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = Color.White.copy(alpha = state.alpha * 0.5f),
-          style = Stroke(width = 6f),
-        )
+        translate(left = rect.left, top = rect.top) {
+          drawPath(
+            path = path,
+            color = Color.White.copy(alpha = state.alpha * 0.5f),
+            style = Stroke(width = 6f),
+          )
+        }
       }
     }
     is HighlightAnimation.Scan -> {
@@ -651,12 +672,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimationEffect
       val outline = shapeImpl.createOutline(Size(rect.width, rect.height), layoutDirection, density)
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
-        val shimmerColor = lerpColor(animation.baseColor, animation.highlightColor, kotlin.math.abs(t - 0.5f) * 2f)
-        drawPath(
-          path = path.translate(Offset(rect.left, rect.top)),
-          color = shimmerColor,
-          style = Stroke(width = 2f),
-        )
+        translate(left = rect.left, top = rect.top) {
+          val shimmerColor = lerpColor(animation.baseColor, animation.highlightColor, kotlin.math.abs(t - 0.5f) * 2f)
+          drawPath(
+            path = path,
+            color = shimmerColor,
+            style = Stroke(width = 2f),
+          )
+        }
       }
     }
     HighlightAnimation.None -> Unit

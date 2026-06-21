@@ -18,10 +18,18 @@
 package com.itsaky.androidide.onboarding.bubble
 
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.LayoutDirection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection as UnitLayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
 
@@ -106,22 +114,7 @@ sealed class BubbleShape {
   data class Hexagon(
     val inset: Dp = 8.dp,
   ) : BubbleShape() {
-    override val shape: Shape = GenericShape { size, _, density ->
-      val w = size.width
-      val h = size.height
-      with(density) {
-        val ix = inset.toPx().coerceAtMost(min(w, h) / 4f)
-        val iy = inset.toPx().coerceAtMost(min(w, h) / 4f)
-        // 六边形: 左右两侧扁平, 上下平直
-        moveTo(ix, 0f)
-        lineTo(w - ix, 0f)
-        lineTo(w, h / 2f)
-        lineTo(w - ix, h)
-        lineTo(ix, h)
-        lineTo(0f, h / 2f)
-        close()
-      }
-    }
+    override val shape: Shape = HexagonShape(inset)
   }
 
   // ============================================================
@@ -130,19 +123,7 @@ sealed class BubbleShape {
   data class Diamond(
     val inset: Dp = 4.dp,
   ) : BubbleShape() {
-    override val shape: Shape = GenericShape { size, _, density ->
-      val w = size.width
-      val h = size.height
-      with(density) {
-        val ix = inset.toPx().coerceAtMost(w / 4f)
-        val iy = inset.toPx().coerceAtMost(h / 4f)
-        moveTo(w / 2f, iy)
-        lineTo(w - ix, h / 2f)
-        lineTo(w / 2f, h - iy)
-        lineTo(ix, h / 2f)
-        close()
-      }
-    }
+    override val shape: Shape = DiamondShape(inset)
   }
 
   // ============================================================
@@ -154,66 +135,7 @@ sealed class BubbleShape {
     /** 尖角位置, 默认在底部居中向下 */
     val tailPosition: TailPosition = TailPosition.BottomCenter,
   ) : BubbleShape() {
-    override val shape: Shape = GenericShape { size, _, density ->
-      val w = size.width
-      val h = size.height
-      with(density) {
-        val r = cornerRadius.toPx().coerceAtMost(min(size.width, size.height) / 2f)
-        val t = tailSize.toPx()
-
-        when (tailPosition) {
-        TailPosition.BottomCenter -> {
-          // 圆角矩形 + 底部居中向下尖角
-          addRoundRect(
-            androidx.compose.ui.geometry.RoundRect(
-              left = 0f, top = 0f, right = w, bottom = h - t,
-              cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
-            )
-          )
-          // 尖角三角形
-          moveTo(w / 2f - t, h - t)
-          lineTo(w / 2f, h)
-          lineTo(w / 2f + t, h - t)
-          close()
-        }
-        TailPosition.TopCenter -> {
-          addRoundRect(
-            androidx.compose.ui.geometry.RoundRect(
-              left = 0f, top = t, right = w, bottom = h,
-              cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
-            )
-          )
-          moveTo(w / 2f - t, t)
-          lineTo(w / 2f, 0f)
-          lineTo(w / 2f + t, t)
-          close()
-        }
-        TailPosition.LeftCenter -> {
-          addRoundRect(
-            androidx.compose.ui.geometry.RoundRect(
-              left = t, top = 0f, right = w, bottom = h,
-              cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
-            )
-          )
-          moveTo(t, h / 2f - t)
-          lineTo(0f, h / 2f)
-          lineTo(t, h / 2f + t)
-          close()
-        }
-        TailPosition.RightCenter -> {
-          addRoundRect(
-            androidx.compose.ui.geometry.RoundRect(
-              left = 0f, top = 0f, right = w - t, bottom = h,
-              cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
-            )
-          )
-          moveTo(w - t, h / 2f - t)
-          lineTo(w, h / 2f)
-          lineTo(w - t, h / 2f + t)
-          close()
-        }
-      }
-    }
+    override val shape: Shape = SpeechBubbleShape(cornerRadius, tailSize, tailPosition)
   }
 
   /** 聊天气泡尖角方向 */
@@ -227,31 +149,7 @@ sealed class BubbleShape {
     val indicatorWidth: Dp = 36.dp,
     val indicatorHeight: Dp = 4.dp,
   ) : BubbleShape() {
-    override val shape: Shape = GenericShape { size, _, density ->
-      val w = size.width
-      val h = size.height
-      with(density) {
-        val r = cornerRadius.toPx().coerceAtMost(min(size.width, size.height) / 2f)
-        val iw = indicatorWidth.toPx().coerceAtMost(size.width / 2f)
-        val ih = indicatorHeight.toPx()
-
-        // 上方圆角矩形 + 底部居中凸出
-        addRoundRect(
-          androidx.compose.ui.geometry.RoundRect(
-            left = 0f, top = 0f, right = w, bottom = h,
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
-          )
-        )
-        // 底部凸出指示器 (半圆)
-        moveTo(w / 2f - iw, h)
-        cubicTo(
-          w / 2f - iw, h + ih,
-          w / 2f + iw, h + ih,
-          w / 2f + iw, h
-        )
-        close()
-      }
-    }
+    override val shape: Shape = TabbedShape(cornerRadius, indicatorWidth, indicatorHeight)
   }
 
   // ============================================================
@@ -265,4 +163,155 @@ sealed class BubbleShape {
     /** 默认气泡形状: 圆角矩形 */
     val Default: BubbleShape = RoundedRectangle()
   }
+}
+
+// =============================================================================
+// 私有 Shape 实现 — 直接实现 Shape 接口, 通过 createOutline(size, ld, density)
+// 拿到 density, 这样可以调用 Dp.toPx() 把 dp 转换成 px.
+// =============================================================================
+
+private class HexagonShape(private val inset: Dp) : Shape {
+  override fun createOutline(
+    size: Size,
+    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    density: Density,
+  ): Outline = Outline.Generic(Path().apply {
+    with(density) {
+      val ix = inset.toPx().coerceAtMost(min(size.width, size.height) / 4f)
+      val iy = inset.toPx().coerceAtMost(min(size.width, size.height) / 4f)
+      // 六边形: 左右两侧扁平, 上下平直
+      moveTo(ix, 0f)
+      lineTo(size.width - ix, 0f)
+      lineTo(size.width, size.height / 2f)
+      lineTo(size.width - ix, size.height)
+      lineTo(ix, size.height)
+      lineTo(0f, size.height / 2f)
+      close()
+    }
+  })
+}
+
+private class DiamondShape(private val inset: Dp) : Shape {
+  override fun createOutline(
+    size: Size,
+    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    density: Density,
+  ): Outline = Outline.Generic(Path().apply {
+    with(density) {
+      val ix = inset.toPx().coerceAtMost(size.width / 4f)
+      val iy = inset.toPx().coerceAtMost(size.height / 4f)
+      moveTo(size.width / 2f, iy)
+      lineTo(size.width - ix, size.height / 2f)
+      lineTo(size.width / 2f, size.height - iy)
+      lineTo(ix, size.height / 2f)
+      close()
+    }
+  })
+}
+
+private class SpeechBubbleShape(
+  private val cornerRadius: Dp,
+  private val tailSize: Dp,
+  private val tailPosition: BubbleShape.TailPosition,
+) : Shape {
+  override fun createOutline(
+    size: Size,
+    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    density: Density,
+  ): Outline = Outline.Generic(Path().apply {
+    with(density) {
+      val w = size.width
+      val h = size.height
+      val r = cornerRadius.toPx().coerceAtMost(min(w, h) / 2f)
+      val t = tailSize.toPx()
+
+      when (tailPosition) {
+        BubbleShape.TailPosition.BottomCenter -> {
+          // 圆角矩形 + 底部居中向下尖角
+          addRoundRect(
+            RoundRect(
+              left = 0f, top = 0f, right = w, bottom = h - t,
+              cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
+            )
+          )
+          moveTo(w / 2f - t, h - t)
+          lineTo(w / 2f, h)
+          lineTo(w / 2f + t, h - t)
+          close()
+        }
+        BubbleShape.TailPosition.TopCenter -> {
+          addRoundRect(
+            RoundRect(
+              left = 0f, top = t, right = w, bottom = h,
+              cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
+            )
+          )
+          moveTo(w / 2f - t, t)
+          lineTo(w / 2f, 0f)
+          lineTo(w / 2f + t, t)
+          close()
+        }
+        BubbleShape.TailPosition.LeftCenter -> {
+          addRoundRect(
+            RoundRect(
+              left = t, top = 0f, right = w, bottom = h,
+              cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
+            )
+          )
+          moveTo(t, h / 2f - t)
+          lineTo(0f, h / 2f)
+          lineTo(t, h / 2f + t)
+          close()
+        }
+        BubbleShape.TailPosition.RightCenter -> {
+          addRoundRect(
+            RoundRect(
+              left = 0f, top = 0f, right = w - t, bottom = h,
+              cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
+            )
+          )
+          moveTo(w - t, h / 2f - t)
+          lineTo(w, h / 2f)
+          lineTo(w - t, h / 2f + t)
+          close()
+        }
+      }
+    }
+  })
+}
+
+private class TabbedShape(
+  private val cornerRadius: Dp,
+  private val indicatorWidth: Dp,
+  private val indicatorHeight: Dp,
+) : Shape {
+  override fun createOutline(
+    size: Size,
+    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    density: Density,
+  ): Outline = Outline.Generic(Path().apply {
+    with(density) {
+      val w = size.width
+      val h = size.height
+      val r = cornerRadius.toPx().coerceAtMost(min(w, h) / 2f)
+      val iw = indicatorWidth.toPx().coerceAtMost(w / 2f)
+      val ih = indicatorHeight.toPx()
+
+      // 上方圆角矩形 + 底部居中凸出
+      addRoundRect(
+        RoundRect(
+          left = 0f, top = 0f, right = w, bottom = h,
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
+        )
+      )
+      // 底部凸出指示器 (半圆)
+      moveTo(w / 2f - iw, h)
+      cubicTo(
+        w / 2f - iw, h + ih,
+        w / 2f + iw, h + ih,
+        w / 2f + iw, h
+      )
+      close()
+    }
+  })
 }
