@@ -6,7 +6,9 @@ plugins {
 android {
     namespace = "me.rerere.baselineprofile"
     compileSdk {
-        version = 36
+        version = release(36) {
+            minorApiLevel = 1
+        }
     }
 
     compileOptions {
