@@ -106,19 +106,21 @@ sealed class BubbleShape {
   data class Hexagon(
     val inset: Dp = 8.dp,
   ) : BubbleShape() {
-    override val shape: Shape = GenericShape { size, _ ->
+    override val shape: Shape = GenericShape { size, _, density ->
       val w = size.width
       val h = size.height
-      val ix = inset.toPx().coerceAtMost(min(w, h) / 4f)
-      val iy = inset.toPx().coerceAtMost(min(w, h) / 4f)
-      // 六边形: 左右两侧扁平, 上下平直
-      moveTo(ix, 0f)
-      lineTo(w - ix, 0f)
-      lineTo(w, h / 2f)
-      lineTo(w - ix, h)
-      lineTo(ix, h)
-      lineTo(0f, h / 2f)
-      close()
+      with(density) {
+        val ix = inset.toPx().coerceAtMost(min(w, h) / 4f)
+        val iy = inset.toPx().coerceAtMost(min(w, h) / 4f)
+        // 六边形: 左右两侧扁平, 上下平直
+        moveTo(ix, 0f)
+        lineTo(w - ix, 0f)
+        lineTo(w, h / 2f)
+        lineTo(w - ix, h)
+        lineTo(ix, h)
+        lineTo(0f, h / 2f)
+        close()
+      }
     }
   }
 
@@ -128,16 +130,18 @@ sealed class BubbleShape {
   data class Diamond(
     val inset: Dp = 4.dp,
   ) : BubbleShape() {
-    override val shape: Shape = GenericShape { size, _ ->
+    override val shape: Shape = GenericShape { size, _, density ->
       val w = size.width
       val h = size.height
-      val ix = inset.toPx().coerceAtMost(w / 4f)
-      val iy = inset.toPx().coerceAtMost(h / 4f)
-      moveTo(w / 2f, iy)
-      lineTo(w - ix, h / 2f)
-      lineTo(w / 2f, h - iy)
-      lineTo(ix, h / 2f)
-      close()
+      with(density) {
+        val ix = inset.toPx().coerceAtMost(w / 4f)
+        val iy = inset.toPx().coerceAtMost(h / 4f)
+        moveTo(w / 2f, iy)
+        lineTo(w - ix, h / 2f)
+        lineTo(w / 2f, h - iy)
+        lineTo(ix, h / 2f)
+        close()
+      }
     }
   }
 
@@ -150,13 +154,14 @@ sealed class BubbleShape {
     /** 尖角位置, 默认在底部居中向下 */
     val tailPosition: TailPosition = TailPosition.BottomCenter,
   ) : BubbleShape() {
-    override val shape: Shape = GenericShape { size, _ ->
-      val r = cornerRadius.toPx().coerceAtMost(min(size.width, size.height) / 2f)
-      val t = tailSize.toPx()
+    override val shape: Shape = GenericShape { size, _, density ->
       val w = size.width
       val h = size.height
+      with(density) {
+        val r = cornerRadius.toPx().coerceAtMost(min(size.width, size.height) / 2f)
+        val t = tailSize.toPx()
 
-      when (tailPosition) {
+        when (tailPosition) {
         TailPosition.BottomCenter -> {
           // 圆角矩形 + 底部居中向下尖角
           addRoundRect(
@@ -222,28 +227,30 @@ sealed class BubbleShape {
     val indicatorWidth: Dp = 36.dp,
     val indicatorHeight: Dp = 4.dp,
   ) : BubbleShape() {
-    override val shape: Shape = GenericShape { size, _ ->
-      val r = cornerRadius.toPx().coerceAtMost(min(size.width, size.height) / 2f)
-      val iw = indicatorWidth.toPx().coerceAtMost(size.width / 2f)
-      val ih = indicatorHeight.toPx()
+    override val shape: Shape = GenericShape { size, _, density ->
       val w = size.width
       val h = size.height
+      with(density) {
+        val r = cornerRadius.toPx().coerceAtMost(min(size.width, size.height) / 2f)
+        val iw = indicatorWidth.toPx().coerceAtMost(size.width / 2f)
+        val ih = indicatorHeight.toPx()
 
-      // 上方圆角矩形 + 底部居中凸出
-      addRoundRect(
-        androidx.compose.ui.geometry.RoundRect(
-          left = 0f, top = 0f, right = w, bottom = h,
-          cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
+        // 上方圆角矩形 + 底部居中凸出
+        addRoundRect(
+          androidx.compose.ui.geometry.RoundRect(
+            left = 0f, top = 0f, right = w, bottom = h,
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
+          )
         )
-      )
-      // 底部凸出指示器 (半圆)
-      moveTo(w / 2f - iw, h)
-      cubicTo(
-        w / 2f - iw, h + ih,
-        w / 2f + iw, h + ih,
-        w / 2f + iw, h
-      )
-      close()
+        // 底部凸出指示器 (半圆)
+        moveTo(w / 2f - iw, h)
+        cubicTo(
+          w / 2f - iw, h + ih,
+          w / 2f + iw, h + ih,
+          w / 2f + iw, h
+        )
+        close()
+      }
     }
   }
 

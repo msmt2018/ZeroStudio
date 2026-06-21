@@ -19,8 +19,11 @@ package com.itsaky.androidide.onboarding.effects
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.random.Random
@@ -56,29 +59,16 @@ fun Modifier.grainNoise(
   val area = (width * height) / 1_000_000f
   val count = (grainDensity * area).toInt().coerceIn(50, 4000)
 
-  // 一次性生成所有点
-  val points = FloatArray(count * 2)
-  for (i in 0 until count) {
-    points[i * 2] = rng.nextFloat() * width
-    points[i * 2 + 1] = rng.nextFloat() * height
+  // 一次性生成所有点 (List<Offset> 是当前 drawPoints 接受的类型)
+  val points = List(count) {
+    Offset(rng.nextFloat() * width, rng.nextFloat() * height)
   }
 
   // 半透明点 — 通过 dstOver 叠加在底色上, 不会让背景变白
-  if (clip) {
-    // 用 shape clip 切割 (简化: 通过矩形粗略处理)
-    // 复杂 shape 的精确切割交由上层 Box.clip 负责
-    drawPoints(
-      points = points,
-      pointMode = androidx.compose.ui.graphics.PointMode.Points,
-      color = grainColor.copy(alpha = grainAlpha),
-      strokeWidth = 1.2f,
-    )
-  } else {
-    drawPoints(
-      points = points,
-      pointMode = androidx.compose.ui.graphics.PointMode.Points,
-      color = grainColor.copy(alpha = grainAlpha),
-      strokeWidth = 1.2f,
-    )
-  }
+  drawPoints(
+    points = points,
+    pointMode = PointMode.Points,
+    color = grainColor.copy(alpha = grainAlpha),
+    strokeWidth = 1.2f,
+  )
 }

@@ -51,7 +51,6 @@ import com.itsaky.androidide.onboarding.LaunchOnboarding
 import com.itsaky.androidide.onboarding.OnboardingConfig
 import com.itsaky.androidide.onboarding.OnboardingController
 import com.itsaky.androidide.onboarding.OnboardingOverlay
-import com.itsaky.androidide.onboarding.OnboardingPreferences
 import com.itsaky.androidide.onboarding.OnboardingStep
 import com.itsaky.androidide.onboarding.OnboardingTarget
 import com.itsaky.androidide.onboarding.bubble.BubbleContent
@@ -61,6 +60,7 @@ import com.itsaky.androidide.onboarding.highlight.HighlightAnimation
 import com.itsaky.androidide.onboarding.highlight.HighlightShape
 import com.itsaky.androidide.onboarding.highlight.HighlightTheme
 import com.itsaky.androidide.onboarding.onboardingBind
+import com.itsaky.androidide.onboarding.prefs.OnboardingPreferences
 import com.itsaky.androidide.onboarding.prefs.SharedPreferencesOnboardingPreferences
 import com.itsaky.androidide.onboarding.simulation.GestureType
 import com.itsaky.androidide.onboarding.simulation.PathPoint

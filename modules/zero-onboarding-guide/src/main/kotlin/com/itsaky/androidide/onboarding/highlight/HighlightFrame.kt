@@ -307,9 +307,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawScrimWithCutout
   }
   if (path != null) {
     drawPath(
-      path = path,
+      path = path.translate(Offset(rect.left, rect.top)),
       color = Color.Black,
-      topLeft = Offset(rect.left, rect.top),
       blendMode = BlendMode.DstOut,
     )
   }
@@ -340,15 +339,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = t.borderColor.copy(alpha = t.borderAlpha),
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = t.borderWidth.toPx()),
         )
       } else {
         drawRoundRect(
           color = t.borderColor.copy(alpha = t.borderAlpha),
-          topLeft = Offset(rect.left, rect.top),
           size = size,
           cornerRadius = CornerRadius(16f, 16f),
           style = Stroke(width = t.borderWidth.toPx()),
@@ -365,9 +362,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = t.borderColor,
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = t.borderWidth.toPx(), pathEffect = effect),
         )
       } else {
@@ -390,9 +386,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = t.borderColor,
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = t.borderWidth.toPx(), pathEffect = effect),
         )
       }
@@ -405,23 +400,20 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       // 第 1 圈 (外层): 模糊光晕
       if (path != null) {
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = t.glowColor.copy(alpha = 0.18f),
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() * 0.6f),
         )
         // 第 2 圈 (中层): 较亮光晕
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = t.glowColor.copy(alpha = 0.35f),
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = t.borderWidth.toPx() + t.glowRadius.toPx() * 0.25f),
         )
         // 实色 (中心): 高对比主线
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = t.color,
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = t.borderWidth.toPx()),
         )
       }
@@ -526,9 +518,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = t.ringColor,
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = t.ringWidth.toPx()),
         )
       }
@@ -540,14 +531,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawThemeBorder(
       if (path != null) {
         // 微白色磨砂边
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           brush = Brush.verticalGradient(
             colors = listOf(
               t.borderColor.copy(alpha = t.blurAlpha + 0.3f),
               t.borderColor.copy(alpha = t.blurAlpha * 0.5f),
             ),
           ),
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = t.borderWidth.toPx()),
         )
       }
@@ -580,12 +570,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimationEffect
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = Color.White.copy(alpha = glowAlpha * 0.3f),
-          topLeft = Offset(
-            rect.left - (rect.width * (glowSize - 1f)) / 2f,
-            rect.top - (rect.height * (glowSize - 1f)) / 2f,
-          ),
           style = Stroke(width = animation.maxScale * 8f),
         )
       }
@@ -598,9 +584,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimationEffect
         val path = (outline as? Outline.Generic)?.path
         if (path != null) {
           drawPath(
-            path = path,
+            path = path.translate(Offset(rect.left - (rect.width * (glowSize - 1f)) / 2f, rect.top - (rect.height * (glowSize - 1f)) / 2f)),
             color = Color.White.copy(alpha = 0.6f),
-            topLeft = Offset(rect.left, rect.top),
             style = Stroke(
               width = 2f,
               pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f),
@@ -615,9 +600,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimationEffect
       val path = (outline as? Outline.Generic)?.path
       if (path != null) {
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = Color.White.copy(alpha = state.alpha * 0.5f),
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = 6f),
         )
       }
@@ -669,9 +653,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnimationEffect
       if (path != null) {
         val shimmerColor = lerpColor(animation.baseColor, animation.highlightColor, kotlin.math.abs(t - 0.5f) * 2f)
         drawPath(
-          path = path,
+          path = path.translate(Offset(rect.left, rect.top)),
           color = shimmerColor,
-          topLeft = Offset(rect.left, rect.top),
           style = Stroke(width = 2f),
         )
       }

@@ -23,7 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.itsaky.androidide.onboarding.bubble.BubbleContent
-import com.itsaky.androidide.onboarding.bubble.BubblePlacement
+import com.itsaky.androidide.onboarding.BubblePlacement
 import com.itsaky.androidide.onboarding.bubble.BubbleShape
 import com.itsaky.androidide.onboarding.bubble.BubbleStyle
 import com.itsaky.androidide.onboarding.highlight.HighlightAnimation

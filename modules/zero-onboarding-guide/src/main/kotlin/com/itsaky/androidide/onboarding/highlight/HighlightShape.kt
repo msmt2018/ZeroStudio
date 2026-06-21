@@ -18,6 +18,7 @@
 package com.itsaky.androidide.onboarding.highlight
 
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -127,7 +128,7 @@ internal fun HighlightShape.toShape(
     }
   }
   is HighlightShape.RoundedRect -> RoundedCornerShape(cornerRadius)
-  HighlightShape.Rect -> androidx.compose.foundation.shape.RectangleShape
+  HighlightShape.Rect -> RectangleShape
   HighlightShape.Circle -> CircleShape
   HighlightShape.Oval -> OvalShapeImpl
   HighlightShape.Stadium -> StadiumShapeImpl

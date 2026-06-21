@@ -146,7 +146,7 @@ fun Modifier.onboardingBind(target: OnboardingTarget): Modifier = this
   }
   .semantics {
     // 用 Semantics 标记, 方便测试和调试
-    OnboardingTargetIdKey setValue target.id
+    set(OnboardingTargetIdKey, target.id)
   }
 
 /**
