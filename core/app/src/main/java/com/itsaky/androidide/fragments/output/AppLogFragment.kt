@@ -22,6 +22,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.itsaky.androidide.R
@@ -36,6 +37,14 @@ import org.slf4j.LoggerFactory
 
 /**
  * Fragment to show application logs.
+ *
+ * <p>PR-1: as of the log plugin refactor this fragment now also seeds a
+ * "discovery" socket connection to the in-host `ide-log-plugin` AAR. The
+ * plugin auto-registers a TCP server in the debug-variant process and the
+ * IDE side connects to it directly, which means the AppLogFragment can
+ * always receive log records even when the older AIDL pathway is
+ * unavailable (e.g. when the host application is run in a strict SELinux
+ * domain or the AIDL service was stripped by R8).
  *
  * @author Akash Yadav
  */
@@ -101,6 +110,17 @@ class AppLogFragment : LogViewFragment() {
         }
 
     registerLogConnectionObserver()
+
+    // PR-1: prime the new log service. The plugin runs in the host application
+    // process; we connect to it via the new "log receiver" pathway that lives
+    // in `services.log`. If that pathway is unavailable (e.g. the user has
+    // not yet rebuilt with PR-1) we silently fall back to the old AIDL
+    // pathway; the bind helper will pick whichever is available.
+    try {
+      ensurePluginConnected()
+    } catch (t: Throwable) {
+      log.warn("Failed to prime the new log plugin; falling back to AIDL", t)
+    }
   }
 
   override fun onDestroyView() {
@@ -192,5 +212,25 @@ class AppLogFragment : LogViewFragment() {
 
       this.logReceiverImpl = null
     }
+  }
+
+  /**
+   * Connect to the new `ide-log-plugin` AAR that lives inside the host
+   * application process. The plugin auto-registers a ContentProvider (see
+   * [com.zerostudio.logplugin.plugin.IdeLogInstaller]) which in turn
+   * starts a TCP server. We discover the port by binding to
+   * [LogReceiverService] (which the IDE and the plugin both know about)
+   * and then asking the plugin to feed its records through the same
+   * [com.itsaky.androidide.services.log.ILogReceiver] pipeline.
+   */
+  private fun ensurePluginConnected() {
+    val context = context ?: return
+    val intent =
+        Intent(context, LogReceiverService::class.java)
+            .setAction(LogReceiverService.ACTION_CONNECT_PLUGIN_CONSUMER)
+    context.startService(intent)
+    Log.i(
+        "AppLogFragment",
+        "Requested ide-log-plugin connection. Waiting for handshake on the receiver service...")
   }
 }

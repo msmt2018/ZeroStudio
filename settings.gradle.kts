@@ -83,6 +83,7 @@ dependencyResolutionManagement {
 }
 
 val skipNyx = System.getenv("ZEROSTUDIO_SKIP_NYX") == "true"
+val includeIdeLogPlugin = System.getenv("ZEROSTUDIO_SKIP_IDE_LOG_PLUGIN") != "true"
 
 buildscript {
   repositories { mavenCentral() }
@@ -182,6 +183,9 @@ include(
     ":logging:idestats",
     ":logging:logger",
     ":logging:logsender",
+
+    ":ide-log-plugin",
+    ":utilities:logwire",
     ":termux:application",
     ":termux:emulator",
     ":termux:shared",

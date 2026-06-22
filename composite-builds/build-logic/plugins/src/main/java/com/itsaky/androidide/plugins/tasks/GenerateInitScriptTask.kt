@@ -24,7 +24,14 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 
-/** Generates the Gradle init script for AndroidIDE. */
+/**
+ * Generates the Gradle init script for the ZeroStudio IDE.
+ *
+ * <p>As of PR-1 the init script classpath references the new
+ * `ide-log-plugin` AAR instead of the legacy `zerostudio-gradle-plugin`
+ * jar; the latter is removed in PR-1. PR-2 will add the `ide-debugger`
+ * artifact to the classpath as well.
+ */
 abstract class GenerateInitScriptTask : DefaultTask() {
 
   @get:Input abstract val downloadVersion: Property<String>
@@ -52,11 +59,16 @@ abstract class GenerateInitScriptTask : DefaultTask() {
               }
 
               dependencies {
-                  classpath  name: "zerostudio-gradle-plugin-1.0.0"
+                  // PR-1: replaces the legacy zerostudio-gradle-plugin-1.0.0.jar.
+                  // The new AAR is produced by the :ide-log-plugin module and
+                  // copied into the init classpath by GradleBuildService.
+                  classpath  name: "ide-log-plugin-1.0.0"
+                  // PR-2: classpath name: "ide-debugger-1.0.0"
               }
           }
-                
-                apply plugin: com.itsaky.androidide.gradle.AndroidIDEInitScriptPlugin
+
+                // PR-1: replaced by com.zerostudio.logplugin.plugin.IdeLogInitScriptPlugin
+                apply plugin: com.zerostudio.logplugin.plugin.IdeLogInitScriptPlugin
           """
               .trimIndent()
       )

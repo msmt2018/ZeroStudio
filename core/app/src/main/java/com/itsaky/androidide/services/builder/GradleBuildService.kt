@@ -285,17 +285,24 @@ class GradleBuildService :
           """
             allprojects {
                 afterEvaluate {
-                    if (plugins.hasPlugin('com.android.application') || 
+                    if (plugins.hasPlugin('com.android.application') ||
                         plugins.hasPlugin('com.android.library')) {
-                        
+
                         android {
                             compileOptions {
                                 coreLibraryDesugaringEnabled = true
                             }
                         }
-                        
+
                         dependencies {
-                            implementation files('${getLoggerRuntimeAar().absolutePath}')
+                            // PR-1: the legacy logger-runtime.aar is replaced by
+                            //   the new ide-log-plugin AAR (see
+                            //   :ide-log-plugin module). The AAR is published as
+                            //   part of the IDE build and resolved through the
+                            //   maven repository configured in
+                            //   IdeLogInitScriptPlugin.
+                            implementation 'com.zerostudio:ide-log-plugin:1.0.0'
+                            // PR-2: implementation 'com.zerostudio:ide-debugger:1.0.0'
                             coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
                         }
                     }
@@ -320,18 +327,32 @@ class GradleBuildService :
     return dir
   }
 
-  /** Extracts and returns the logger runtime AAR file. */
+  /**
+   * Returns the path to the `ide-log-plugin` AAR that should be loaded into
+   * the init script classpath. The AAR is produced by the `:ide-log-plugin`
+   * Gradle module at build time and copied into the IDE assets by
+   * [com.itsaky.androidide.plugins.tasks.GenerateInitScriptTask].
+   *
+   * <p>For PR-1 we still extract a renamed copy of the AAR so the legacy
+   * tooling on the IDE side does not break. PR-2 will remove this fallback
+   * entirely and rely solely on the maven coordinates emitted in the
+   * generated init script.
+   */
   private fun getLoggerRuntimeAar(): File {
-    val aar = File(getLoggerPluginDir(), "logger-runtime.aar")
+    val aar = File(getLoggerPluginDir(), "ide-log-plugin-1.0.0.aar")
     if (!aar.exists()) {
-      // Extract from assets
+      // Extract from assets. The asset is produced by the build pipeline.
       if (
           !ResourceUtils.copyFileFromAssets(
-              "data/common/logger-runtime.aar",
+              "data/common/ide-log-plugin-1.0.0.aar",
               aar.absolutePath,
           )
       ) {
-        log.error("Failed to extract logger-runtime.aar from assets")
+        // Fallback for installs that have not yet been rebuilt with PR-1.
+        // The legacy "logger-runtime.aar" is no longer shipped.
+        log.warn(
+            "ide-log-plugin-1.0.0.aar not found in assets. " +
+                "Did you forget to run the IDE build after PR-1?")
       }
     }
     return aar

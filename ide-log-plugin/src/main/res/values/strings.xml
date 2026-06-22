@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ide_log_plugin_name">ZeroStudio Log Plugin</string>
+    <string name="ide_log_plugin_description">
+        High-fidelity log + JDWP bridge injected into the debug variant of
+        the host application.
+    </string>
+</resources>

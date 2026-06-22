@@ -226,6 +226,9 @@ dependencies {
   implementation(projects.lsp.clangd)
   implementation(projects.logging.idestats)
   implementation(projects.logging.logsender)
+
+  // PR-1: shared wire protocol for the ide-log-plugin AAR.
+  implementation(project(":utilities:logwire"))
   implementation(projects.termux.application)
   implementation(projects.termux.view)
   implementation(projects.termux.emulator)

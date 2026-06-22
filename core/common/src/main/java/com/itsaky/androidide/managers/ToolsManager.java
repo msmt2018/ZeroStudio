@@ -140,30 +140,15 @@ public class ToolsManager {
    * 专门用于集中管理 Assets 解压/安装的私有方法
    */
   private static void installExtraTools() {
-  
-   // ResourceUtils.copyFileFromAssets(getCommonAsset("logger-runtime.aar"),
-          // new File(Environment.PLUGIN_HOME,"logger").getAbsolutePath());
-          
-   // ResourceUtils.copyFileFromAssets(getCommonAsset("plugin-api.jar"),
-          // Environment.PLUGIN_HOME.getAbsolutePath());
-          
-   // ResourceUtils.copyFileFromAssets(getCommonAsset("zerostudio-gradle-plugin-1.0.0.jar"),
-          // new File(Environment.ANDROIDIDE_HOME, "init").getAbsolutePath());
-          
-          
-  
-    installAsset("data/common/logger-runtime.zip",
-        new File(Environment.PLUGIN_HOME , "logger"), true, 0, null);
-  
-    installAsset("data/common/plugin-api.jar", 
-        Environment.PLUGIN_HOME, false, 0, null);
-  
-    installAsset("data/common/zerostudio-gradle-plugin-1.0.0.jar", 
-        new File(Environment.ANDROIDIDE_HOME , "init"), false, 0, null);
-  
-    // 解压 compose 预览所需文件
-    // installAsset("compose/compose-jars.zip",
-        // Environment.COMPOSE_HOME, true, 0, null);
+
+   // PR-1: the legacy `logger-runtime.zip`, `plugin-api.jar` and
+   // `zerostudio-gradle-plugin-1.0.0.jar` assets are removed. The new
+   // `ide-log-plugin` AAR is published as a regular Gradle module and
+   // resolved through `ide-log-plugin-1.0.0.aar` extracted from
+   // `data/common/ide-log-plugin-1.0.0.aar`. PR-2 will additionally
+   // install `data/common/ide-debugger-1.0.0.aar`.
+   installAsset("data/common/ide-log-plugin-1.0.0.aar",
+       new File(Environment.PLUGIN_HOME , "ide-log-plugin"), true, 0, null);
   }
 
   private static void extractColorScheme(final BaseApplication app) {

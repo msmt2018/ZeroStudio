@@ -1,0 +1,5 @@
+-keep class com.zerostudio.logplugin.** { *; }
+-keep class org.slf4j.** { *; }
+-keep class ch.qos.logback.** { *; }
+-dontwarn ch.qos.logback.**
+-dontwarn org.slf4j.**

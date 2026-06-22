@@ -1,0 +1,5 @@
+#
+# ZeroStudio - ide-log-plugin
+#
+
+include(":ide-log-plugin")

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~  ZeroStudio IDE - ide-log-plugin
+  -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- Required to read logcat from the host application process. -->
+  <uses-permission android:name="android.permission.READ_LOGS" />
+
+  <!--
+    The plugin is intended to be packaged into the debug variant of the host APK
+    and runs entirely in-process. It does not declare any service or receiver here
+    on purpose: the host manifest is responsible for declaring any entry points,
+    and the plugin's content provider is injected by the IDE build logic.
+  -->
+
+  <application>
+    <!--
+      A non-exported ContentProvider that installs the plugin as early as possible
+      in the host application process. The IDE build pipeline injects the fully
+      qualified name of this provider into the host manifest of every debug variant
+      so that the host application's Application.onCreate is preceded by our hook.
+    -->
+    <provider
+        android:name="com.zerostudio.logplugin.plugin.IdeLogInstaller"
+        android:authorities="${applicationId}.ide.logplugin.Installer"
+        android:exported="false"
+        android:initOrder="9999" />
+
+  </application>
+
+</manifest>

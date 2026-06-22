@@ -165,6 +165,16 @@ class LogReceiverImpl(consumer: ((LogLine) -> Unit)? = null) : ILogReceiver.Stub
     notifyConnectionObserver(senderId)
   }
 
+  /**
+   * PR-1: append a [LogLine] to the consumer. Used by
+   * [PluginLogConnector] to push log records received from the
+   * `ide-log-plugin` AAR through the same consumer pipeline as the legacy
+   * AIDL pathway.
+   */
+  fun appendLine(line: LogLine) {
+    consumer?.invoke(line)
+  }
+
   override fun close() {
     // TODO : Send close request to clients
     senderHandler.close()

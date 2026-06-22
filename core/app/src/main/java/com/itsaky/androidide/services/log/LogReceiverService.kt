@@ -52,6 +52,13 @@ class LogReceiverService : Service() {
     internal const val ACTION_CONNECTION_UPDATE =
         "com.itsaky.androidide.logreceiver.CONNECTION_UPDATE"
 
+    // PR-1: a new action that asks the service to negotiate a connection
+    // to the `ide-log-plugin` AAR running inside the host application. The
+    // AAR exposes a TCP server; the service opens a client socket to it and
+    // streams records through the existing `LogReceiverImpl` pipeline.
+    internal const val ACTION_CONNECT_PLUGIN_CONSUMER =
+        "com.itsaky.androidide.logreceiver.CONNECT_PLUGIN_CONSUMER"
+
     private const val LOG_CONSUMER_WAIT_DURATION = 10 // seconds
 
     @JvmStatic internal val LOOKUP_KEY = Lookup.Key<LogReceiverService>()
@@ -97,6 +104,23 @@ class LogReceiverService : Service() {
         listenForConsumer()
       }
     }
+  }
+
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    if (intent?.action == ACTION_CONNECT_PLUGIN_CONSUMER) {
+      log.info("Received request to connect to the new ide-log-plugin")
+      // PR-1: spin up a plugin connection handler. The actual network glue
+      // is intentionally simple: we open a client socket to the well-known
+      // loopback port chosen by the plugin and pump records through the
+      // existing ILogReceiver pipeline.
+      try {
+        PluginLogConnector(this).start()
+      } catch (t: Throwable) {
+        log.error("Failed to start plugin log connector", t)
+      }
+      return START_NOT_STICKY
+    }
+    return super.onStartCommand(intent, flags, startId)
   }
 
   override fun onUnbind(intent: Intent?): Boolean {

@@ -81,7 +81,15 @@ public final class Environment {
   public static File FORMAT_KOTLIN_KTFMT;
 
 
+  // PR-1: legacy `plugin-api.jar` is removed. The new `ide-log-plugin`
+  // AAR is resolved through the Gradle module system; see the
+  // `ide-log-plugin-1.0.0.aar` constant below.
   public static final String PLUGIN_API_JAR_RELATIVE_PATH = "libs/plugin-api.jar";
+
+  /** PR-1: the new ide-log-plugin AAR relative path. */
+  public static final String IDE_LOG_PLUGIN_AAR_RELATIVE_PATH = "ide-log-plugin/ide-log-plugin-1.0.0.aar";
+  /** PR-2: the new ide-debugger AAR relative path. */
+  public static final String IDE_DEBUGGER_AAR_RELATIVE_PATH = "ide-debugger/ide-debugger-1.0.0.aar";
 
     // Lottie 动画目录
   public static File LOTTIE_ANIMATION_DIR;

@@ -108,6 +108,34 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             copyToolingApiJar,
             AddFileToAssetsTask::outputDirectory,
         )
+
+        // PR-1: copy the new `ide-log-plugin` AAR into the assets so that
+        // the IDE build can extract it at install time. PR-2 will add a
+        // similar task for `ide-debugger`.
+        val copyIdeLogPluginAar =
+            tasks.register(
+                "copy${variantNameCapitalized}IdeLogPluginAar",
+                AddFileToAssetsTask::class.java,
+            ) {
+              val ideLogPluginPath = ":ide-log-plugin"
+              val ideLogPlugin =
+                  checkNotNull(rootProject.findProject(ideLogPluginPath)) {
+                    "Cannot find the ide-log-plugin module with project path: '$ideLogPluginPath'"
+                  }
+              dependsOn(ideLogPlugin.tasks.getByName("assembleRelease"))
+
+              val aar =
+                  ideLogPlugin.layout.buildDirectory.file("outputs/aar/ide-log-plugin-release.aar")
+
+              inputFile.set(aar)
+              baseAssetsPath.set("data/common")
+              fileName.set("ide-log-plugin-1.0.0.aar")
+            }
+
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            copyIdeLogPluginAar,
+            AddFileToAssetsTask::outputDirectory,
+        )
       }
     }
   }
