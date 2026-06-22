@@ -31,6 +31,8 @@ import com.itsaky.androidide.activities.editor.BaseEditorActivity
 import com.itsaky.androidide.app.BaseApplication
 import com.itsaky.androidide.cursor.CursorHistoryManager
 import com.itsaky.androidide.editor.api.IEditor
+import com.itsaky.androidide.debugger.model.BreakpointManager
+import com.itsaky.androidide.debugger.view.BreakpointGutterManager
 import com.itsaky.androidide.editor.databinding.LayoutCodeEditorBinding
 import com.itsaky.androidide.editor.ui.EditorSearchLayout
 import com.itsaky.androidide.editor.ui.IDEEditor
@@ -239,6 +241,9 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
     readFileAndApplySelection(file, selection)
 
     setupContentChangeListener()
+
+    // PR-3: 附加断点 gutter
+    setupBreakpointGutter()
   }
 
   private fun setupContentChangeListener() {
@@ -250,6 +255,32 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
         startDiagnosticAnalysis(editorFile)
       }
     }
+  }
+
+  /**
+   * PR-3: 在编辑器左侧创建断点 gutter。
+   * 监听滚动、缩放、内容变化，把 6 种状态的断点图标绘制在 gutter 上。
+   */
+  private fun setupBreakpointGutter() {
+    val editor = binding.editor
+    val file = editor.file
+    if (file == null) {
+      // 文件尚未设置，延迟到 setFile 时绑定
+      return
+    }
+    val gutter = BreakpointGutterManager.attach(editor, file.absolutePath)
+    gutter.setActionListener(object : BreakpointGutterManager.OnBreakpointActionListener {
+      override fun onBreakpointClick(file: String, line: Int) {
+        BreakpointManager.getInstance().toggle(file, line)
+      }
+
+      override fun onBreakpointLongClick(bp: com.itsaky.androidide.debugger.model.IdeBreakpoint) {
+        // 长按处理在 PR-3 调试器中打开 BottomSheet
+        BreakpointManager.getInstance().setEnabled(
+            bp.id, bp.state != com.itsaky.androidide.debugger.model.IdeBreakpoint.State.DISABLED)
+      }
+    })
+    gutter.showSidebar()
   }
 
   /**
@@ -489,6 +520,9 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
     // This will make sure that textDocument/didOpen is sent
     binding.editor.setFile(file)
 
+    // PR-3: 在文件加载后绑定断点 gutter
+    setupBreakpointGutter()
+
     // Initialize diagnostic handling for Kotlin files
     if (file.extension == "kt" || file.extension == "kts") {
       binding.editor.initDiagnosticHandling()
@@ -697,6 +731,7 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
   override fun close() {
     analysisJob?.cancel()
     codeEditorScope.cancelIfActive("Cancellation was requested")
+    _binding?.editor?.also { BreakpointGutterManager.detach(it) }
     _binding?.editor?.apply {
       CursorHistoryManager.removeTracker(this)
       clearDiagnostics()

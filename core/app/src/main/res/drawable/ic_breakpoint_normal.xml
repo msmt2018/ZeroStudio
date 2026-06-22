@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点 6 状态图标
+  用 vector drawable，0-4 对应 5 个独立图标。
+  HIT 与 VERIFIED 共用绿色外观，命中时再叠加外环（由 BreakpointSidebar 在
+  onDraw 中绘制），避免 drawable 体系管理 hit 动画。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#E53935"/>
+    <stroke
+        android:width="1.5dp"
+        android:color="#FFFFFF"/>
+</shape>

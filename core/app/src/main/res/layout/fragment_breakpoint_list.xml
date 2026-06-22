@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点列表 Fragment 布局
+
+  顶部：3 个快捷操作（清空、全部启用、全部禁用）
+  中部：RecyclerView 列出所有断点
+  空状态：提示"无断点"
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="8dp"
+        android:background="?attr/colorSurfaceVariant">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/debugger_breakpoints_title"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textColor="?attr/colorOnSurface"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bp_action_disable_all"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_action_bp_disable_all"
+            android:minWidth="0dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bp_action_enable_all"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_action_bp_enable_all"
+            android:minWidth="0dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bp_action_clear"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_action_bp_clear"
+            android:minWidth="0dp"/>
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/bp_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="48dp"
+            android:scrollbars="vertical"/>
+
+        <TextView
+            android:id="@+id/bp_empty"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="@string/debugger_breakpoints_empty"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            android:visibility="gone"/>
+    </FrameLayout>
+
+</LinearLayout>

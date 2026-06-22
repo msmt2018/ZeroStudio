@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点 item 长按弹出的操作菜单
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_bp_toggle"
+        android:title="@string/debugger_action_toggle_bp"/>
+    <item
+        android:id="@+id/menu_bp_edit_condition"
+        android:title="@string/debugger_action_edit_condition"/>
+    <item
+        android:id="@+id/menu_bp_delete"
+        android:title="@string/debugger_action_bp_delete"/>
+</menu>

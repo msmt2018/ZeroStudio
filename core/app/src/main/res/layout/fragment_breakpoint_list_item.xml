@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点列表 item 布局
+
+  | [●]  ../app/src/main/.../MainActivity.kt   27   条件     |
+  |         条件: i > 0                                                     |
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="10dp"
+    android:background="?attr/selectableItemBackground"
+    android:focusable="true"
+    android:clickable="true"
+    android:minHeight="56dp">
+
+    <ImageView
+        android:id="@+id/bp_dot"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:contentDescription="@string/debugger_breakpoint_glyph_desc"
+        android:src="@drawable/ic_breakpoint_normal"/>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/bp_file"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="?attr/colorOnSurface"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:singleLine="true"
+                android:ellipsize="middle"
+                tools:text="../app/src/main/.../MainActivity.kt"
+                xmlns:tools="http://schemas.android.com/tools"/>
+
+            <TextView
+                android:id="@+id/bp_line"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                android:layout_marginEnd="8dp"
+                tools:text="27"
+                xmlns:tools="http://schemas.android.com/tools"/>
+
+            <TextView
+                android:id="@+id/bp_state"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                tools:text="已验证"
+                xmlns:tools="http://schemas.android.com/tools"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/bp_condition"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:visibility="gone"
+            android:layout_marginTop="2dp"
+            tools:text="条件: i > 0"
+            xmlns:tools="http://schemas.android.com/tools"/>
+    </LinearLayout>
+
+</LinearLayout>

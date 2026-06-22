@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点 + 调试器相关字符串
+-->
+<resources>
+
+    <!-- 断点 Tab / 列表 -->
+    <string name="debugger_breakpoints_tab">断点</string>
+    <string name="debugger_breakpoints_title">断点</string>
+    <string name="debugger_breakpoints_empty">无断点\n点击编辑器左侧空白处可添加</string>
+    <string name="debugger_breakpoint_glyph_desc">断点图标</string>
+
+    <!-- 断点 item 菜单 -->
+    <string name="debugger_action_toggle_bp">启用 / 禁用</string>
+    <string name="debugger_action_edit_condition">编辑条件</string>
+    <string name="debugger_action_bp_delete">删除</string>
+    <string name="debugger_action_bp_enable_all">全部启用</string>
+    <string name="debugger_action_bp_disable_all">全部禁用</string>
+    <string name="debugger_action_bp_clear">清空</string>
+
+    <!-- 调试器主菜单 (submenu) -->
+    <string name="debugger_menu">调试</string>
+    <string name="debugger_menu_run">运行控制</string>
+    <string name="debugger_menu_step">单步</string>
+    <string name="debugger_menu_breakpoints">断点</string>
+    <string name="debugger_menu_view">视图</string>
+
+    <!-- 9 个动作 -->
+    <string name="debugger_action_debug_toggle">🪲 调试</string>
+    <string name="debugger_action_resume">▶️ 恢复</string>
+    <string name="debugger_action_pause">⏸️ 暂停</string>
+    <string name="debugger_action_stop">⏹️ 停止</string>
+    <string name="debugger_action_step_over">⤵️ 单步跳过</string>
+    <string name="debugger_action_step_into">⬇️ 单步进入</string>
+    <string name="debugger_action_step_out">⤴️ 单步返回</string>
+    <string name="debugger_action_run_to_cursor">👉 执行到光标</string>
+
+    <!-- 视图动作 -->
+    <string name="debugger_action_goto_current_bp">转到当前断点</string>
+    <string name="debugger_action_show_current_frame">显示当前帧</string>
+</resources>
