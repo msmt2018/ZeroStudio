@@ -51,9 +51,17 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import me.rerere.rikkahub.di.appModule
+import me.rerere.rikkahub.di.dataSourceModule
+import me.rerere.rikkahub.di.repositoryModule
+import me.rerere.rikkahub.di.viewModelModule
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.koin.androidContext
+import org.koin.android.ext.koin.androidLogger
+import org.koin.androidx.workmanager.koin.workManagerFactory
+import org.koin.core.context.startKoin
 import org.slf4j.LoggerFactory
 
 /**
@@ -78,6 +86,21 @@ class IDEApplication : TermuxApplication() {
     super.onCreate()
 
     applyPersistedLocale()
+
+    // 启动 chatai 模块的 Koin 容器。
+    // 原本是 me.rerere.rikkahub.RikkaHubRuntime.ensureKoinStarted(this),
+    // 但 RikkaHubRuntime 已被移除, 而 chatai 模块的 Application 类
+    // (RikkaHubApp) 没有被注册到 AndroidManifest (manifest 里只有 IDEApplication),
+    // 所以原来这条链路下 Koin 根本不会启动, chatai 的 Compose UI
+    // (RouteFragment -> RikkahubTheme -> rememberUserSettingsState) 第一次
+    // 访问 Koin 就会抛 "KoinApplication has not been started"。
+    // 把 startKoin 直接放在这里, 用 chatai 模块的 4 个 module 装配。
+    startKoin {
+      androidLogger()
+      androidContext(this@IDEApplication)
+      workManagerFactory()
+      modules(appModule, viewModelModule, dataSourceModule, repositoryModule)
+    }
 
     uncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, th -> handleCrash(thread, th) }

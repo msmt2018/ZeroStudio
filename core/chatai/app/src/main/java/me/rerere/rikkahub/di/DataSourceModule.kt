@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import android.content.Context
+import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.http.HttpHeaders
@@ -23,6 +24,7 @@ import me.rerere.rikkahub.data.api.RikkaHubAPI
 import me.rerere.rikkahub.data.api.SponsorAPI
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.db.AppDatabase
+import me.rerere.rikkahub.data.db.fts.JiebaAvailability
 import me.rerere.rikkahub.data.db.fts.MessageFtsManager
 import me.rerere.rikkahub.data.db.fts.SimpleDictManager
 import me.rerere.rikkahub.data.db.migrations.Migration_6_7
@@ -40,8 +42,11 @@ import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.dsl.module
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.io.File
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+
+private const val TAG = "DataSourceModule"
 
 val dataSourceModule = module {
     single {
@@ -50,25 +55,53 @@ val dataSourceModule = module {
 
     single {
         val context: Context = get()
-        Room.databaseBuilder(context, AppDatabase::class.java, "rikka_hub")
+        // jieba 分词原生扩展 libsimple.so 是 jieba 搜索的依赖, 但仓里
+        // 没有任何 CMake/ndk-build 目标会产出这个 .so, 默认情况下不会被打
+        // 进 APK。如果硬编码把 SQLiteCustomExtension 注册进去, openInner
+        // 阶段会直接 dlopen 失败抛 SQLiteException:
+        //   "Could not register extension: dlopen failed: library
+        //    '/data/app/.../libsimple.so' not found"
+        // 这里改成运行时探测: 只有当 .so 真在 nativeLibraryDir 下时才注册
+        // 扩展并调用 jieba_dict(?); 否则使用原版 Room openHelperFactory
+        // 走内置 FTS5 简单分词, 搜索功能可用, 只是没有 jieba 词典能力。
+        val libsimplePath = context.applicationInfo.nativeLibraryDir + "/libsimple"
+        val jiebaAvailable = File(libsimplePath).exists().also {
+            Log.i(TAG, "jieba extension libsimple.so present=$it (path=$libsimplePath)")
+        }
+        // 把探测结果存到全局, 给 MessageFtsManager.search() 用, 让搜索在没有
+        // jieba 时回退到普通 MATCH, 避免 "no such function: jieba_query"。
+        // (Static state 是因为 SQLiteDatabase 本身在进程内单例, 探测结果
+        // 在 onCreate 阶段确定一次就够, 不用每次都再读一次文件系统。)
+        JiebaAvailability.available = jiebaAvailable
+
+        val builder = Room.databaseBuilder(context, AppDatabase::class.java, "rikka_hub")
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-            .addMigrations(Migration_6_7, Migration_11_12, Migration_13_14, Migration_14_15, Migration_15_16)
+            .addMigrations(
+                Migration_6_7,
+                Migration_11_12,
+                Migration_13_14,
+                Migration_14_15,
+                Migration_15_16,
+            )
+
+        if (jiebaAvailable) {
+            builder.openHelperFactory(
+                RequerySQLiteOpenHelperFactory(
+                    listOf(
+                        RequerySQLiteOpenHelperFactory.ConfigurationOptions { options ->
+                            options.customExtensions.add(
+                                SQLiteCustomExtension(libsimplePath, null)
+                            )
+                            options
+                        },
+                    )
+                )
+            )
+        }
+
+        builder
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
-                    val dictDir = SimpleDictManager.extractDict(context)
-                    val cursor = db.query("SELECT jieba_dict(?)", arrayOf(dictDir.absolutePath))
-                    cursor.use {
-                        if (it.moveToFirst()) {
-                            val result = it.getString(0)
-                            val success = result?.trimEnd('/') == dictDir.absolutePath.trimEnd('/')
-                            if (!success) {
-                                android.util.Log.e(
-                                    "DataSourceModule",
-                                    "jieba_dict failed: $result, path=${dictDir.absolutePath}"
-                                )
-                            }
-                        }
-                    }
                     db.execSQL(
                         """
                         CREATE VIRTUAL TABLE IF NOT EXISTS message_fts USING fts5(
@@ -82,21 +115,35 @@ val dataSourceModule = module {
                         )
                         """.trimIndent()
                     )
+                    if (jiebaAvailable) {
+                        // 装入 jieba 词典路径, 让 FTS5 MATCH 时能通过
+                        // jieba_query(?) 调用 jieba 切词。失败仅记日志,
+                        // 仍然不阻断 DB 打开。
+                        runCatching {
+                            val dictDir = SimpleDictManager.extractDict(context)
+                            val cursor = db.query(
+                                "SELECT jieba_dict(?)",
+                                arrayOf(dictDir.absolutePath),
+                            )
+                            cursor.use {
+                                if (it.moveToFirst()) {
+                                    val result = it.getString(0)
+                                    val success =
+                                        result?.trimEnd('/') == dictDir.absolutePath.trimEnd('/')
+                                    if (!success) {
+                                        Log.e(
+                                            TAG,
+                                            "jieba_dict failed: $result, path=${dictDir.absolutePath}",
+                                        )
+                                    }
+                                }
+                            }
+                        }.onFailure {
+                            Log.w(TAG, "jieba_dict registration failed; search will fall back", it)
+                        }
+                    }
                 }
             })
-            .openHelperFactory(
-                RequerySQLiteOpenHelperFactory(
-                    listOf(
-                RequerySQLiteOpenHelperFactory.ConfigurationOptions { options ->
-                    options.customExtensions.add(
-                        SQLiteCustomExtension(
-                            context.applicationInfo.nativeLibraryDir + "/libsimple",
-                            null
-                        )
-                    )
-                    options
-                }
-            )))
             .build()
     }
 
@@ -184,8 +231,8 @@ val dataSourceModule = module {
                 val contentTypeHeader = request.header("Content-Type")
                 if (
                     contentTypeHeader != null &&
-                    contentTypeHeader.contains(";") &&
-                    contentTypeHeader.substringBefore(";").trim().equals("application/json", ignoreCase = true)
+                        contentTypeHeader.contains(";") &&
+                        contentTypeHeader.substringBefore(";").trim().equals("application/json", ignoreCase = true)
                 ) {
                     chain.proceed(
                         request.newBuilder()

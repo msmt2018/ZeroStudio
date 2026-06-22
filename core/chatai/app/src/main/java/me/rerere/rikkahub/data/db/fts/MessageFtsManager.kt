@@ -67,18 +67,24 @@ class MessageFtsManager(private val database: AppDatabase) {
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
     ): List<MessageSearchResult> = withContext(Dispatchers.IO) {
         val results = mutableListOf<MessageSearchResult>()
+        // jieba 扩展 libsimple.so 不可用时 (见 JiebaAvailability), 整个连接上
+        // 没有 jieba_query() 这个标量函数, 调了会抛
+        //   "no such function: jieba_query"
+        // 所以这里走 FTS5 内置的 simple tokenizer 直接 MATCH 原词。
+        // 召回质量会下降 (中文不被分词), 但搜索不会因为扩展缺失而崩。
+        val matchExpr = if (JiebaAvailability.available) "jieba_query(?)" else "?"
         val cursor = db.query(
             """
             SELECT node_id, message_id, conversation_id, title, update_at,
                    simple_snippet(message_fts, 0, '[', ']', '...', 30) AS snippet
             FROM message_fts
-            WHERE text MATCH jieba_query(?)
+            WHERE text MATCH $matchExpr
             ORDER BY ${sort.orderBy}
             LIMIT 50
             """.trimIndent(),
             arrayOf(keyword)
         )
-        Log.i(TAG, "search: $keyword")
+        Log.i(TAG, "search: $keyword (jieba=${JiebaAvailability.available})")
         cursor.use {
             while (it.moveToNext()) {
                 results.add(
