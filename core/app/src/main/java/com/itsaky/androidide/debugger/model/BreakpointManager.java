@@ -53,6 +53,7 @@ public final class BreakpointManager {
     private final Map<String, Map<Integer, IdeBreakpoint>> byFile = new HashMap<>();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     @Nullable private com.zerostudio.debugger.api.Debugger debugger;
+    private boolean autoPersist = true;
 
     private BreakpointManager() {}
 
@@ -322,12 +323,14 @@ public final class BreakpointManager {
         for (Listener l : listeners) {
             try { l.onBreakpointsChanged(snap); } catch (Throwable ignored) {}
         }
+        if (autoPersist) BreakpointStore.getInstance().save();
     }
 
     private void fireStateChanged(@NonNull IdeBreakpoint bp) {
         for (Listener l : listeners) {
             try { l.onBreakpointStateChanged(bp); } catch (Throwable ignored) {}
         }
+        if (autoPersist) BreakpointStore.getInstance().save();
     }
 
     /** 标准化文件路径（用于 byFile 键） */

@@ -74,6 +74,11 @@ public class BaseApplication extends Application {
     Environment.init(this);
 
     mPrefsManager = new PreferenceManager(this);
+
+    // PR-3: 加载持久化的断点（如果有）
+    try {
+      com.itsaky.androidide.debugger.model.BreakpointStore.getInstance().load();
+    } catch (Throwable ignored) {}
   }
 
   public void writeException(Throwable th) {
