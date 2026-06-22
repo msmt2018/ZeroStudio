@@ -17,6 +17,16 @@ val dbSchemaLocation = "$projectDir/schemas"
 
 room { schemaDirectory(dbSchemaLocation) }
 
+// 这个模块通过 CMake IMPORTED 链接 prebuilt 的 libgit2/libcrypto/libssh2/libssl。
+// 仓库里只放 .gitkeep,真正的 .so 不在 VCS 里。一旦缺失,ninja 在 buildCMake 时
+// 会直接 FAILED 报 "missing and no known rule to make it"。
+// 当任意 ABI 的 prebuilt 不存在时,跳过 externalNativeBuild,
+// 让 Kotlin/Java 能编译;代价是运行时 JNI (puppygit/git2j) 加载失败,
+// 调用相关 API 会抛 UnsatisfiedLinkError,见 LibLoader 的注释。
+val anyAbi = "arm64-v8a"
+val prebuiltNativeLibsAvailable =
+    file("src/main/jniLibs/$anyAbi/libgit2.so").exists()
+
 android {
   val packageName = "com.catpuppyapp.puppygit.play.pro"
 
@@ -33,21 +43,30 @@ android {
     vectorDrawables { useSupportLibrary = true }
     ndk { abiFilters += listOf("arm64-v8a", "x86_64", "armeabi-v7a") }
 
-    externalNativeBuild {
-      cmake {
-        arguments +=
-            listOf(
-                "-DANDROID_STL=none"
-            ) // none = 用于禁止NDK的任何C++标准库（STL（std::string、std::vector、std::map、std::algorithm 等 STL））
+    if (prebuiltNativeLibsAvailable) {
+      externalNativeBuild {
+        cmake {
+          arguments +=
+              listOf(
+                  "-DANDROID_STL=none"
+              ) // none = 用于禁止NDK的任何C++标准库（STL（std::string、std::vector、std::map、std::algorithm 等 STL））
+        }
       }
     }
     multiDexEnabled = true
   }
-  externalNativeBuild {
-    cmake {
-      path = file("CMakeLists.txt")
-      version = "3.31.1"
+  if (prebuiltNativeLibsAvailable) {
+    externalNativeBuild {
+      cmake {
+        path = file("CMakeLists.txt")
+        version = "3.31.1"
+      }
     }
+  } else {
+    logger.warn(
+        "core:git prebuilt native libs not found at src/main/jniLibs/*/libgit2.so; " +
+            "skipping externalNativeBuild. The puppygit/git2j JNI will fail to load at runtime."
+    )
   }
 
   buildTypes {

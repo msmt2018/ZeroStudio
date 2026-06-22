@@ -203,12 +203,14 @@ fun ResolutionEditor(
 internal enum class CutoutKind(val displayName: String) {
     NONE("None"),
     NOTCH("Notch"),
+    DYNAMIC_ISLAND("Dynamic Island"),
     PUNCH_HOLE("Punch"),
     WATERFALL("Waterfall");
 
     fun toCutoutGeometry(): CutoutGeometry? = when (this) {
         NONE -> null
         NOTCH -> CutoutGeometry.IPHONE_14_NOTCH
+        DYNAMIC_ISLAND -> CutoutGeometry.DYNAMIC_ISLAND
         PUNCH_HOLE -> CutoutGeometry.PIXEL_PUNCHHOLE
         WATERFALL -> CutoutGeometry.HUAWEI_WATERFALL
     }
@@ -216,6 +218,7 @@ internal enum class CutoutKind(val displayName: String) {
 
 private fun CutoutGeometry.kind(): CutoutKind = when (this) {
     is CutoutGeometry.Notch -> CutoutKind.NOTCH
+    is CutoutGeometry.DynamicIsland -> CutoutKind.DYNAMIC_ISLAND
     is CutoutGeometry.PunchHole -> CutoutKind.PUNCH_HOLE
     is CutoutGeometry.WaterfallCurve -> CutoutKind.WATERFALL
 }

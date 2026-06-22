@@ -20,7 +20,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -146,10 +146,7 @@ internal fun EditedFilesList(
         val fileName = remember(path) { path.substringAfterLast('/') }
         ModalBottomSheet(
             onDismissRequest = { selectedPath = null },
-            sheetState = rememberBottomSheetState(
-                initialValue = SheetValue.Hidden,
-                enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-            ),
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             Column(
                 modifier = Modifier

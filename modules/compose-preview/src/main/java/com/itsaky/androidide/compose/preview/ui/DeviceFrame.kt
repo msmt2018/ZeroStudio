@@ -604,6 +604,25 @@ fun DeviceThumbnail(
                                 .background(cutoutColor, RoundedCornerShape(2.dp))
                         )
                     }
+                    is CutoutGeometry.DynamicIsland -> {
+                        // 灵动岛形状与 Notch 相似, 沿用 Notch 渲染路径, 仅放大圆角
+                        val w = with(density) { c.widthDp.dp.toPx() } * 0.05f
+                        val h = with(density) { c.heightDp.dp.toPx() } * 0.05f
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        ((width.toPx() - w) / 2f).roundToInt(),
+                                        0
+                                    )
+                                }
+                                .size(with(density) { w.toDp() }, with(density) { h.toDp() })
+                                .background(
+                                    cutoutColor,
+                                    RoundedCornerShape((c.cornerRadiusDp * 0.05f).dp)
+                                )
+                        )
+                    }
                     is CutoutGeometry.PunchHole -> {
                         val d = with(density) { c.diameterDp.dp.toPx() } * 0.05f
                         Box(

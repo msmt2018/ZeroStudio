@@ -77,7 +77,7 @@ val PermissionNotification = PermissionInfo(
 
 @RequiresApi(37)
 val PermissionLocalNetwork = PermissionInfo(
-    permission = Manifest.permission.ACCESS_LOCAL_NETWORK,
+    permission = "android.permission.ACCESS_LOCAL_NETWORK",
     displayName = { Text(stringResource(R.string.permission_local_network)) },
     usage = { Text(stringResource(R.string.permission_local_network_desc)) },
     required = true

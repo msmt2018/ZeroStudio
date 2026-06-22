@@ -198,14 +198,19 @@ dependencies {
 
     // Haze (background blur)
     implementation(libs.haze)
-    implementation(libs.haze.materials)
+    implementation(libs.haze.blur.materials)
     implementation(libs.haze.blur)
 
     // koin
-    implementation(platform(libs.koin.bom))
-    implementation(libs.koin.android)
-    implementation(libs.koin.compose)
-    implementation(libs.koin.androidx.workmanager)
+    // Exposed via api() so that consumers (e.g. core/app, which owns the
+    // Application class and therefore calls startKoin) can resolve the
+    // Koin DSL symbols (startKoin, androidLogger, androidContext,
+    // workManagerFactory, modules) and the Module class itself without
+    // having to redeclare the same Koin coordinates.
+    api(platform(libs.koin.bom))
+    api(libs.koin.android)
+    api(libs.koin.compose)
+    api(libs.koin.androidx.workmanager)
 
     // jetbrains markdown parser
     implementation(libs.jetbrains.markdown)
@@ -307,7 +312,7 @@ dependencies {
     implementation(projects.core.chatai.speech)
     implementation(projects.core.chatai.common)
     implementation(projects.core.chatai.material3)
-    implementation(projects.core.chatai.workspac)
+    implementation(projects.core.chatai.workspace)
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
     implementation(kotlin("reflect"))
 

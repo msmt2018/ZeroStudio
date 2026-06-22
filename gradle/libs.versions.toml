@@ -133,7 +133,7 @@ metadataExtractor = "2.20.0"
 javaxAnnotation = "1.3.2"
 orgNanohttpd = "2.3.1"
 incap = "1.0.0"
-haze = "1.7.2"
+haze = "2.0.0-alpha03"
 huge-icons = "1.3"
 jmdns = "3.6.3"
 slf4j-android = "1.7.36"
@@ -525,7 +525,7 @@ quickjs = { group = "wang.harlon.quickjs", name = "wrapper-android", version.ref
 dom4j = { module = "org.dom4j:dom4j", version.ref = "dom4j" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
-haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
+haze-blur-materials = { module = "dev.chrisbanes.haze:haze-blur-materials", version.ref = "haze" }
 jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
 slf4j-android = { module = "org.slf4j:slf4j-android", version.ref = "slf4j-android" }
 sqlite-android = { module = "com.github.rikkahub:sqlite-android", version.ref = "sqlite-android" }

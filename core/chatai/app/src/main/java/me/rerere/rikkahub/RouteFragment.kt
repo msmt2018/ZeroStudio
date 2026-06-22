@@ -237,11 +237,12 @@ class RouteFragment : Fragment() {
         }
         val migrationState by DatabaseMigrationTracker.state.collectAsStateWithLifecycle()
 
+        val ctx = requireContext()
         val startScreen = Screen.Chat(
-            id = if (readBooleanPreference("create_new_conversation_on_start", true)) {
+            id = if (ctx.readBooleanPreference("create_new_conversation_on_start", true)) {
                 Uuid.random().toString()
             } else {
-                readStringPreference(
+                ctx.readStringPreference(
                     "lastConversationId",
                     Uuid.random().toString()
                 ) ?: Uuid.random().toString()

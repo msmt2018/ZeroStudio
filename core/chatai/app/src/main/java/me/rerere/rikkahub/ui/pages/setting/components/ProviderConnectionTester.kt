@@ -19,7 +19,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -262,7 +262,7 @@ private fun TestResultItem(
     }
 
     if (showErrorSheet && state is UiState.Error) {
-        val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val stackTrace = remember(state.error) {
             state.error.stackTraceToString()
         }

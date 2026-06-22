@@ -266,45 +266,49 @@ private fun PositionedBubble(
     }
   }
 
-  val offsetModifier = when (resolvedPlacement) {
-    BubblePlacement.Auto,
-    BubblePlacement.Above -> Modifier.absoluteOffsetByRect(
-      targetRect = targetRect,
-      alignX = AlignH.Center,
-      // 气泡显示在 target **上方**: y = targetRect.top - height - margin
-      alignY = AlignV.Above,
-      margin = margin,
-    )
-    BubblePlacement.Below -> Modifier.absoluteOffsetByRect(
-      targetRect = targetRect,
-      alignX = AlignH.Center,
-      // 气泡显示在 target **下方**: y = targetRect.bottom + margin
-      alignY = AlignV.Below,
-      margin = margin,
-    )
-    BubblePlacement.Left -> Modifier.absoluteOffsetByRect(
-      targetRect = targetRect,
-      alignX = AlignH.RightOf,
-      alignY = AlignV.Center,
-      margin = margin,
-    )
-    BubblePlacement.Right -> Modifier.absoluteOffsetByRect(
-      targetRect = targetRect,
-      alignX = AlignH.LeftOf,
-      alignY = AlignV.Center,
-      margin = margin,
-    )
-    BubblePlacement.TopCenter -> Modifier
-      .align(Alignment.TopCenter)
-      .padding(top = 32.dp)
-    BubblePlacement.BottomCenter -> Modifier
-      .align(Alignment.BottomCenter)
-      .padding(bottom = 32.dp)
-    is BubblePlacement.Custom -> Modifier
-      .offset(x = resolvedPlacement.x.dp, y = resolvedPlacement.y.dp)
-  }
-
   Box(modifier = Modifier.fillMaxSize()) {
+    // 在 BoxScope 内构建 offsetModifier, 这样 .align(Alignment.TopCenter/BottomCenter) 可用
+    val offsetModifier = when (resolvedPlacement) {
+      BubblePlacement.Auto,
+      BubblePlacement.Above -> Modifier.absoluteOffsetByRect(
+        targetRect = targetRect,
+        bubbleSize = bubbleSize,
+        alignX = AlignH.Center,
+        // 气泡显示在 target **上方**: y = targetRect.top - height - margin
+        alignY = AlignV.Above,
+        margin = margin,
+      )
+      BubblePlacement.Below -> Modifier.absoluteOffsetByRect(
+        targetRect = targetRect,
+        bubbleSize = bubbleSize,
+        alignX = AlignH.Center,
+        // 气泡显示在 target **下方**: y = targetRect.bottom + margin
+        alignY = AlignV.Below,
+        margin = margin,
+      )
+      BubblePlacement.Left -> Modifier.absoluteOffsetByRect(
+        targetRect = targetRect,
+        bubbleSize = bubbleSize,
+        alignX = AlignH.RightOf,
+        alignY = AlignV.Center,
+        margin = margin,
+      )
+      BubblePlacement.Right -> Modifier.absoluteOffsetByRect(
+        targetRect = targetRect,
+        bubbleSize = bubbleSize,
+        alignX = AlignH.LeftOf,
+        alignY = AlignV.Center,
+        margin = margin,
+      )
+      BubblePlacement.TopCenter -> Modifier
+        .align(Alignment.TopCenter)
+        .padding(top = 32.dp)
+      BubblePlacement.BottomCenter -> Modifier
+        .align(Alignment.BottomCenter)
+        .padding(bottom = 32.dp)
+      is BubblePlacement.Custom -> Modifier
+        .offset(x = resolvedPlacement.x.dp, y = resolvedPlacement.y.dp)
+    }
     Box(
       modifier = offsetModifier
         .onSizeChanged { bubbleSize = Size(it.width.toFloat(), it.height.toFloat()) },
@@ -418,15 +422,21 @@ private enum class AlignV { Above, Below, Center }
  *
  * 区别于标准 [Modifier.offset]: 这个 offset 用绝对像素,
  * 因为 targetRect 是绝对坐标 (来自 positionInWindow).
+ *
+ * 旧版 Compose 的 `Modifier.offset { intSize -> IntOffset(...) }` 在新版里
+ * 签名已改为 `Modifier.offset { IntOffset(...) }` (接收 Density, 不再接 intSize),
+ * 因此这里改成基于 bubbleSize 计算后再用 `offset(x, y)` 应用.
  */
+@Composable
 private fun Modifier.absoluteOffsetByRect(
   targetRect: Rect,
+  bubbleSize: Size,
   alignX: AlignH,
   alignY: AlignV,
   margin: Float = 0f,
-): Modifier = this.offset { intSize ->
-  val width = intSize.width.toFloat()
-  val height = intSize.height.toFloat()
+): Modifier {
+  val width = bubbleSize.width
+  val height = bubbleSize.height
   val targetCx = targetRect.left + targetRect.width / 2f
   val targetCy = targetRect.top + targetRect.height / 2f
 
@@ -440,7 +450,11 @@ private fun Modifier.absoluteOffsetByRect(
     AlignV.Below -> targetRect.bottom + margin
     AlignV.Center -> targetCy - height / 2f
   }
-  IntOffset(x.roundToInt(), y.roundToInt())
+  val density = LocalDensity.current
+  return this.offset(
+    x = with(density) { x.toDp() },
+    y = with(density) { y.toDp() },
+  )
 }
 
 // =============================================================================

@@ -383,7 +383,7 @@ class MyCodeEditor(
             stylesUpdateRequest = StylesUpdateRequest(
                 ignoreThis = false,
                 targetEditorState = editorState,
-                act = { styleReceiver -> lang.analyzeManager.reset(ContentReference(Content(text)), Bundle(), styleReceiver) }
+                act = { lang.analyzeManager.reset(ContentReference(Content(text)), Bundle()) }
             ),
             language = lang
         )

@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -127,7 +128,7 @@ internal fun HighlightShape.toShape(
     }
   }
   is HighlightShape.RoundedRect -> RoundedCornerShape(cornerRadius)
-  HighlightShape.Rect -> androidx.compose.foundation.shape.RectangleShape
+  HighlightShape.Rect -> RectangleShape
   HighlightShape.Circle -> CircleShape
   HighlightShape.Oval -> OvalShapeImpl
   HighlightShape.Stadium -> StadiumShapeImpl

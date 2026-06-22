@@ -70,6 +70,7 @@ import me.rerere.hugeicons.stroke.Share08
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.tools.resolveWorkspaceToolApproval
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
+import me.rerere.rikkahub.data.db.entity.toolApprovalOverrides
 import androidx.compose.ui.res.stringResource
 import me.rerere.rikkahub.R
 import me.rerere.rikkahub.ui.components.nav.BackButton

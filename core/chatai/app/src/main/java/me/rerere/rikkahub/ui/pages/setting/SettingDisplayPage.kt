@@ -343,20 +343,18 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                                 )
                             },
                         )
-                        val chatFontFamilyOptions = listOf(
-                            ChatFontFamily.DEFAULT to stringResource(R.string.setting_display_page_chat_font_family_default),
-                            ChatFontFamily.SERIF to stringResource(R.string.setting_display_page_chat_font_family_serif),
-                            ChatFontFamily.MONOSPACE to stringResource(R.string.setting_display_page_chat_font_family_monospace),
-                        )
                         item(
                             headlineContent = { Text(stringResource(R.string.setting_display_page_chat_font_family_title)) },
                             supportingContent = {
+                                val chatFontFamilyOptions = remember {
+                                    listOf(ChatFontFamily.DEFAULT, ChatFontFamily.SERIF, ChatFontFamily.MONOSPACE)
+                                }
                                 SingleChoiceSegmentedButtonRow(
                                     modifier = Modifier
                                         .padding(top = 4.dp)
                                         .fillMaxWidth()
                                 ) {
-                                    chatFontFamilyOptions.forEachIndexed { index, (family, label) ->
+                                    chatFontFamilyOptions.forEachIndexed { index, family ->
                                         SegmentedButton(
                                             selected = displaySetting.chatFontFamily == family,
                                             onClick = { updateDisplaySetting(displaySetting.copy(chatFontFamily = family)) },
@@ -365,12 +363,21 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                                                 chatFontFamilyOptions.size
                                             ),
                                         ) {
+                                            val label = stringResource(
+                                                when (family) {
+                                                    ChatFontFamily.DEFAULT -> R.string.setting_display_page_chat_font_family_default
+                                                    ChatFontFamily.SERIF -> R.string.setting_display_page_chat_font_family_serif
+                                                    ChatFontFamily.MONOSPACE -> R.string.setting_display_page_chat_font_family_monospace
+                                                    ChatFontFamily.CUSTOM -> R.string.setting_display_page_chat_font_family_default
+                                                }
+                                            )
                                             Text(
                                                 text = label,
                                                 fontFamily = when (family) {
                                                     ChatFontFamily.DEFAULT -> FontFamily.Default
                                                     ChatFontFamily.SERIF -> FontFamily.Serif
                                                     ChatFontFamily.MONOSPACE -> FontFamily.Monospace
+                                                    ChatFontFamily.CUSTOM -> FontFamily.Default
                                                 }
                                             )
                                         }
@@ -407,6 +414,7 @@ fun SettingDisplayPage(vm: SettingVM = koinViewModel()) {
                                                 ChatFontFamily.DEFAULT -> FontFamily.Default
                                                 ChatFontFamily.SERIF -> FontFamily.Serif
                                                 ChatFontFamily.MONOSPACE -> FontFamily.Monospace
+                                                ChatFontFamily.CUSTOM -> FontFamily.Default
                                             }
                                         )
                                     )

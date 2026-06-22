@@ -29,8 +29,17 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         # List C/C++ source files with relative paths to this CMakeLists.txt.
         workspace.cpp)
 
-add_library(termux SHARED
-        termux_pty.cpp)
+# 注意: 之前这里还 add_library(termux SHARED termux_pty.cpp) 提供
+# com.termux.terminal.JNI 的 JNI 实现。但 termux/emulator 模块已经通过
+# ndk-build (src/main/jni/Android.mk) 输出了 libtermux.so, 二者同名冲突,
+# 会在 :core:app:mergeDebugNativeLibs 阶段直接 FAILED:
+#   "2 files found with path 'lib/arm64-v8a/libtermux.so' from inputs:
+#    - termux/emulator/.../libtermux.so
+#    - core/chatai/workspace/.../libtermux.so"
+# termux/emulator 那一份覆盖范围更全 (多出 setPtyUTF8Mode 等), 并且
+# core/chatai/workspace 自己的 Java/Kotlin 代码没有调用 com.termux.terminal.JNI,
+# 所以把这里的 termux target 移除, JNI 完全交给 termux/emulator 负责。
+# 保留 termux_pty.cpp 源文件但不再编译, 方便以后真要替换实现时参考。
 
 # Specifies libraries CMake should link to your target library. You
 # can link libraries from various origins, such as libraries defined in this
@@ -38,7 +47,4 @@ add_library(termux SHARED
 target_link_libraries(${CMAKE_PROJECT_NAME}
         # List libraries link to the target library
         android
-        log)
-
-target_link_libraries(termux
         log)

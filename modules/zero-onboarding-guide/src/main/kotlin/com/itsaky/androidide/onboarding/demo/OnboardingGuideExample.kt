@@ -51,7 +51,6 @@ import com.itsaky.androidide.onboarding.LaunchOnboarding
 import com.itsaky.androidide.onboarding.OnboardingConfig
 import com.itsaky.androidide.onboarding.OnboardingController
 import com.itsaky.androidide.onboarding.OnboardingOverlay
-import com.itsaky.androidide.onboarding.OnboardingPreferences
 import com.itsaky.androidide.onboarding.OnboardingStep
 import com.itsaky.androidide.onboarding.OnboardingTarget
 import com.itsaky.androidide.onboarding.bubble.BubbleContent
@@ -61,6 +60,7 @@ import com.itsaky.androidide.onboarding.highlight.HighlightAnimation
 import com.itsaky.androidide.onboarding.highlight.HighlightShape
 import com.itsaky.androidide.onboarding.highlight.HighlightTheme
 import com.itsaky.androidide.onboarding.onboardingBind
+import com.itsaky.androidide.onboarding.prefs.OnboardingPreferences
 import com.itsaky.androidide.onboarding.prefs.SharedPreferencesOnboardingPreferences
 import com.itsaky.androidide.onboarding.simulation.GestureType
 import com.itsaky.androidide.onboarding.simulation.PathPoint
@@ -102,8 +102,10 @@ fun OnboardingGuideExample() {
   val density = LocalDensity.current
 
   // === 启动引导 (带持久化) ===
-  LaunchedEffect(Unit) {
-    val steps = listOf(
+  // steps 在 Composable 作用域中定义, 因为 LaunchOnboarding 是 Composable 函数
+  // (新版 Compose 中 LaunchOnboarding 必须在 Composable 上下文中调用)
+  val steps = remember(searchTarget, settingsTarget, drawerTarget) {
+    listOf(
       // ===== 步骤 1: 欢迎 (无目标, 居中气泡) =====
       OnboardingStep(
         id = "welcome",
@@ -218,17 +220,18 @@ fun OnboardingGuideExample() {
         touchSimulator = TouchSimulator.tap(x = 0f, y = 0f),
       ),
     )
-
-    controller = LaunchOnboarding(
-      steps = steps,
-      config = OnboardingConfig(
-        guideId = "demo_onboarding_v1",        // <-- 持久化 ID
-        preferences = prefs,                   // <-- 持久化实现
-        skipIfCompleted = true,                // <-- 已完成则自动跳过
-      ),
-      autoStart = true,
-    )
   }
+
+  // LaunchOnboarding 是 Composable 函数, 必须在 Composable 作用域 (而非 LaunchedEffect 协程块) 中调用
+  controller = LaunchOnboarding(
+    steps = steps,
+    config = OnboardingConfig(
+      guideId = "demo_onboarding_v1",        // <-- 持久化 ID
+      preferences = prefs,                   // <-- 持久化实现
+      skipIfCompleted = true,                // <-- 已完成则自动跳过
+    ),
+    autoStart = true,
+  )
 
   Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF5F5F5))) {
     // === 主内容 UI ===
