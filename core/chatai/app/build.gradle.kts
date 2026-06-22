@@ -202,10 +202,15 @@ dependencies {
     implementation(libs.haze.blur)
 
     // koin
-    implementation(platform(libs.koin.bom))
-    implementation(libs.koin.android)
-    implementation(libs.koin.compose)
-    implementation(libs.koin.androidx.workmanager)
+    // Exposed via api() so that consumers (e.g. core/app, which owns the
+    // Application class and therefore calls startKoin) can resolve the
+    // Koin DSL symbols (startKoin, androidLogger, androidContext,
+    // workManagerFactory, modules) and the Module class itself without
+    // having to redeclare the same Koin coordinates.
+    api(platform(libs.koin.bom))
+    api(libs.koin.android)
+    api(libs.koin.compose)
+    api(libs.koin.androidx.workmanager)
 
     // jetbrains markdown parser
     implementation(libs.jetbrains.markdown)
