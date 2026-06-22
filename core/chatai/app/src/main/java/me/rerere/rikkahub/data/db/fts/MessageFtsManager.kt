@@ -7,7 +7,6 @@ import me.rerere.ai.ui.UIMessage
 import me.rerere.ai.ui.UIMessagePart
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.model.Conversation
-import me.rerere.rikkahub.data.model.MessageNode
 import java.time.Instant
 
 data class MessageSearchResult(
@@ -32,6 +31,10 @@ class MessageFtsManager(private val database: AppDatabase) {
     private val db get() = database.openHelper.writableDatabase
 
     suspend fun indexConversation(conversation: Conversation) = withContext(Dispatchers.IO) {
+        // FTS5 模块不可用时 (见 FtsAvailability), `message_fts` 表根本没建,
+        // 任何对它的 INSERT/DELETE 都会抛 "no such table: message_fts"。
+        // 直接跳过, 不要让搜索索引拖垮业务写入.
+        if (!FtsAvailability.available) return@withContext
         val conversationId = conversation.id.toString()
         db.execSQL("DELETE FROM message_fts WHERE conversation_id = ?", arrayOf(conversationId))
         conversation.messageNodes.forEach { node ->
@@ -55,10 +58,12 @@ class MessageFtsManager(private val database: AppDatabase) {
     }
 
     suspend fun deleteConversation(conversationId: String) = withContext(Dispatchers.IO) {
+        if (!FtsAvailability.available) return@withContext
         db.execSQL("DELETE FROM message_fts WHERE conversation_id = ?", arrayOf(conversationId))
     }
 
     suspend fun deleteAll() = withContext(Dispatchers.IO) {
+        if (!FtsAvailability.available) return@withContext
         db.execSQL("DELETE FROM message_fts")
     }
 
@@ -66,6 +71,12 @@ class MessageFtsManager(private val database: AppDatabase) {
         keyword: String,
         sort: MessageSearchSort = MessageSearchSort.RELEVANCE,
     ): List<MessageSearchResult> = withContext(Dispatchers.IO) {
+        // FTS5 不可用时直接返回空, 不去查 `message_fts` (那表不存在).
+        // SearchVM/SearchPage 拿到空列表会渲染空态, 不会闪退。
+        if (!FtsAvailability.available) {
+            Log.i(TAG, "search skipped: FTS5 unavailable (keyword='$keyword')")
+            return@withContext emptyList()
+        }
         val results = mutableListOf<MessageSearchResult>()
         // jieba 扩展 libsimple.so 不可用时 (见 JiebaAvailability), 整个连接上
         // 没有 jieba_query() 这个标量函数, 调了会抛
