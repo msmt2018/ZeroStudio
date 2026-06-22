@@ -77,6 +77,18 @@
             android:visibility="gone"
             android:layout_marginTop="2dp"
             tools:text="条件: i > 0"/>
+
+        <TextView
+            android:id="@+id/bp_log_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:visibility="gone"
+            android:layout_marginTop="2dp"
+            tools:text="日志: x = 42"/>
     </LinearLayout>
 
 </LinearLayout>

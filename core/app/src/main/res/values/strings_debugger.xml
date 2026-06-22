@@ -13,6 +13,7 @@
     <!-- 断点 item 菜单 -->
     <string name="debugger_action_toggle_bp">启用 / 禁用</string>
     <string name="debugger_action_edit_condition">编辑条件</string>
+    <string name="debugger_action_edit_log">编辑日志点</string>
     <string name="debugger_action_bp_delete">删除</string>
     <string name="debugger_action_bp_enable_all">全部启用</string>
     <string name="debugger_action_bp_disable_all">全部禁用</string>
@@ -70,4 +71,11 @@
     <string name="debugger_eval_error">求值失败：%1$s</string>
     <string name="debugger_eval_object">&lt;object&gt;</string>
     <string name="debugger_eval_array">&lt;array&gt;</string>
+
+    <!-- PR-6: 条件断点 / 日志点 -->
+    <string name="debugger_logpoint_tab">日志点</string>
+    <string name="debugger_log_title">日志点输出</string>
+    <string name="debugger_log_empty">没有日志点输出\n在断点上设置日志消息表达式</string>
+    <string name="debugger_log_clear">清空</string>
+    <string name="debugger_log_autoscroll">自动滚动</string>
 </resources>

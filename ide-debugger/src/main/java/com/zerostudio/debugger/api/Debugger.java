@@ -123,13 +123,21 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
      * resolved.
      */
     public long addBreakpoint(@NonNull String sourceFile, int line) {
-        return addBreakpoint(sourceFile, line, null);
+        return addBreakpoint(sourceFile, line, null, null);
     }
 
     public long addBreakpoint(
             @NonNull String sourceFile, int line, @Nullable String condition) {
+        return addBreakpoint(sourceFile, line, condition, null);
+    }
+
+    public long addBreakpoint(
+            @NonNull String sourceFile,
+            int line,
+            @Nullable String condition,
+            @Nullable String logMessage) {
         long id = breakpointIdGen.incrementAndGet();
-        Breakpoint bp = new Breakpoint(id, sourceFile, line, condition);
+        Breakpoint bp = new Breakpoint(id, sourceFile, line, condition, logMessage);
         breakpoints.add(bp);
         try {
             sourceLocator.installBreakpoint(bp);
@@ -293,6 +301,26 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
     }
 
     void onSuspend(@NonNull SuspendInfo info) {
+        // PR-6: handle conditional breakpoints and logpoints BEFORE
+        // notifying the UI. A logpoint never pauses the program; a
+        // conditional breakpoint only pauses if the condition evaluates
+        // truthy.
+        if (info.reason == SuspendInfo.Reason.BREAKPOINT
+                && info.frames != null && !info.frames.isEmpty()) {
+            StackFrameInfo top = info.frames.get(0);
+            Breakpoint bp = breakpoints.findByLocation(top.sourceFile, top.lineNumber);
+            if (bp != null) {
+                if (bp.isLogpoint()) {
+                    handleLogpoint(bp, info, top);
+                    return;
+                }
+                if (bp.isConditional()) {
+                    if (!handleCondition(bp, info, top)) {
+                        return; // condition false -> don't suspend
+                    }
+                }
+            }
+        }
         lastSuspend = info;
         session.setState(DebugSession.State.SUSPENDED);
         // Clean up one-shot breakpoints.
@@ -301,6 +329,67 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
         // Also notify high-level listeners for backward compatibility.
         for (Listener l : listeners) {
             try { l.onSuspend(info); } catch (Throwable ignored) { }
+        }
+    }
+
+    /**
+     * Evaluate a logpoint expression in the top frame and publish the
+     * resulting message on the log bus. Resumes the VM without ever
+     * notifying the UI about a suspend.
+     */
+    private void handleLogpoint(
+            @NonNull Breakpoint bp,
+            @NonNull SuspendInfo info,
+            @NonNull StackFrameInfo top) {
+        EvalResult r = eval.evaluate(top.threadId, top.frameId, bp.logMessage);
+        String text = r.isError() || r.displayValue == null
+                ? "(eval error: " + r.error + ")"
+                : r.displayValue;
+        eventBus.publish(DebugEvents.logpoint(bp, text));
+        // Resume immediately.
+        try { sourceLocator.resumeAll(); } catch (java.io.IOException ignored) {}
+        session.setState(DebugSession.State.RUNNING);
+        lastSuspend = null;
+    }
+
+    /**
+     * Evaluate a conditional breakpoint. Returns true if the program should
+     * suspend (condition truthy or evaluation failed), false if it should
+     * silently resume.
+     */
+    private boolean handleCondition(
+            @NonNull Breakpoint bp,
+            @NonNull SuspendInfo info,
+            @NonNull StackFrameInfo top) {
+        EvalResult r = eval.evaluate(top.threadId, top.frameId, bp.condition);
+        if (r.isError()) {
+            // Don't silently skip - if the user wrote a bad condition,
+            // pause so they can see it.
+            return true;
+        }
+        if (isTruthy(r)) return true;
+        // Condition is false: silently resume.
+        try { sourceLocator.resumeAll(); } catch (java.io.IOException ignored) {}
+        session.setState(DebugSession.State.RUNNING);
+        lastSuspend = null;
+        return false;
+    }
+
+    private static boolean isTruthy(@NonNull EvalResult r) {
+        if (r.displayValue == null) return true; // unknown -> suspend
+        switch (r.tag) {
+            case BOOLEAN: return r.displayValue.equals("true");
+            case INT: case LONG: case SHORT: case BYTE: case CHAR:
+                try { return Long.parseLong(r.displayValue) != 0L; }
+                catch (NumberFormatException e) { return true; }
+            case FLOAT: case DOUBLE:
+                try { return Double.parseDouble(r.displayValue) != 0.0; }
+                catch (NumberFormatException e) { return true; }
+            case OBJECT: case ARRAY: case STRING:
+                // null reference -> don't suspend; everything else -> suspend
+                return r.objectId != 0L;
+            default:
+                return true;
         }
     }
 

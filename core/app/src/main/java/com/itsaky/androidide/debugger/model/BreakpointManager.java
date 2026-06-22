@@ -158,13 +158,24 @@ public final class BreakpointManager {
     }
 
     @MainThread
+    public void setLogMessage(@NonNull String id, @Nullable String logMessage) {
+        IdeBreakpoint bp = findById(id);
+        if (bp == null) return;
+        bp.setLogMessage(logMessage);
+        reinstallOnDebugger(bp);
+        fireStateChanged(bp);
+    }
+
+    @MainThread
     public void setEnabled(@NonNull String id, boolean enabled) {
         IdeBreakpoint bp = findById(id);
         if (bp == null) return;
         bp.state = enabled
-                ? (bp.condition != null && !bp.condition.isEmpty()
-                        ? IdeBreakpoint.State.CONDITION
-                        : IdeBreakpoint.State.NORMAL)
+                ? (bp.logMessage != null && !bp.logMessage.isEmpty()
+                        ? IdeBreakpoint.State.LOG
+                        : (bp.condition != null && !bp.condition.isEmpty()
+                                ? IdeBreakpoint.State.CONDITION
+                                : IdeBreakpoint.State.NORMAL))
                 : IdeBreakpoint.State.DISABLED;
         if (enabled) {
             installOnDebugger(bp);
@@ -264,9 +275,15 @@ public final class BreakpointManager {
     /** ide-debugger 报告该断点已验证 (server returned a valid location)。 */
     public void markVerified(@NonNull IdeBreakpoint bp) {
         if (bp.state == IdeBreakpoint.State.VERIFIED) return;
-        bp.state = (bp.condition != null && !bp.condition.isEmpty())
-                ? IdeBreakpoint.State.CONDITION
-                : IdeBreakpoint.State.VERIFIED;
+        if (bp.state == IdeBreakpoint.State.LOG
+                || (bp.logMessage != null && !bp.logMessage.isEmpty())) {
+            bp.state = IdeBreakpoint.State.LOG;
+        } else if (bp.state == IdeBreakpoint.State.CONDITION
+                || (bp.condition != null && !bp.condition.isEmpty())) {
+            bp.state = IdeBreakpoint.State.CONDITION;
+        } else {
+            bp.state = IdeBreakpoint.State.VERIFIED;
+        }
         fireStateChanged(bp);
     }
 
@@ -291,7 +308,8 @@ public final class BreakpointManager {
         if (!bp.isActive()) return;
         try {
             String cond = (bp.state == IdeBreakpoint.State.CONDITION) ? bp.condition : null;
-            long id = debugger.addBreakpoint(bp.file, bp.line, cond);
+            String log = (bp.state == IdeBreakpoint.State.LOG) ? bp.logMessage : null;
+            long id = debugger.addBreakpoint(bp.file, bp.line, cond, log);
             bp.debuggerBpId = id;
         } catch (Throwable t) {
             ILogger.debug(TAG, "installOnDebugger failed: " + t.getMessage());

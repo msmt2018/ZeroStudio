@@ -16,11 +16,14 @@ package com.itsaky.androidide.debugger;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
+import com.itsaky.androidide.debugger.model.LogStore;
 import com.itsaky.androidide.ui.CodeEditorView;
 import com.itsaky.androidide.utils.ILogger;
 import com.zerostudio.debugger.api.Debugger;
 import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.SuspendInfo;
+import com.zerostudio.debugger.event.DebugEventBus;
+import com.zerostudio.debugger.event.DebugEvents;
 import com.zerostudio.debugger.model.DebugSession.State;
 import java.io.File;
 
@@ -57,6 +60,22 @@ public final class DebuggerController
         });
     }
 
+    /**
+     * PR-6: forward logpoint events from the freshly-created debugger's
+     * event bus to the in-process LogStore. Called once per
+     * {@link #connect(String, int)} call.
+     */
+    private void subscribeLogpointBus(@NonNull com.zerostudio.debugger.api.Debugger dbg) {
+        dbg.eventBus().subscribe(new DebugEventBus.DebugEventsListener() {
+            @Override
+            public void onDebugEvent(@NonNull DebugEvents event) {
+                if (event.type == DebugEvents.Type.LOGPOINT) {
+                    LogStore.getInstance().append(event.sourceFile, event.line, event.message);
+                }
+            }
+        });
+    }
+
     public void attachActivity(@Nullable com.itsaky.androidide.activities.editor.BaseEditorActivity activity) {
         this.attachedActivity = activity;
     }
@@ -67,6 +86,7 @@ public final class DebuggerController
             if (debugger == null) {
                 debugger = new Debugger();
                 debugger.addListener(this);
+                subscribeLogpointBus(debugger);
             }
             debugger.connect(host, port);
             BreakpointManager.getInstance().bindDebugger(debugger);

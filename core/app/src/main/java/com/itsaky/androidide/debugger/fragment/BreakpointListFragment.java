@@ -121,6 +121,10 @@ public class BreakpointListFragment extends Fragment
                 showConditionDialog(bp);
                 return true;
             }
+            if (id == R.id.menu_bp_edit_log) {
+                showLogpointDialog(bp);
+                return true;
+            }
             if (id == R.id.menu_bp_delete) {
                 BreakpointManager.getInstance().remove(bp.id);
                 return true;
@@ -140,6 +144,24 @@ public class BreakpointListFragment extends Fragment
                 .setView(input)
                 .setPositiveButton("确定", (d, w) ->
                         BreakpointManager.getInstance().setCondition(bp.id, input.getText().toString()))
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /**
+     * PR-6: dialog for editing a breakpoint's log message (logpoint).
+     * Setting a non-empty value marks the breakpoint as a logpoint; the
+     * VM will evaluate the message on hit and never pause.
+     */
+    private void showLogpointDialog(@NonNull IdeBreakpoint bp) {
+        android.widget.EditText input = new android.widget.EditText(requireContext());
+        input.setText(bp.logMessage != null ? bp.logMessage : "");
+        input.setHint("日志消息 (e.g. \"x=\" + x)");
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("编辑日志点")
+                .setView(input)
+                .setPositiveButton("确定", (d, w) ->
+                        BreakpointManager.getInstance().setLogMessage(bp.id, input.getText().toString()))
                 .setNegativeButton("取消", null)
                 .show();
     }

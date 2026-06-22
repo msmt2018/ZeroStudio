@@ -61,12 +61,13 @@ public final class BreakpointStore {
                     int line = o.optInt("line", -1);
                     if (f.isEmpty() || line <= 0) continue;
                     String cond = o.optString("condition", null);
+                    String log = o.optString("logMessage", null);
                     IdeBreakpoint.State state = IdeBreakpoint.State.NORMAL;
                     try {
                         state = IdeBreakpoint.State.valueOf(o.optString("state", "NORMAL"));
                     } catch (IllegalArgumentException ignored) {}
                     IdeBreakpoint bp = new IdeBreakpoint(
-                            f, line, cond, state, -1L, o.optInt("hitCount", 0));
+                            f, line, cond, log, state, -1L, o.optInt("hitCount", 0));
                     mgr.add(bp);
                 }
                 Log.i(TAG, "Loaded " + arr.length() + " breakpoints from " + file);
@@ -95,6 +96,7 @@ public final class BreakpointStore {
                     o.put("file", bp.file);
                     o.put("line", bp.line);
                     if (bp.condition != null) o.put("condition", bp.condition);
+                    if (bp.logMessage != null) o.put("logMessage", bp.logMessage);
                     o.put("state", bp.state.name());
                     o.put("hitCount", bp.hitCount);
                     arr.put(o);

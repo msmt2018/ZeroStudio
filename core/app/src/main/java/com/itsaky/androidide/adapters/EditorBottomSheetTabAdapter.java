@@ -27,6 +27,7 @@ import com.itsaky.androidide.fragments.DiagnosticsListFragment;
 import com.itsaky.androidide.fragments.SearchResultFragment;
 import com.itsaky.androidide.debugger.fragment.BreakpointListFragment;
 import com.itsaky.androidide.debugger.fragment.CallStackFragment;
+import com.itsaky.androidide.debugger.fragment.LogpointFragment;
 import com.itsaky.androidide.debugger.fragment.VariablesFragment;
 import com.itsaky.androidide.debugger.fragment.WatchesFragment;
 import com.itsaky.androidide.fragments.output.AppLogFragment;
@@ -91,6 +92,10 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
         VariablesFragment.class, ++index));
     this.fragments.add(new Tab(fragmentActivity.getString(R.string.debugger_watches_tab),
         WatchesFragment.class, ++index));
+
+    // PR-6: 日志点输出 tab
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.debugger_logpoint_tab),
+        LogpointFragment.class, ++index));
   }
 
   public Fragment getFragmentAtIndex(int index) {
@@ -193,6 +198,11 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
   @Nullable
   public WatchesFragment getWatchesFragment() {
     return findFragmentByClass(WatchesFragment.class);
+  }
+
+  @Nullable
+  public LogpointFragment getLogpointFragment() {
+    return findFragmentByClass(LogpointFragment.class);
   }
 
   public <T extends Fragment> int findIndexOfFragmentByClass(@NonNull Class<T> tClass) {

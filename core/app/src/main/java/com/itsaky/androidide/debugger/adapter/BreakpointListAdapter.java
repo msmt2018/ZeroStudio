@@ -1,16 +1,18 @@
 /*
  *  ZeroStudio IDE - 断点列表 RecyclerView 适配器
  *
- *  6 种状态对应不同的圆形色块 + 文本标签：
- *   - NORMAL 🔴 普通
- *   - INVALID ⭕ 无效
- *   - VERIFIED 🟢 已验证
- *   - CONDITION 🟡 条件
- *   - DISABLED 🚫 禁用
- *   - HIT 🔵 命中
+ *  7 种状态对应不同的圆形色块 + 文本标签：
+ *   - NORMAL    - 普通
+ *   - INVALID   - 无效
+ *   - VERIFIED  - 已验证
+ *   - CONDITION - 条件
+ *   - LOG       - 日志点
+ *   - DISABLED  - 禁用
+ *   - HIT       - 命中
  *
+ *  PR-6: 加入 LOG 状态 + logMessage 文本。
  *  点击：跳转到对应文件/行。
- *  长按：弹出操作菜单（编辑条件/启用-禁用/删除）。
+ *  长按：弹出操作菜单（编辑条件/编辑日志点/启用-禁用/删除）。
  */
 
 package com.itsaky.androidide.debugger.adapter;
@@ -23,6 +25,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
@@ -64,9 +67,12 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         h.state.setText(stateLabel(bp.state));
         h.state.setTextColor(colorForState(bp.state));
         h.dot.setImageDrawable(makeDot(bp.state));
-        h.condition.setVisibility(bp.condition != null && !bp.condition.isEmpty()
-                ? View.VISIBLE : View.GONE);
+        boolean hasCondition = bp.condition != null && !bp.condition.isEmpty();
+        boolean hasLog = bp.logMessage != null && !bp.logMessage.isEmpty();
+        h.condition.setVisibility(hasCondition ? View.VISIBLE : View.GONE);
         h.condition.setText(bp.condition != null ? bp.condition : "");
+        h.logMessage.setVisibility(hasLog ? View.VISIBLE : View.GONE);
+        h.logMessage.setText(bp.logMessage != null ? bp.logMessage : "");
 
         h.itemView.setOnClickListener(v -> {
             if (listener != null) listener.onItemClick(bp);
@@ -89,6 +95,7 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         final TextView line;
         final TextView state;
         final TextView condition;
+        final TextView logMessage;
 
         VH(@NonNull View v) {
             super(v);
@@ -97,6 +104,7 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
             line = v.findViewById(R.id.bp_line);
             state = v.findViewById(R.id.bp_state);
             condition = v.findViewById(R.id.bp_condition);
+            logMessage = v.findViewById(R.id.bp_log_message);
         }
     }
 
@@ -106,6 +114,7 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
             case INVALID: return "无效";
             case VERIFIED: return "已验证";
             case CONDITION: return "条件";
+            case LOG: return "日志点";
             case DISABLED: return "禁用";
             case HIT: return "命中";
             default: return state.name();
@@ -118,6 +127,7 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
             case INVALID: return 0xFFB71C1C;
             case VERIFIED: return 0xFF43A047;
             case CONDITION: return 0xFFFBC02D;
+            case LOG: return 0xFF8E24AA;
             case DISABLED: return 0xFF9E9E9E;
             case HIT: return 0xFF1E88E5;
             default: return 0xFFE53935;

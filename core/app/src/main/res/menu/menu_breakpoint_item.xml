@@ -10,6 +10,9 @@
         android:id="@+id/menu_bp_edit_condition"
         android:title="@string/debugger_action_edit_condition"/>
     <item
+        android:id="@+id/menu_bp_edit_log"
+        android:title="@string/debugger_action_edit_log"/>
+    <item
         android:id="@+id/menu_bp_delete"
         android:title="@string/debugger_action_bp_delete"/>
 </menu>

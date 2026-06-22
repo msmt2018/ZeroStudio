@@ -134,6 +134,16 @@ public class BreakpointSidebar extends View {
             canvas.drawLine(cx, cy + r * 0.5f, cx - r * 0.5f, cy, outlinePaint);
             canvas.drawLine(cx - r * 0.5f, cy, cx, cy - r * 0.5f, outlinePaint);
         }
+        if (bp.state == IdeBreakpoint.State.LOG) {
+            // 内部"文"字形简化：两条横线 + 一条竖线 - 表示日志点
+            outlinePaint.setColor(Color.WHITE);
+            outlinePaint.setStrokeWidth(dp(1.2f));
+            float armW = r * 0.6f;
+            float armH = r * 0.35f;
+            canvas.drawLine(cx - armW, cy - armH, cx + armW, cy - armH, outlinePaint);
+            canvas.drawLine(cx - armW, cy,        cx + armW, cy,        outlinePaint);
+            canvas.drawLine(cx,         cy - r * 0.6f, cx,       cy + r * 0.6f, outlinePaint);
+        }
     }
 
     @Override
@@ -189,6 +199,7 @@ public class BreakpointSidebar extends View {
             case INVALID:   return 0xFFB71C1C; // 暗红 / 圆环空心
             case VERIFIED:  return 0xFF43A047; // 绿
             case CONDITION: return 0xFFFBC02D; // 黄
+            case LOG:       return 0xFF8E24AA; // 紫
             case DISABLED:  return 0xFF9E9E9E; // 灰
             case HIT:       return 0xFF1E88E5; // 蓝
             default:        return 0xFFE53935;
