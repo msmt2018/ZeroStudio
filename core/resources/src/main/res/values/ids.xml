@@ -110,7 +110,24 @@
      <item
           name="fragment_containers_parent"
           type="id" />
-          
+
+     <!-- PR-3 / PR-4: 调试器 Action 菜单 ID -->
+     <item type="id" name="dbg_action_resume" />
+     <item type="id" name="dbg_action_pause" />
+     <item type="id" name="dbg_action_stop" />
+     <item type="id" name="dbg_action_step_over" />
+     <item type="id" name="dbg_action_step_into" />
+     <item type="id" name="dbg_action_step_out" />
+     <item type="id" name="dbg_action_run_to_cursor" />
+     <item type="id" name="dbg_action_debug_toggle" />
+     <item type="id" name="dbg_action_bp_enable_all" />
+     <item type="id" name="dbg_action_bp_disable_all" />
+     <item type="id" name="dbg_action_bp_clear" />
+     <item type="id" name="dbg_action_goto_current_bp" />
+     <item type="id" name="dbg_action_show_current_frame" />
+     <item type="id" name="dbg_action_refresh" />
+     <item type="id" name="dbg_action_add_watch" />
+
 </resources>
 
 

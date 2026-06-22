@@ -38,4 +38,31 @@
     <!-- 视图动作 -->
     <string name="debugger_action_goto_current_bp">转到当前断点</string>
     <string name="debugger_action_show_current_frame">显示当前帧</string>
+
+    <!-- PR-4: 调试侧边面板 (调用栈 / 变量 / 监视) -->
+    <string name="debugger_callstack_tab">调用栈</string>
+    <string name="debugger_variables_tab">变量</string>
+    <string name="debugger_watches_tab">监视</string>
+
+    <string name="debugger_callstack_title">调用栈</string>
+    <string name="debugger_callstack_empty">程序未暂停，没有可显示的栈帧</string>
+    <string name="debugger_callstack_frame_at">@ %1$s:%2$d</string>
+
+    <string name="debugger_variables_title">变量</string>
+    <string name="debugger_variables_empty">无可显示的变量</string>
+    <string name="debugger_variables_loading">加载变量中…</string>
+    <string name="debugger_variables_error">变量加载失败：%1$s</string>
+
+    <string name="debugger_watches_title">监视</string>
+    <string name="debugger_watches_empty">没有监视表达式\n点击 + 添加表达式</string>
+    <string name="debugger_watches_add">添加监视</string>
+    <string name="debugger_watches_dialog_title">添加监视表达式</string>
+    <string name="debugger_watches_dialog_hint">表达式 (例如 i, list.size())</string>
+    <string name="debugger_watches_action_delete">删除</string>
+    <string name="debugger_watches_action_clear">清空</string>
+    <string name="debugger_watches_error">求值失败：%1$s</string>
+    <string name="debugger_watches_value_pending">…</string>
+
+    <string name="debugger_action_refresh">刷新</string>
+    <string name="debugger_action_add_watch">添加监视</string>
 </resources>

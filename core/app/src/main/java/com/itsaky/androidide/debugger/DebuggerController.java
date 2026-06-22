@@ -37,6 +37,11 @@ public final class DebuggerController
     /** JDWP thread id of the currently paused thread (used by stepOver/Into/Out). */
     private long pausedAtThreadId = -1L;
 
+    /** PR-4: shared runtime state for the side panel (call stack, variables, watches). */
+    private final DebugSessionState sessionState = new DebugSessionState();
+
+    public DebugSessionState sessionState() { return sessionState; }
+
     private DebuggerController() {
         BreakpointManager.getInstance().addListener(new BreakpointManager.Listener() {
             @Override
@@ -75,6 +80,8 @@ public final class DebuggerController
         if (debugger == null) return;
         try { debugger.disconnect(); } catch (Throwable ignored) {}
         BreakpointManager.getInstance().bindDebugger(null);
+        sessionState.onDisconnected();
+        pausedAtThreadId = -1L;
     }
 
     public void resume() {
@@ -204,7 +211,10 @@ public final class DebuggerController
     }
 
     @Override
-    public void onResumed() { /* 状态变化已通过 event bus 同步 */ }
+    public void onResumed() {
+        pausedAtThreadId = -1L;
+        sessionState.onResume();
+    }
 
     @Override
     public void onConnectionChanged(boolean connected) {
@@ -219,6 +229,7 @@ public final class DebuggerController
     @Override
     public void onSuspend(@NonNull SuspendInfo info) {
         pausedAtThreadId = info.threadId;
+        sessionState.onSuspend(info);
         StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
         if (frame == null) return;
         com.itsaky.androidide.debugger.model.IdeBreakpoint bp =
@@ -226,5 +237,34 @@ public final class DebuggerController
         if (bp != null) {
             BreakpointManager.getInstance().markHit(bp);
         }
+    }
+
+    /** PR-4: switch the current frame (drives Variables / Watches reload). */
+    public void selectFrame(long frameId) {
+        sessionState.selectFrame(frameId);
+    }
+
+    /** PR-4: prompt the user to add a new watch expression. */
+    public void promptAddWatch() {
+        if (!(attachedActivity instanceof android.app.Activity)) {
+            return;
+        }
+        android.app.Activity act = (android.app.Activity) attachedActivity;
+        android.widget.EditText input = new android.widget.EditText(act);
+        input.setHint("表达式 (例如 i, list.size())");
+        new androidx.appcompat.app.AlertDialog.Builder(act)
+                .setTitle("添加监视表达式")
+                .setView(input)
+                .setPositiveButton("添加", (d, w) -> {
+                    String expr = input.getText().toString().trim();
+                    if (!expr.isEmpty()) {
+                        com.itsaky.androidide.debugger.model.WatchStore.getInstance().add(expr);
+                        if (attachedActivity != null) {
+                            attachedActivity.flashInfo("已添加监视: " + expr);
+                        }
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 }

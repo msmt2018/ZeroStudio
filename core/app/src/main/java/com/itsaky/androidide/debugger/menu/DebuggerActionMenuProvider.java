@@ -5,13 +5,16 @@
  *    1. 运行控制  (▶️ 恢复, ⏸️ 暂停, ⏹️ 停止)
  *    2. 单步      (⤵️ StepOver, ⬇️ StepInto, ⤴️ StepOut, 👉 RunToCursor)
  *    3. 断点      (🪲 调试 [Attach / Detach], 启用全部, 禁用全部, 清空)
- *    4. 视图      (转到当前断点, 显示当前帧)
+ *    4. 视图      (转到当前断点, 显示当前帧, 刷新, 添加监视)
  *
  *  使用 MenuProvider 模式（AndroidX Core 1.7+），菜单可同时显示在 Toolbar
  *  (toolbar) 和底部 ActionMode (bottom bar) 中。
  *
  *  本类只做“菜单到方法”的映射，真正的逻辑委托给 DebuggerController
  *  （由 PR-2 注入 com.zerostudio.debugger.api.Debugger）。
+ *
+ *  PR-4: 新增「刷新」与「添加监视」两个动作，对应侧边面板的 CallStackFragment
+ *  / VariablesFragment / WatchesFragment。
  */
 
 package com.itsaky.androidide.debugger.menu;
@@ -80,6 +83,11 @@ public class DebuggerActionMenuProvider implements MenuProvider {
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         view.add(0, R.id.dbg_action_show_current_frame, 1, R.string.debugger_action_show_current_frame)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        // PR-4: 刷新当前帧 / 打开添加监视对话框
+        view.add(0, R.id.dbg_action_refresh, 2, R.string.debugger_action_refresh)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        view.add(0, R.id.dbg_action_add_watch, 3, R.string.debugger_action_add_watch)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
     }
 
     @Override
@@ -124,6 +132,14 @@ public class DebuggerActionMenuProvider implements MenuProvider {
             return true;
         } else if (id == R.id.dbg_action_show_current_frame) {
             ctl.showCurrentFrame();
+            return true;
+        } else if (id == R.id.dbg_action_refresh) {
+            // 通知监听器重新加载（state 自身未变，fire 一次以触发刷新）
+            ctl.sessionState().selectFrame(ctl.sessionState().currentFrameId());
+            flashInfo(R.string.debugger_action_refresh);
+            return true;
+        } else if (id == R.id.dbg_action_add_watch) {
+            ctl.promptAddWatch();
             return true;
         }
         return false;
