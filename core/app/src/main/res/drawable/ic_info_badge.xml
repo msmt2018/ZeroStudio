@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Circular info badge used as a "tap for details" hint on file tree rows.
+  A filled accent-colored circle with a white exclamation mark in the center.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+  <!-- Outer circle -->
+  <path
+      android:fillColor="?attr/colorAccent"
+      android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z" />
+
+  <!-- Exclamation mark stem -->
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M11,6h2v8h-2z" />
+
+  <!-- Exclamation mark dot -->
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M11,16.5m-1.2,0a1.2,1.2 0,1 1,2.4 0a1.2,1.2 0,1 1,-2.4 0" />
+</vector>
