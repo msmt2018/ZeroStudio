@@ -32,16 +32,12 @@ import com.zerostudio.debugger.api.VariableInfo;
 import com.zerostudio.debugger.jdwp.CommandCodes;
 import com.zerostudio.debugger.jdwp.CommandSet;
 import com.zerostudio.debugger.jdwp.JdwpClient;
-import com.zerostudio.debugger.jdwp.JdwpEvents;
 import com.zerostudio.debugger.jdwp.JdwpPacket;
 import com.zerostudio.debugger.jdwp.ModKind;
-import com.zerostudio.debugger.jdwp.StepDepth;
-import com.zerostudio.debugger.jdwp.StepSize;
 import com.zerostudio.debugger.jdwp.SuspendPolicy;
 import com.zerostudio.debugger.jdwp.EventKind;
 import com.zerostudio.debugger.util.ByteBuf;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -347,7 +343,7 @@ public final class SourceLocator {
     @NonNull
     private List<VariableInfo> readVariables(
             long threadId, long frameId, long classId, long methodId) throws IOException {
-        // Look up the variable table for the method.
+        // Look up the variable table for the method to discover the locals.
         ByteBuf buf = new ByteBuf();
         buf.writeLong(classId);
         buf.writeLong(methodId);
@@ -355,19 +351,208 @@ public final class SourceLocator {
                 CommandSet.Method, CommandCodes.MethodCmd.VariableTable, buf.toByteArray());
         if (reply.errorCode() != 0) return Collections.emptyList();
         ByteBuf in = new ByteBuf(reply.data);
-        int argCount = in.readInt();
-        int slotCount = 0;
-        for (int i = 0; i < argCount; i++) {
-            in.readLong();  // code index
-            in.readString(); // name
-            in.readString(); // signature
-            in.readInt();    // length
-            in.readInt();    // slot
+        int varCount = in.readInt();
+
+        // We need (slot, name, signature) for each variable so we can later
+        // call StackFrame.GetValues once and pick them up. We also need to
+        // filter to "this" frame only - the table reports all locals for
+        // the method, but the values returned by GetValues already encode
+        // the current code index so the receiver side can match them up.
+        int[] slots = new int[varCount];
+        String[] names = new String[varCount];
+        String[] sigs = new String[varCount];
+        byte[] tags = new byte[varCount];
+        for (int i = 0; i < varCount; i++) {
+            in.readLong();               // code index
+            names[i] = in.readString();  // name
+            sigs[i]  = in.readString();  // signature
+            in.readInt();                // length
+            slots[i] = in.readInt();     // slot
+            tags[i]  = tagFor(sigs[i]);
         }
-        // We don't actually fetch values here; the StackFrameInfo is
-        // constructed without values, and the IDE's UI fetches them on
-        // demand through EvalEngine. Return empty.
-        return Collections.emptyList();
+
+        // Build the (slots, tags) request for StackFrame.GetValues.
+        ByteBuf gv = new ByteBuf();
+        gv.writeLong(threadId);
+        gv.writeLong(frameId);
+        gv.writeInt(varCount);
+        for (int i = 0; i < varCount; i++) {
+            gv.writeInt(slots[i]);
+            gv.writeByte(tags[i]);
+        }
+        JdwpPacket valReply = client.sendCommand(
+                CommandSet.StackFrame, CommandCodes.StackFrameCmd.GetValues, gv.toByteArray());
+        List<VariableInfo> out = new ArrayList<>(varCount);
+        if (valReply.errorCode() == 0) {
+            ByteBuf vin = new ByteBuf(valReply.data);
+            int count = Math.min(varCount, vin.readInt());
+            for (int i = 0; i < count; i++) {
+                byte tag = vin.readByte();
+                String value = readTagValue(vin, tag);
+                out.add(new VariableInfo(
+                        /* id = */ 0L,
+                        String.valueOf((char) tag),
+                        names[i],
+                        sigs[i],
+                        value,
+                        isPrim(tag),
+                        slots[i]));
+            }
+        }
+
+        // 'this' for non-static methods, via StackFrame.ThisObject.
+        VariableInfo thisObj = readThis(threadId, frameId);
+        if (thisObj != null) out.add(0, thisObj);
+        return out;
+    }
+
+    @androidx.annotation.Nullable
+    private VariableInfo readThis(long threadId, long frameId) throws IOException {
+        ByteBuf buf = new ByteBuf();
+        buf.writeLong(threadId);
+        buf.writeLong(frameId);
+        JdwpPacket reply = client.sendCommand(
+                CommandSet.StackFrame, CommandCodes.StackFrameCmd.ThisObject, buf.toByteArray());
+        if (reply.errorCode() != 0) return null;
+        ByteBuf in = new ByteBuf(reply.data);
+        byte tag = in.readByte();
+        if (tag == 'L') {
+            long id = in.readLong();
+            // Ask the reference for its type signature so the UI can show it.
+            String typeSig = readObjectTypeSignature(id);
+            return new VariableInfo(
+                    id, "L", "this", typeSig, "id=" + id, false, -1);
+        }
+        return null;
+    }
+
+    @androidx.annotation.NonNull
+    private String readObjectTypeSignature(long objectId) throws IOException {
+        ByteBuf buf = new ByteBuf();
+        buf.writeLong(objectId);
+        JdwpPacket reply = client.sendCommand(
+                CommandSet.ObjectReference, CommandCodes.ObjectReferenceCmd.ReferenceType,
+                buf.toByteArray());
+        if (reply.errorCode() != 0) return "Ljava/lang/Object;";
+        ByteBuf in = new ByteBuf(reply.data);
+        byte typeTag = in.readByte();
+        long classId = in.readLong();
+        return readClassSignature(classId);
+    }
+
+    private static String readTagValue(@androidx.annotation.NonNull ByteBuf in, byte tag) {
+        switch (tag) {
+            case 'V': return "void";
+            case 'Z': return (in.readByte() != 0) ? "true" : "false";
+            case 'B': return String.valueOf(in.readByte());
+            case 'C': return String.valueOf((char) in.readUnsignedShort());
+            case 'S': return String.valueOf(in.readShort());
+            case 'I': return String.valueOf(in.readInt());
+            case 'J': return String.valueOf(in.readLong());
+            case 'F': return String.valueOf(in.readFloat());
+            case 'D': return String.valueOf(in.readDouble());
+            case 'L': return "<object id=" + in.readLong() + ">";
+            case '[': return "<array id=" + in.readLong() + ">";
+            default:  return "?";
+        }
+    }
+
+    private static byte tagFor(@androidx.annotation.NonNull String sig) {
+        if (sig.isEmpty()) return 'L';
+        char c = sig.charAt(0);
+        if (c == '[' || c == 'L') return 'L';
+        return (byte) c;
+    }
+
+    private static boolean isPrim(byte tag) {
+        return tag != 'L' && tag != '[';
+    }
+
+    /**
+     * Look up a single local variable by name from the current frame. The
+     * call re-issues VariableTable + GetValues for the whole method and
+     * then filters; the IDE never hits this path on a hot loop.
+     */
+    @androidx.annotation.Nullable
+    public VariableInfo fetchLocal(long threadId, long frameId, @androidx.annotation.NonNull String name)
+            throws java.io.IOException {
+        // Fetch the frame's method id and class id, then read the var table.
+        ByteBuf fb = new ByteBuf();
+        fb.writeLong(threadId);
+        fb.writeInt(0);
+        fb.writeInt(1);
+        JdwpPacket fr = client.sendCommand(
+                CommandSet.ThreadReference, CommandCodes.ThreadReferenceCmd.Frames,
+                fb.toByteArray());
+        if (fr.errorCode() != 0) return null;
+        ByteBuf fin = new ByteBuf(fr.data);
+        int count = fin.readInt();
+        if (count < 1) return null;
+        long gotFrameId = fin.readLong();
+        if (gotFrameId != frameId) return null;
+        fin.readByte(); // typeTag
+        long classId = fin.readLong();
+        long methodId = fin.readLong();
+        fin.readLong(); // codeIndex
+
+        // Read the var table.
+        ByteBuf buf = new ByteBuf();
+        buf.writeLong(classId);
+        buf.writeLong(methodId);
+        JdwpPacket reply = client.sendCommand(
+                CommandSet.Method, CommandCodes.MethodCmd.VariableTable, buf.toByteArray());
+        if (reply.errorCode() != 0) return null;
+        ByteBuf in = new ByteBuf(reply.data);
+        int varCount = in.readInt();
+        if (varCount == 0) return null;
+        int matchIdx = -1;
+        for (int i = 0; i < varCount; i++) {
+            in.readLong();
+            String n = in.readString();
+            in.readString();
+            in.readInt();
+            in.readInt();
+            if (n.equals(name)) { matchIdx = i; }
+        }
+        if (matchIdx < 0) {
+            // Try 'this' as a fallback.
+            return readThis(threadId, frameId);
+        }
+        // Re-parse: build the (slots, tags) request and send it.
+        ByteBuf in2 = new ByteBuf(reply.data);
+        in2.readInt();
+        int targetSlot = -1;
+        byte targetTag = 'L';
+        String targetSig = "";
+        for (int i = 0; i < varCount; i++) {
+            in2.readLong();
+            in2.readString();
+            String sig = in2.readString();
+            in2.readInt();
+            int slot = in2.readInt();
+            if (i == matchIdx) {
+                targetSlot = slot;
+                targetTag = tagFor(sig);
+                targetSig = sig;
+            }
+        }
+        if (targetSlot < 0) return null;
+
+        ByteBuf gv = new ByteBuf();
+        gv.writeLong(threadId);
+        gv.writeLong(frameId);
+        gv.writeInt(1);
+        gv.writeInt(targetSlot);
+        gv.writeByte(targetTag);
+        JdwpPacket valReply = client.sendCommand(
+                CommandSet.StackFrame, CommandCodes.StackFrameCmd.GetValues, gv.toByteArray());
+        if (valReply.errorCode() != 0) return null;
+        ByteBuf vin = new ByteBuf(valReply.data);
+        vin.readInt();
+        byte tag = vin.readByte();
+        String value = readTagValue(vin, tag);
+        return new VariableInfo(0L, String.valueOf((char) tag), name, targetSig, value,
+                isPrim(tag), targetSlot);
     }
 
     /** Best-effort guess of a class signature from a source file name. */

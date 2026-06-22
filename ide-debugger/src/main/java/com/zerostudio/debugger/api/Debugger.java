@@ -80,6 +80,20 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
     public JdwpClient client() { return client; }
 
     /**
+     * Look up a single local variable by name in the current frame. Used
+     * by the expression evaluator to resolve an identifier before it can
+     * be stringified. Returns null if no such local exists.
+     */
+    @Nullable
+    public VariableInfo fetchLocal(long threadId, long frameId, @NonNull String name) {
+        try {
+            return sourceLocator.fetchLocal(threadId, frameId, name);
+        } catch (java.io.IOException ex) {
+            return null;
+        }
+    }
+
+    /**
      * Open a connection to the JDWP server running inside the target
      * application. Blocks until the handshake completes.
      */

@@ -29,6 +29,8 @@ import com.itsaky.androidide.debugger.DebugSessionState;
 import com.itsaky.androidide.debugger.DebuggerController;
 import com.itsaky.androidide.debugger.adapter.WatchesAdapter;
 import com.itsaky.androidide.debugger.model.WatchStore;
+import com.zerostudio.debugger.api.EvalResult;
+import com.zerostudio.debugger.api.StackFrameInfo;
 
 public class WatchesFragment extends Fragment
         implements DebugSessionState.Listener {
@@ -81,10 +83,37 @@ public class WatchesFragment extends Fragment
 
     @Override
     public void onStateChanged(@NonNull DebugSessionState state) {
-        // PR-5 之前：占位为 "..." 或 "无法求值"。
-        adapter.markAll(state.isSuspended()
-                ? getString(R.string.debugger_watches_value_pending)
-                : getString(R.string.debugger_watches_value_pending));
+        // 当程序未暂停或没有当前栈帧时，所有值都显示 "—"
+        if (!state.isSuspended()) {
+            adapter.markAll(getString(R.string.debugger_watches_value_pending));
+            return;
+        }
+        StackFrameInfo frame = state.currentFrame();
+        if (frame == null) {
+            adapter.markAll(getString(R.string.debugger_watches_value_pending));
+            return;
+        }
+        // 暂停态：对每个监视表达式走 EvalEngine.evaluate
+        java.util.List<String> exprs = WatchStore.getInstance().all();
+        String[] values = new String[exprs.size()];
+        com.zerostudio.debugger.api.Debugger dbg =
+                com.itsaky.androidide.debugger.DebuggerController.getInstance().debugger();
+        for (int i = 0; i < exprs.size(); i++) {
+            String expr = exprs.get(i);
+            if (dbg == null) {
+                values[i] = getString(R.string.debugger_watches_value_pending);
+                continue;
+            }
+            EvalResult r = dbg.eval().evaluate(frame.threadId, frame.frameId, expr);
+            if (r.isError()) {
+                values[i] = getString(R.string.debugger_watches_error, r.error);
+            } else if (r.displayValue == null) {
+                values[i] = "<" + r.tag.name().toLowerCase() + ">";
+            } else {
+                values[i] = r.displayValue;
+            }
+        }
+        adapter.setValues(values);
     }
 
     private void refresh() {

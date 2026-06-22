@@ -42,6 +42,10 @@ public final class DebuggerController
 
     public DebugSessionState sessionState() { return sessionState; }
 
+    /** PR-5: raw access to the underlying JDWP debugger (used by WatchesFragment). */
+    @Nullable
+    public com.zerostudio.debugger.api.Debugger debugger() { return debugger; }
+
     private DebuggerController() {
         BreakpointManager.getInstance().addListener(new BreakpointManager.Listener() {
             @Override

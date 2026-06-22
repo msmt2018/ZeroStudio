@@ -42,6 +42,17 @@ public class WatchesAdapter extends RecyclerView.Adapter<WatchesAdapter.VH> {
         notifyDataSetChanged();
     }
 
+    public void setValues(@NonNull String[] vs) {
+        values.clear();
+        for (String s : vs) values.add(s);
+        // pad / trim to data size
+        while (values.size() < data.size()) values.add("");
+        if (values.size() > data.size()) {
+            while (values.size() > data.size()) values.remove(values.size() - 1);
+        }
+        notifyDataSetChanged();
+    }
+
     @NonNull
     @Override
     public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {

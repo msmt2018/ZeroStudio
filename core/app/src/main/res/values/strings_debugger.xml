@@ -65,4 +65,9 @@
 
     <string name="debugger_action_refresh">刷新</string>
     <string name="debugger_action_add_watch">添加监视</string>
+
+    <!-- PR-5: 表达式求值 -->
+    <string name="debugger_eval_error">求值失败：%1$s</string>
+    <string name="debugger_eval_object">&lt;object&gt;</string>
+    <string name="debugger_eval_array">&lt;array&gt;</string>
 </resources>
