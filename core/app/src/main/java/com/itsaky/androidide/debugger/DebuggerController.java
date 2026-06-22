@@ -19,6 +19,7 @@ import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.ui.CodeEditorView;
 import com.itsaky.androidide.utils.ILogger;
 import com.zerostudio.debugger.api.Debugger;
+import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.SuspendInfo;
 import com.zerostudio.debugger.model.DebugSession.State;
 import java.io.File;
@@ -33,7 +34,8 @@ public final class DebuggerController
 
     @Nullable private Debugger debugger;
     @Nullable private com.itsaky.androidide.activities.editor.BaseEditorActivity attachedActivity;
-    @Nullable private Thread pausedAtThread;
+    /** JDWP thread id of the currently paused thread (used by stepOver/Into/Out). */
+    private long pausedAtThreadId = -1L;
 
     private DebuggerController() {
         BreakpointManager.getInstance().addListener(new BreakpointManager.Listener() {
@@ -93,17 +95,17 @@ public final class DebuggerController
 
     public void stepOver() {
         if (!requireThread()) return;
-        debugger.stepOver(pausedAtThread.getId());
+        debugger.stepOver(pausedAtThreadId);
     }
 
     public void stepInto() {
         if (!requireThread()) return;
-        debugger.stepInto(pausedAtThread.getId());
+        debugger.stepInto(pausedAtThreadId);
     }
 
     public void stepOut() {
         if (!requireThread()) return;
-        debugger.stepOut(pausedAtThread.getId());
+        debugger.stepOut(pausedAtThreadId);
     }
 
     public void runToCursor() {
@@ -127,23 +129,29 @@ public final class DebuggerController
     public void gotoCurrentBreakpoint() {
         SuspendInfo info = debugger == null ? null : debugger.lastSuspendInfo();
         if (info == null) { flash("当前没有暂停点"); return; }
+        StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
+        if (frame == null) { flash("当前没有可显示的栈帧"); return; }
         com.itsaky.androidide.models.Range range =
                 new com.itsaky.androidide.models.Range(
-                        new com.itsaky.androidide.models.Position(info.location.lineNumber - 1, 0),
-                        new com.itsaky.androidide.models.Position(info.location.lineNumber - 1, 0));
+                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0),
+                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0));
         if (attachedActivity != null) {
-            attachedActivity.openFileAndSelect(new File(info.location.sourceFile), range);
+            attachedActivity.openFileAndSelect(new File(frame.sourceFile), range);
         }
     }
 
     public void showCurrentFrame() {
         SuspendInfo info = debugger == null ? null : debugger.lastSuspendInfo();
         if (info == null) { flash("当前没有暂停点"); return; }
-        if (attachedActivity != null) {
-            attachedActivity.flashInfo(
-                    "线程 " + info.threadId + " 暂停于 " + info.location.sourceFile
-                            + ":" + info.location.lineNumber);
+        StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
+        if (attachedActivity == null) return;
+        if (frame == null) {
+            attachedActivity.flashInfo("线程 " + info.threadId + " 暂停中 (无栈帧信息)");
+            return;
         }
+        attachedActivity.flashInfo(
+                "线程 " + info.threadId + " 暂停于 " + frame.sourceFile
+                        + ":" + frame.lineNumber);
     }
 
     public void toggleDebugConnection() {
@@ -166,7 +174,7 @@ public final class DebuggerController
 
     private boolean requireThread() {
         if (debugger == null) { flash("未连接调试器"); return false; }
-        if (pausedAtThread == null) { flash("当前没有暂停的线程"); return false; }
+        if (pausedAtThreadId <= 0L) { flash("当前没有暂停的线程"); return false; }
         return true;
     }
 
@@ -208,22 +216,15 @@ public final class DebuggerController
         }
     }
 
+    @Override
     public void onSuspend(@NonNull SuspendInfo info) {
-        pausedAtThread = findThreadById(info.threadId);
+        pausedAtThreadId = info.threadId;
+        StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
+        if (frame == null) return;
         com.itsaky.androidide.debugger.model.IdeBreakpoint bp =
-                BreakpointManager.getInstance().findAt(
-                        info.location.sourceFile, info.location.line);
+                BreakpointManager.getInstance().findAt(frame.sourceFile, frame.lineNumber);
         if (bp != null) {
             BreakpointManager.getInstance().markHit(bp);
         }
-    }
-
-    @Nullable
-    private Thread findThreadById(long id) {
-        // 简化：实际中应通过 ThreadReference 缓存
-        Thread[] ts = new Thread[Thread.activeCount()];
-        Thread.enumerate(ts);
-        for (Thread t : ts) if (t != null && t.getId() == id) return t;
-        return null;
     }
 }

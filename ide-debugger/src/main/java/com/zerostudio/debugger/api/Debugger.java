@@ -284,12 +284,19 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
         // Clean up one-shot breakpoints.
         breakpoints.removeOneShots(info);
         eventBus.publish(DebugEvents.suspend(info));
+        // Also notify high-level listeners for backward compatibility.
+        for (Listener l : listeners) {
+            try { l.onSuspend(info); } catch (Throwable ignored) { }
+        }
     }
 
     void onResume() {
         session.setState(DebugSession.State.RUNNING);
         lastSuspend = null;
         eventBus.publish(DebugEvents.resume());
+        for (Listener l : listeners) {
+            try { l.onResumed(); } catch (Throwable ignored) { }
+        }
     }
 
     void notifyBreakpointChanged(@NonNull Breakpoint bp) {
@@ -315,5 +322,7 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
         default void onBreakpointChanged(@NonNull Breakpoint bp) {}
         default void onResumed() {}
         default void onConnectionChanged(boolean connected) {}
+        /** Called whenever the target program is suspended (breakpoint, step, etc.). */
+        default void onSuspend(@NonNull SuspendInfo info) {}
     }
 }
