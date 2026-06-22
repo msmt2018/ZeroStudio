@@ -29,6 +29,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
+import android.app.Activity;
+import android.os.Bundle;
 import com.itsaky.androidide.logsender.LogSender;
 import com.itsaky.androidide.logsender.LogSenderService;
 
@@ -42,6 +44,8 @@ import com.itsaky.androidide.logsender.LogSenderService;
  * @author Akash Yadav
  * @see <a
  * href="https://github.com/square/leakcanary/blob/main/leakcanary-object-watcher-android/src/main/java/leakcanary/internal/MainProcessAppWatcherInstaller.kt">MainProcessAppWatcherInstaller</a>
+ * Modifications by
+ * Mohammed-baqer-null @ https://github.com/Mohammed-baqer-null
  */
 public class LogSenderInstaller extends ContentProvider {
 
@@ -53,6 +57,44 @@ public class LogSenderInstaller extends ContentProvider {
       return true;
     }
 
+    // Register a lifecycle callback to restart service when app is restarted
+    application.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
+      private boolean serviceStarted = false;
+
+      @Override
+      public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+        if (!serviceStarted) {
+          serviceStarted = true;
+          startLogSenderService(application);
+        }
+      }
+
+      @Override
+      public void onActivityStarted(Activity activity) {}
+
+      @Override
+      public void onActivityResumed(Activity activity) {}
+
+      @Override
+      public void onActivityPaused(Activity activity) {}
+
+      @Override
+      public void onActivityStopped(Activity activity) {}
+
+      @Override
+      public void onActivitySaveInstanceState(Activity activity, Bundle outState) {}
+
+      @Override
+      public void onActivityDestroyed(Activity activity) {}
+    });
+
+    // Also start immediately
+    startLogSenderService(application);
+
+    return true;
+  }
+
+  private void startLogSenderService(Application application) {
     try {
       final Intent intent = new Intent(application, LogSenderService.class);
       intent.setAction(LogSenderService.ACTION_START_SERVICE);
@@ -63,15 +105,13 @@ public class LogSenderInstaller extends ContentProvider {
         application.startService(intent);
       }
     } catch (Exception e) {
-
       // starting a background service is not allowed on Android 12+
       // ignore the BackgroundServiceStartNotAllowedException in such cases
       if (VERSION.SDK_INT < VERSION_CODES.S
           || !(e instanceof BackgroundServiceStartNotAllowedException)) {
-        throw new RuntimeException(e);
+        Logger.error("Failed to start LogSenderService", e);
       }
     }
-    return true;
   }
 
 

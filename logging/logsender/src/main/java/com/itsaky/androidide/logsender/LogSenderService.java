@@ -29,7 +29,9 @@ import android.content.res.Resources;
 import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.widget.Toast;
 import com.itsaky.androidide.logsender.utils.Logger;
 
@@ -37,7 +39,10 @@ import com.itsaky.androidide.logsender.utils.Logger;
  * A {@link Service} which runs in the background and sends logs to AndroidIDE.
  *
  * @author Akash Yadav
+ * Modifications by
+ * Mohammed-baqer-null @ https://github.com/Mohammed-baqer-null
  */
+ 
 public class LogSenderService extends Service {
 
   private final LogSender logSender = new LogSender();
@@ -49,12 +54,21 @@ public class LogSenderService extends Service {
   public static final String ACTION_START_SERVICE = "ide.logsender.service.start";
   public static final String ACTION_STOP_SERVICE = "ide.logsender.service.stop";
 
+  private boolean hasCleanedUp = false;
+  private boolean wasConnected = false;
+  
+  private Handler reconnectHandler;
+  private static final int RECONNECT_DELAY_MS = 5000;
+  private int reconnectAttempts = 0;
+  private static final int MAX_RECONNECT_ATTEMPTS = 10;
+
   @Override
   public void onCreate() {
     Logger.debug("[LogSenderService] onCreate()");
     super.onCreate();
     setupNotificationChannel();
     startForeground(NOTIFICATION_ID, buildNotification());
+    reconnectHandler = new Handler(Looper.getMainLooper());
   }
 
   @Override
@@ -66,6 +80,12 @@ public class LogSenderService extends Service {
   @Override
   public int onStartCommand(Intent intent, int flags, int startId) {
     Logger.debug("onStartCommand", intent, flags, startId);
+
+    if (intent == null) {
+      Logger.info("Service restarted by system, attempting to reconnect...");
+      actionStartService();
+      return START_STICKY;
+    }
 
     switch (intent.getAction()) {
       case ACTION_START_SERVICE:
@@ -79,57 +99,106 @@ public class LogSenderService extends Service {
         break;
     }
 
-    return START_NOT_STICKY;
+    return START_STICKY;
   }
 
   private void actionStartService() {
     Logger.info("Starting log sender service...");
 
+    if (logSender.isConnected() || logSender.isBinding()) {
+      Logger.debug("Already connected or binding. Skipping.");
+      reconnectAttempts = 0;
+      return;
+    }
+
     boolean result = false;
     try {
       result = logSender.bind(getApplicationContext());
       Logger.debug("Bind to AndroidIDE:", result);
+      if (result) {
+        wasConnected = true;
+        reconnectAttempts = 0;
+      }
     } catch (Exception err) {
       Logger.error(getString(R.string.msg_bind_service_failed), err);
     }
 
     if (!result) {
-      Toast.makeText(this, getString(R.string.msg_bind_service_failed), Toast.LENGTH_SHORT).show();
-      actionStopService();
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        Logger.info("Connection failed, scheduling reconnect attempt " + reconnectAttempts);
+        scheduleReconnect();
+      } else {
+        Logger.error("Max reconnection attempts reached, stopping service");
+        Toast.makeText(this, getString(R.string.msg_bind_service_failed), Toast.LENGTH_SHORT).show();
+        actionStopService();
+      }
     }
+  }
+
+  private void scheduleReconnect() {
+    reconnectHandler.postDelayed(new Runnable() {
+      @Override
+      public void run() {
+        Logger.info("Attempting automatic reconnection...");
+        actionStartService();
+      }
+    }, RECONNECT_DELAY_MS);
   }
 
   private void actionStopService() {
     Logger.info("Stopping log sender service...");
+    wasConnected = false;
     stopSelf();
   }
 
-  @Override
-  public void onTaskRemoved(Intent rootIntent) {
+@Override
+public void onTaskRemoved(Intent rootIntent) {
     Logger.debug("[LogSenderService] [onTaskRemoved]", rootIntent);
-
-    if (!logSender.isConnected() && !logSender.isBinding()) {
-      Logger.debug("Not bound to AndroidIDE. Ignored.");
-      return;
+    
+    // Cancel any pending reconnection attempts
+    if (reconnectHandler != null) {
+        reconnectHandler.removeCallbacksAndMessages(null);
     }
+    
+    // Reset reconnect attempts since task was removed
+    reconnectAttempts = 0;
+    
+    // If we were connected, try to restart the service
+    if (wasConnected) {
+        Logger.info("Task removed but was connected - scheduling restart");
+        Intent restartIntent = new Intent(getApplicationContext(), LogSenderService.class);
+        restartIntent.setAction(ACTION_START_SERVICE);
+        if (VERSION.SDK_INT >= VERSION_CODES.O) {
+            startForegroundService(restartIntent);
+        } else {
+            startService(restartIntent);
+        }
+    } else {
+        Logger.info("Task removed, service will stop");
+    }
+}
 
-    Logger.warn("Task removed. Destroying log sender...");
-    logSender.destroy(getApplicationContext());
-    stopSelf();
-  }
-
-  @Override
-  public void onDestroy() {
+@Override
+public void onDestroy() {
     Logger.debug("[LogSenderService] [onDestroy]");
-    if (!logSender.isConnected() && !logSender.isBinding()) {
-      Logger.debug("Not bound to AndroidIDE. Ignored.");
-      return;
+    
+    if (reconnectHandler != null) {
+        reconnectHandler.removeCallbacksAndMessages(null);
+    }
+    
+    if (hasCleanedUp) {
+        Logger.debug("Already cleaned up. Ignored.");
+        super.onDestroy();
+        return;
     }
 
+    // Remove the early exit check - always try to clean up
     Logger.warn("Service is being destroyed. Destroying log sender...");
     logSender.destroy(getApplicationContext());
+    hasCleanedUp = true;
     super.onDestroy();
-  }
+}
 
   private void setupNotificationChannel() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
@@ -151,12 +220,8 @@ public class LogSenderService extends Service {
   private Notification buildNotification() {
     Resources res = getResources();
 
-    // Set notification priority
-    // If holding a wake or wifi lock consider the notification of high priority since it's using power,
-    // otherwise use a low priority
     int priority = Notification.PRIORITY_LOW;
 
-    // Build the notification
     final Builder builder = new Builder(this);
     builder.setContentTitle(NOTIFICATION_TITLE);
     builder.setContentText(NOTIFICATION_TEXT);
@@ -179,7 +244,6 @@ public class LogSenderService extends Service {
 
     builder.setOngoing(true);
 
-    // Set Exit button action
     Intent exitIntent = new Intent(this, LogSenderService.class).setAction(ACTION_STOP_SERVICE);
     builder.addAction(android.R.drawable.ic_delete,
         res.getString(R.string.notification_action_exit),

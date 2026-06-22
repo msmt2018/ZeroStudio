@@ -17,11 +17,7 @@
 
 import com.itsaky.androidide.plugins.NoDesugarPlugin
 
-@Suppress("JavaPluginLanguageLevel")
-plugins {
-  id("java-library")
-  id("com.vanniktech.maven.publish.base")
-}
+@Suppress("JavaPluginLanguageLevel") plugins { id("java-library") }
 
 apply { plugin(NoDesugarPlugin::class.java) }
 
@@ -38,7 +34,4 @@ dependencies {
   }
 
   implementation(projects.utilities.buildInfo)
-
-  testImplementation(libs.tests.junit)
-  testImplementation(libs.tests.google.truth)
 }
