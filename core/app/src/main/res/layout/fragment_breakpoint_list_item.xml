@@ -6,6 +6,7 @@
   |         条件: i > 0                                                     |
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
@@ -46,8 +47,7 @@
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:singleLine="true"
                 android:ellipsize="middle"
-                tools:text="../app/src/main/.../MainActivity.kt"
-                xmlns:tools="http://schemas.android.com/tools"/>
+                tools:text="../app/src/main/.../MainActivity.kt"/>
 
             <TextView
                 android:id="@+id/bp_line"
@@ -56,16 +56,14 @@
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:textAppearance="?attr/textAppearanceLabelSmall"
                 android:layout_marginEnd="8dp"
-                tools:text="27"
-                xmlns:tools="http://schemas.android.com/tools"/>
+                tools:text="27"/>
 
             <TextView
                 android:id="@+id/bp_state"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="?attr/textAppearanceLabelSmall"
-                tools:text="已验证"
-                xmlns:tools="http://schemas.android.com/tools"/>
+                tools:text="已验证"/>
         </LinearLayout>
 
         <TextView
@@ -78,8 +76,7 @@
             android:ellipsize="end"
             android:visibility="gone"
             android:layout_marginTop="2dp"
-            tools:text="条件: i > 0"
-            xmlns:tools="http://schemas.android.com/tools"/>
+            tools:text="条件: i > 0"/>
     </LinearLayout>
 
 </LinearLayout>
