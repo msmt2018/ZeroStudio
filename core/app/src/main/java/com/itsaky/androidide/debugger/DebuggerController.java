@@ -129,8 +129,8 @@ public final class DebuggerController
         if (info == null) { flash("当前没有暂停点"); return; }
         com.itsaky.androidide.models.Range range =
                 new com.itsaky.androidide.models.Range(
-                        new com.itsaky.androidide.models.Position(info.location.line - 1, 0),
-                        new com.itsaky.androidide.models.Position(info.location.line - 1, 0));
+                        new com.itsaky.androidide.models.Position(info.location.lineNumber - 1, 0),
+                        new com.itsaky.androidide.models.Position(info.location.lineNumber - 1, 0));
         if (attachedActivity != null) {
             attachedActivity.openFileAndSelect(new File(info.location.sourceFile), range);
         }
@@ -142,7 +142,7 @@ public final class DebuggerController
         if (attachedActivity != null) {
             attachedActivity.flashInfo(
                     "线程 " + info.threadId + " 暂停于 " + info.location.sourceFile
-                            + ":" + info.location.line);
+                            + ":" + info.location.lineNumber);
         }
     }
 

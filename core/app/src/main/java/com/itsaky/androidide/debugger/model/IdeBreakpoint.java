@@ -88,7 +88,9 @@ public final class IdeBreakpoint {
     /** 设置条件；附带条件会自动把状态切为 CONDITION。 */
     public void setCondition(@Nullable String expr) {
         this.condition = expr;
-        if (expr != null && !expr.isEmpty() && state == State.NORMAL) {
+        if (expr != null && !expr.isEmpty()
+                && state != State.DISABLED
+                && state != State.HIT) {
             state = State.CONDITION;
         }
     }
