@@ -46,7 +46,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +67,7 @@ import java.io.File
 import java.io.Serializable
 import java.util.zip.ZipFile
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ProjectMaterialsFragment : BaseFragment() {
   private val viewModel: ProjectMaterialsViewModel by viewModels()
@@ -88,6 +87,9 @@ class ProjectMaterialsFragment : BaseFragment() {
   }
 
   private fun openInEditor(file: File) {
+    // openFile() must run on the main thread because the editor view inflates a layout
+    // that uses ValueAnimator (LinearProgressIndicator), which crashes on background
+    // threads with "Animators may only be run on Looper threads".
     (activity as? EditorHandlerActivity)?.openFile(file)
   }
 }
@@ -102,8 +104,11 @@ private fun ProjectMaterialsScreen(viewModel: ProjectMaterialsViewModel, onOpenF
 
   var detailTarget by remember { mutableStateOf<ProjectMaterialItem?>(null) }
   var detailLoading by remember { mutableStateOf(false) }
-  var archiveRoot by remember { mutableStateOf<ArchiveEntryFileObject?>(null) }
-  var archiveSource by remember { mutableStateOf<File?>(null) }
+
+  // Decompilation dialog state.
+  var decompileTarget by remember { mutableStateOf<ArchiveEntryTarget?>(null) }
+  var decompileState by remember { mutableStateOf<ClassDecompileState>(ClassDecompileState.Choosing) }
+  var decompileFormat by remember { mutableStateOf<ClassDecompileFormat?>(null) }
 
   LaunchedEffect(detailTarget) {
     val target = detailTarget
@@ -138,12 +143,7 @@ private fun ProjectMaterialsScreen(viewModel: ProjectMaterialsViewModel, onOpenF
     Column(modifier = Modifier.fillMaxSize().padding(padding)) {
       CategoryToolbar(
           state = state,
-          onCategorySelected = {
-            viewModel.selectCategory(it)
-            // Leaving the archive context when switching categories is the safer default.
-            archiveRoot = null
-            archiveSource = null
-          },
+          onCategorySelected = { viewModel.selectCategory(it) },
       )
       Box(modifier = Modifier.fillMaxSize()) {
         when {
@@ -156,12 +156,13 @@ private fun ProjectMaterialsScreen(viewModel: ProjectMaterialsViewModel, onOpenF
           else ->
               FileTreeArea(
                   items = visibleItems,
-                  archiveRoot = archiveRoot,
-                  archiveSource = archiveSource,
-                  onArchiveOpened = { file, root -> archiveSource = file; archiveRoot = root },
                   onOpenFile = onOpenFile,
                   onShowDetail = { detailTarget = it },
                   infoBadge = infoBadge,
+                  onDecompileRequested = { target ->
+                    decompileTarget = target
+                    decompileState = ClassDecompileState.Choosing
+                  },
               )
         }
       }
@@ -175,6 +176,64 @@ private fun ProjectMaterialsScreen(viewModel: ProjectMaterialsViewModel, onOpenF
         loading = detailLoading,
         onDismiss = { detailTarget = null },
     )
+  }
+
+  decompileTarget?.let { target ->
+    ClassDecompileDialog(
+        state = decompileState,
+        target = ClassEntryTarget(
+            archive = target.archive,
+            entryName = target.entryName,
+            displayName = target.displayName,
+        ),
+        onChoose = { format ->
+          decompileFormat = format
+          decompileState = ClassDecompileState.Running(format, "Preparing…")
+        },
+        onDismiss = {
+          decompileTarget = null
+          decompileState = ClassDecompileState.Choosing
+          decompileFormat = null
+        },
+        onOpen = { file ->
+          decompileTarget = null
+          decompileState = ClassDecompileState.Choosing
+          decompileFormat = null
+          onOpenFile(file)
+        },
+    )
+  }
+
+  // Drive the decompilation work in a coroutine. We react to changes in the chosen
+  // format and target, and update the dialog state from the main thread.
+  LaunchedEffect(decompileTarget, decompileFormat) {
+    val target = decompileTarget
+    val format = decompileFormat
+    if (target == null || format == null) return@LaunchedEffect
+    // Move to the IO dispatcher for the actual decompilation; on completion update
+    // the dialog state on the main thread.
+    val newState =
+        withContext(Dispatchers.IO) {
+          runCatching {
+                val entry =
+                    ClassEntryTarget(
+                        archive = target.archive,
+                        entryName = target.entryName,
+                        displayName = target.displayName,
+                    )
+                when (format) {
+                  ClassDecompileFormat.JAVA -> ClassDecompilerService.decompileToJava(entry)
+                  ClassDecompileFormat.SMALI -> ClassDecompilerService.decompileToSmali(entry)
+                }
+              }
+              .fold(
+                  onSuccess = { file -> ClassDecompileState.Success(format, file) as ClassDecompileState },
+                  onFailure = { t ->
+                    ClassDecompileState.Failure(format, t.message ?: t.javaClass.simpleName)
+                  },
+              )
+        }
+    decompileState = newState
   }
 }
 
@@ -295,54 +354,23 @@ private fun CenteredMessage(title: String, subtitle: String) {
   }
 }
 
+/** Lightweight description of a `.class` entry to decompile. */
+data class ArchiveEntryTarget(
+    val archive: File,
+    val entryName: String,
+    val displayName: String = entryName.substringAfterLast('/'),
+)
+
 @Composable
 private fun FileTreeArea(
     items: List<ProjectMaterialItem>,
-    archiveRoot: ArchiveEntryFileObject?,
-    archiveSource: File?,
-    onArchiveOpened: (File, ArchiveEntryFileObject) -> Unit,
     onOpenFile: (File) -> Unit,
     onShowDetail: (ProjectMaterialItem) -> Unit,
     infoBadge: Drawable?,
+    onDecompileRequested: (ArchiveEntryTarget) -> Unit,
 ) {
-  val scope = rememberCoroutineScope()
-  var loadingArchive by remember { mutableStateOf(false) }
-  var decompiling by remember { mutableStateOf(false) }
-  // Recompute the root whenever the visible items or the active archive change.
-  val currentRoot: FileObject =
-      remember(items, archiveRoot) { archiveRoot ?: buildMaterialsTree(items) }
-
-  if (loadingArchive || decompiling) {
-    CenteredLoader(
-        text =
-            when {
-              decompiling -> "Decompiling class files…"
-              loadingArchive -> "Loading archive entries…"
-              else -> "Working…"
-            },
-    )
-    return
-  }
-
-  // Header hint when browsing inside an archive – a "back to materials" affordance.
-  if (archiveSource != null && archiveRoot != null) {
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-      Row(
-          modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-          verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Text(
-            text = "Browsing ${archiveSource.name}",
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-      }
-    }
-  }
+  // Recompute the root whenever the visible items change.
+  val currentRoot: FileObject = remember(items) { buildMaterialsTree(items) }
 
   Box(modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)) {
     AndroidView(
@@ -361,39 +389,12 @@ private fun FileTreeArea(
             setOnFileClickListener(
                 object : FileClickListener {
                   override fun onClick(node: Node<FileObject>) {
-                    when (val obj = node.value) {
-                      is MaterialTreeFileObject -> {
-                        val material = obj.material
-                        val p = material?.path?.let(::File)
-                        when {
-                          p != null && p.isFile && isArchive(p) -> {
-                            loadingArchive = true
-                            scope.launch(Dispatchers.IO) {
-                              val newRoot = buildArchiveTree(p)
-                              loadingArchive = false
-                              onArchiveOpened(p, newRoot)
-                            }
-                          }
-                          p != null && p.isFile -> onOpenFile(p)
-                          material != null -> onShowDetail(material)
-                        }
-                      }
-                      is ArchiveEntryFileObject -> {
-                        if (!obj.isDirectory()) {
-                          val output = obj.extractToTemp()
-                          if (output.extension == "class") {
-                            decompiling = true
-                            scope.launch(Dispatchers.IO) {
-                              val decompiled = decompileClassWithRelated(obj)
-                              decompiling = false
-                              onOpenFile(decompiled)
-                            }
-                          } else {
-                            onOpenFile(output)
-                          }
-                        }
-                      }
-                    }
+                    handleNodeClick(
+                        node = node,
+                        onOpenFile = onOpenFile,
+                        onShowDetail = onShowDetail,
+                        onDecompileRequested = onDecompileRequested,
+                    )
                   }
                 },
             )
@@ -402,6 +403,52 @@ private fun FileTreeArea(
         },
         update = { tree -> tree.loadFiles(currentRoot, true) },
     )
+  }
+}
+
+/**
+ * Centralised click handler for the file tree. The handler is broken into a top-level
+ * function so that long-running work (zip reads, decompilation) can be performed on
+ * `Dispatchers.IO` while the subsequent UI/editor interactions are always marshalled
+ * back to the main thread.
+ */
+private fun handleNodeClick(
+    node: Node<FileObject>,
+    onOpenFile: (File) -> Unit,
+    onShowDetail: (ProjectMaterialItem) -> Unit,
+    onDecompileRequested: (ArchiveEntryTarget) -> Unit,
+) {
+  when (val obj = node.value) {
+    is ArchiveBackedMaterialFileObject -> {
+      // The FileTreeAdapter already toggles expansion for directory nodes. Inline
+      // expansion is the desired action for archive files, so we do nothing here and
+      // let the row click be handled by the tree itself. Tapping the info badge
+      // will still open the material detail dialog.
+    }
+    is MaterialTreeFileObject -> {
+      val material = obj.material
+      val p = material?.path?.let(::File)
+      when {
+        p != null && p.isFile -> onOpenFile(p)
+        material != null -> onShowDetail(material)
+      }
+    }
+    is ArchiveEntryFileObject -> {
+      if (obj.isFile() && obj.getName().endsWith(".class", ignoreCase = true)) {
+        onDecompileRequested(
+            ArchiveEntryTarget(
+                archive = obj.archive,
+                entryName = obj.entryPath,
+                displayName = obj.getName(),
+            ),
+        )
+      } else if (obj.isFile()) {
+        // Non-class entry: extract to a temp file and open it in the editor.
+        val extracted = runCatching { obj.extractToTemp() }.getOrNull()
+        if (extracted != null) onOpenFile(extracted)
+      }
+      // Directories are expanded by the FileTree itself – no work to do here.
+    }
   }
 }
 
@@ -443,30 +490,6 @@ private class MaterialInfoBadgeProvider(
   }
 }
 
-private fun decompileClassWithRelated(target: ArchiveEntryFileObject): File {
-  val engine = GeneralPreferences.decompilerEngine
-  val cacheDir = File(System.getProperty("java.io.tmpdir"), "materials-decompiled-cache").apply { mkdirs() }
-  val mainName = target.getName().substringBeforeLast('.')
-  val outFile = File(cacheDir, "$mainName.java")
-
-  val related = target.collectSiblingClasses()
-  val rendered = buildString {
-    appendLine("// Decompiled by $engine")
-    appendLine("// Main class: ${target.getName()}")
-    related.forEach { entry ->
-      val bytes = entry.extractToTemp().readBytes()
-      val cls = entry.getName().substringBeforeLast('.')
-      appendLine()
-      appendLine("// ---- class: ${entry.getName()} ----")
-      appendLine("class $cls {")
-      appendLine("  // bytecode size = ${bytes.size}")
-      appendLine("}")
-    }
-  }
-  outFile.writeText(rendered)
-  return outFile
-}
-
 private fun buildMaterialsTree(items: List<ProjectMaterialItem>): MaterialTreeFileObject {
   val root = MaterialTreeFileObject("Project Materials", true, null)
   val byType = items.groupBy { it.sourceType }
@@ -475,7 +498,10 @@ private fun buildMaterialsTree(items: List<ProjectMaterialItem>): MaterialTreeFi
     byType[type].orEmpty().groupBy { it.id.substringBefore(':', "misc") }.forEach {
         (module, moduleItems) ->
       val moduleNode = MaterialTreeFileObject(module, true, null)
-      moduleItems.sortedBy { it.title }.forEach { moduleNode.children += MaterialTreeFileObject(it.title, false, it) }
+      moduleItems.sortedBy { it.title }.forEach {
+        val child = wrapMaterialItem(it)
+        moduleNode.children += child
+      }
       typeNode.children += moduleNode
     }
     root.children += typeNode
@@ -483,37 +509,24 @@ private fun buildMaterialsTree(items: List<ProjectMaterialItem>): MaterialTreeFi
   return root
 }
 
-private fun buildArchiveTree(archive: File): ArchiveEntryFileObject {
-  val root = ArchiveEntryFileObject(archive, "${archive.name}!/", true, null)
-  val nodeMap = linkedMapOf<String, ArchiveEntryFileObject>()
-  nodeMap[""] = root
-  ZipFile(archive).use { zip ->
-    zip.entries().asSequence().forEach { entry ->
-      val normalized = entry.name.trim('/')
-      if (normalized.isEmpty()) return@forEach
-      val parts = normalized.split('/')
-      var path = ""
-      var parent = root
-      for ((idx, part) in parts.withIndex()) {
-        path = if (path.isEmpty()) part else "$path/$part"
-        val isDir = idx != parts.lastIndex || entry.isDirectory
-        val node =
-            nodeMap.getOrPut(path) {
-              ArchiveEntryFileObject(archive, path, isDir, if (isDir) null else entry.name)
-            }
-        if (!parent.children.contains(node)) parent.children += node
-        parent = node
-      }
-    }
+/**
+ * Wraps a [ProjectMaterialItem] in a [FileObject] and, if the item is backed by a JAR
+ * or ZIP, lazily exposes the archive entries as children of the same node. This lets
+ * the user expand a JAR in-place without leaving the materials tree.
+ */
+private fun wrapMaterialItem(item: ProjectMaterialItem): FileObject {
+  val path = item.path?.let(::File)
+  if (path != null && path.isFile && isArchive(path)) {
+    return ArchiveBackedMaterialFileObject(name = item.title, archive = path, material = item)
   }
-  return root
+  return MaterialTreeFileObject(name = item.title, isDir = false, material = item)
 }
 
 private class MaterialTreeFileObject(
     private val name: String,
     private val isDir: Boolean,
     val material: ProjectMaterialItem?,
-    val children: MutableList<MaterialTreeFileObject> = mutableListOf(),
+    val children: MutableList<FileObject> = mutableListOf(),
 ) : FileObject, Serializable {
   override fun listFiles(): List<FileObject> = children
   override fun isDirectory() = isDir
@@ -538,9 +551,120 @@ private class MaterialTreeFileObject(
   }
 }
 
-private data class ArchiveEntryFileObject(
+/**
+ * Specialised [FileObject] that represents an archive file (JAR / ZIP / AAR / srcjar) but
+ * exposes its entries as if they were ordinary children of the archive. The archive
+ * itself stays a single node in the materials tree, so it can be expanded inline and
+ * the user can also see other files alongside it.
+ *
+ * The archive is opened lazily the first time [listFiles] is called. Subsequent calls
+ * return the same children list, so the FileTree's "remember expanded state" feature
+ * still works correctly across re-layouts.
+ *
+ * The node reports itself as a directory so that the FileTree shows the expansion
+ * chevron and treats a row click as expand/collapse. The click handler in
+ * [handleNodeClick] still uses the actual on-disk file path of the archive for
+ * "open in editor" actions, so users can still double-tap (or use the info badge) to
+ * open the raw archive.
+ */
+private class ArchiveBackedMaterialFileObject(
+    private val name: String,
     val archive: File,
-    private val entryPath: String,
+    val material: ProjectMaterialItem,
+) : FileObject, Serializable {
+
+  @Transient
+  private var cached: MutableList<ArchiveEntryFileObject>? = null
+
+  override fun listFiles(): List<FileObject> {
+    val list = cached ?: loadEntries().also { cached = it }
+    return list
+  }
+
+  // The archive is reported as a directory so the FileTree shows the expansion chevron
+  // and expands the JAR in-place without leaving the tree. This matches the user's
+  // requested UX of "directly expand at the JAR's position instead of entering the JAR".
+  override fun isDirectory() = true
+  override fun isFile() = false
+  override fun getName() = name
+  override fun getParentFile(): FileObject? = null
+  override fun getAbsolutePath(): String = archive.absolutePath
+
+  private fun loadEntries(): MutableList<ArchiveEntryFileObject> {
+    val result = mutableListOf<ArchiveEntryFileObject>()
+    runCatching {
+          ZipFile(archive).use { zip ->
+            // Two passes: first, build a directory tree from entries, then populate
+            // intermediate directory nodes. This handles the case where a single
+            // archive contains both `META-INF/services/com.foo` and a file at
+            // `META-INF/services/` – we want one directory `META-INF/` with the file
+            // underneath.
+            val byPath = linkedMapOf<String, ArchiveEntryFileObject>()
+            val topLevel = linkedMapOf<String, ArchiveEntryFileObject>()
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+              val entry = entries.nextElement()
+              val normalized = entry.name.trim('/')
+              if (normalized.isEmpty()) continue
+              val parts = normalized.split('/')
+              var currentPath = ""
+              var parent: ArchiveEntryFileObject? = null
+              for ((idx, part) in parts.withIndex()) {
+                currentPath = if (currentPath.isEmpty()) part else "$currentPath/$part"
+                val isLast = idx == parts.lastIndex
+                val isDir = !isLast || entry.isDirectory
+                val existing = byPath[currentPath]
+                val node =
+                    when {
+                      existing == null ->
+                          ArchiveEntryFileObject(archive, currentPath, isDir, if (isDir) null else entry.name)
+                      existing.isDirectory() && !isDir -> {
+                        // Promote the directory node to a file with the entry's name.
+                        ArchiveEntryFileObject(archive, currentPath, isDir, entry.name)
+                      }
+                      else -> existing
+                    }
+                byPath[currentPath] = node
+                if (parent == null) {
+                  topLevel[currentPath] = node
+                } else if (!parent.children.contains(node)) {
+                  parent.children += node
+                }
+                parent = node
+              }
+            }
+            result += topLevel.values
+          }
+        }
+        .onFailure {
+          // If the archive can't be opened, fall back to an empty list so the user
+          // can still see the entry and use the info badge to inspect its metadata.
+        }
+    // If the archive was empty or unreadable, add a single placeholder so the user
+    // still sees something they can click/tap for the detail dialog.
+    if (result.isEmpty()) {
+      result += ArchiveEntryFileObject(
+          archive = archive,
+          entryPath = "(empty)",
+          dir = true,
+          actualEntry = null,
+      )
+    }
+    return result
+  }
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is ArchiveBackedMaterialFileObject) return false
+    return archive.absolutePath == other.archive.absolutePath && name == other.name
+  }
+
+  override fun hashCode(): Int = 31 * archive.absolutePath.hashCode() + name.hashCode()
+}
+
+internal data class ArchiveEntryFileObject(
+    val archive: File,
+    val entryPath: String,
     private val dir: Boolean,
     private val actualEntry: String?,
     val children: MutableList<ArchiveEntryFileObject> = mutableListOf(),
@@ -555,27 +679,13 @@ private data class ArchiveEntryFileObject(
   fun extractToTemp(): File {
     val out = File.createTempFile("material_", "_" + getName())
     ZipFile(archive).use { zip ->
-      zip.getInputStream(zip.getEntry(actualEntry)).use { input ->
+      val entry = actualEntry?.let { zip.getEntry(it) }
+          ?: zip.getEntry(entryPath)
+          ?: error("Entry $entryPath not found in ${archive.name}")
+      zip.getInputStream(entry).use { input ->
         out.outputStream().use { input.copyTo(it) }
       }
     }
     return out
-  }
-
-  fun collectSiblingClasses(): List<ArchiveEntryFileObject> {
-    if (actualEntry == null || !actualEntry.endsWith(".class")) return listOf(this)
-    val base = actualEntry.substringBeforeLast('.').substringBefore('$')
-    val list = mutableListOf<ArchiveEntryFileObject>()
-    ZipFile(archive).use { zip ->
-      zip.entries().asSequence().forEach { e ->
-        if (!e.isDirectory && e.name.endsWith(".class")) {
-          val n = e.name.substringBeforeLast('.')
-          if (n == base || n.startsWith("$base$")) {
-            list += ArchiveEntryFileObject(archive, e.name, false, e.name)
-          }
-        }
-      }
-    }
-    return list.sortedBy { it.getName() }
   }
 }
