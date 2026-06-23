@@ -457,10 +457,25 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
      */
     @NonNull
     public String fetchExceptionMessage(long exceptionObjectId, byte objectTag) {
-        if (exceptionObjectId == 0L) return "";
+        return readString(exceptionObjectId);
+    }
+
+    /**
+     * Phase B4: general purpose read of a {@code java.lang.String}
+     * object via JDWP {@code StringReference.Value} (command set 10,
+     * command 1). Returns an empty string if the object id is null
+     * or the call fails. The {@code objectTag} parameter is
+     * accepted for symmetry with [fetchExceptionMessage] but is
+     * not used; the JDWP {@code StringReference} command set is
+     * always used because the string-id resolution is independent
+     * of the receiver tag.
+     */
+    @NonNull
+    public String readString(long stringObjectId) {
+        if (stringObjectId == 0L) return "";
         try {
             com.zerostudio.debugger.util.ByteBuf buf = new com.zerostudio.debugger.util.ByteBuf();
-            buf.writeLong(exceptionObjectId);
+            buf.writeLong(stringObjectId);
             com.zerostudio.debugger.jdwp.JdwpPacket reply = client.sendCommand(
                     com.zerostudio.debugger.jdwp.CommandSet.StringReference,
                     com.zerostudio.debugger.jdwp.CommandCodes.StringReferenceCmd.Value,
@@ -470,6 +485,29 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
             return in.readString();
         } catch (java.io.IOException ex) {
             return "";
+        }
+    }
+
+    /**
+     * Phase B4: create a string in the target VM and return its
+     * string-id via JDWP {@code VirtualMachine.CreateString}
+     * (command set 1, command 11). Returns 0 if the call fails;
+     * the string-id can then be passed to [readString] or used as
+     * an argument to a method invocation.
+     */
+    public long createString(@NonNull String value) {
+        try {
+            com.zerostudio.debugger.util.ByteBuf buf = new com.zerostudio.debugger.util.ByteBuf();
+            buf.writeString(value);
+            com.zerostudio.debugger.jdwp.JdwpPacket reply = client.sendCommand(
+                    com.zerostudio.debugger.jdwp.CommandSet.VirtualMachine,
+                    com.zerostudio.debugger.jdwp.CommandCodes.VirtualMachineCmd.CreateString,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) return 0L;
+            com.zerostudio.debugger.util.ByteBuf in = new com.zerostudio.debugger.util.ByteBuf(reply.data);
+            return in.readLong();
+        } catch (java.io.IOException ex) {
+            return 0L;
         }
     }
 
