@@ -57,6 +57,14 @@ public final class DebuggerBootstrapProvider extends ContentProvider {
         // produced by the JDWP startup are visible to the IDE.
         int logcatPort = LogCaptureService.getInstance().startLogcat(0);
         int jdwpPort = JdwpServer.startAndRegister(0);
+
+        // PR-D7: emit an app-ready signal via logcat so the IDE can
+        // auto-switch to the debug UI. Format is documented in
+        // AppReadySignalWatcher.SIGNAL_PATTERN.
+        android.util.Log.i("ZeroStudioDebug",
+                "READY pkg=" + getContext().getPackageName()
+                        + " jdwp=" + jdwpPort);
+
         android.util.Log.i(TAG,
                 "DebuggerBootstrap started: jdwp=" + jdwpPort
                         + " logcat=" + logcatPort);
