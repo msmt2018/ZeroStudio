@@ -13,11 +13,13 @@ package com.zerostudio.debugger.event;
 
 import android.util.Log;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import com.zerostudio.debugger.api.Debugger;
 import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.SuspendInfo;
 import com.zerostudio.debugger.jdwp.CommandSet;
 import com.zerostudio.debugger.jdwp.EventKind;
+import com.zerostudio.debugger.jdwp.JdwpClient;
 import com.zerostudio.debugger.jdwp.JdwpPacket;
 import com.zerostudio.debugger.jdwp.SuspendPolicy;
 import com.zerostudio.debugger.util.ByteBuf;
@@ -28,6 +30,7 @@ public final class DebugEventBus {
 
     private static final String TAG = "DebugEventBus";
     private final CopyOnWriteArrayList<DebugEventsListener> listeners = new CopyOnWriteArrayList<>();
+    @Nullable private JdwpClient client;
 
     public void subscribe(@NonNull DebugEventsListener l) {
         listeners.addIfAbsent(l);
@@ -37,6 +40,15 @@ public final class DebugEventBus {
         listeners.remove(l);
     }
 
+    /**
+     * Phase B6: bind the bus to a JdwpClient so that
+     * {@link #subscribeClassPrepare()} and friends can issue the
+     * matching EventRequest.Set command. Safe to call multiple times.
+     */
+    public void bindClient(@NonNull JdwpClient client) {
+        this.client = client;
+    }
+
     public void publish(@NonNull DebugEvents event) {
         for (DebugEventsListener l : listeners) {
             try {
@@ -44,6 +56,32 @@ public final class DebugEventBus {
             } catch (Throwable t) {
                 Log.w(TAG, "listener failed", t);
             }
+        }
+    }
+
+    /**
+     * Phase B6: re-subscribe to CLASS_PREPARE events with a single
+     * composite (no filter) EventRequest. The JDWP EventRequest.Set
+     * command (command set 15, command 1) is issued with:
+     *   eventKind=CLASS_PREPARE, suspendPolicy=NONE.
+     * Returns silently if the bus was never bound to a client.
+     */
+    public void subscribeClassPrepare() {
+        JdwpClient c = client;
+        if (c == null) return;
+        try {
+            ByteBuf buf = new ByteBuf();
+            buf.writeByte(EventKind.CLASS_PREPARE);
+            buf.writeByte(SuspendPolicy.NONE);
+            buf.writeInt(1);     // one modifier: sourceFileMatch
+            // SourceFileMatch modifier (kind=5)
+            buf.writeByte(5);
+            buf.writeString("*");  // wildcard - all classes
+            c.sendCommandNoReply(
+                    com.zerostudio.debugger.jdwp.CommandSet.EventRequest,
+                    (byte) 1, buf.toByteArray());
+        } catch (Throwable t) {
+            Log.w(TAG, "subscribeClassPrepare failed", t);
         }
     }
 

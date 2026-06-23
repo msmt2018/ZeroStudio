@@ -119,6 +119,7 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
      * application. Blocks until the handshake completes.
      */
     public void connect(@NonNull String host, int port) throws java.io.IOException {
+        eventBus.bindClient(client); // Phase B6: enable re-subscribe on reconnect.
         client.connect(host, port);
     }
 
@@ -308,6 +309,45 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
     public void onDisconnected() {
         session.setState(DebugSession.State.DISCONNECTED);
         notifyConnectionChanged(false);
+    }
+
+    /**
+     * Phase B6: called after the JdwpClient has reconnected to the
+     * JDWP server. We re-install every breakpoint in
+     * {@link BreakpointStore} and re-subscribe to events that the
+     * server has forgotten about (CLASS_PREPARE, BREAKPOINT,
+     * EXCEPTION, etc.).
+     *
+     * Re-installation is a best-effort retry: a JDWP error reply is
+     * logged but does not throw.
+     */
+    @Override
+    public void onReconnected() {
+        session.setState(DebugSession.State.CONNECTED);
+        notifyConnectionChanged(true);
+        try {
+            resubscribeAndReinstall();
+        } catch (Throwable t) {
+            Log.w(TAG, "reconnect hook failed", t);
+        }
+    }
+
+    private void resubscribeAndReinstall() {
+        // 1. Reinstall all breakpoints.
+        for (Breakpoint bp : breakpoints.all()) {
+            try {
+                sourceLocator.installBreakpoint(bp);
+            } catch (Throwable t) {
+                Log.w(TAG, "reinstall bp " + bp.id + " failed", t);
+            }
+        }
+        // 2. Re-subscribe to CLASS_PREPARE so late-loaded classes get
+        //    their pending breakpoints installed.
+        try {
+            eventBus.subscribeClassPrepare();
+        } catch (Throwable t) {
+            Log.w(TAG, "re-subscribe CLASS_PREPARE failed", t);
+        }
     }
 
     // -- internal hooks for the event bus --

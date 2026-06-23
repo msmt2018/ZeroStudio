@@ -29,6 +29,10 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // Note: this class is no longer `final` so unit tests can subclass it
@@ -53,6 +57,14 @@ public class JdwpClient {
     @Nullable private JdwpPacketReader reader;
     @Nullable private String host;
     private int port;
+
+    // Phase B6: auto-reconnect state.
+    private boolean reconnectEnabled = false;
+    private long reconnectInitialDelayMs = 250L;
+    private long reconnectMaxDelayMs = 5_000L;
+    private int reconnectAttempts = 0;
+    @Nullable private ScheduledFuture<?> reconnectTask;
+    @Nullable private ScheduledExecutorService reconnectExecutor;
 
     /**
      * Open a TCP connection to the JDWP server and perform the handshake.
@@ -154,6 +166,7 @@ public class JdwpClient {
 
     /** Close the connection. */
     public void close() {
+        cancelReconnect();
         try {
             if (reader != null) {
                 reader.stop();
@@ -184,6 +197,104 @@ public class JdwpClient {
     @Nullable public String host() { return host; }
     public int port() { return port; }
 
+    // ---- Phase B6: automatic reconnect ----
+
+    /**
+     * Phase B6: enable or disable automatic reconnection. When
+     * enabled, a disconnect will schedule a background attempt to
+     * reconnect to the same host/port. On success the registered
+     * {@link ConnectionListener}s receive
+     * {@link ConnectionListener#onReconnected()} so they can
+     * re-issue event subscriptions.
+     */
+    public void setReconnectEnabled(boolean enabled) {
+        this.reconnectEnabled = enabled;
+        if (enabled) {
+            ensureReconnectExecutor();
+        } else {
+            cancelReconnect();
+        }
+    }
+
+    public boolean isReconnectEnabled() {
+        return reconnectEnabled;
+    }
+
+    /**
+     * Phase B6: configure the reconnect backoff. The first attempt
+     * happens after {@code initialDelayMs}, doubling each failed
+     * attempt up to {@code maxDelayMs}.
+     */
+    public void setReconnectBackoff(long initialDelayMs, long maxDelayMs) {
+        this.reconnectInitialDelayMs = initialDelayMs;
+        this.reconnectMaxDelayMs = maxDelayMs;
+    }
+
+    /**
+     * Phase B6: how many reconnect attempts have happened so far.
+     * Useful for tests and UI telemetry. Reset to 0 on a successful
+     * connect.
+     */
+    public int reconnectAttempts() {
+        return reconnectAttempts;
+    }
+
+    /**
+     * Phase B6: install a custom executor. By default a daemon
+     * single-threaded scheduled executor is created lazily. Tests
+     * may pass in a single-threaded executor they can drive
+     * manually.
+     */
+    public void setReconnectExecutor(@Nullable ScheduledExecutorService executor) {
+        this.reconnectExecutor = executor;
+    }
+
+    private void ensureReconnectExecutor() {
+        if (reconnectExecutor == null) {
+            reconnectExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "JdwpClient-reconnect");
+                t.setDaemon(true);
+                return t;
+            });
+        }
+    }
+
+    private void cancelReconnect() {
+        if (reconnectTask != null) {
+            reconnectTask.cancel(false);
+            reconnectTask = null;
+        }
+    }
+
+    private void scheduleReconnect() {
+        if (!reconnectEnabled || host == null) return;
+        ensureReconnectExecutor();
+        long delay = reconnectInitialDelayMs;
+        for (int i = 0; i < reconnectAttempts && delay < reconnectMaxDelayMs; i++) {
+            delay = Math.min(delay * 2, reconnectMaxDelayMs);
+        }
+        reconnectAttempts++;
+        cancelReconnect();
+        final String targetHost = host;
+        final int targetPort = port;
+        reconnectTask = reconnectExecutor.schedule(() -> {
+            try {
+                connect(targetHost, targetPort);
+                reconnectAttempts = 0;
+                notifyReconnected();
+            } catch (IOException ex) {
+                // Try again later.
+                scheduleReconnect();
+            }
+        }, delay, TimeUnit.MILLISECONDS);
+    }
+
+    private void notifyReconnected() {
+        for (ConnectionListener l : connectionListeners) {
+            try { l.onReconnected(); } catch (Throwable t) { Log.w(TAG, "listener", t); }
+        }
+    }
+
     /** Register a listener for events. */
     public void addEventListener(@NonNull EventListener listener) {
         eventListeners.addIfAbsent(listener);
@@ -210,6 +321,9 @@ public class JdwpClient {
     private void notifyDisconnected() {
         for (ConnectionListener l : connectionListeners) {
             try { l.onDisconnected(); } catch (Throwable t) { Log.w(TAG, "listener", t); }
+        }
+        if (reconnectEnabled) {
+            scheduleReconnect();
         }
     }
 
@@ -297,5 +411,14 @@ public class JdwpClient {
     public interface ConnectionListener {
         void onConnected();
         void onDisconnected();
+
+        /**
+         * Phase B6: called after the client has automatically
+         * reconnected to the JDWP server. The implementation should
+         * re-issue event subscriptions (EventRequest.Set), install
+         * breakpoints, etc. The default implementation is a no-op
+         * for binary compatibility with existing listeners.
+         */
+        default void onReconnected() { }
     }
 }
