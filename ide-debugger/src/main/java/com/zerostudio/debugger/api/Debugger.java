@@ -39,6 +39,7 @@ import com.zerostudio.debugger.model.BreakpointStore;
 import com.zerostudio.debugger.model.DebugSession;
 import com.zerostudio.debugger.model.EvalEngine;
 import com.zerostudio.debugger.model.SourceLocator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -255,6 +256,75 @@ public final class Debugger
         }
         notifyBreakpointChanged(bp);
         return id;
+    }
+
+    /**
+     * Phase H4: Add and install multiple breakpoints efficiently.
+     *
+     * Groups breakpoints by source file to minimize repeated source file
+     * parsing and class signature lookups. See
+     * {@link SourceLocator#installBreakpoints(List)}.
+     *
+     * @param specs array of breakpoint specs, each element is
+     *              [sourceFile, line, condition, logMessage, hitCountMode, hitCount]
+     *              (all strings, use "" for nulls)
+     * @return the assigned breakpoint ids in the same order as the specs
+     */
+    public List<Long> addBreakpoints(@NonNull List<BreakpointSpec> specs) {
+        List<Long> ids = new ArrayList<>(specs.size());
+        List<Breakpoint> toInstall = new ArrayList<>(specs.size());
+        for (BreakpointSpec spec : specs) {
+            long id = breakpointIdGen.incrementAndGet();
+            Breakpoint bp = new Breakpoint(
+                    id, spec.sourceFile, spec.line, spec.condition, spec.logMessage,
+                    spec.hitCountMode, spec.hitCount);
+            breakpoints.add(bp);
+            toInstall.add(bp);
+            ids.add(id);
+        }
+        try {
+            sourceLocator.installBreakpoints(toInstall);
+        } catch (java.io.IOException ioe) {
+            Log.w(TAG, "Failed to install breakpoints", ioe);
+            for (Breakpoint bp : toInstall) {
+                bp.state = Breakpoint.State.INVALID;
+                notifyBreakpointChanged(bp);
+            }
+        }
+        for (Breakpoint bp : toInstall) {
+            notifyBreakpointChanged(bp);
+        }
+        return ids;
+    }
+
+    /**
+     * Phase H4: A breakpoint specification for batch addition.
+     * All fields mirror {@link Debugger#addBreakpoint(String, int, String, String, Breakpoint.HitCountMode, int)}.
+     */
+    public static final class BreakpointSpec {
+        @NonNull public final String sourceFile;
+        public final int line;
+        @Nullable public final String condition;
+        @Nullable public final String logMessage;
+        @NonNull public final Breakpoint.HitCountMode hitCountMode;
+        public final int hitCount;
+
+        public BreakpointSpec(@NonNull String sourceFile, int line) {
+            this(sourceFile, line, null, null, Breakpoint.HitCountMode.ALWAYS, 0);
+        }
+
+        public BreakpointSpec(@NonNull String sourceFile, int line,
+                              @Nullable String condition,
+                              @Nullable String logMessage,
+                              @NonNull Breakpoint.HitCountMode hitCountMode,
+                              int hitCount) {
+            this.sourceFile = sourceFile;
+            this.line = line;
+            this.condition = condition;
+            this.logMessage = logMessage;
+            this.hitCountMode = hitCountMode;
+            this.hitCount = hitCount;
+        }
     }
 
     public void removeBreakpoint(long id) {
