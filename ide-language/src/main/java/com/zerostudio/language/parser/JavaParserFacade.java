@@ -3,7 +3,7 @@ package com.zerostudio.language.parser;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.Position;
+import com.github.javaparser.Range;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.BodyDeclaration;
@@ -11,7 +11,6 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.InterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -19,7 +18,6 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 
 import com.zerostudio.language.model.LanguageId;
@@ -48,7 +46,7 @@ public final class JavaParserFacade implements Parser {
     private final String languageVersion;
 
     public JavaParserFacade() {
-        this(ParserConfiguration.LanguageLevel.JAVA_17);
+        this(ParserConfiguration.LanguageLevel.POPULAR);
     }
 
     public JavaParserFacade(ParserConfiguration.LanguageLevel level) {
@@ -108,13 +106,14 @@ public final class JavaParserFacade implements Parser {
         String name = td.getNameAsString();
         String fqn = pkg.isEmpty() ? name : pkg + "." + name;
         if (outerName != null) fqn = outerName + "$" + name;
+        final String classFqn = fqn;
         SymbolKind kind = kindFor(td);
         symbols.add(new Symbol(name, fqn, kind, outerName, path,
                 toRange(td.getRange().orElse(null)), LanguageId.JAVA));
 
         for (BodyDeclaration<?> member : td.getMembers()) {
             if (member instanceof MethodDeclaration) {
-                MethodDeclaration md = (MethodDeclaration) member;
+                final MethodDeclaration md = (MethodDeclaration) member;
                 String sig = fqn + "#" + md.getNameAsString()
                         + "(" + paramTypes(md.getParameters()) + ")";
                 symbols.add(new Symbol(md.getNameAsString(), sig,
@@ -123,8 +122,9 @@ public final class JavaParserFacade implements Parser {
                 // references inside method
                 BlockStmt body = md.getBody().orElse(null);
                 if (body != null) {
-                    body.walk(NameExpr.class, n -> addNameRef(path, fqn, md.getNameAsString(), n, refs));
-                    body.walk(MethodCallExpr.class, n -> addCallRef(path, fqn, md.getNameAsString(), n, refs));
+                    final String methodName = md.getNameAsString();
+                    body.walk(NameExpr.class, n -> addNameRef(path, classFqn, methodName, n, refs));
+                    body.walk(MethodCallExpr.class, n -> addCallRef(path, classFqn, methodName, n, refs));
                 }
             } else if (member instanceof ConstructorDeclaration) {
                 ConstructorDeclaration cd = (ConstructorDeclaration) member;
@@ -140,12 +140,11 @@ public final class JavaParserFacade implements Parser {
                             toRange(vd.getRange().orElse(null)), LanguageId.JAVA));
                 }
                 fd.getVariables().forEach(v -> v.getInitializer().ifPresent(init -> {
-                    init.walk(NameExpr.class, n -> addNameRef(path, fqn, null, n, refs));
-                    init.walk(MethodCallExpr.class, n -> addCallRef(path, fqn, null, n, refs));
+                    init.walk(NameExpr.class, n -> addNameRef(path, classFqn, null, n, refs));
+                    init.walk(MethodCallExpr.class, n -> addCallRef(path, classFqn, null, n, refs));
                 }));
             } else if (member instanceof ClassOrInterfaceDeclaration
-                    || member instanceof EnumDeclaration
-                    || member instanceof InterfaceDeclaration) {
+                    || member instanceof EnumDeclaration) {
                 TypeDeclaration<?> inner = (TypeDeclaration<?>) member;
                 extractType(path, pkg, fqn, inner, symbols, refs);
             }
@@ -160,8 +159,12 @@ public final class JavaParserFacade implements Parser {
 
     private void addCallRef(String path, String pkg, String container,
                             MethodCallExpr mc, List<Reference> refs) {
+        // Use the range of the method name, not the whole call expression;
+        // otherwise nested references (e.g. Toast.makeText where "Toast"
+        // also gets a reference) overlap and the cursor-based lookup can't
+        // disambiguate.
         refs.add(new Reference(mc.getNameAsString(),
-                toRange(mc.getRange().orElse(null)),
+                toRange(mc.getName().getRange().orElse(null)),
                 Reference.ReferenceKind.CALL, container, path, LanguageId.JAVA));
         // Also note the receiver / argument names.
         mc.getScope().ifPresent(s -> s.walk(NameExpr.class,
@@ -172,8 +175,11 @@ public final class JavaParserFacade implements Parser {
     }
 
     private static SymbolKind kindFor(TypeDeclaration<?> td) {
-        if (td instanceof InterfaceDeclaration) return SymbolKind.INTERFACE;
         if (td instanceof EnumDeclaration) return SymbolKind.ENUM;
+        if (td instanceof ClassOrInterfaceDeclaration) {
+            ClassOrInterfaceDeclaration ci = (ClassOrInterfaceDeclaration) td;
+            return ci.isInterface() ? SymbolKind.INTERFACE : SymbolKind.CLASS;
+        }
         return SymbolKind.CLASS;
     }
 
@@ -186,9 +192,11 @@ public final class JavaParserFacade implements Parser {
         return sb.toString();
     }
 
-    private static SourceRange toRange(Position p) {
-        if (p == null) return SourceRange.NONE;
-        return new SourceRange(p.line - 1, p.column - 1, p.line - 1, p.column - 1);
+    private static SourceRange toRange(Range r) {
+        if (r == null) return SourceRange.NONE;
+        com.github.javaparser.Position b = r.begin;
+        com.github.javaparser.Position e = r.end;
+        return new SourceRange(b.line - 1, b.column - 1, e.line - 1, e.column - 1);
     }
 
     /**
@@ -197,8 +205,8 @@ public final class JavaParserFacade implements Parser {
      */
     public static SourceRange rangeOf(com.github.javaparser.Range r) {
         if (r == null) return SourceRange.NONE;
-        Position b = r.begin;
-        Position e = r.end;
+        com.github.javaparser.Position b = r.begin;
+        com.github.javaparser.Position e = r.end;
         return new SourceRange(b.line - 1, b.column - 1, e.line - 1, e.column - 1);
     }
 }

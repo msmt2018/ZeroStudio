@@ -3,8 +3,8 @@ package com.zerostudio.language.index;
 import com.zerostudio.language.model.LanguageId;
 import com.zerostudio.language.model.ParsedFile;
 import com.zerostudio.language.model.Symbol;
+import com.zerostudio.language.model.SymbolKind;
 
-import java.util.Collection;
 import java.util.List;
 
 /**

@@ -90,17 +90,72 @@ final class CppDeclExtractor {
             int open = p;
             int close = matchBrace(open);
             if (name != null) scopeStack.push(name);
-            // Recurse into body
+            // Recurse into body using the SAME extract() but the brace
+            // depth is what bounds it; once we see the close brace, we
+            // return. We need to scope the recursion so we don't re-enter
+            // tryNamespace for the same `{` token.
             p = open + 1;
-            // inner declarations until matching '}'
+            // Capture a hard upper bound: stop when we hit the matching '}'.
             int saved = p;
-            extract();
-            // We will resume after the close brace below.
+            int endBrace = close;
+            // Walk tokens up to endBrace.
+            while (p < endBrace) {
+                Token t = tokens.get(p);
+                if (t.kind == Token.Kind.PREPROCESSOR) { p++; continue; }
+                if (t.kind == Token.Kind.KEYWORD) {
+                    switch (t.text) {
+                        case "class":
+                        case "struct":
+                            tryClassLike(t.text);
+                            continue;
+                        case "enum":
+                            tryEnum();
+                            continue;
+                        case "template":
+                            skipTemplate();
+                            continue;
+                        case "typedef":
+                            tryTypedef();
+                            continue;
+                        case "using":
+                            tryUsing();
+                            continue;
+                        case "namespace":
+                            // Don't recurse into tryNamespace from inside
+                            // a namespace body. Skip to the end of the inner
+                            // namespace to avoid stack growth.
+                            skipInnerNamespace();
+                            continue;
+                        default:
+                            tryFunction();
+                            continue;
+                    }
+                } else if (t.kind == Token.Kind.IDENTIFIER) {
+                    tryFunction();
+                    continue;
+                } else {
+                    p++;
+                }
+            }
             if (name != null) scopeStack.pop();
             p = close + 1;
             return;
         }
         p = save + 1;
+    }
+
+    private void skipInnerNamespace() {
+        // We're at "namespace". Skip past its name and body braces only.
+        p++;
+        skipWS();
+        // optional name
+        while (p < tokens.size() && tokens.get(p).kind == Token.Kind.IDENTIFIER) {
+            p++; skipWS();
+        }
+        if (p < tokens.size() && isToken("{")) {
+            int close = matchBrace(p);
+            p = (close >= 0) ? close + 1 : p + 1;
+        }
     }
 
     private void tryClassLike(String kw) {
@@ -157,22 +212,6 @@ final class CppDeclExtractor {
             if (t.kind == Token.Kind.PREPROCESSOR) { p++; continue; }
             if (t.kind == Token.Kind.KEYWORD) {
                 switch (t.text) {
-                    case "public":
-                    case "private":
-                    case "protected":
-                    case "static":
-                    case "virtual":
-                    case "explicit":
-                    case "inline":
-                    case "constexpr":
-                    case "friend":
-                    case "mutable":
-                    case "const":
-                    case "noexcept":
-                    case "override":
-                    case "final":
-                        p++;
-                        continue;
                     case "class":
                     case "struct":
                         tryClassLike(t.text);
@@ -191,7 +230,21 @@ final class CppDeclExtractor {
                         continue;
                 }
             } else if (t.kind == Token.Kind.IDENTIFIER) {
-                // Could be a constructor (NAME(...)) or a method.
+                // C++ access specifiers (public/private/protected) get
+                // lexed as IDENTIFIER by the underlying C lexer. Handle
+                // them as a special case: skip the label and the following
+                // ':' so we don't try to parse them as a function.
+                if (t.text.equals("public") || t.text.equals("private")
+                        || t.text.equals("protected")) {
+                    p++;
+                    while (p < endBrace
+                            && tokens.get(p).kind == Token.Kind.OPERATOR
+                            && !tokens.get(p).text.equals(":")) {
+                        p++;
+                    }
+                    if (p < endBrace && tokens.get(p).text.equals(":")) p++;
+                    continue;
+                }
                 tryFunction();
                 continue;
             } else {
@@ -389,6 +442,6 @@ final class CppDeclExtractor {
     }
 
     private String currentScope() {
-        return String.join("::", scopeStack.descendingIterator());
+        return String.join("::", new java.util.ArrayList<>(scopeStack));
     }
 }

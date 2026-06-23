@@ -2,6 +2,7 @@ package com.zerostudio.language.parser;
 
 import com.zerostudio.language.model.LanguageId;
 import com.zerostudio.language.model.ParsedFile;
+import com.zerostudio.language.model.SourcePosition;
 import com.zerostudio.language.model.SourceRange;
 
 /**
@@ -29,18 +30,12 @@ public final class AstNode {
     }
 
     /** Find the deepest node whose range contains the given position. */
-    public AstNode findAt(SourceRange.RangeAccessor pos) {
-        if (!range.contains(pos.asPosition())) return null;
+    public AstNode findAt(SourcePosition pos) {
+        if (!range.contains(pos)) return null;
         for (AstNode child : children) {
             AstNode hit = child.findAt(pos);
             if (hit != null) return hit;
         }
         return this;
-    }
-
-    /** Adapter so {@link #findAt} can accept either a SourcePosition or a
-     * SourceRange as the probe. */
-    public interface RangeAccessor {
-        com.zerostudio.language.model.SourcePosition asPosition();
     }
 }

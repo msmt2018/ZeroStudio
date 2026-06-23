@@ -46,7 +46,7 @@ public final class GoToDefinitionService {
      * </ol>
      */
     public ResolutionResult resolve(SourceLocation location) {
-        ParsedFile parsed = language.index.lookup().file(location.file);
+        ParsedFile parsed = language.index().lookup().file(location.file);
         if (parsed == null) {
             // File isn't indexed yet; ask the language service to parse it.
             try {
@@ -78,7 +78,7 @@ public final class GoToDefinitionService {
         }
         SymbolResolver resolver = ResolverRegistry.get(parsed.language);
         if (resolver == null) return ResolutionResult.unresolved(ref);
-        ResolutionContext ctx = new ResolutionContext(parsed, language.index);
+        ResolutionContext ctx = new ResolutionContext(parsed, language.index());
         return resolver.resolve(ref, ctx);
     }
 

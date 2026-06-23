@@ -467,6 +467,6 @@ final class KotlinDeclExtractor {
     }
 
     private String currentClass() {
-        return String.join(".", classStack.descendingIterator());
+        return String.join(".", new java.util.ArrayList<>(classStack));
     }
 }

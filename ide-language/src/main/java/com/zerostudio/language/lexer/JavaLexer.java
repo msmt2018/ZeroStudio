@@ -171,8 +171,13 @@ public final class JavaLexer implements Lexer {
             if (isOpStart((char) c)) {
                 int sLine = line, sCol = col;
                 int start = i;
-                while (i < len && isOpPart(text.charAt(i))) { i++; col++; }
-                out.add(new Token(Token.Kind.OPERATOR, text.substring(start, i),
+                String op = readOperator(text, i);
+                i += op.length();
+                for (int k = 0; k < op.length(); k++) {
+                    if (op.charAt(k) == '\n') { line++; col = 0; }
+                    else { col++; }
+                }
+                out.add(new Token(Token.Kind.OPERATOR, op,
                         new SourceRange(sLine, sCol, line, col), LanguageId.JAVA));
                 continue;
             }
@@ -196,7 +201,36 @@ public final class JavaLexer implements Lexer {
         return "+-*/%=<>!&|^~?:.,;()[]{}@$".indexOf(c) >= 0;
     }
 
-    private static boolean isOpPart(char c) {
-        return "+-*/%=<>!&|^~?:.,;()[]{}@$".indexOf(c) >= 0;
+    /**
+     * Max-munch read of an operator / punctuation. Stops at the first
+     * single-character punctuator (one of {@code ( ) [ ] { } , ; . :}) so
+     * that {@code };} is lexed as three tokens ({@code }, {@code ;},
+     * {@code }}), not one.
+     */
+    private static String readOperator(String text, int start) {
+        int i = start;
+        int len = text.length();
+        // 3-char operators
+        if (i + 2 < len) {
+            String t3 = text.substring(i, i + 3);
+            if (t3.equals(">>>") || t3.equals("<<=") || t3.equals(">>=")) {
+                return t3;
+            }
+        }
+        // 2-char operators
+        if (i + 1 < len) {
+            String t2 = text.substring(i, i + 2);
+            if (t2.equals("==") || t2.equals("!=") || t2.equals("<=")
+                    || t2.equals(">=") || t2.equals("&&") || t2.equals("||")
+                    || t2.equals("++") || t2.equals("--") || t2.equals("+=")
+                    || t2.equals("-=") || t2.equals("*=") || t2.equals("/=")
+                    || t2.equals("%=") || t2.equals("&=") || t2.equals("|=")
+                    || t2.equals("^=") || t2.equals("<<") || t2.equals(">>")
+                    || t2.equals("->") || t2.equals("::")) {
+                return t2;
+            }
+        }
+        // single char (must be one of the punctuators)
+        return text.substring(i, i + 1);
     }
 }

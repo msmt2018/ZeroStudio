@@ -49,7 +49,7 @@ public final class LanguageService {
         this.goToDefinition = new GoToDefinitionService(this);
     }
 
-    public ProjectIndex index() { return index; }
+    public final ProjectIndex index() { return index; }
 
     public GoToDefinitionService goToDefinition() { return goToDefinition; }
 

@@ -195,8 +195,13 @@ public final class KotlinLexer implements Lexer {
             if (isOpStart((char) c)) {
                 int sLine = line, sCol = col;
                 int start = i;
-                while (i < len && isOpPart(text.charAt(i))) { i++; col++; }
-                out.add(new Token(Token.Kind.OPERATOR, text.substring(start, i),
+                String op = readOperator(text, i);
+                i += op.length();
+                for (int k = 0; k < op.length(); k++) {
+                    if (op.charAt(k) == '\n') { line++; col = 0; }
+                    else { col++; }
+                }
+                out.add(new Token(Token.Kind.OPERATOR, op,
                         new SourceRange(sLine, sCol, line, col), LanguageId.KOTLIN));
                 continue;
             }
@@ -216,7 +221,26 @@ public final class KotlinLexer implements Lexer {
     private static boolean isOpStart(char c) {
         return "+-*/%=<>!&|^~?:.,;()[]{}@$".indexOf(c) >= 0;
     }
-    private static boolean isOpPart(char c) {
-        return "+-*/%=<>!&|^~?:.,;()[]{}@$".indexOf(c) >= 0;
+    private static String readOperator(String text, int start) {
+        int i = start;
+        int len = text.length();
+        if (i + 2 < len) {
+            String t3 = text.substring(i, i + 3);
+            if (t3.equals("===") || t3.equals("!==")) {
+                return t3;
+            }
+        }
+        if (i + 1 < len) {
+            String t2 = text.substring(i, i + 2);
+            if (t2.equals("==") || t2.equals("!=") || t2.equals("<=")
+                    || t2.equals(">=") || t2.equals("&&") || t2.equals("||")
+                    || t2.equals("++") || t2.equals("--") || t2.equals("+=")
+                    || t2.equals("-=") || t2.equals("*=") || t2.equals("/=")
+                    || t2.equals("%=") || t2.equals("?.") || t2.equals("!!")
+                    || t2.equals("->") || t2.equals("::")) {
+                return t2;
+            }
+        }
+        return text.substring(i, i + 1);
     }
 }
