@@ -118,6 +118,17 @@ public class JdwpClient {
     @NonNull
     public JdwpPacket sendCommand(byte commandSet, byte command, @NonNull byte[] data)
             throws IOException {
+        return sendCommand(commandSet, command, data, 5_000L);
+    }
+
+    /**
+     * PR-D5: bounded variant for heartbeat / time-sensitive callers.
+     * Returns the reply packet (with the 2-byte error code stripped) on success;
+     * throws IOException on timeout or transport failure.
+     */
+    @NonNull
+    public JdwpPacket sendCommand(byte commandSet, byte command, @NonNull byte[] data,
+                                   long timeoutMs) throws IOException {
         int id = idAllocator.incrementAndGet();
         JdwpPacket p = new JdwpPacket.Builder()
                 .id(id)
@@ -129,7 +140,7 @@ public class JdwpClient {
         pending.put(id, future);
         try {
             writePacket(p);
-            return future.await();
+            return future.await(timeoutMs);
         } finally {
             pending.remove(id);
         }
@@ -382,8 +393,16 @@ public class JdwpClient {
         }
 
         JdwpPacket await() throws IOException {
+            return await(5_000L);
+        }
+
+        /**
+         * PR-D5: bounded await with caller-supplied timeout. Used by
+         * heartbeat to fail fast on a dead connection.
+         */
+        JdwpPacket await(long timeoutMs) throws IOException {
             synchronized (lock) {
-                long deadline = System.currentTimeMillis() + 5_000L;
+                long deadline = System.currentTimeMillis() + Math.max(0L, timeoutMs);
                 while (!done) {
                     long remaining = deadline - System.currentTimeMillis();
                     if (remaining <= 0) {
