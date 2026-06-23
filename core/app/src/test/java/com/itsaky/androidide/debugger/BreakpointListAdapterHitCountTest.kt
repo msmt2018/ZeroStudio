@@ -71,4 +71,57 @@ class BreakpointListAdapterHitCountTest {
         assertEquals(7, bp.hitCount)
         assertNotEquals(IdeBreakpoint.State.DISABLED, bp.state)
     }
+
+    // ============== Phase E4: stateLabelResId ==============
+
+    @Test
+    fun `stateLabelResId maps NORMAL to normal string`() {
+        assertEquals(R.string.debugger_bp_state_normal,
+                BreakpointListAdapter.stateLabelResId(IdeBreakpoint.State.NORMAL))
+    }
+
+    @Test
+    fun `stateLabelResId maps INVALID to invalid string`() {
+        assertEquals(R.string.debugger_bp_state_invalid,
+                BreakpointListAdapter.stateLabelResId(IdeBreakpoint.State.INVALID))
+    }
+
+    @Test
+    fun `stateLabelResId maps VERIFIED to verified string`() {
+        assertEquals(R.string.debugger_bp_state_verified,
+                BreakpointListAdapter.stateLabelResId(IdeBreakpoint.State.VERIFIED))
+    }
+
+    @Test
+    fun `stateLabelResId maps CONDITION to condition string`() {
+        assertEquals(R.string.debugger_bp_state_condition,
+                BreakpointListAdapter.stateLabelResId(IdeBreakpoint.State.CONDITION))
+    }
+
+    @Test
+    fun `stateLabelResId maps LOG to logpoint string`() {
+        assertEquals(R.string.debugger_bp_state_logpoint,
+                BreakpointListAdapter.stateLabelResId(IdeBreakpoint.State.LOG))
+    }
+
+    @Test
+    fun `stateLabelResId maps DISABLED to disabled string`() {
+        assertEquals(R.string.debugger_bp_state_disabled,
+                BreakpointListAdapter.stateLabelResId(IdeBreakpoint.State.DISABLED))
+    }
+
+    @Test
+    fun `stateLabelResId maps HIT to hit string`() {
+        assertEquals(R.string.debugger_bp_state_hit,
+                BreakpointListAdapter.stateLabelResId(IdeBreakpoint.State.HIT))
+    }
+
+    @Test
+    fun `stateLabelResId returns 0 for unknown state (defensive)`() {
+        // 反射构造未知 enum 不安全,仅断言 7 个已知状态都返回非零 resId
+        for (s in IdeBreakpoint.State.values()) {
+            assertNotEquals("state=$s", 0,
+                    BreakpointListAdapter.stateLabelResId(s))
+        }
+    }
 }

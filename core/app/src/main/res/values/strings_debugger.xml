@@ -124,4 +124,13 @@
     <string name="debugger_bp_hit_greater">命中 &gt; %1$d</string>
     <string name="debugger_bp_hit_multiple">每 %1$d 次触发</string>
     <string name="debugger_bp_hit_received">已命中 %1$d 次</string>
+
+    <!-- PR-E4: 断点状态标签 (7 种) -->
+    <string name="debugger_bp_state_normal">普通</string>
+    <string name="debugger_bp_state_invalid">无效</string>
+    <string name="debugger_bp_state_verified">已验证</string>
+    <string name="debugger_bp_state_condition">条件</string>
+    <string name="debugger_bp_state_logpoint">日志点</string>
+    <string name="debugger_bp_state_disabled">禁用</string>
+    <string name="debugger_bp_state_hit">命中</string>
 </resources>

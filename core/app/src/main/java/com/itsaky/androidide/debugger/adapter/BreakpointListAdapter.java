@@ -67,7 +67,7 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         Context ctx = h.itemView.getContext();
         h.file.setText(shortenPath(bp.file));
         h.line.setText(String.valueOf(bp.line));
-        h.state.setText(stateLabel(bp.state));
+        h.state.setText(stateLabel(ctx, bp.state));
         // Phase E3: 颜色从资源加载,浅/深色主题自适应
         h.state.setTextColor(BreakpointStateColors.colorForState(ctx, bp.state));
         h.dot.setImageDrawable(makeDot(ctx, bp.state));
@@ -141,16 +141,36 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         }
     }
 
-    private static String stateLabel(IdeBreakpoint.State state) {
+    private static String stateLabel(@NonNull Context ctx, IdeBreakpoint.State state) {
+        // Phase E4: 状态标签通过 R.string 资源加载,支持多语言。
+        int resId;
         switch (state) {
-            case NORMAL: return "普通";
-            case INVALID: return "无效";
-            case VERIFIED: return "已验证";
-            case CONDITION: return "条件";
-            case LOG: return "日志点";
-            case DISABLED: return "禁用";
-            case HIT: return "命中";
-            default: return state.name();
+            case NORMAL:    resId = R.string.debugger_bp_state_normal; break;
+            case INVALID:   resId = R.string.debugger_bp_state_invalid; break;
+            case VERIFIED:  resId = R.string.debugger_bp_state_verified; break;
+            case CONDITION: resId = R.string.debugger_bp_state_condition; break;
+            case LOG:       resId = R.string.debugger_bp_state_logpoint; break;
+            case DISABLED:  resId = R.string.debugger_bp_state_disabled; break;
+            case HIT:       resId = R.string.debugger_bp_state_hit; break;
+            default:        return state.name();
+        }
+        return ctx.getString(resId);
+    }
+
+    /**
+     * Phase E4: 纯函数版本,返回 state 对应的 R.string 资源 id。
+     * 供单测断言映射关系,无需 Context。
+     */
+    public static int stateLabelResId(IdeBreakpoint.State state) {
+        switch (state) {
+            case NORMAL:    return R.string.debugger_bp_state_normal;
+            case INVALID:   return R.string.debugger_bp_state_invalid;
+            case VERIFIED:  return R.string.debugger_bp_state_verified;
+            case CONDITION: return R.string.debugger_bp_state_condition;
+            case LOG:       return R.string.debugger_bp_state_logpoint;
+            case DISABLED:  return R.string.debugger_bp_state_disabled;
+            case HIT:       return R.string.debugger_bp_state_hit;
+            default:        return 0;
         }
     }
 
