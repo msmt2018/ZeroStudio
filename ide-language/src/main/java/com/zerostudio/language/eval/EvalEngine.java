@@ -198,6 +198,31 @@ public final class EvalEngine {
             Object v = arr[i];
             return v == null ? Result.nullValue() : Result.of(v);
         }
+        if (target.value instanceof Map) {
+            Object key = idx.value;
+            Map<?, ?> map = (Map<?, ?>) target.value;
+            if (!map.containsKey(key)) return Result.nullValue();
+            Object v = map.get(key);
+            return v == null ? Result.nullValue() : Result.of(v);
+        }
+        if (target.value instanceof int[]) {
+            int i = ((Number) idx.value).intValue();
+            int[] arr = (int[]) target.value;
+            if (i < 0 || i >= arr.length) return Result.error("Index OOB: " + i);
+            return Result.of((long) arr[i]);
+        }
+        if (target.value instanceof long[]) {
+            int i = ((Number) idx.value).intValue();
+            long[] arr = (long[]) target.value;
+            if (i < 0 || i >= arr.length) return Result.error("Index OOB: " + i);
+            return Result.of(arr[i]);
+        }
+        if (target.value instanceof String) {
+            int i = ((Number) idx.value).intValue();
+            String s = (String) target.value;
+            if (i < 0 || i >= s.length()) return Result.error("Index OOB: " + i);
+            return Result.of(String.valueOf(s.charAt(i)));
+        }
         return Result.error("Cannot index " + target.value);
     }
 

@@ -72,6 +72,34 @@ public final class ProjectIndex {
 
     public ParsedFile fileFor(String className) { return classNameToFile.get(className); }
 
+    /**
+     * 严格检查：给定 FQN 是否在索引中作为 CLASS 声明存在（而非仅作为 import）。
+     * 用于诊断未解析的 import。
+     */
+    public boolean hasClass(String fqn) {
+        if (fqn == null) return false;
+        // 找到声称含此 FQN 的文件
+        ParsedFile pf = classNameToFile.get(fqn);
+        if (pf == null) return false;
+        // 该文件中是否有 CLASS 引用声明了此 FQN
+        if (pf.references == null) return false;
+        String simple = fqn.substring(fqn.lastIndexOf('.') + 1);
+        String pkg = fqn.substring(0, fqn.lastIndexOf('.'));
+        for (Reference r : pf.references) {
+            if (r.kind == Reference.ReferenceKind.CLASS
+                    && simple.equals(r.name)
+                    && pkg.equals(pf.packageName)) {
+                return true;
+            }
+            if (r.kind == Reference.ReferenceKind.TYPE
+                    && simple.equals(r.name)
+                    && pkg.equals(pf.packageName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public ParsedFile fileForPath(String path) { return filePathToFile.get(path); }
 
     public List<String> fuzzySearch(String query, int max) {

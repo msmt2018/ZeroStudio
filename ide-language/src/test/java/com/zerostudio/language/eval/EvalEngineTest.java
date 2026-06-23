@@ -121,4 +121,87 @@ public class EvalEngineTest {
         EvalEngine.Result r = engine.evaluate(n, f);
         assertEquals(1L, r.value);
     }
+
+    @Test
+    public void listIndexAccess() {
+        FrameSnapshot f = new FrameSnapshot();
+        java.util.List<String> list = java.util.Arrays.asList("a", "b", "c");
+        f.addValue(new FrameSnapshot.Value("items", "List", "Local", list));
+        Node n = new ExpressionParser("items[1]").parse();
+        EvalEngine.Result r = engine.evaluate(n, f);
+        assertEquals("b", r.value);
+    }
+
+    @Test
+    public void listIndexOutOfBounds() {
+        FrameSnapshot f = new FrameSnapshot();
+        java.util.List<String> list = java.util.Arrays.asList("a", "b");
+        f.addValue(new FrameSnapshot.Value("items", "List", "Local", list));
+        Node n = new ExpressionParser("items[10]").parse();
+        EvalEngine.Result r = engine.evaluate(n, f);
+        assertTrue(r.isError());
+    }
+
+    @Test
+    public void mapAccess() {
+        FrameSnapshot f = new FrameSnapshot();
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        map.put("x", 10L);
+        map.put("name", "Alice");
+        f.addValue(new FrameSnapshot.Value("data", "Map", "Local", map));
+        Node n = new ExpressionParser("data[\"x\"]").parse();
+        EvalEngine.Result r = engine.evaluate(n, f);
+        assertEquals(10L, r.value);
+    }
+
+    @Test
+    public void arrayAccess() {
+        FrameSnapshot f = new FrameSnapshot();
+        Object[] arr = new Object[]{"x", "y", "z"};
+        f.addValue(new FrameSnapshot.Value("arr", "Object[]", "Local", arr));
+        Node n = new ExpressionParser("arr[2]").parse();
+        EvalEngine.Result r = engine.evaluate(n, f);
+        assertEquals("z", r.value);
+    }
+
+    @Test
+    public void memberAccessOnFrame() {
+        FrameSnapshot f = new FrameSnapshot();
+        f.addValue(new FrameSnapshot.Value("name", "String", "Field", "Alice"));
+        FrameSnapshot self = new FrameSnapshot();
+        self.addValue(new FrameSnapshot.Value("name", "String", "Field", "Bob"));
+        f.addValue(new FrameSnapshot.Value("self", "FrameSnapshot", "Local", self));
+        Node n = new ExpressionParser("self.name").parse();
+        EvalEngine.Result r = engine.evaluate(n, f);
+        assertEquals("Bob", r.value);
+    }
+
+    @Test
+    public void nullMemberAccessReturnsNull() {
+        FrameSnapshot f = new FrameSnapshot();
+        f.addValue(new FrameSnapshot.Value("obj", "Object", "Local", null));
+        Node n = new ExpressionParser("obj.anything").parse();
+        EvalEngine.Result r = engine.evaluate(n, f);
+        assertTrue(r.isNull());
+    }
+
+    @Test
+    public void logicalAndVars() {
+        FrameSnapshot f = new FrameSnapshot();
+        f.addValue(new FrameSnapshot.Value("a", "boolean", "Local", true));
+        f.addValue(new FrameSnapshot.Value("b", "boolean", "Local", false));
+        Node n = new ExpressionParser("a && b").parse();
+        EvalEngine.Result r = engine.evaluate(n, f);
+        assertEquals(false, r.value);
+    }
+
+    @Test
+    public void logicalOrVars() {
+        FrameSnapshot f = new FrameSnapshot();
+        f.addValue(new FrameSnapshot.Value("a", "boolean", "Local", false));
+        f.addValue(new FrameSnapshot.Value("b", "boolean", "Local", true));
+        Node n = new ExpressionParser("a || b").parse();
+        EvalEngine.Result r = engine.evaluate(n, f);
+        assertEquals(true, r.value);
+    }
 }
