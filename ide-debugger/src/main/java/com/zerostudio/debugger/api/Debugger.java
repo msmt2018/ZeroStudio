@@ -47,18 +47,39 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
 
     private static final String TAG = "Debugger";
 
-    private final JdwpClient client = new JdwpClient();
-    private final DebugSession session = new DebugSession();
-    private final BreakpointStore breakpoints = new BreakpointStore();
-    private final SourceLocator sourceLocator = new SourceLocator(this);
-    private final EvalEngine eval = new EvalEngine(this);
-    private final DebugEventBus eventBus = new DebugEventBus();
-    private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
-    private final AtomicLong breakpointIdGen = new AtomicLong(0L);
-    private final AtomicBoolean vmStartReceived = new AtomicBoolean(false);
-    @Nullable private volatile SuspendInfo lastSuspend = null;
+    // Fields are no longer initialised inline so the package-private
+    // constructor below can inject a fake JdwpClient for unit testing.
+    private final JdwpClient client;
+    private final DebugSession session;
+    private final BreakpointStore breakpoints;
+    private final SourceLocator sourceLocator;
+    private final EvalEngine eval;
+    private final DebugEventBus eventBus;
+    private final CopyOnWriteArrayList<Listener> listeners;
+    private final AtomicLong breakpointIdGen;
+    private final AtomicBoolean vmStartReceived;
+    @Nullable private volatile SuspendInfo lastSuspend;
 
     public Debugger() {
+        this(new JdwpClient());
+    }
+
+    /**
+     * Package-private constructor used by the unit tests to inject a fake
+     * {@link JdwpClient} (see {@code FakeJdwpClient} in src/test). The
+     * production code path always goes through the no-arg constructor.
+     */
+    Debugger(@NonNull JdwpClient client) {
+        this.client = client;
+        this.session = new DebugSession();
+        this.breakpoints = new BreakpointStore();
+        this.sourceLocator = new SourceLocator(this);
+        this.eval = new EvalEngine(this);
+        this.eventBus = new DebugEventBus();
+        this.listeners = new CopyOnWriteArrayList<>();
+        this.breakpointIdGen = new AtomicLong(0L);
+        this.vmStartReceived = new AtomicBoolean(false);
+        this.lastSuspend = null;
         client.addEventListener(this);
         client.addConnectionListener(this);
     }
@@ -375,7 +396,9 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
         return false;
     }
 
-    private static boolean isTruthy(@NonNull EvalResult r) {
+    // Package-private so the unit tests can drive the truthiness rules
+    // directly. Production callers go through handleCondition().
+    static boolean isTruthy(@NonNull EvalResult r) {
         if (r.displayValue == null) return true; // unknown -> suspend
         switch (r.tag) {
             case BOOLEAN: return r.displayValue.equals("true");

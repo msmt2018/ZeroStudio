@@ -31,7 +31,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class JdwpClient {
+// Note: this class is no longer `final` so unit tests can subclass it
+// (see `FakeJdwpClient` in src/test). The class is still safe to extend
+// because all the public methods are well-defined and there are no
+// package-private fields that subclasses could clobber.
+public class JdwpClient {
 
     private static final String TAG = "JdwpClient";
     private static final int HANDSHAKE_TIMEOUT_MS = 5_000;
