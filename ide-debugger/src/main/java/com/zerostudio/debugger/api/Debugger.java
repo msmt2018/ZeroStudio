@@ -431,6 +431,22 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
         }
     }
 
+    /**
+     * Phase B1: callback invoked by the {@link com.zerostudio.debugger.event.DebugEventBus}
+     * whenever a CLASS_PREPARE event arrives. We hand the
+     * freshly-loaded class off to the SourceLocator so it can retry
+     * any pending breakpoints that were waiting for this class.
+     *
+     * @param classId the refTypeId of the freshly-prepared class
+     * @param classSignature the JVM type signature (e.g. {@code Lcom/example/Foo;})
+     * @param sourceFile the class's source-file attribute (may be null)
+     */
+    public void onClassPrepare(long classId, @NonNull String classSignature,
+                                @Nullable String sourceFile) {
+        if (sourceLocator == null) return;
+        sourceLocator.retryPending(classId, sourceFile);
+    }
+
     private void notifyResumed() {
         for (Listener l : listeners) {
             try { l.onResumed(); } catch (Throwable ignored) { }

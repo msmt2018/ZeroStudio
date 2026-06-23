@@ -46,6 +46,13 @@ public final class SourceLocator {
 
     private final Debugger debugger;
     private final JdwpClient client;
+    /**
+     * Phase B1: breakpoints that failed to install because the
+     * target class was not yet loaded. We retry each one whenever
+     * CLASS_PREPARE fires for a class whose source file matches
+     * the breakpoint's path.
+     */
+    private final List<Breakpoint> pending = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public SourceLocator(@NonNull Debugger debugger) {
         this.debugger = debugger;
@@ -100,7 +107,10 @@ public final class SourceLocator {
         // classes via CLASS_PREPARE.
         String classSignature = guessClassSignature(bp.sourceFile);
         if (classSignature == null) {
-            return; // wait for CLASS_PREPARE
+            // Phase B1: no usable class hint -> stash in pending list
+            // and wait for a matching CLASS_PREPARE.
+            pending.add(bp);
+            return;
         }
         // ClassesBySignature
         ByteBuf buf = new ByteBuf();
@@ -115,7 +125,11 @@ public final class SourceLocator {
         ByteBuf in = new ByteBuf(reply.data);
         int count = in.readInt();
         if (count == 0) {
-            bp.state = Breakpoint.State.INVALID;
+            // Phase B1: the class isn't loaded yet. Keep the
+            // breakpoint PENDING and wait for CLASS_PREPARE to
+            // retry. We do NOT mark it INVALID; the user expects
+            // it to install once the class shows up.
+            pending.add(bp);
             return;
         }
         // Take the first matching class.
@@ -214,6 +228,49 @@ public final class SourceLocator {
         buf.writeInt(bp.requestId);
         client.sendCommand(
                 CommandSet.EventRequest, CommandCodes.EventRequestCmd.Clear, buf.toByteArray());
+    }
+
+    /**
+     * Phase B1: called from {@link com.zerostudio.debugger.event.DebugEventBus}
+     * whenever a CLASS_PREPARE event arrives. Tries to install any
+     * pending breakpoint whose source file matches the new class's
+     * source file. A breakpoint that still can't be resolved stays in
+     * the pending list; one that succeeds is removed.
+     *
+     * @param classId the refTypeId of the freshly-prepared class
+     * @param sourceFile the class's source file attribute (may be null)
+     */
+    public void retryPending(long classId, @Nullable String sourceFile) {
+        if (pending.isEmpty()) return;
+        java.util.Iterator<Breakpoint> it = pending.iterator();
+        while (it.hasNext()) {
+            Breakpoint bp = it.next();
+            if (bp.state != Breakpoint.State.PENDING) {
+                it.remove();
+                continue;
+            }
+            // Best-effort match: same basename, or classSig-derived
+            // path containing the breakpoint's filename. The full
+            // class-sig lookup is done inside installBreakpoint so
+            // we don't duplicate it here.
+            if (sourceFile != null && !sourceFile.endsWith(basename(bp.sourceFile))) {
+                continue;
+            }
+            try {
+                installBreakpoint(bp);
+                if (bp.state == Breakpoint.State.VERIFIED) {
+                    it.remove();
+                    debugger.notifyBreakpointChanged(bp);
+                }
+            } catch (IOException ex) {
+                // keep pending; retry on the next CLASS_PREPARE
+            }
+        }
+    }
+
+    /** Phase B1: peek the pending-breakpoint list (test-only). */
+    int pendingCount() {
+        return pending.size();
     }
 
     public void resumeAll() throws IOException {

@@ -106,7 +106,16 @@ public final class DebugEventBus {
                     break;
                 }
                 case EventKind.CLASS_PREPARE: {
-                    publish(DebugEvents.of(DebugEvents.Type.CLASS_PREPARE, "Class prepare"));
+                    // Phase B1: parse the per-event payload and
+                    // hand the new class off to the Debugger so it
+                    // can retry any pending breakpoints.
+                    //   typeTag (1) + refTypeId (8) + sig (utf) + sourceFile (utf)
+                    byte typeTag = in.readByte();
+                    long classId = in.readLong();
+                    String classSig = in.readString();
+                    String sourceFile = in.readString();
+                    debugger.onClassPrepare(classId, classSig, sourceFile);
+                    publish(DebugEvents.of(DebugEvents.Type.CLASS_PREPARE, "Class prepare: " + classSig));
                     break;
                 }
                 default: {
