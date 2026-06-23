@@ -1031,4 +1031,72 @@ public class EvalEngineEvaluateTest {
         assertNotNull(r.error);
         assertTrue(r.error, r.error.contains("no static field"));
     }
+
+    // ---------- Phase A5: static method 调用 ----------
+
+    @Test
+    public void evaluate_staticMethodCall_twoIntArgs() {
+        // `java.lang.Math.max(3, 7)` -> 7
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // 1) ClassesBySignature for Ljava/lang/Math;
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0xCAFE, 0x05));
+        // 2) ReferenceType.Methods (lookup max)
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new JdwpPayloads.Method[] {
+                new JdwpPayloads.Method(0xCAFE0L, "max", "(II)I",
+                        0x0009 /* ACC_PUBLIC | ACC_STATIC */)
+        }));
+        // 3) ClassType.InvokeMethod -> reply
+        fake.enqueueOkReply(JdwpPayloads.invokeMethodReply((byte) 'I', JdwpPayloads.intValue(7)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "java.lang.Math.max(3, 7)");
+        assertFalse(r.isError());
+        assertEquals(Tag.INT, r.tag);
+        assertEquals("7", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_staticMethodCall_noSuchStaticMethod_returnsError() {
+        // Class exists but the method is an instance method, not static.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0xCAFE, 0x05));
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new JdwpPayloads.Method[] {
+                new JdwpPayloads.Method(0x100, "max", "(II)I",
+                        0x0001 /* ACC_PUBLIC only, NOT static */)
+        }));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "com.example.Foo.max(1, 2)");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("no static method"));
+    }
+
+    @Test
+    public void evaluate_staticMethodCall_classNotLoaded_returnsError() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureEmpty());
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "com.example.Foo.run()");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("no such local or class"));
+    }
+
+    @Test
+    public void evaluate_staticMethodCall_picksStaticOverInstance() {
+        // Class has both an instance and a static overload with the
+        // same name+arity. The lookup should prefer the static one.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0xCAFE, 0x05));
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new JdwpPayloads.Method[] {
+                new JdwpPayloads.Method(0x100, "calc", "(I)I", 0x0001 /* instance */),
+                new JdwpPayloads.Method(0x200, "calc", "(I)I", 0x0009 /* static */),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.invokeMethodReply((byte) 'I', JdwpPayloads.intValue(42)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "com.example.Foo.calc(1)");
+        assertFalse(r.isError());
+        assertEquals("42", r.displayValue);
+    }
 }

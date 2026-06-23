@@ -584,9 +584,6 @@ public final class EvalEngine {
                     }
                     EvalResult recv = resolveAndEval(r.receiver, threadId, frameId);
                     if (recv.isError()) return recv;
-                    if (recv.tag != EvalResult.Tag.OBJECT) {
-                        return EvalResult.error("method call on non-object");
-                    }
                     // PR-9: evaluate every argument first, then hand them to
                     // invokeMethod. Argument values must be encodable as JDWP
                     // values; if any arg evaluation fails the whole call fails.
@@ -597,6 +594,17 @@ public final class EvalEngine {
                             if (a.isError()) return a;
                             argResults.add(a);
                         }
+                    }
+                    // Phase A5: a Tag.CLASS receiver means the call is a
+                    // static method invocation. Use ClassType.InvokeMethod
+                    // (which takes a refTypeId) instead of
+                    // ObjectReference.InvokeMethod.
+                    if (recv.tag == EvalResult.Tag.CLASS) {
+                        return invokeStaticMethod(recv.objectId, r.name,
+                                recv.typeSignature, argResults);
+                    }
+                    if (recv.tag != EvalResult.Tag.OBJECT) {
+                        return EvalResult.error("method call on non-object");
                     }
                     return invokeMethod(recv.objectId, r.name, recv.typeSignature, argResults);
                 }
@@ -1016,6 +1024,75 @@ public final class EvalEngine {
         } catch (IOException ex) {
             return EvalResult.error("io: " + ex.getMessage());
         }
+    }
+
+    /**
+     * Phase A5: invoke a static method. Same arg-eval flow as
+     * {@link #invokeMethod}, but uses {@code ClassType.InvokeMethod}
+     * (command set 3, command 3) which takes a refTypeId instead of
+     * an objectId. We restrict the method lookup to methods that
+     * actually have the {@code ACC_STATIC} modifier set; without
+     * that, a static call could accidentally bind to an instance
+     * overload with the same name and arity.
+     */
+    @NonNull
+    private EvalResult invokeStaticMethod(long refType, @NonNull String methodName,
+                                           @NonNull String ownerSig,
+                                           @NonNull java.util.List<EvalResult> argResults) {
+        try {
+            long methodId = lookupStaticMethodByNameAndArity(refType, methodName, argResults.size());
+            if (methodId == 0) {
+                return EvalResult.error("no static method: "
+                        + ownerSig + "." + methodName);
+            }
+            ByteBuf buf = new ByteBuf();
+            buf.writeLong(refType);
+            buf.writeLong(threadRef());
+            buf.writeInt(argResults.size());
+            for (EvalResult a : argResults) {
+                encodeValue(buf, a);
+            }
+            buf.writeLong(methodId);
+            JdwpPacket reply = client.sendCommand(
+                    CommandSet.ClassType, CommandCodes.ClassTypeCmd.InvokeMethod,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) {
+                return EvalResult.error("ClassType.InvokeMethod error " + reply.errorCode());
+            }
+            ByteBuf in = new ByteBuf(reply.data);
+            byte tag = in.readByte();
+            String v = readValue(in, tag);
+            String returnSig = tagToSignature(tag);
+            return EvalResult.of(evalTag(returnSig), returnSig, v);
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Phase A5: like {@link #lookupMethodByNameAndArity} but only
+     * returns methods with {@code ACC_STATIC} (0x0008) set. Used by
+     * {@link #invokeStaticMethod} so we never accidentally dispatch a
+     * static call to an instance overload.
+     */
+    private long lookupStaticMethodByNameAndArity(long refType, @NonNull String name, int arity)
+            throws IOException {
+        ByteBuf buf = new ByteBuf();
+        buf.writeLong(refType);
+        JdwpPacket reply = client.sendCommand(
+                CommandSet.ReferenceType, CommandCodes.ReferenceTypeCmd.Methods, buf.toByteArray());
+        if (reply.errorCode() != 0) return 0L;
+        ByteBuf in = new ByteBuf(reply.data);
+        int n = in.readInt();
+        for (int i = 0; i < n; i++) {
+            long mid = in.readLong();
+            String mname = in.readString();
+            String msig = in.readString();
+            int modBits = in.readInt();
+            if (mname.equals(name) && countArity(msig) == arity
+                    && (modBits & 0x0008) != 0) return mid;
+        }
+        return 0L;
     }
 
     /**
