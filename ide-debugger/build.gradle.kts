@@ -51,6 +51,9 @@ dependencies {
   // Phase G1: JavaParser for extracting class signatures from .java source files.
   implementation(libs.common.javaparser)
 
+  // Phase G2: ASM for reading .class files (LineNumberTable, SourceFile attribute).
+  implementation(libs.common.asm)
+
   // PR-7: unit tests for EvalEngine.Parser.
   testImplementation(libs.tests.junit)
 }
