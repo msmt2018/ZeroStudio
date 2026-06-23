@@ -1744,6 +1744,39 @@ public final class EvalEngine {
         }
     }
 
+    /**
+     * Phase B5: force the top frame of {@code threadId} to return
+     * early with the given value via JDWP
+     * {@code ThreadReference.ForceEarlyReturn} (command set 11,
+     * command 13). The return type is described by {@code sig};
+     * a {@code V} signature is invalid for ForceEarlyReturn but
+     * accepted here as a no-op for symmetry.
+     */
+    @NonNull
+    public EvalResult forceEarlyReturn(long threadId, @NonNull String sig,
+                                       @NonNull String value) {
+        if (sig.isEmpty() || sig.charAt(0) == 'V') {
+            return EvalResult.error("ForceEarlyReturn requires a non-void return type");
+        }
+        try {
+            ByteBuf buf = new ByteBuf();
+            buf.writeLong(threadId);
+            buf.writeByte(tagFor(sig));
+            writeValue(buf, sig, value);
+            JdwpPacket reply = client.sendCommand(
+                    CommandSet.ThreadReference, CommandCodes.ThreadReferenceCmd.ForceEarlyReturn,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) {
+                return EvalResult.error("ForceEarlyReturn error " + reply.errorCode());
+            }
+            return EvalResult.of(evalTag(sig), sig, value);
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        } catch (NumberFormatException ex) {
+            return EvalResult.error("bad value: " + ex.getMessage());
+        }
+    }
+
     private static boolean isPrim(byte tag) {
         return tag != 'L' && tag != '[';
     }
