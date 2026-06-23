@@ -184,6 +184,7 @@ include(
     ":logging:logsender",
     ":ide-log-plugin",
     ":ide-debugger",
+    ":ide-decompiler",
     ":ide-language",
     ":utilities:logwire",
     ":termux:application",
