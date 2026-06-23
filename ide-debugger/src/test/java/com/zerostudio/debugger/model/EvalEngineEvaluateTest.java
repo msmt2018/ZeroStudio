@@ -202,23 +202,25 @@ public class EvalEngineEvaluateTest {
         queueThisResolution(fake, 0x5000L, 0x600L, "Lcom/example/Foo;");
         // 6) VirtualMachine.ClassesBySignature
         fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0x1000L, 0));
-        // 7) ReferenceType.Methods: 第一次按 "()V" 查
+        // 7) ReferenceType.Methods: 第一次按 "()V" 查 -> 不匹配 toString
         fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
                 new Method(0xA000L, "toString", "()Ljava/lang/String;", 0),
         }));
-        // 8) ReferenceType.Methods: 第二次按名字 fallback
+        // 8) ReferenceType.Methods: 按 arity 查 -> 找到 toString
         fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
                 new Method(0xA000L, "toString", "()Ljava/lang/String;", 0),
         }));
-        // 9) ObjectReference.InvokeMethod: 'L' + 返回值 0xA001
-        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'L', JdwpPayloads.longValue(0xA001L)));
+        // 9) ObjectReference.InvokeMethod 返回: tag='L' + objectId 0xA001
+        //    (注意: InvokeMethod 响应**没有** count 前缀,与 GetValues 不同)
+        fake.enqueueOkReply(JdwpPayloads.invokeMethodReply((byte) 'L', JdwpPayloads.longValue(0xA001L)));
 
         EvalEngine e = newEngine(fake);
         EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "this.toString()");
 
         assertFalse(r.isError());
-        // invokeNoArgMethod 用 ownerSig 作为 typeSignature
-        assertEquals("Lcom/example/Foo;", r.typeSignature);
+        // PR-9: invokeMethod 现在用 response 的 tag 决定返回类型。
+        assertEquals(Tag.OBJECT, r.tag);
+        assertEquals("Ljava/lang/Object;", r.typeSignature);
         assertEquals("<object id=40961>", r.displayValue);
         assertEquals(9, fake.commandCount());
     }
@@ -358,25 +360,187 @@ public class EvalEngineEvaluateTest {
     }
 
     @Test
-    public void evaluate_methodWithArgs_returnsError() {
-        // 解析器接受有参方法,但 invokeNoArgMethod 只支持 0 参。
-        // 用一个纯 LOCAL receiver + 方法调用,跳过 this 解析。
+    public void evaluate_methodWithTwoIntArgs_returnsIntResult() {
+        // this.add(1, 2) where add(int, int) -> int
         FakeJdwpClient fake = new FakeJdwpClient();
-        // 解析 `foo` -> LOCAL
-        fake.enqueueOkReply(JdwpPayloads.framesReply(
-                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
-        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
-                new Var(0L, "foo", "Lcom/example/Foo;", 1, 0),
+        queueThisResolution(fake, 0x5000L, 0x600L, "Lcom/example/Calc;");
+        // 6) ClassesBySignature
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0x1000L, 0));
+        // 7) Methods (first try "(JJ)V" — won't match)
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
+                new Method(0xA000L, "add", "(II)I", 0),
         }));
-        // foo 是 object id,被抹平为 0,displayValue 是 <object id=...>
-        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'L', JdwpPayloads.longValue(0x7000L)));
+        // 8) Methods (fallback lookupMethodByNameAndArity — finds "add" with 2 args)
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
+                new Method(0xA000L, "add", "(II)I", 0),
+        }));
+        // 9) InvokeMethod -> 'I' + 3
+        fake.enqueueOkReply(JdwpPayloads.invokeMethodReply((byte) 'I', JdwpPayloads.intValue(3)));
 
         EvalEngine e = newEngine(fake);
-        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "foo.bar(1)");
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "this.add(1, 2)");
+
+        assertFalse(r.isError());
+        // PR-9: invokeMethod now uses the actual return type from the response tag.
+        assertEquals(Tag.INT, r.tag);
+        assertEquals("I", r.typeSignature);
+        assertEquals("3", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_methodWithStringArg_invokesCorrectly() {
+        // this.greet("") where greet(String) -> String.
+        // args are evaluated first, so the order is:
+        //   1) this resolution (5 commands)
+        //   2) CreateString for the "" literal (1 command)
+        //   3) ClassesBySignature
+        //   4) Methods (first try) - signature build is (Ljava/lang/String;)V -> no match
+        //   5) Methods (fallback by name+arity) - finds greet
+        //   6) InvokeMethod
+        FakeJdwpClient fake = new FakeJdwpClient();
+        queueThisResolution(fake, 0x5000L, 0x600L, "Lcom/example/Greeter;");
+        // 6) CreateString for ""
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xD000L));
+        // 7) ClassesBySignature
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0x1000L, 0));
+        // 8) Methods (first try — sig doesn't match)
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
+                new Method(0xB000L, "greet", "(Ljava/lang/String;)Ljava/lang/String;", 0),
+        }));
+        // 9) Methods (fallback by name+arity — finds it)
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
+                new Method(0xB000L, "greet", "(Ljava/lang/String;)Ljava/lang/String;", 0),
+        }));
+        // 10) InvokeMethod -> 'L' + objectId
+        fake.enqueueOkReply(JdwpPayloads.invokeMethodReply((byte) 'L', JdwpPayloads.longValue(0xC000L)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "this.greet(\"\")");
+
+        assertFalse(r.isError());
+        assertEquals(Tag.OBJECT, r.tag);
+        assertEquals("Ljava/lang/Object;", r.typeSignature);
+        assertEquals("<object id=49152>", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_methodWithOneArg() {
+        // this.increment(5) where increment(int) -> int
+        FakeJdwpClient fake = new FakeJdwpClient();
+        queueThisResolution(fake, 0x5000L, 0x600L, "Lcom/example/Counter;");
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0x1000L, 0));
+        // Methods (first try "(J)V" — won't match; return empty)
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[0]));
+        // (current code falls back to lookupMethodByNameAndArity which queries
+        //  Methods again — so the second Methods response below is for that.)
+        // Methods (fallback by arity) -> finds increment(I)I
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
+                new Method(0xD000L, "increment", "(I)I", 0),
+        }));
+        // InvokeMethod -> 'I' + 6
+        fake.enqueueOkReply(JdwpPayloads.invokeMethodReply((byte) 'I', JdwpPayloads.intValue(6)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "this.increment(5)");
+
+        assertFalse(r.isError());
+        assertEquals(Tag.INT, r.tag);
+        assertEquals("6", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_methodWithArgs_methodNotFound_returnsError() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        queueThisResolution(fake, 0x5000L, 0x600L, "Lcom/example/Foo;");
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0x1000L, 0));
+        // Methods (first try): 0 results
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[0]));
+        // Methods (fallback by arity): 0 results
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[0]));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "this.missing(1)");
 
         assertTrue(r.isError());
         assertNotNull(r.error);
-        assertTrue(r.error, r.error.contains("method calls with arguments are not supported"));
+        assertTrue(r.error, r.error.contains("no method: missing"));
+    }
+
+    @Test
+    public void evaluate_methodWithArgs_argEvaluationError_returnsError() {
+        // this.add(x) where x doesn't exist
+        FakeJdwpClient fake = new FakeJdwpClient();
+        queueThisResolution(fake, 0x5000L, 0x600L, "Lcom/example/Calc;");
+        // 现在要解析 arg `x` -> LOCAL,失败
+        // (需要在 frames 之后给一个 0 vars 的 var table)
+        // frames: 一个新栈帧(为解析 x 准备的栈帧)
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        // var table: 0 vars -> 找不到 x
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[0]));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "this.add(x)");
+
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("no such local: x"));
+    }
+
+    @Test
+    public void evaluate_methodWithTwoIntArgs_requestEncodesArgsAsLongs() {
+        // 验证 InvokeMethod 请求里:arg 字节确实按"J"(long)编码(因为
+        // 解析器把字面量都存为 LITERAL_LONG)。
+        FakeJdwpClient fake = new FakeJdwpClient();
+        queueThisResolution(fake, 0x5000L, 0x600L, "Lcom/example/Calc;");
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0x1000L, 0));
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
+                new Method(0xA000L, "add", "(II)I", 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.methodsReply(new Method[] {
+                new Method(0xA000L, "add", "(II)I", 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.invokeMethodReply((byte) 'I', JdwpPayloads.intValue(3)));
+
+        EvalEngine e = newEngine(fake);
+        e.evaluate(THREAD_ID, FRAME_ID, "this.add(1, 2)");
+
+        // 找到发到 ObjectReference.InvokeMethod 的那条命令
+        FakeJdwpClient.SentCommand invoke = null;
+        for (FakeJdwpClient.SentCommand c : fake.sentCommands()) {
+            if (c.commandSet == CommandSet.ObjectReference
+                    && c.command == CommandCodes.ObjectReferenceCmd.InvokeMethod) {
+                invoke = c;
+                break;
+            }
+        }
+        assertNotNull("expected an InvokeMethod command to be sent", invoke);
+        // 数据布局:objectId(8) + threadId(8) + argCount(4) + arg1(8) + arg2(8) + methodId(8) = 44
+        assertEquals(44, invoke.data.length);
+        // argCount 在偏移 16..19 应该是 2
+        int argCount = ((invoke.data[16] & 0xff) << 24)
+                | ((invoke.data[17] & 0xff) << 16)
+                | ((invoke.data[18] & 0xff) << 8)
+                | (invoke.data[19] & 0xff);
+        assertEquals(2, argCount);
+        // arg1(1) 位于偏移 20..27,大端
+        long arg1 = 0;
+        for (int i = 0; i < 8; i++) {
+            arg1 = (arg1 << 8) | (invoke.data[20 + i] & 0xffL);
+        }
+        assertEquals(1L, arg1);
+        // arg2(2) 位于偏移 28..35
+        long arg2 = 0;
+        for (int i = 0; i < 8; i++) {
+            arg2 = (arg2 << 8) | (invoke.data[28 + i] & 0xffL);
+        }
+        assertEquals(2L, arg2);
+        // methodId 位于偏移 36..43
+        long methodId = 0;
+        for (int i = 0; i < 8; i++) {
+            methodId = (methodId << 8) | (invoke.data[36 + i] & 0xffL);
+        }
+        assertEquals(0xA000L, methodId);
     }
 
     // ---------- 辅助 ----------

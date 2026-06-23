@@ -216,6 +216,19 @@ public final class JdwpPayloads {
         return b.toByteArray();
     }
 
+    /**
+     * ObjectReference.InvokeMethod 的响应:只有 1 个返回值
+     *   [tag] + [value bytes]
+     *(没有 count 前缀 — 与 GetValues 响应不同)。
+     */
+    @NonNull
+    public static byte[] invokeMethodReply(byte tag, @NonNull byte[] value) {
+        ByteBuf b = new ByteBuf();
+        b.writeByte(tag);
+        b.writeBytes(value);
+        return b.toByteArray();
+    }
+
     /** 编码一个 int 值的原始字节(用于 GetValues 的 value 负载)。 */
     @NonNull
     public static byte[] intValue(int v) {

@@ -371,13 +371,21 @@ public final class EvalEngine {
                     }
                     EvalResult recv = resolveAndEval(r.receiver, threadId, frameId);
                     if (recv.isError()) return recv;
-                    if (r.args != null && !r.args.isEmpty()) {
-                        return EvalResult.error("method calls with arguments are not supported");
-                    }
                     if (recv.tag != EvalResult.Tag.OBJECT) {
                         return EvalResult.error("method call on non-object");
                     }
-                    return invokeNoArgMethod(recv.objectId, r.name, recv.typeSignature);
+                    // PR-9: evaluate every argument first, then hand them to
+                    // invokeMethod. Argument values must be encodable as JDWP
+                    // values; if any arg evaluation fails the whole call fails.
+                    java.util.List<EvalResult> argResults = new java.util.ArrayList<>();
+                    if (r.args != null) {
+                        for (Resolved arg : r.args) {
+                            EvalResult a = resolveAndEval(arg, threadId, frameId);
+                            if (a.isError()) return a;
+                            argResults.add(a);
+                        }
+                    }
+                    return invokeMethod(recv.objectId, r.name, recv.typeSignature, argResults);
                 }
                 default:
                     return EvalResult.error("unsupported expression kind");
@@ -452,21 +460,27 @@ public final class EvalEngine {
     }
 
     @NonNull
-    private EvalResult invokeNoArgMethod(long objectId, @NonNull String methodName,
-                                          @NonNull String ownerSig) {
+    private EvalResult invokeMethod(long objectId, @NonNull String methodName,
+                                     @NonNull String ownerSig,
+                                     @NonNull java.util.List<EvalResult> argResults) {
         try {
             long refType = lookupClassByName(ownerSig);
             if (refType == 0) return EvalResult.error("class not loaded: " + ownerSig);
-            long methodId = lookupMethod(refType, methodName, "()V");
+            // We don't know the return type up front, so try the most common
+            // convention `(... )V` first, then fall back to a name + arity
+            // search across the class's method table.
+            long methodId = lookupMethod(refType, methodName, buildSignature(argResults));
             if (methodId == 0) {
-                // Try a generic ()V signature; otherwise the lookup fails.
-                methodId = lookupMethodByName(refType, methodName);
+                methodId = lookupMethodByNameAndArity(refType, methodName, argResults.size());
                 if (methodId == 0) return EvalResult.error("no method: " + methodName);
             }
             ByteBuf buf = new ByteBuf();
             buf.writeLong(objectId);
             buf.writeLong(threadRef());
-            buf.writeInt(0); // we don't support args yet
+            buf.writeInt(argResults.size());
+            for (EvalResult a : argResults) {
+                encodeValue(buf, a);
+            }
             buf.writeLong(methodId);
             JdwpPacket reply = client.sendCommand(
                     CommandSet.ObjectReference, CommandCodes.ObjectReferenceCmd.InvokeMethod,
@@ -477,10 +491,150 @@ public final class EvalEngine {
             ByteBuf in = new ByteBuf(reply.data);
             byte tag = in.readByte();
             String v = readValue(in, tag);
-            return EvalResult.of(evalTag(ownerSig), ownerSig, v);
+            // PR-9: the actual return type comes from the InvokeMethod
+            // response's tag, not the receiver's owner signature.
+            String returnSig = tagToSignature(tag);
+            return EvalResult.of(evalTag(returnSig), returnSig, v);
         } catch (IOException ex) {
             return EvalResult.error("io: " + ex.getMessage());
         }
+    }
+
+    /**
+     * Build a JDWP method signature from a list of argument {@link EvalResult}s.
+     * The return type is hard-coded to {@code V} because the caller doesn't
+     * know it; the lookup falls back to name + arity when an exact match
+     * fails. This signature is only used as a hint.
+     */
+    @NonNull
+    static String buildSignature(@NonNull java.util.List<EvalResult> argResults) {
+        StringBuilder sb = new StringBuilder("(");
+        for (EvalResult a : argResults) {
+            sb.append(a.typeSignature);
+        }
+        sb.append(")V");
+        return sb.toString();
+    }
+
+    /**
+     * Write [arg] into [buf] as a JDWP value, in the order JDWP expects:
+     * a one-byte tag is NOT written here; the caller already knows the
+     * tag from {@code arg.typeSignature}. The bytes match the wire format
+     * for {@code ObjectReference.InvokeMethod}.
+     */
+    static void encodeValue(@NonNull ByteBuf buf, @NonNull EvalResult arg) {
+        String sig = arg.typeSignature;
+        if (sig.isEmpty()) {
+            // Best-effort fallback: assume the arg is an object reference.
+            buf.writeLong(arg.objectId);
+            return;
+        }
+        char c = sig.charAt(0);
+        switch (c) {
+            case 'Z': buf.writeByte(parseBoolean(arg) ? 1 : 0); break;
+            case 'B': buf.writeByte(parseByte(arg)); break;
+            case 'C': buf.writeShort((int) parseChar(arg)); break;
+            case 'S': buf.writeShort((int) parseShort(arg)); break;
+            case 'I': buf.writeInt((int) parseLong(arg)); break;
+            case 'J': buf.writeLong(parseLong(arg)); break;
+            case 'F': buf.writeFloat((float) parseDouble(arg)); break;
+            case 'D': buf.writeDouble(parseDouble(arg)); break;
+            case 'L':
+            case '[':
+                buf.writeLong(arg.objectId);
+                break;
+            default:
+                throw new IllegalStateException("unsupported arg type: " + sig);
+        }
+    }
+
+    private static boolean parseBoolean(@NonNull EvalResult r) {
+        return r.displayValue != null && r.displayValue.equals("true");
+    }
+
+    private static byte parseByte(@NonNull EvalResult r) {
+        try { return Byte.parseByte(r.displayValue); }
+        catch (NumberFormatException e) { return 0; }
+    }
+
+    private static char parseChar(@NonNull EvalResult r) {
+        if (r.displayValue == null || r.displayValue.isEmpty()) return '\0';
+        return r.displayValue.charAt(0);
+    }
+
+    private static short parseShort(@NonNull EvalResult r) {
+        try { return Short.parseShort(r.displayValue); }
+        catch (NumberFormatException e) { return 0; }
+    }
+
+    private static long parseLong(@NonNull EvalResult r) {
+        try { return Long.parseLong(r.displayValue); }
+        catch (NumberFormatException e) { return 0L; }
+    }
+
+    private static double parseDouble(@NonNull EvalResult r) {
+        try { return Double.parseDouble(r.displayValue); }
+        catch (NumberFormatException e) { return 0.0; }
+    }
+
+    /**
+     * Convert a JDWP value tag byte to the corresponding type signature.
+     * Object tags map to {@code Ljava/lang/Object;} because we don't know
+     * the actual class; the caller is expected to widen with a follow-up
+     * {@code ObjectReference.ReferenceType} if the precise type matters.
+     */
+    @NonNull
+    static String tagToSignature(byte tag) {
+        switch (tag) {
+            case 'V': return "V";
+            case 'Z': return "Z";
+            case 'B': return "B";
+            case 'C': return "C";
+            case 'S': return "S";
+            case 'I': return "I";
+            case 'J': return "J";
+            case 'F': return "F";
+            case 'D': return "D";
+            case 'L': return "Ljava/lang/Object;";
+            case '[': return "[Ljava/lang/Object;";
+            default:  return "Ljava/lang/Object;";
+        }
+    }
+
+    /**
+     * Count the number of type parameters in a JDWP method signature, e.g.
+     * {@code "(II)V" -> 2}, {@code "(Ljava/lang/String;J)V" -> 2},
+     * {@code "()V" -> 0}.
+     */
+    static int countArity(@NonNull String methodSig) {
+        int open = methodSig.indexOf('(');
+        int close = methodSig.indexOf(')');
+        if (open < 0 || close < 0 || close <= open) return 0;
+        String params = methodSig.substring(open + 1, close);
+        if (params.isEmpty()) return 0;
+        int count = 0;
+        int i = 0;
+        while (i < params.length()) {
+            char c = params.charAt(i);
+            if (c == 'L') {
+                int semi = params.indexOf(';', i);
+                if (semi < 0) break;
+                i = semi + 1;
+            } else if (c == '[') {
+                i++;
+                if (i < params.length() && params.charAt(i) == 'L') {
+                    int semi = params.indexOf(';', i);
+                    if (semi < 0) break;
+                    i = semi + 1;
+                } else if (i < params.length()) {
+                    i++;
+                }
+            } else {
+                i++;
+            }
+            count++;
+        }
+        return count;
     }
 
     private long threadRef() {
@@ -566,6 +720,31 @@ public final class EvalEngine {
             in.readString();
             in.readInt();
             if (mname.equals(name)) return mid;
+        }
+        return 0L;
+    }
+
+    /**
+     * PR-9: find a method by name + arity. Useful as a fallback when the
+     * full method signature can't be reconstructed from the evaluated
+     * arguments (e.g. when the parser stores all int-like literals as
+     * {@code J}).
+     */
+    private long lookupMethodByNameAndArity(long refType, @NonNull String name, int arity)
+            throws IOException {
+        ByteBuf buf = new ByteBuf();
+        buf.writeLong(refType);
+        JdwpPacket reply = client.sendCommand(
+                CommandSet.ReferenceType, CommandCodes.ReferenceTypeCmd.Methods, buf.toByteArray());
+        if (reply.errorCode() != 0) return 0L;
+        ByteBuf in = new ByteBuf(reply.data);
+        int n = in.readInt();
+        for (int i = 0; i < n; i++) {
+            long mid = in.readLong();
+            String mname = in.readString();
+            String msig = in.readString();
+            in.readInt();
+            if (mname.equals(name) && countArity(msig) == arity) return mid;
         }
         return 0L;
     }
