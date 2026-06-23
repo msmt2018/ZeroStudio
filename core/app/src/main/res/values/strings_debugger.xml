@@ -133,4 +133,20 @@
     <string name="debugger_bp_state_logpoint">日志点</string>
     <string name="debugger_bp_state_disabled">禁用</string>
     <string name="debugger_bp_state_hit">命中</string>
+
+    <!-- PR-E5: 无障碍 (TalkBack) 文案 -->
+    <string name="debugger_a11y_bp_long_press">长按调出操作菜单</string>
+    <string name="debugger_a11y_line_prefix">第 %1$d 行</string>
+    <string name="debugger_a11y_condition_prefix">条件:%1$s</string>
+    <string name="debugger_a11y_log_prefix">日志:%1$s</string>
+    <string name="debugger_a11y_var_loading">正在加载变量</string>
+    <string name="debugger_a11y_watch_pending">监视 %1$s 等待求值</string>
+    <string name="debugger_a11y_watch_value">监视 %1$s,值为 %2$s</string>
+    <string name="debugger_a11y_watch_error">监视 %1$s 求值失败: %2$s</string>
+    <string name="debugger_a11y_frame_at">栈帧 %1$s,位于 %2$s 第 %3$d 行</string>
+    <string name="debugger_a11y_bp_hit">断点 %1$s 命中</string>
+    <string name="debugger_a11y_connected">已连接调试器</string>
+    <string name="debugger_a11y_disconnected">已断开调试器</string>
+    <string name="debugger_a11y_paused">程序已暂停于 %1$s 第 %2$d 行</string>
+    <string name="debugger_a11y_resumed">程序已恢复运行</string>
 </resources>

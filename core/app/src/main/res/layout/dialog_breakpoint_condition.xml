@@ -102,7 +102,9 @@
                     android:inputType="textMultiLine"
                     android:minLines="2"
                     android:maxLines="6"
-                    android:scrollbars="vertical"/>
+                    android:scrollbars="vertical"
+                    android:contentDescription="@string/debugger_bcd_condition_label"
+                    android:labelFor="@id/bcd_condition_input"/>
             </com.google.android.material.textfield.TextInputLayout>
 
             <TextView
@@ -145,7 +147,9 @@
                     android:fontFamily="monospace"
                     android:textSize="13sp"
                     android:inputType="text"
-                    android:singleLine="true"/>
+                    android:singleLine="true"
+                    android:contentDescription="@string/debugger_bcd_log_label"
+                    android:labelFor="@id/bcd_log_input"/>
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.chip.ChipGroup
@@ -201,7 +205,9 @@
                     android:layout_height="wrap_content"
                     android:inputType="number"
                     android:maxLength="9"
-                    android:singleLine="true"/>
+                    android:singleLine="true"
+                    android:contentDescription="@string/debugger_bcd_hit_count"
+                    android:labelFor="@id/bcd_hit_count_input"/>
             </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
 

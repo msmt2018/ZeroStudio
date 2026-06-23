@@ -23,10 +23,15 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.AccessibilityDelegateCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.BreakpointStateColors;
@@ -112,6 +117,48 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
             }
             return false;
         });
+
+        // Phase E5: 无障碍 (TalkBack) 支持
+        // 1. contentDescription: "状态 文件 第N行 [条件: ...] [日志: ...] [已命中 N 次]"
+        h.itemView.setContentDescription(buildContentDescription(ctx, bp));
+        // 2. 自定义无障碍动作: 长按调出操作菜单
+        ViewCompat.setAccessibilityDelegate(h.itemView, new AccessibilityDelegateCompat() {
+            @Override
+            public void onInitializeAccessibilityNodeInfo(
+                    @NonNull View host, @NonNull AccessibilityNodeInfoCompat info) {
+                super.onInitializeAccessibilityNodeInfo(host, info);
+                AccessibilityActionCompat action =
+                        new AccessibilityActionCompat(
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK.getId(),
+                                ctx.getString(R.string.debugger_a11y_bp_long_press));
+                info.addAction(action);
+                info.setLongClickable(true);
+            }
+        });
+    }
+
+    @NonNull
+    private static String buildContentDescription(@NonNull Context ctx,
+                                                  @NonNull IdeBreakpoint bp) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(ctx.getString(stateLabelResId(bp.state)));
+        sb.append(' ');
+        sb.append(shortenPath(bp.file));
+        sb.append(' ');
+        sb.append(ctx.getString(R.string.debugger_a11y_line_prefix, bp.line));
+        if (bp.condition != null && !bp.condition.isEmpty()) {
+            sb.append(", ");
+            sb.append(ctx.getString(R.string.debugger_a11y_condition_prefix, bp.condition));
+        }
+        if (bp.logMessage != null && !bp.logMessage.isEmpty()) {
+            sb.append(", ");
+            sb.append(ctx.getString(R.string.debugger_a11y_log_prefix, bp.logMessage));
+        }
+        if (bp.hitCountReceived > 0) {
+            sb.append(", ");
+            sb.append(ctx.getString(R.string.debugger_bp_hit_received, bp.hitCountReceived));
+        }
+        return sb.toString();
     }
 
     @Override

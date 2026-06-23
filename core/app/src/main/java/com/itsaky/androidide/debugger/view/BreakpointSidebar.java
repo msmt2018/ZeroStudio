@@ -19,6 +19,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.ViewCompat;
 import com.itsaky.androidide.debugger.BreakpointStateColors;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
@@ -67,6 +68,39 @@ public class BreakpointSidebar extends View {
         hitRingPaint.setStrokeWidth(dp(2f));
         hitRingPaint.setColor(Color.WHITE);
         setWillNotDraw(false);
+        // Phase E5: 自定义 view 的无障碍设置。
+        // 开启 focusable 后屏幕阅读器可以聚焦,并通过自定义
+        // AccessibilityDelegate 把"切换断点"暴露为可执行 action。
+        setFocusable(true);
+        setClickable(true);
+        setLongClickable(true);
+        setContentDescription(context.getString(
+                com.itsaky.androidide.R.string.debugger_a11y_bp_long_press));
+        // 自定义 a11y action: 命中 toggle 行为
+        ViewCompat.setAccessibilityDelegate(this, new androidx.core.view.AccessibilityDelegateCompat() {
+            @Override
+            public void onInitializeAccessibilityNodeInfo(
+                    @NonNull View host,
+                    @NonNull androidx.core.view.accessibility.AccessibilityNodeInfoCompat info) {
+                super.onInitializeAccessibilityNodeInfo(host, info);
+                info.setClickable(true);
+                info.setLongClickable(true);
+                androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat toggle =
+                        new androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                                androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+                                        .AccessibilityActionCompat.ACTION_CLICK.getId(),
+                                host.getContext().getString(
+                                        com.itsaky.androidide.R.string.debugger_action_toggle_bp));
+                androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat longPress =
+                        new androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+                                android.view.accessibility.AccessibilityNodeInfo
+                                        .AccessibilityAction.ACTION_LONG_CLICK.getId(),
+                                host.getContext().getString(
+                                        com.itsaky.androidide.R.string.debugger_a11y_bp_long_press));
+                info.addAction(toggle);
+                info.addAction(longPress);
+            }
+        });
     }
 
     public void bind(@NonNull CodeEditor editor, @NonNull String file) {

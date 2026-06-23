@@ -136,4 +136,20 @@
     <string name="debugger_bp_state_logpoint">Logpoint</string>
     <string name="debugger_bp_state_disabled">Disabled</string>
     <string name="debugger_bp_state_hit">Hit</string>
+
+    <!-- Accessibility (TalkBack) strings -->
+    <string name="debugger_a11y_bp_long_press">Long-press to open the actions menu</string>
+    <string name="debugger_a11y_line_prefix">line %1$d</string>
+    <string name="debugger_a11y_condition_prefix">condition: %1$s</string>
+    <string name="debugger_a11y_log_prefix">log: %1$s</string>
+    <string name="debugger_a11y_var_loading">Loading variables</string>
+    <string name="debugger_a11y_watch_pending">Watch %1$s pending evaluation</string>
+    <string name="debugger_a11y_watch_value">Watch %1$s, value is %2$s</string>
+    <string name="debugger_a11y_watch_error">Watch %1$s evaluation failed: %2$s</string>
+    <string name="debugger_a11y_frame_at">Frame %1$s at %2$s line %3$d</string>
+    <string name="debugger_a11y_bp_hit">Breakpoint %1$s hit</string>
+    <string name="debugger_a11y_connected">Connected to debugger</string>
+    <string name="debugger_a11y_disconnected">Disconnected from debugger</string>
+    <string name="debugger_a11y_paused">Program paused at %1$s line %2$d</string>
+    <string name="debugger_a11y_resumed">Program resumed</string>
 </resources>
