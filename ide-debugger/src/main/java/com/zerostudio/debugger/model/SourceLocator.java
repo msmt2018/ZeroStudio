@@ -51,6 +51,10 @@ public final class SourceLocator {
     private final JdwpClient client;
     /** Phase G1: Java source parser for extracting class signatures. Lazily initialized. */
     private final JavaSourceParser sourceParser = new JavaSourceParser();
+    /** Phase G2: .class file reader for SourceFile attribute verification. */
+    private final ClassFileReader classReader = new ClassFileReader();
+    /** Phase G3: Source file → parsed data cache. */
+    private final SourceLocatorCache cache = new SourceLocatorCache();
     /**
      * Phase B1: breakpoints that failed to install because the
      * target class was not yet loaded. We retry each one whenever
@@ -634,19 +638,23 @@ public final class SourceLocator {
      *  class name from the source file, falling back to the basename heuristic
      *  only for .kt files or when parsing fails.
      *
+     *  Phase G3: results are cached in SourceLocatorCache to avoid repeated
+     *  file I/O and parsing.
+     *
      *  @return JVM type signature (e.g., "Lcom/example/MainActivity;") or null */
     @androidx.annotation.Nullable
     private String guessClassSignature(@NonNull String sourceFile) {
         String base = basename(sourceFile);
         if (base.endsWith(".java")) {
-            // Phase G1: try to parse the source file for an exact signature
-            ParsedSource parsed = sourceParser.parse(sourceFile);
+            // Phase G3: use cache
+            ParsedSource parsed = cache.getSource(sourceFile);
             if (parsed != null) {
                 String sig = parsed.topLevelSignature();
                 if (sig != null) {
                     return sig;
                 }
             }
+            // Cache miss: already handled by cache.getSource() which populates the cache.
             // Fallback: use basename without extension
             String name = base.substring(0, base.length() - 5);
             if (!name.isEmpty()) {
