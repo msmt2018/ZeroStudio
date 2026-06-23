@@ -149,6 +149,18 @@ public final class ObjectReferenceCmd {
     }
 }
 
+/**
+ * Phase B2: StringReference command set (10) command codes.
+ * Currently only {@link #Value} is used (to read an exception message).
+ */
+public final class StringReferenceCmd {
+    public static final byte Value = 1;
+
+    private StringReferenceCmd() {
+        // no instances
+    }
+}
+
 /** Method command set (6) command codes. */
 public final class MethodCmd {
     public static final byte LineTable = 1;

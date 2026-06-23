@@ -83,13 +83,31 @@ public final class DebugEventBus {
                     break;
                 }
                 case EventKind.EXCEPTION: {
-                    long refTypeId = in.readLong();
-                    long locationClassId = in.readLong();
-                    long locationMethodId = in.readLong();
-                    long locationCodeIndex = in.readLong();
-                    // catchLocation is unused for now
-                    SuspendInfo info = buildSuspend(debugger, threadId, SuspendInfo.Reason.EXCEPTION,
-                            "Exception at " + locationClassId + ":" + locationMethodId);
+                    // Phase B2: parse the per-event payload and
+                    // carry the exception class + object through to
+                    // the suspend info. The JDWP Composite Event
+                    // format for EXCEPTION is:
+                    //   refTypeId (8)         - exception class
+                    //   tag (1) + objectId (8) - the thrown exception instance
+                    //   catchClassId (8)
+                    //   catchMethodId (8)
+                    //   catchIndex (8)
+                    // The last three are all-zero when the exception
+                    // is uncaught.
+                    long exClassId = in.readLong();
+                    byte exTag = in.readByte();
+                    long exObjectId = in.readLong();
+                    long catchClassId = in.readLong();
+                    long catchMethodId = in.readLong();
+                    long catchIndex = in.readLong();
+                    boolean caught = (catchClassId != 0L || catchMethodId != 0L || catchIndex != 0L);
+                    String message = debugger.fetchExceptionMessage(exObjectId, exTag);
+                    String desc = (message == null || message.isEmpty())
+                            ? "Exception at " + catchClassId + ":" + catchMethodId
+                            : "Exception " + exClassId + ": " + message;
+                    SuspendInfo info = buildSuspendEx(
+                            debugger, threadId, SuspendInfo.Reason.EXCEPTION,
+                            desc, exClassId, message, caught);
                     debugger.onSuspend(info);
                     break;
                 }
@@ -141,6 +159,30 @@ public final class DebugEventBus {
             frames = java.util.Collections.emptyList();
         }
         return new SuspendInfo(threadId, reason, frames, description);
+    }
+
+    /**
+     * Phase B2: build a SuspendInfo that also carries the exception
+     * class, message and caught/uncaught flag. Stack frames are
+     * fetched in the same defensive way as the simpler builder.
+     */
+    @NonNull
+    private SuspendInfo buildSuspendEx(
+            @NonNull Debugger debugger,
+            long threadId,
+            @NonNull SuspendInfo.Reason reason,
+            @NonNull String description,
+            long exceptionClassId,
+            @NonNull String exceptionMessage,
+            boolean exceptionCaught) {
+        List<StackFrameInfo> frames;
+        try {
+            frames = debugger.getStackFrames(threadId, 0, 32);
+        } catch (Throwable t) {
+            frames = java.util.Collections.emptyList();
+        }
+        return new SuspendInfo(threadId, reason, frames, description,
+                exceptionClassId, exceptionMessage, exceptionCaught);
     }
 
     public interface DebugEventsListener {

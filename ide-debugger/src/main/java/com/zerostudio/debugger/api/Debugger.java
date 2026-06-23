@@ -447,6 +447,32 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
         sourceLocator.retryPending(classId, sourceFile);
     }
 
+    /**
+     * Phase B2: read the message of a thrown exception object via
+     * JDWP {@code StringReference.Value} (command set 10, command 1).
+     * Returns an empty string if the object isn't a string or the
+     * call fails. The call is best-effort: an exception in a debugger
+     * is a debugger bug, not a user error, so we never throw out of
+     * this method.
+     */
+    @NonNull
+    public String fetchExceptionMessage(long exceptionObjectId, byte objectTag) {
+        if (exceptionObjectId == 0L) return "";
+        try {
+            com.zerostudio.debugger.util.ByteBuf buf = new com.zerostudio.debugger.util.ByteBuf();
+            buf.writeLong(exceptionObjectId);
+            com.zerostudio.debugger.jdwp.JdwpPacket reply = client.sendCommand(
+                    com.zerostudio.debugger.jdwp.CommandSet.StringReference,
+                    com.zerostudio.debugger.jdwp.CommandCodes.StringReferenceCmd.Value,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) return "";
+            com.zerostudio.debugger.util.ByteBuf in = new com.zerostudio.debugger.util.ByteBuf(reply.data);
+            return in.readString();
+        } catch (java.io.IOException ex) {
+            return "";
+        }
+    }
+
     private void notifyResumed() {
         for (Listener l : listeners) {
             try { l.onResumed(); } catch (Throwable ignored) { }
