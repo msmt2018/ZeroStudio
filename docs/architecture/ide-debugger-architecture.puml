@@ -1,0 +1,120 @@
+@startuml ide-debugger-architecture
+!theme plain
+skinparam componentStyle rectangle
+
+title ZeroStudio IDE Debugger Architecture
+
+package "IDE Application (core/app)" {
+    [BreakpointSidebar] as sidebar
+    [BreakpointListFragment] as bpFragment
+    [BreakpointConditionDialog] as bpDialog
+    [BreakpointListAdapter] as bpAdapter
+    [VariablesAdapter] as varsAdapter
+    [WatchesAdapter] as watchesAdapter
+    [CallStackAdapter] as callStackAdapter
+    [DebuggerUI] as ui
+}
+
+package "ide-debugger Module" {
+    package "API Layer" {
+        [Debugger] as debugger
+        [Breakpoint] as bp
+        [BreakpointStore] as bpStore
+        [DebugSession] as session
+        [EvalEngine] as eval
+        [Listener] as listener
+    }
+
+    package "JDWP Layer" {
+        [JdwpClient] as jdwpClient
+        [JdwpPacket] as packet
+        [JdwpPacketCodec] as codec
+        [JdwpPacketReader] as reader
+        [DebugSessionHeartbeat] as heartbeat
+        [CommandSet / CommandCodes] as commands
+        [EventKind / ModKind] as events
+    }
+
+    package "Model Layer" {
+        [SourceLocator] as sourceLocator
+        [StackFrameInfo] as frameInfo
+        [VariableInfo] as varInfo
+        [SuspendInfo] as suspendInfo
+        [ThreadInfo] as threadInfo
+    }
+
+    package "Event Layer" {
+        [DebugEventBus] as eventBus
+        [DebugEvents] as debugEvents
+    }
+}
+
+package "ide-log-plugin (Target App)" {
+    [JDWP Server] as jdwpServer
+    [LogwireTransport] as logwire
+}
+
+package "utilities/logwire" {
+    [LogwireProtocol] as logwireProto
+}
+
+' Relationships
+ui --> debugger : API calls
+sidebar --> bpStore : read breakpoints
+bpFragment --> bpStore : CRUD operations
+bpDialog --> bp : set condition/hitCount
+bpAdapter --> bpStore : display list
+varsAdapter --> varInfo : display locals
+watchesAdapter --> eval : evaluate expressions
+callStackAdapter --> frameInfo : display frames
+
+debugger --> jdwpClient : send/receive JDWP
+debugger --> bpStore : manage breakpoints
+debugger --> sourceLocator : install/uninstall
+debugger --> eval : evaluate expressions
+debugger --> eventBus : publish events
+debugger --> session : state machine
+debugger --> listener : notify UI
+
+jdwpClient --> packet : encode/decode
+jdwpClient --> codec : serialize
+jdwpClient --> reader : read from socket
+jdwpClient --> heartbeat : keepalive
+jdwpClient --> commands : command constants
+jdwpClient --> events : event constants
+
+sourceLocator --> jdwpClient : ClassesBySignature\nSourceFile\nLineTable\nEventRequest.Set
+
+eval --> sourceLocator : fetchLocal
+eval --> jdwpClient : InvokeMethod\nGetValues
+
+eventBus --> debugEvents : event types
+
+jdwpClient --> logwireProto : LOGW magic
+jdwpServer --> logwireProto : LOGW magic
+
+note right of debugger
+  Top-level facade
+  Thread-safe API
+  Lifecycle management
+end note
+
+note right of jdwpClient
+  TCP socket connection
+  Handshake + packet I/O
+  Event/Connection listeners
+end note
+
+note right of sourceLocator
+  Source file → JDWP location
+  Pending breakpoint retry
+  CLASS_PREPARE handling
+end note
+
+note right of eval
+  Expression parser
+  JDWP method invocation
+  Force early return
+end note
+
+@enduml
