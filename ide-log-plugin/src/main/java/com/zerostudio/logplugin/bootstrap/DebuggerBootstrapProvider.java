@@ -16,6 +16,10 @@
  *  delete() so the OS is satisfied that it has been initialised.
  *  The class is intentionally simple: a single static
  *  initializer kicks off the JdwpServer + LogCaptureService.
+ *
+ *  PR-D2: the call() method exposes the JDWP port as a Bundle
+ *  so the IDE can discover it after launching the target
+ *  application, without having to hardcode the port.
  */
 package com.zerostudio.logplugin.bootstrap;
 
@@ -23,6 +27,7 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -33,6 +38,18 @@ import com.zerostudio.logplugin.jdwp.JdwpServer;
 public final class DebuggerBootstrapProvider extends ContentProvider {
 
     private static final String TAG = "DebuggerBootstrap";
+
+    /** Authority string (must match IdeDebuggerInitScriptPlugin.BOOTSTRAP_AUTHORITY). */
+    public static final String AUTHORITY = "com.zerostudio.debugger.bootstrap";
+
+    /** call() method: returns a Bundle with the live JDWP port. */
+    public static final String METHOD_GET_JDWP_PORT = "getJdwpPort";
+
+    /** call() method: returns a Bundle with the live logcat port. */
+    public static final String METHOD_GET_LOGCAT_PORT = "getLogcatPort";
+
+    /** Bundle key for the port int value. */
+    public static final String KEY_PORT = "port";
 
     @Override
     public boolean onCreate() {
@@ -77,4 +94,31 @@ public final class DebuggerBootstrapProvider extends ContentProvider {
                       @Nullable String selection, @Nullable String[] selectionArgs) {
         return 0;
     }
+
+    /**
+     * PR-D2: expose the live ports via [Bundle]. The IDE calls
+     * `contentResolver.call(AUTHORITY, METHOD_GET_JDWP_PORT, null, null)`
+     * after launching the target application; the returned
+     * Bundle contains a single int entry [KEY_PORT].
+     *
+     * This avoids the need to hardcode a port in both the IDE
+     * and the bootstrap provider.
+     */
+    @Nullable
+    @Override
+    public Bundle call(@NonNull String method, @Nullable String arg,
+                       @Nullable Bundle extras) {
+        if (METHOD_GET_JDWP_PORT.equals(method)) {
+            Bundle b = new Bundle();
+            b.putInt(KEY_PORT, LogCaptureService.getInstance().getJdwpPort());
+            return b;
+        }
+        if (METHOD_GET_LOGCAT_PORT.equals(method)) {
+            Bundle b = new Bundle();
+            b.putInt(KEY_PORT, LogCaptureService.getInstance().getLogcatPort());
+            return b;
+        }
+        return super.call(method, arg, extras);
+    }
 }
+

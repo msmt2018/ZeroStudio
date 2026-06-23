@@ -4,6 +4,10 @@
  *  Phase C4: smoke tests for the host-side service classes. The
  *  tests use no Android framework features so they can run as
  *  plain JVM unit tests.
+ *
+ *  PR-D2: also covers the new constants exposed by
+ *  DebuggerBootstrapProvider for the IDE to discover the JDWP
+ *  port at runtime.
  */
 package com.zerostudio.logplugin;
 
@@ -16,6 +20,7 @@ import static org.junit.Assert.assertTrue;
 import com.itsaky.androidide.logwire.LogPayload;
 import com.zerostudio.logplugin.api.LogLevel;
 import com.zerostudio.logplugin.api.LogTransportType;
+import com.zerostudio.logplugin.bootstrap.DebuggerBootstrapProvider;
 import com.zerostudio.logplugin.util.LogBuffer;
 
 import org.junit.Test;
@@ -26,6 +31,24 @@ import java.util.List;
 
 @RunWith(JUnit4.class)
 public class LogCaptureServiceTest {
+
+    // ---------- PR-D2: DebuggerBootstrapProvider constants ----------
+    //
+    //  这些常量必须与 IdeDebuggerInitScriptPlugin.BOOTSTRAP_AUTHORITY 一致,
+    //  也要与 ide-log-plugin / core/app 两侧 build 时替换的 manifest 匹配。
+    //  IDE 端 (core/app) 通过这些字符串去 query ContentProvider。
+
+    @Test
+    public void bootstrapAuthority_isStable() {
+        assertEquals("com.zerostudio.debugger.bootstrap", DebuggerBootstrapProvider.AUTHORITY);
+    }
+
+    @Test
+    public void bootstrapCallMethodNames_areStable() {
+        assertEquals("getJdwpPort", DebuggerBootstrapProvider.METHOD_GET_JDWP_PORT);
+        assertEquals("getLogcatPort", DebuggerBootstrapProvider.METHOD_GET_LOGCAT_PORT);
+        assertEquals("port", DebuggerBootstrapProvider.KEY_PORT);
+    }
 
     // ---------- LogLevel ----------
 

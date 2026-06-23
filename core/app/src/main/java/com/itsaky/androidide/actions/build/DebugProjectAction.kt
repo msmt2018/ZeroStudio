@@ -27,30 +27,34 @@ import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.BaseBuildAction
 import com.itsaky.androidide.actions.markInvisible
+import com.itsaky.androidide.debugger.DebugSessionLauncher
 import com.itsaky.androidide.debugger.DebuggerController
 import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.projects.android.androidAppProjects
 import com.itsaky.androidide.utils.flashError
+import com.itsaky.androidide.utils.flashInfo
 import com.itsaky.androidide.utils.resolveAttr
+import java.io.File
 
 /**
- * PR-D1: 顶层 "🪲 调试" 工具栏按钮。
+ * PR-D1/D2: 顶层 "🪲 调试" 工具栏按钮。
  *
- * 作为最显眼的入口点，提供一键 Attach/Detach JDWP 调试器的能力：
+ * 作为最显眼的入口点，提供一键 build → install → launch → JDWP-attach
+ * 的能力。点击后：
  *
- * - 当调试器未连接时，点击触发 [DebuggerController.toggleDebugConnection]，
- *   IDE 会主动 connect 到 127.0.0.1:5005（默认 JDWP 端口），并把当前
- *   BreakpointManager 中的所有断点通过 [com.zerostudio.debugger.api.Debugger] 重新
- *   安装。
- * - 当调试器已连接时，点击会断开连接，停止所有 VM 事件流，清理会话状态。
+ *  1. [com.itsaky.androidide.actions.openApplicationModuleChooser] 选 module
+ *  2. [com.itsaky.androidide.projects.builder.BuildService.executeTasks] 跑 assembleDebug
+ *  3. [com.itsaky.androidide.utils.ApkInstaller.installApk] 安装 APK
+ *  4. [com.itsaky.androidide.utils.IntentUtils.launchApp] 启动 App
+ *  5. [com.itsaky.androidide.debugger.JdwpPortResolver] poll 目标 App 的 JDWP 端口
+ *  6. [DebuggerController.connect] 建立 JDWP 链路
  *
  * 与已有的 [com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider] 不同：
  * DebuggerActionMenuProvider 注入到 Toolbar ActionMode（overflow 菜单），
  * 负责细粒度的运行控制/单步/视图；本类作为 EDITOR_TOOLBAR 顶层 icon，**最
  * 大化可视性**——任何打开的项目都能看到。
  *
- * 真正的 build+install+launch+JDWP-attach 流程由 PR-D2/PR-D3 实现。
- * 在那之前，本 action 只会去 connect 一个已经在目标设备上启动的 JDWP server。
+ * 完整流程由 [DebugSessionLauncher] 驱动；本 action 只是入口。
  *
  * @author android_zero
  */
@@ -59,8 +63,8 @@ class DebugProjectAction(context: Context, override val order: Int) : BaseBuildA
     override val id: String = "ide.editor.build.debugProject"
 
     /**
-     * PR-D1: 必须在 UI 线程执行 —— 连接 / 断开会触发 [BaseEditorActivity.invalidateOptionsMenu]
-     * 以让按钮 label/icon 立即更新。
+     * PR-D1: 必须在 UI 线程执行 —— 会通过 [com.itsaky.androidide.activities.editor.BaseEditorActivity.invalidateOptionsMenu]
+     * 让按钮 label/icon 立即更新。
      */
     override var requiresUIThread: Boolean = true
 
@@ -69,6 +73,9 @@ class DebugProjectAction(context: Context, override val order: Int) : BaseBuildA
         icon = ContextCompat.getDrawable(context, R.drawable.ic_bug)
         enabled = false
     }
+
+    @Suppress("unused")
+    private val launcher: DebugSessionLauncher = DebugSessionLauncher(context.applicationContext)
 
     override fun prepare(data: ActionData) {
         super.prepare(data)
@@ -128,21 +135,43 @@ class DebugProjectAction(context: Context, override val order: Int) : BaseBuildA
             return true
         }
 
-        // PR-D1: 仅 connect，由 PR-D2 之后实现 build → install → launch → attach 串联。
-        // 主机/端口暂取 build variants 中保存的 PORT_HINT (由 IdeDebuggerInitScriptPlugin
-        // 注入到 manifest placeholders)；这里先 fallback 到 127.0.0.1:5005。
-        val (host, port) = resolveDebugTarget(activity)
-        controller.connect(host, port)
-        activity.flashInfo(activity.getString(R.string.debugger_msg_connecting, host, port))
-        return true
+        // PR-D2: 启动完整 build → install → launch → JDWP-attach 流程。
+        // 启动器在后台线程里完成 assemble/install/launch/port-poll/connect,
+        // 期间通过 Listener 把每个 step 推回 UI 线程,这里只需要把 Listener
+        // 接到 activity 的 flashInfo 即可。
+        launcher.setListener(object : DebugSessionLauncher.Listener {
+            override fun onBuildStarting(module, variant) {
+                activity.flashInfo(
+                        activity.getString(R.string.debugger_msg_build_starting, module.name))
+            }
+            override fun onInstallStarting(apk: File) {
+                activity.flashInfo(
+                        activity.getString(R.string.debugger_msg_install_starting, apk.name))
+            }
+            override fun onInstallCommitted() {
+                activity.flashInfo(R.string.debugger_msg_install_committed)
+            }
+            override fun onLaunched(packageName: String) {
+                activity.flashInfo(
+                        activity.getString(R.string.debugger_msg_launched, packageName))
+            }
+            override fun onAttaching(host: String, port: Int) {
+                activity.flashInfo(
+                        activity.getString(R.string.debugger_msg_connecting, host, port))
+            }
+            override fun onConnected(host: String, port: Int) {
+                activity.flashInfo(
+                        activity.getString(R.string.debugger_msg_connected, host, port))
+                activity.invalidateOptionsMenu()
+            }
+            override fun onFailed(step: DebugSessionLauncher.Step, message: String) {
+                flashError(activity.getString(R.string.debugger_msg_failed, step.name, message))
+            }
+        })
+        val started = launcher.start(data)
+        if (!started) {
+            flashError(R.string.debugger_err_launcher_busy)
+        }
+        return started
     }
-
-    /**
-     * 从 Activity 持有的 BuildPreferences / VariantInfo / DebuggerBootstrapProvider manifest
-     * placeholders 中解析调试目标 host:port。当前实现 (PR-D1) 全部 fallback 到 loopback 5005；
-     * 后续 PR-D2/PR-D3 接入 shizuku 之后改成读 ContentProvider meta-data。
-     */
-    private fun resolveDebugTarget(
-        @Suppress("UNUSED_PARAMETER") context: Context
-    ): Pair<String, Int> = "127.0.0.1" to 5005
 }

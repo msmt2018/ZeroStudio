@@ -83,6 +83,15 @@
     <string name="debugger_action_start_debug">🪲 开始调试</string>
     <string name="debugger_action_start_debug_desc">连接 JDWP 调试器</string>
     <string name="debugger_err_build_in_progress">正在构建，请等待构建完成后再启动调试</string>
+    <string name="debugger_err_launcher_busy">调试启动器正在运行</string>
     <string name="debugger_msg_connecting">正在连接调试器 %1$s:%2$d …</string>
+    <string name="debugger_msg_connected">已连接调试器 %1$s:%2$d</string>
     <string name="debugger_msg_disconnected">已断开调试器</string>
+
+    <!-- PR-D2: DebugSessionLauncher 流程状态消息 -->
+    <string name="debugger_msg_build_starting">开始构建 %1$s …</string>
+    <string name="debugger_msg_install_starting">正在安装 %1$s …</string>
+    <string name="debugger_msg_install_committed">安装已提交，等待安装完成 …</string>
+    <string name="debugger_msg_launched">已启动 %1$s</string>
+    <string name="debugger_msg_failed">调试启动失败 @%1$s : %2$s</string>
 </resources>
