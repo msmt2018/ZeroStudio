@@ -5,21 +5,24 @@
  *  This is the bridge between the IDE's source-level view and the JDWP
  *  server's class/method/line-level view.
  *
- *  Strategy (simplified for the first cut):
+ *  Phase G1: now uses JavaSourceParser to extract the package declaration
+ *  and class signatures from .java source files, replacing the previous
+ *  basename-only heuristic.
  *
- *   1. When the user adds a breakpoint we issue `ClassesBySignature` for
- *      every class whose name we can guess from the source file's name
- *      and package. For each candidate we then call `SourceFile` and
- *      `LineTable` to find a matching line.
- *   2. If we find one we issue `EventRequest.Set` with the LOCATION
- *      modifier and store the request id on the breakpoint.
+ *  Strategy:
+ *
+ *   1. When the user adds a breakpoint we first try to parse the .java file
+ *      with JavaParser to get the exact package + class signature.
+ *      If that fails we fall back to the basename heuristic.
+ *   2. We then issue `ClassesBySignature` for the resolved class signature.
+ *      For each candidate we call `SourceFile` and `LineTable` to verify.
  *   3. If no class is loaded yet we keep the breakpoint in
  *      [Breakpoint.State.PENDING]; we listen for CLASS_PREPARE events and
  *      try again as classes come in.
  *
- *  PR-2 ships a working but not fully optimal implementation. A more
- *  sophisticated implementation would cache class signatures, look them
- *  up by SourceFile attribute and handle Java modules.
+ *  Phase G1 also adds support for inner classes by parsing nested class
+ *  declarations, though currently only the top-level class is used for
+ *  breakpoint installation.
  */
 
 package com.zerostudio.debugger.model;
@@ -46,6 +49,8 @@ public final class SourceLocator {
 
     private final Debugger debugger;
     private final JdwpClient client;
+    /** Phase G1: Java source parser for extracting class signatures. Lazily initialized. */
+    private final JavaSourceParser sourceParser = new JavaSourceParser();
     /**
      * Phase B1: breakpoints that failed to install because the
      * target class was not yet loaded. We retry each one whenever
@@ -623,14 +628,40 @@ public final class SourceLocator {
                 isPrim(tag), targetSlot);
     }
 
-    /** Best-effort guess of a class signature from a source file name. */
+    /** Best-effort guess of a class signature from a source file name.
+     *
+     *  Phase G1: now uses JavaSourceParser to extract the exact package +
+     *  class name from the source file, falling back to the basename heuristic
+     *  only for .kt files or when parsing fails.
+     *
+     *  @return JVM type signature (e.g., "Lcom/example/MainActivity;") or null */
     @androidx.annotation.Nullable
-    private static String guessClassSignature(@NonNull String sourceFile) {
+    private String guessClassSignature(@NonNull String sourceFile) {
         String base = basename(sourceFile);
-        if (!base.endsWith(".java") && !base.endsWith(".kt")) return null;
-        String name = base.substring(0, base.length() - 5);
-        if (name.isEmpty()) return null;
-        return "L" + name + ";";
+        if (base.endsWith(".java")) {
+            // Phase G1: try to parse the source file for an exact signature
+            ParsedSource parsed = sourceParser.parse(sourceFile);
+            if (parsed != null) {
+                String sig = parsed.topLevelSignature();
+                if (sig != null) {
+                    return sig;
+                }
+            }
+            // Fallback: use basename without extension
+            String name = base.substring(0, base.length() - 5);
+            if (!name.isEmpty()) {
+                return "L" + name + ";";
+            }
+            return null;
+        } else if (base.endsWith(".kt")) {
+            // Kotlin files: JavaParser doesn't handle them, fall back to basename
+            String name = base.substring(0, base.length() - 3);
+            if (!name.isEmpty()) {
+                return "L" + name + ";";
+            }
+            return null;
+        }
+        return null;
     }
 
     private static String basename(@NonNull String path) {

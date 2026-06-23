@@ -48,6 +48,9 @@ dependencies {
   // transport that carries JDWP-bridge notifications.
   implementation(project(":utilities:logwire"))
 
+  // Phase G1: JavaParser for extracting class signatures from .java source files.
+  implementation(libs.common.javaparser)
+
   // PR-7: unit tests for EvalEngine.Parser.
   testImplementation(libs.tests.junit)
 }
