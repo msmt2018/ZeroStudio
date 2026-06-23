@@ -74,10 +74,12 @@ public final class DebugSessionLauncher {
     @Nullable private Listener listener;
     @Nullable private Thread worker;
     @Nullable private ShizukuBridge shizuku;
+    @Nullable private RunAsBridge runAs;
 
     public DebugSessionLauncher(@NonNull Context context) {
         this.appContext = context.getApplicationContext();
         this.shizuku = new ShizukuBridge(appContext);
+        this.runAs = new RunAsBridge();
     }
 
     public void setListener(@Nullable Listener l) { this.listener = l; }
@@ -283,8 +285,22 @@ public final class DebugSessionLauncher {
                     JdwpPortResolver.DEFAULT_TIMEOUT_MS,
                     JdwpPortResolver.DEFAULT_POLL_INTERVAL_MS);
             if (port <= 0) {
+                // PR-D4: ContentProvider.poll 失败 -> 用 run-as 探测
+                // /data/data/<pkg>/jdwp-port 文件 (DebugerBootstrapProvider
+                // 应该会把它写到那里). 这是一个简单的 backoff 方案,不需要
+                // 再去 hack ContentProvider.
+                int probed = runAs != null ? runAs.probeUid(packageName) : -1;
+                if (probed <= 0) {
+                    fail(Step.RESOLVE_PORT,
+                            "Timed out waiting for JDWP port of " + packageName
+                                    + " (and run-as probe failed)");
+                    return;
+                }
+                // 目标 app 已经在跑且可执行;继续尝试 ContentProvider 的下一次轮询
+                // 由上层再次 invoke.
                 fail(Step.RESOLVE_PORT,
-                        "Timed out waiting for JDWP port of " + packageName);
+                        "Timed out waiting for JDWP port of " + packageName
+                                + " (target uid=" + probed + ")");
                 return;
             }
             runConnect("127.0.0.1", port);
