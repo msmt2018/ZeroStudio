@@ -1626,6 +1626,124 @@ public final class EvalEngine {
         }
     }
 
+    /**
+     * Phase B3: encode a primitive value of the given {@code sig} for
+     * a SetValues payload. The output is the raw bytes that follow
+     * the {@code (tag, value...)} pair in a Set request. For 'L'
+     * and '[' this writes an 8-byte object id; for 'V' nothing is
+     * written.
+     */
+    static void writeValue(@NonNull ByteBuf out, @NonNull String sig, @NonNull String value) {
+        if (sig.isEmpty()) return;
+        switch (sig.charAt(0)) {
+            case 'V': break;
+            case 'Z': out.writeByte(Boolean.parseBoolean(value) ? 1 : 0); break;
+            case 'B': out.writeByte(Byte.parseByte(value)); break;
+            case 'C': out.writeShort((int) value.charAt(0)); break;
+            case 'S': out.writeShort(Short.parseShort(value)); break;
+            case 'I': out.writeInt(Integer.parseInt(value)); break;
+            case 'J': out.writeLong(Long.parseLong(value)); break;
+            case 'F': out.writeFloat(Float.parseFloat(value)); break;
+            case 'D': out.writeDouble(Double.parseDouble(value)); break;
+            case 'L': case '[': out.writeLong(Long.parseLong(value)); break;
+        }
+    }
+
+    /**
+     * Phase B3: write a single element of an array via
+     * {@code ArrayReference.SetValues} (command set 13, command 3).
+     * The element's type is derived from the array's signature; the
+     * value is encoded as a string. The method is best-effort and
+     * never throws — failures are returned as [EvalResult.error].
+     */
+    @NonNull
+    public EvalResult setArrayElement(long arrayId, int index, @NonNull String arraySig,
+                                      @NonNull String value) {
+        String elemSig = arrayElementSignature(arraySig);
+        if (elemSig.isEmpty()) {
+            return EvalResult.error("malformed array signature: " + arraySig);
+        }
+        try {
+            ByteBuf buf = new ByteBuf();
+            buf.writeLong(arrayId);
+            buf.writeInt(1);     // one element
+            buf.writeInt(index);
+            buf.writeByte(tagFor(elemSig));
+            writeValue(buf, elemSig, value);
+            JdwpPacket reply = client.sendCommand(
+                    CommandSet.ArrayReference, CommandCodes.ArrayReferenceCmd.SetValues,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) {
+                return EvalResult.error("ArrayReference.SetValues error " + reply.errorCode());
+            }
+            return EvalResult.of(evalTag(elemSig), elemSig, value);
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        } catch (NumberFormatException ex) {
+            return EvalResult.error("bad value: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Phase B3: write a single local variable of the current frame via
+     * {@code StackFrame.SetValues} (command set 16, command 2). The
+     * caller supplies the local's slot + type signature + value.
+     */
+    @NonNull
+    public EvalResult setLocal(long threadId, long frameId, int slot,
+                               @NonNull String sig, @NonNull String value) {
+        try {
+            ByteBuf buf = new ByteBuf();
+            buf.writeLong(threadId);
+            buf.writeLong(frameId);
+            buf.writeInt(1);     // one value
+            buf.writeInt(slot);
+            buf.writeByte(tagFor(sig));
+            writeValue(buf, sig, value);
+            JdwpPacket reply = client.sendCommand(
+                    CommandSet.StackFrame, CommandCodes.StackFrameCmd.SetValues,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) {
+                return EvalResult.error("StackFrame.SetValues error " + reply.errorCode());
+            }
+            return EvalResult.of(evalTag(sig), sig, value);
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        } catch (NumberFormatException ex) {
+            return EvalResult.error("bad value: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Phase B3: write a single static field of a class via
+     * {@code ClassType.SetValues} (command set 3, command 2). The
+     * caller supplies the class refTypeId, the fieldId, signature,
+     * and string-encoded value.
+     */
+    @NonNull
+    public EvalResult setStaticField(long classId, long fieldId,
+                                     @NonNull String sig, @NonNull String value) {
+        try {
+            ByteBuf buf = new ByteBuf();
+            buf.writeLong(classId);
+            buf.writeInt(1);     // one value
+            buf.writeLong(fieldId);
+            buf.writeByte(tagFor(sig));
+            writeValue(buf, sig, value);
+            JdwpPacket reply = client.sendCommand(
+                    CommandSet.ClassType, CommandCodes.ClassTypeCmd.SetValues,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) {
+                return EvalResult.error("ClassType.SetValues error " + reply.errorCode());
+            }
+            return EvalResult.of(evalTag(sig), sig, value);
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        } catch (NumberFormatException ex) {
+            return EvalResult.error("bad value: " + ex.getMessage());
+        }
+    }
+
     private static boolean isPrim(byte tag) {
         return tag != 'L' && tag != '[';
     }
