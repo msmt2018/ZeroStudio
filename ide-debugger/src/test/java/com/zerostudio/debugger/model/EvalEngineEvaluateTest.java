@@ -580,4 +580,156 @@ public class EvalEngineEvaluateTest {
         assertEquals(1, CommandSet.VirtualMachine);
         assertEquals(11, CommandCodes.VirtualMachineCmd.CreateString);
     }
+
+    // ---------- Phase A1: 算术运算符端到端 ----------
+
+    @Test
+    public void evaluate_literalAddition_noJdwp() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 + 2");
+        assertFalse(r.isError());
+        assertEquals(Tag.LONG, r.tag);
+        assertEquals("J", r.typeSignature);
+        assertEquals("3", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_literalSubtraction_noJdwp() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "10 - 4");
+        assertFalse(r.isError());
+        assertEquals("6", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_literalMultiplication_noJdwp() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "6 * 7");
+        assertFalse(r.isError());
+        assertEquals("42", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_literalDivision_noJdwp() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "20 / 4");
+        assertFalse(r.isError());
+        assertEquals("5", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_literalModulo_noJdwp() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "10 % 3");
+        assertFalse(r.isError());
+        assertEquals("1", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_literalDivisionByZero_returnsError() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 / 0");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("division by zero"));
+    }
+
+    @Test
+    public void evaluate_precedenceMultiplyBeforeAdd() {
+        // 1 + 2 * 3 == 7. Both sides are pure literals so zero JDWP calls.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 + 2 * 3");
+        assertFalse(r.isError());
+        assertEquals("7", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_parensOverridePrecedence() {
+        // (1 + 2) * 3 == 9.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "(1 + 2) * 3");
+        assertFalse(r.isError());
+        assertEquals("9", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_localPlusLiteral() {
+        // local `i` is 41, then `i + 1` is 42. The `i` lookup still
+        // requires Frames + VariableTable + GetValues, then the literal
+        // +1 is evaluated locally. Phase A1 widens the result to long
+        // because the parser stores int literals as LITERAL_LONG.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0L, "i", "I", 1, 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'I', JdwpPayloads.intValue(41)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "i + 1");
+        assertFalse(r.isError());
+        assertEquals(Tag.LONG, r.tag);
+        assertEquals("J", r.typeSignature);
+        assertEquals("42", r.displayValue);
+        assertEquals(3, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_localDividedByLiteral() {
+        // count(100) / 4 -> 25 (long).
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0L, "count", "J", 2, 1),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'J', JdwpPayloads.longValue(100L)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "count / 4");
+        assertFalse(r.isError());
+        assertEquals(Tag.LONG, r.tag);
+        assertEquals("25", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_doubleArithmetic_widensToDouble() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1.5 + 2.5");
+        assertFalse(r.isError());
+        assertEquals(Tag.DOUBLE, r.tag);
+        assertEquals("D", r.typeSignature);
+        assertEquals("4.0", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_stringOperand_returnsError() {
+        // `"x" + 1` -- Phase A1 doesn't support string concat yet; the
+        // helper should report a clean error and not throw.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // CreateString for the literal
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "\"x\" + 1");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("requires numeric"));
+    }
 }

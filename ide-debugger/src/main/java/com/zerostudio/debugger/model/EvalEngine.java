@@ -1,7 +1,7 @@
 /*
  *  ZeroStudio IDE - ide-debugger
  *
- *  Expression evaluator. PR-5 adds three capabilities:
+ *  Expression evaluator. PR-5/6/9 + Phase A1:
  *
  *    1. Resolve a frame's local variables to actual values (this method
  *       used to be a stub; now the SourceLocator populates them).
@@ -9,13 +9,16 @@
  *       expressions and return a string-serialised value:
  *          identifier            - a local var, parameter, or 'this'
  *          expr.field            - ObjectReference.GetFieldValue
- *          expr.method()         - call a no-arg method via
+ *          expr.method(args)     - call a method via
  *                                  ObjectReference.InvokeMethod
  *          String literal "..."  - VirtualMachine.CreateString
  *          int / long / double   - literal
  *          (expr)                - grouping
  *          a.b.c                 - chained field access
- *          a.b()                 - chained method call
+ *          a.b(args)             - chained method call
+ *          a + b, a - b          - Phase A1 numeric arithmetic
+ *          a * b, a / b, a % b   - Phase A1 numeric arithmetic
+ *          1 + 2 * 3             - Phase A1 left-associative precedence
  *
  *       The parser is a hand-written recursive descent. It is NOT a full
  *       Java parser; anything we don't handle returns EvalResult.error.
@@ -142,11 +145,18 @@ public final class EvalEngine {
 
     /** Resolved identifier in the current scope. */
     static final class Resolved {
-        enum Kind { LOCAL, FIELD, METHOD, THIS, LITERAL_STRING, LITERAL_INT, LITERAL_LONG, LITERAL_DOUBLE, NEW_STRING }
+        enum Kind {
+            LOCAL, FIELD, METHOD, THIS,
+            LITERAL_STRING, LITERAL_INT, LITERAL_LONG, LITERAL_DOUBLE, NEW_STRING,
+            // Phase A1: arithmetic binary operators. left/right carry the
+            // operands; name carries the operator string ("+", "-", "*", "/", "%").
+            BINARY
+        }
         final Kind kind;
-        final String name;       // LOCAL, FIELD, METHOD, LITERAL_*
+        final String name;       // LOCAL, FIELD, METHOD, LITERAL_*, BINARY (op)
         @Nullable final Resolved receiver; // FIELD, METHOD
         @Nullable final List<Resolved> args; // METHOD
+        @Nullable final Resolved left, right; // BINARY
         final long literalLong;  // for LITERAL_LONG
         final double literalDouble; // for LITERAL_DOUBLE
 
@@ -155,23 +165,39 @@ public final class EvalEngine {
             this.name = name;
             this.receiver = receiver;
             this.args = args;
+            this.left = null;
+            this.right = null;
             this.literalLong = 0L;
             this.literalDouble = 0.0;
         }
         Resolved(Kind kind, String name) {
             this(kind, name, null, null);
         }
+        // BINARY: left/right are the operands, name is the operator.
+        private Resolved(Kind kind, String name, @Nullable Resolved left, @Nullable Resolved right) {
+            this.kind = kind;
+            this.name = name;
+            this.receiver = null;
+            this.args = null;
+            this.left = left;
+            this.right = right;
+            this.literalLong = 0L;
+            this.literalDouble = 0.0;
+        }
+        // LITERAL_*: literalLong/literalDouble carry the value, name is null.
         private Resolved(Kind kind, String name, @Nullable Resolved receiver,
                          @Nullable List<Resolved> args, long literalLong, double literalDouble) {
             this.kind = kind;
             this.name = name;
             this.receiver = receiver;
             this.args = args;
+            this.left = null;
+            this.right = null;
             this.literalLong = literalLong;
             this.literalDouble = literalDouble;
         }
         static Resolved litString(String s) {
-            return new Resolved(Kind.LITERAL_STRING, s, null, null, 0L, 0.0);
+            return new Resolved(Kind.LITERAL_STRING, s, null, null);
         }
         static Resolved litInt(long v) {
             return new Resolved(Kind.LITERAL_INT, null, null, null, v, 0.0);
@@ -181,6 +207,10 @@ public final class EvalEngine {
         }
         static Resolved litDouble(double v) {
             return new Resolved(Kind.LITERAL_DOUBLE, null, null, null, 0L, v);
+        }
+        /** Phase A1: build a binary-operation AST node. */
+        static Resolved binop(String op, @NonNull Resolved left, @NonNull Resolved right) {
+            return new Resolved(Kind.BINARY, op, left, right);
         }
     }
 
@@ -192,12 +222,64 @@ public final class EvalEngine {
         boolean hasMore() { return pos < src.length() && src.charAt(pos) != '\0'; }
         String remainder() { return src.substring(pos); }
 
+        /**
+         * Top of the expression precedence chain. Phase A1 wires up
+         * {@code + - * / %} via the {@code parseAdditive} and
+         * {@code parseMultiplicative} layers; future phases will add
+         * {@code parseLogicalOr} / {@code parseLogicalAnd} / etc.
+         */
         @NonNull Resolved parseExpr() {
+            return parseAdditive();
+        }
+
+        /**
+         * Phase A1: additive level. {@code +} and {@code -} bind looser
+         * than {@code * / %} so they live at the top of the chain.
+         * Left-associative: {@code a - b - c} is {@code (a - b) - c}.
+         */
+        @NonNull private Resolved parseAdditive() {
+            Resolved left = parseMultiplicative();
+            while (true) {
+                skipWs();
+                char c = peek();
+                if (c != '+' && c != '-') break;
+                pos++;
+                Resolved right = parseMultiplicative();
+                left = Resolved.binop(String.valueOf(c), left, right);
+            }
+            return left;
+        }
+
+        /**
+         * Phase A1: multiplicative level. {@code *}, {@code /} and
+         * {@code %} bind tighter than {@code + -}.
+         */
+        @NonNull private Resolved parseMultiplicative() {
+            Resolved left = parsePrimary();
+            while (true) {
+                skipWs();
+                char c = peek();
+                if (c != '*' && c != '/' && c != '%') break;
+                pos++;
+                Resolved right = parsePrimary();
+                left = Resolved.binop(String.valueOf(c), left, right);
+            }
+            return left;
+        }
+
+        /**
+         * Bottom of the precedence chain: literals, identifiers and
+         * parenthesised sub-expressions. {@code -5} / {@code +5} are
+         * still consumed here by {@link #parseNumberLiteral} (the parser
+         * stores the sign in the numeric value); a true unary minus
+         * operator (e.g. {@code -(a + b)}) is a future-phase enhancement.
+         */
+        @NonNull private Resolved parsePrimary() {
             skipWs();
             char c = peek();
             if (c == '"') return parseStringLiteral();
             if (c == '(') {
-                expect('(');
+                pos++;
                 Resolved inner = parseExpr();
                 expect(')');
                 return parseAccessChain(inner);
@@ -387,6 +469,16 @@ public final class EvalEngine {
                     }
                     return invokeMethod(recv.objectId, r.name, recv.typeSignature, argResults);
                 }
+                case BINARY: {
+                    // Phase A1: arithmetic + - * / % on numeric operands.
+                    // String concat (a + "x") is Phase A3; comparison +
+                    // logical operators are Phase A2.
+                    EvalResult l = resolveAndEval(r.left, threadId, frameId);
+                    if (l.isError()) return l;
+                    EvalResult rhs = resolveAndEval(r.right, threadId, frameId);
+                    if (rhs.isError()) return rhs;
+                    return applyBinaryOp(r.name, l, rhs);
+                }
                 default:
                     return EvalResult.error("unsupported expression kind");
             }
@@ -410,6 +502,80 @@ public final class EvalEngine {
             case '[': return EvalResult.Tag.ARRAY;
             default:  return EvalResult.Tag.OBJECT;
         }
+    }
+
+    /**
+     * Phase A1: apply an arithmetic binary operator to two evaluated
+     * operands. Operators supported: {@code + - * / %}. String concat
+     * is Phase A3; comparison / logical operators are Phase A2.
+     *
+     * <p>Widening rules:
+     * <ul>
+     *   <li>If either operand is float/double, the result is double.
+     *   <li>Otherwise the result is long. Bytes / shorts / ints / longs
+     *       are all coerced to long and the result is long.
+     * </ul>
+     *
+     * <p>If either operand is non-numeric (object, array, string, void,
+     * boolean) the call returns an error result.
+     */
+    @NonNull
+    static EvalResult applyBinaryOp(@NonNull String op,
+                                    @NonNull EvalResult l,
+                                    @NonNull EvalResult r) {
+        if (!isNumeric(l)) {
+            return EvalResult.error("operator '" + op
+                    + "' requires numeric left operand (got " + l.typeSignature + ")");
+        }
+        if (!isNumeric(r)) {
+            return EvalResult.error("operator '" + op
+                    + "' requires numeric right operand (got " + r.typeSignature + ")");
+        }
+        boolean isDouble = "D".equals(l.typeSignature) || "F".equals(l.typeSignature)
+                || "D".equals(r.typeSignature) || "F".equals(r.typeSignature);
+        if (isDouble) {
+            double a = parseDouble(l);
+            double b = parseDouble(r);
+            switch (op) {
+                case "+": return EvalResult.of(EvalResult.Tag.DOUBLE, "D", String.valueOf(a + b));
+                case "-": return EvalResult.of(EvalResult.Tag.DOUBLE, "D", String.valueOf(a - b));
+                case "*": return EvalResult.of(EvalResult.Tag.DOUBLE, "D", String.valueOf(a * b));
+                case "/":
+                    if (b == 0.0) return EvalResult.error("division by zero");
+                    return EvalResult.of(EvalResult.Tag.DOUBLE, "D", String.valueOf(a / b));
+                case "%":
+                    if (b == 0.0) return EvalResult.error("modulo by zero");
+                    return EvalResult.of(EvalResult.Tag.DOUBLE, "D", String.valueOf(a % b));
+                default:
+                    return EvalResult.error("unsupported binary operator: " + op);
+            }
+        }
+        long a = parseLong(l);
+        long b = parseLong(r);
+        switch (op) {
+            case "+": return EvalResult.of(EvalResult.Tag.LONG, "J", String.valueOf(a + b));
+            case "-": return EvalResult.of(EvalResult.Tag.LONG, "J", String.valueOf(a - b));
+            case "*": return EvalResult.of(EvalResult.Tag.LONG, "J", String.valueOf(a * b));
+            case "/":
+                if (b == 0L) return EvalResult.error("division by zero");
+                return EvalResult.of(EvalResult.Tag.LONG, "J", String.valueOf(a / b));
+            case "%":
+                if (b == 0L) return EvalResult.error("modulo by zero");
+                return EvalResult.of(EvalResult.Tag.LONG, "J", String.valueOf(a % b));
+            default:
+                return EvalResult.error("unsupported binary operator: " + op);
+        }
+    }
+
+    /**
+     * Phase A1 helper: true if {@code r} carries a numeric type signature
+     * ({@code B S I J F D}). The display value is consumed lazily by
+     * {@link #parseLong} / {@link #parseDouble}.
+     */
+    private static boolean isNumeric(@NonNull EvalResult r) {
+        if (r.typeSignature == null || r.typeSignature.isEmpty()) return false;
+        char c = r.typeSignature.charAt(0);
+        return c == 'B' || c == 'S' || c == 'I' || c == 'J' || c == 'F' || c == 'D';
     }
 
     @Nullable

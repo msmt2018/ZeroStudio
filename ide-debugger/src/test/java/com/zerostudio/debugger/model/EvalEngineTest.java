@@ -261,9 +261,12 @@ public class EvalEngineTest {
 
     @Test
     public void parseTrailingInputFails() {
-        // 不支持 + 号
+        // Phase A1: `i + 1` is a valid binary expression, not trailing
+        // input. To still exercise the trailing-input guard we tack a
+        // bogus identifier on after a valid expression: `i + 1 j` parses
+        // `i + 1` and then sees ` j` as leftover.
         try {
-            EvalEngine.parseExpressionStrict("i + 1");
+            EvalEngine.parseExpressionStrict("i + 1 j");
             fail("expected IllegalArgumentException for trailing input");
         } catch (IllegalArgumentException expected) {
             assertTrue(expected.getMessage(),
@@ -359,5 +362,158 @@ public class EvalEngineTest {
         assertEquals(Resolved.Kind.METHOD, r.kind);
         assertEquals("bar", r.name);
         assertEquals(2, r.args.size());
+    }
+
+    // ---------- Phase A1: 算术运算符 ----------
+
+    @Test
+    public void parseAdd_twoLiterals() {
+        Resolved r = EvalEngine.parseExpressionStrict("1 + 2");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("+", r.name);
+        assertNotNull(r.left);
+        assertNotNull(r.right);
+        assertEquals(Resolved.Kind.LITERAL_LONG, r.left.kind);
+        assertEquals(1L, r.left.literalLong);
+        assertEquals(Resolved.Kind.LITERAL_LONG, r.right.kind);
+        assertEquals(2L, r.right.literalLong);
+    }
+
+    @Test
+    public void parseSubtract_twoLiterals() {
+        Resolved r = EvalEngine.parseExpressionStrict("10 - 3");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("-", r.name);
+        assertEquals(10L, r.left.literalLong);
+        assertEquals(3L, r.right.literalLong);
+    }
+
+    @Test
+    public void parseMultiply_twoLiterals() {
+        Resolved r = EvalEngine.parseExpressionStrict("4 * 6");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("*", r.name);
+    }
+
+    @Test
+    public void parseDivide_twoLiterals() {
+        Resolved r = EvalEngine.parseExpressionStrict("10 / 2");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("/", r.name);
+    }
+
+    @Test
+    public void parseModulo_twoLiterals() {
+        Resolved r = EvalEngine.parseExpressionStrict("7 % 3");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("%", r.name);
+    }
+
+    @Test
+    public void parseAdd_localAndLiteral() {
+        Resolved r = EvalEngine.parseExpressionStrict("count + 1");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("+", r.name);
+        assertEquals(Resolved.Kind.LOCAL, r.left.kind);
+        assertEquals("count", r.left.name);
+        assertEquals(Resolved.Kind.LITERAL_LONG, r.right.kind);
+        assertEquals(1L, r.right.literalLong);
+    }
+
+    @Test
+    public void parsePrecedence_multiplyBeforeAdd() {
+        // 1 + 2 * 3 == 1 + (2 * 3) -> top is `+`, right is `2 * 3`.
+        Resolved r = EvalEngine.parseExpressionStrict("1 + 2 * 3");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("+", r.name);
+        assertEquals(Resolved.Kind.LITERAL_LONG, r.left.kind);
+        assertEquals(1L, r.left.literalLong);
+        assertEquals(Resolved.Kind.BINARY, r.right.kind);
+        assertEquals("*", r.right.name);
+        assertEquals(2L, r.right.left.literalLong);
+        assertEquals(3L, r.right.right.literalLong);
+    }
+
+    @Test
+    public void parsePrecedence_parensOverride() {
+        // (1 + 2) * 3 -> top is `*`, left is `1 + 2`.
+        Resolved r = EvalEngine.parseExpressionStrict("(1 + 2) * 3");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("*", r.name);
+        assertEquals(Resolved.Kind.BINARY, r.left.kind);
+        assertEquals("+", r.left.name);
+        assertEquals(1L, r.left.left.literalLong);
+        assertEquals(2L, r.left.right.literalLong);
+        assertEquals(3L, r.right.literalLong);
+    }
+
+    @Test
+    public void parseLeftAssociative_subtract() {
+        // a - b - c is parsed as (a - b) - c.
+        Resolved r = EvalEngine.parseExpressionStrict("a - b - c");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("-", r.name);
+        assertEquals(Resolved.Kind.BINARY, r.left.kind);
+        assertEquals("-", r.left.name);
+        assertEquals("a", r.left.left.name);
+        assertEquals("b", r.left.right.name);
+        assertEquals("c", r.right.name);
+    }
+
+    @Test
+    public void parseDoubleArithmetic() {
+        Resolved r = EvalEngine.parseExpressionStrict("1.5 + 2.5");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("+", r.name);
+        assertEquals(Resolved.Kind.LITERAL_DOUBLE, r.left.kind);
+        assertEquals(1.5, r.left.literalDouble, 0.0001);
+        assertEquals(Resolved.Kind.LITERAL_DOUBLE, r.right.kind);
+        assertEquals(2.5, r.right.literalDouble, 0.0001);
+    }
+
+    @Test
+    public void parseBinaryFollowedByChainedField() {
+        // `a + b.field` is still additive on top with a FIELD on the right.
+        Resolved r = EvalEngine.parseExpressionStrict("a + b.field");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("+", r.name);
+        assertEquals(Resolved.Kind.LOCAL, r.left.kind);
+        assertEquals("a", r.left.name);
+        assertEquals(Resolved.Kind.FIELD, r.right.kind);
+        assertEquals("field", r.right.name);
+        assertEquals("b", r.right.receiver.name);
+    }
+
+    @Test
+    public void parseBinaryInsideMethodArg() {
+        // foo.add(1, 2 + 3) -> second arg is a BINARY.
+        Resolved r = EvalEngine.parseExpressionStrict("foo.add(1, 2 + 3)");
+        assertEquals(Resolved.Kind.METHOD, r.kind);
+        assertEquals(2, r.args.size());
+        assertEquals(Resolved.Kind.LITERAL_LONG, r.args.get(0).kind);
+        assertEquals(Resolved.Kind.BINARY, r.args.get(1).kind);
+        assertEquals("+", r.args.get(1).name);
+    }
+
+    @Test
+    public void parseTrailingOperatorFails() {
+        // `1 +` is missing a right operand; parsePrimary sees EOF and
+        // throws "unexpected char '\0'".
+        try {
+            EvalEngine.parseExpressionStrict("1 +");
+            fail("expected RuntimeException for trailing operator");
+        } catch (RuntimeException expected) {
+            assertTrue(expected.getMessage(),
+                    expected.getMessage().startsWith("unexpected char"));
+        }
+    }
+
+    @Test
+    public void parseSkipsWhitespaceAroundOperators() {
+        Resolved r = EvalEngine.parseExpressionStrict("  1   +   2  ");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("+", r.name);
+        assertEquals(1L, r.left.literalLong);
+        assertEquals(2L, r.right.literalLong);
     }
 }

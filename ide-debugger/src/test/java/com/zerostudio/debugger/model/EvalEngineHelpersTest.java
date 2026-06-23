@@ -14,6 +14,7 @@ package com.zerostudio.debugger.model;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import com.zerostudio.debugger.api.EvalResult;
 import com.zerostudio.debugger.api.EvalResult.Tag;
@@ -207,6 +208,125 @@ public class EvalEngineHelpersTest {
         assertEquals(0, EvalEngine.countArity(""));
         assertEquals(0, EvalEngine.countArity("no parens"));
         assertEquals(0, EvalEngine.countArity("(broken"));
+    }
+
+    // ---------- Phase A1: applyBinaryOp (纯函数) ----------
+
+    @Test
+    public void applyBinaryOp_additionOfLongs() {
+        EvalResult r = EvalEngine.applyBinaryOp("+",
+                EvalResult.of(Tag.LONG, "J", "10"),
+                EvalResult.of(Tag.LONG, "J", "32"));
+        assertEquals(Tag.LONG, r.tag);
+        assertEquals("J", r.typeSignature);
+        assertEquals("42", r.displayValue);
+    }
+
+    @Test
+    public void applyBinaryOp_subtractionOfLongs() {
+        EvalResult r = EvalEngine.applyBinaryOp("-",
+                EvalResult.of(Tag.LONG, "J", "10"),
+                EvalResult.of(Tag.LONG, "J", "3"));
+        assertEquals("7", r.displayValue);
+    }
+
+    @Test
+    public void applyBinaryOp_multiplicationOfLongs() {
+        EvalResult r = EvalEngine.applyBinaryOp("*",
+                EvalResult.of(Tag.LONG, "J", "6"),
+                EvalResult.of(Tag.LONG, "J", "7"));
+        assertEquals("42", r.displayValue);
+    }
+
+    @Test
+    public void applyBinaryOp_divisionOfLongs() {
+        EvalResult r = EvalEngine.applyBinaryOp("/",
+                EvalResult.of(Tag.LONG, "J", "20"),
+                EvalResult.of(Tag.LONG, "J", "4"));
+        assertEquals("5", r.displayValue);
+    }
+
+    @Test
+    public void applyBinaryOp_moduloOfLongs() {
+        EvalResult r = EvalEngine.applyBinaryOp("%",
+                EvalResult.of(Tag.LONG, "J", "10"),
+                EvalResult.of(Tag.LONG, "J", "3"));
+        assertEquals("1", r.displayValue);
+    }
+
+    @Test
+    public void applyBinaryOp_divisionByZeroLong_returnsError() {
+        EvalResult r = EvalEngine.applyBinaryOp("/",
+                EvalResult.of(Tag.LONG, "J", "1"),
+                EvalResult.of(Tag.LONG, "J", "0"));
+        assertTrue(r.isError());
+        assertTrue(r.error, r.error.contains("division by zero"));
+    }
+
+    @Test
+    public void applyBinaryOp_moduloByZeroLong_returnsError() {
+        EvalResult r = EvalEngine.applyBinaryOp("%",
+                EvalResult.of(Tag.LONG, "J", "1"),
+                EvalResult.of(Tag.LONG, "J", "0"));
+        assertTrue(r.isError());
+        assertTrue(r.error, r.error.contains("modulo by zero"));
+    }
+
+    @Test
+    public void applyBinaryOp_doubleArithmetic_widensToDouble() {
+        EvalResult r = EvalEngine.applyBinaryOp("+",
+                EvalResult.of(Tag.LONG, "J", "1"),
+                EvalResult.of(Tag.DOUBLE, "D", "0.5"));
+        assertEquals(Tag.DOUBLE, r.tag);
+        assertEquals("D", r.typeSignature);
+        assertEquals("1.5", r.displayValue);
+    }
+
+    @Test
+    public void applyBinaryOp_divisionByZeroDouble_returnsError() {
+        EvalResult r = EvalEngine.applyBinaryOp("/",
+                EvalResult.of(Tag.DOUBLE, "D", "1.0"),
+                EvalResult.of(Tag.DOUBLE, "D", "0.0"));
+        assertTrue(r.isError());
+        assertTrue(r.error, r.error.contains("division by zero"));
+    }
+
+    @Test
+    public void applyBinaryOp_stringOperand_returnsError() {
+        EvalResult r = EvalEngine.applyBinaryOp("+",
+                EvalResult.of(Tag.STRING, "Ljava/lang/String;", "x"),
+                EvalResult.of(Tag.LONG, "J", "1"));
+        assertTrue(r.isError());
+        assertTrue(r.error, r.error.contains("requires numeric left operand"));
+    }
+
+    @Test
+    public void applyBinaryOp_objectOperand_returnsError() {
+        EvalResult r = EvalEngine.applyBinaryOp("+",
+                EvalResult.object(0x100L, "Lcom/example/Foo;"),
+                EvalResult.of(Tag.LONG, "J", "1"));
+        assertTrue(r.isError());
+        assertTrue(r.error, r.error.contains("requires numeric left operand"));
+    }
+
+    @Test
+    public void applyBinaryOp_unknownOperator_returnsError() {
+        // Defensive: parser should never produce this, but the helper
+        // must not throw — it must report a clean error result.
+        EvalResult r = EvalEngine.applyBinaryOp("?",
+                EvalResult.of(Tag.LONG, "J", "1"),
+                EvalResult.of(Tag.LONG, "J", "2"));
+        assertTrue(r.isError());
+        assertTrue(r.error, r.error.contains("unsupported binary operator"));
+    }
+
+    @Test
+    public void applyBinaryOp_negativeLongResult() {
+        // 5 - 10 == -5
+        EvalResult r = EvalEngine.applyBinaryOp("-",
+                EvalResult.of(Tag.LONG, "J", "5"),
+                EvalResult.of(Tag.LONG, "J", "10"));
+        assertEquals("-5", r.displayValue);
     }
 
     // ---------- 辅助 ----------
