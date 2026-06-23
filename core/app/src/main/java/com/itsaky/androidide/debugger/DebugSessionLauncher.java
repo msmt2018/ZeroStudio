@@ -73,9 +73,11 @@ public final class DebugSessionLauncher {
     private final Context appContext;
     @Nullable private Listener listener;
     @Nullable private Thread worker;
+    @Nullable private ShizukuBridge shizuku;
 
     public DebugSessionLauncher(@NonNull Context context) {
         this.appContext = context.getApplicationContext();
+        this.shizuku = new ShizukuBridge(appContext);
     }
 
     public void setListener(@Nullable Listener l) { this.listener = l; }
@@ -172,6 +174,22 @@ public final class DebugSessionLauncher {
             fail(Step.INSTALL, "Editor activity no longer available");
             return;
         }
+
+        // PR-D3: 如果 shizuku 拿得到权限,优先走 `pm install` (无需
+        // PackageInstaller session 确认,支持 split APK & 静默重装).
+        if (shizuku != null
+                && shizuku.isBinderReady()
+                && shizuku.checkPermission() == ShizukuBridge.SHIZUKU_PERMISSION_GRANTED) {
+            log.info("installing via shizuku (uid={})", shizuku.getServerUid());
+            boolean ok = shizuku.installApk(apk.getAbsolutePath());
+            if (ok) {
+                fireInstallCommitted();
+                runInstall_postInstall(data, module, variant, apk, true);
+                return;
+            }
+            log.warn("shizuku install failed, falling back to PackageInstaller");
+        }
+
         final AtomicReference<Throwable> installError = new AtomicReference<>();
         try {
             activity.runOnUiThread(() -> {
@@ -206,7 +224,18 @@ public final class DebugSessionLauncher {
             fail(Step.INSTALL, "installApk threw: " + installError.get().getMessage());
             return;
         }
+        runInstall_postInstall(data, module, variant, apk, false);
+    }
 
+    /**
+     * 共享 launch-after-install 逻辑,从 shizuku path 和 PackageInstaller path
+     * 两条路都能调到这里。
+     */
+    private void runInstall_postInstall(@NonNull ActionData data,
+                                        @NonNull AndroidModule module,
+                                        @NonNull BasicAndroidVariantMetadata variant,
+                                        @NonNull File apk,
+                                        boolean fromShizuku) {
         String pkg = variant.getMainArtifact().getApplicationId();
         if (pkg == null || pkg.isEmpty()) {
             fail(Step.LAUNCH, "applicationId is null for variant " + variant.getName());
