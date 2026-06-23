@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 调试器 UI 颜色 (深色模式)
+
+  在 Material 暗色背景上直接使用 #E53935 这样的鲜艳色会
+  过亮刺眼。这里选择更高的亮度+稍偏粉的色调,既保留状态
+  语义,又对夜间阅读友好。
+
+  总体原则:
+    - NORMAL / INVALID  → 浅红 / 暗红(同语义,亮度提高)
+    - VERIFIED          → 浅绿
+    - CONDITION         → 浅金
+    - LOGPOINT          → 浅紫
+    - DISABLED          → 中灰
+    - HIT               → 浅蓝
+-->
+<resources>
+    <color name="debugger_bp_normal">#FF6E6E</color>
+    <color name="debugger_bp_invalid">#D32F2F</color>
+    <color name="debugger_bp_verified">#81C784</color>
+    <color name="debugger_bp_condition">#FFD54F</color>
+    <color name="debugger_bp_logpoint">#BA68C8</color>
+    <color name="debugger_bp_disabled">#BDBDBD</color>
+    <color name="debugger_bp_hit">#64B5F6</color>
+
+    <color name="debugger_bp_hit_count_label">#CE93D8</color>
+    <color name="debugger_bp_hit_count_received_label">#90CAF9</color>
+</resources>

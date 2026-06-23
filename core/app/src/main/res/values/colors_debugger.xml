@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 调试器 UI 颜色 (浅色模式)
+
+  这些颜色集中定义在 IDE 主 module 而不是 core/resources,
+  是为了避免污染通用资源。断点状态色 / 命中次数色等都属于
+  调试器特定 UI 资产。
+
+  Phase E3: 在 values-night/ 下提供对应覆盖,根据主题切换为
+  对比度更合适的暗色。
+-->
+<resources>
+    <!-- 断点状态: 7 种 -->
+    <color name="debugger_bp_normal">#E53935</color>
+    <color name="debugger_bp_invalid">#B71C1C</color>
+    <color name="debugger_bp_verified">#43A047</color>
+    <color name="debugger_bp_condition">#FBC02D</color>
+    <color name="debugger_bp_logpoint">#8E24AA</color>
+    <color name="debugger_bp_disabled">#9E9E9E</color>
+    <color name="debugger_bp_hit">#1E88E5</color>
+
+    <!-- 命中次数/已命中次数标签: 浅色主题下用稍深的强调色 -->
+    <color name="debugger_bp_hit_count_label">#7B1FA2</color>
+    <color name="debugger_bp_hit_count_received_label">#1565C0</color>
+</resources>

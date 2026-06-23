@@ -19,6 +19,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.itsaky.androidide.debugger.BreakpointStateColors;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
 import io.github.rosemoe.sora.widget.CodeEditor;
@@ -109,7 +110,7 @@ public class BreakpointSidebar extends View {
     }
 
     private void drawGlyph(Canvas canvas, float cx, float cy, float r, IdeBreakpoint bp) {
-        int fill = colorForState(bp.state);
+        int fill = BreakpointStateColors.colorForState(getContext(), bp.state);
         fillPaint.setColor(fill);
         canvas.drawCircle(cx, cy, r, fillPaint);
         outlinePaint.setColor(adjustAlpha(Color.WHITE, 0.85f));
@@ -191,19 +192,6 @@ public class BreakpointSidebar extends View {
             }
         }
         return best;
-    }
-
-    private static int colorForState(IdeBreakpoint.State state) {
-        switch (state) {
-            case NORMAL:    return 0xFFE53935; // 红
-            case INVALID:   return 0xFFB71C1C; // 暗红 / 圆环空心
-            case VERIFIED:  return 0xFF43A047; // 绿
-            case CONDITION: return 0xFFFBC02D; // 黄
-            case LOG:       return 0xFF8E24AA; // 紫
-            case DISABLED:  return 0xFF9E9E9E; // 灰
-            case HIT:       return 0xFF1E88E5; // 蓝
-            default:        return 0xFFE53935;
-        }
     }
 
     private static int adjustAlpha(int color, float factor) {

@@ -17,6 +17,7 @@
 
 package com.itsaky.androidide.debugger.adapter;
 
+import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.LayoutInflater;
@@ -28,6 +29,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 import com.itsaky.androidide.R;
+import com.itsaky.androidide.debugger.BreakpointStateColors;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
 import java.io.File;
 import java.util.ArrayList;
@@ -62,11 +64,13 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
     @Override
     public void onBindViewHolder(@NonNull VH h, int position) {
         IdeBreakpoint bp = data.get(position);
+        Context ctx = h.itemView.getContext();
         h.file.setText(shortenPath(bp.file));
         h.line.setText(String.valueOf(bp.line));
         h.state.setText(stateLabel(bp.state));
-        h.state.setTextColor(colorForState(bp.state));
-        h.dot.setImageDrawable(makeDot(bp.state));
+        // Phase E3: 颜色从资源加载,浅/深色主题自适应
+        h.state.setTextColor(BreakpointStateColors.colorForState(ctx, bp.state));
+        h.dot.setImageDrawable(makeDot(ctx, bp.state));
         boolean hasCondition = bp.condition != null && !bp.condition.isEmpty();
         boolean hasLog = bp.logMessage != null && !bp.logMessage.isEmpty();
         h.condition.setVisibility(hasCondition ? View.VISIBLE : View.GONE);
@@ -81,8 +85,9 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         if (h.hitCount != null) {
             h.hitCount.setVisibility(hasHitCount ? View.VISIBLE : View.GONE);
             if (hasHitCount) {
-                h.hitCount.setText(h.itemView.getContext().getString(
+                h.hitCount.setText(ctx.getString(
                         hitCountLabelResId(bp.hitCountMode), bp.hitCount));
+                h.hitCount.setTextColor(BreakpointStateColors.hitCountLabelColor(ctx));
             }
         }
         // Phase E2: 已命中次数提示
@@ -90,8 +95,10 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
             boolean showReceived = bp.hitCountReceived > 0;
             h.hitCountReceived.setVisibility(showReceived ? View.VISIBLE : View.GONE);
             if (showReceived) {
-                h.hitCountReceived.setText(h.itemView.getContext().getString(
+                h.hitCountReceived.setText(ctx.getString(
                         R.string.debugger_bp_hit_received, bp.hitCountReceived));
+                h.hitCountReceived.setTextColor(
+                        BreakpointStateColors.hitCountReceivedLabelColor(ctx));
             }
         }
 
@@ -147,17 +154,9 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         }
     }
 
-    private static int colorForState(IdeBreakpoint.State state) {
-        switch (state) {
-            case NORMAL: return 0xFFE53935;
-            case INVALID: return 0xFFB71C1C;
-            case VERIFIED: return 0xFF43A047;
-            case CONDITION: return 0xFFFBC02D;
-            case LOG: return 0xFF8E24AA;
-            case DISABLED: return 0xFF9E9E9E;
-            case HIT: return 0xFF1E88E5;
-            default: return 0xFFE53935;
-        }
+    private static int colorForState(@NonNull Context ctx, IdeBreakpoint.State state) {
+        // Phase E3: 颜色解析委托给 BreakpointStateColors,数值不再硬编码
+        return BreakpointStateColors.colorForState(ctx, state);
     }
 
     /**
@@ -175,10 +174,10 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         }
     }
 
-    private static GradientDrawable makeDot(IdeBreakpoint.State state) {
+    private static GradientDrawable makeDot(@NonNull Context ctx, IdeBreakpoint.State state) {
         GradientDrawable g = new GradientDrawable();
         g.setShape(GradientDrawable.OVAL);
-        g.setColor(colorForState(state));
+        g.setColor(colorForState(ctx, state));
         g.setStroke((int) (1.5f * 3), adjustAlpha(Color.WHITE, 0.85f));
         return g;
     }
