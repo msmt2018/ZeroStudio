@@ -618,7 +618,20 @@ public final class EvalEngine {
                         if (rhs.isError()) return rhs;
                         return applyComparisonOp(op, l, rhs);
                     }
-                    // Phase A1: arithmetic + - * / %.
+                    // Phase A3: `+` with at least one String operand is
+                    // string concatenation. We must detect this BEFORE
+                    // applyBinaryOp (which would reject the String).
+                    if ("+".equals(op)) {
+                        EvalResult l = resolveAndEval(r.left, threadId, frameId);
+                        if (l.isError()) return l;
+                        EvalResult rhs = resolveAndEval(r.right, threadId, frameId);
+                        if (rhs.isError()) return rhs;
+                        if (isStringLike(l) || isStringLike(rhs)) {
+                            return stringConcat(l, rhs);
+                        }
+                        return applyBinaryOp(op, l, rhs);
+                    }
+                    // Phase A1: arithmetic - * / %.
                     EvalResult l = resolveAndEval(r.left, threadId, frameId);
                     if (l.isError()) return l;
                     EvalResult rhs = resolveAndEval(r.right, threadId, frameId);
@@ -853,6 +866,52 @@ public final class EvalEngine {
         }
         try { return Long.parseLong(lv) == Long.parseLong(rv); }
         catch (NumberFormatException e) { return false; }
+    }
+
+    /**
+     * Phase A3 helper: true if {@code r} is string-typed. Either the
+     * {@code Tag.STRING} tag (set by {@link LITERAL_STRING} evaluation)
+     * or the {@code Ljava/lang/String;} type signature.
+     */
+    private static boolean isStringLike(@NonNull EvalResult r) {
+        if (r == null) return false;
+        if (r.tag == EvalResult.Tag.STRING) return true;
+        String sig = r.typeSignature;
+        return sig != null && sig.equals("Ljava/lang/String;");
+    }
+
+    /**
+     * Phase A3: concatenate the display forms of two evaluated
+     * operands and create a fresh JDWP string for the result. The
+     * non-string side is converted to its display string (no toString
+     * call; we don't have the precise class info on hand). Returns an
+     * error if the JDWP {@code CreateString} call fails.
+     */
+    @NonNull
+    private EvalResult stringConcat(@NonNull EvalResult l, @NonNull EvalResult r) {
+        String combined = toConcatString(l) + toConcatString(r);
+        try {
+            long stringId = createString(combined);
+            return EvalResult.string(stringId, combined);
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Phase A3 helper: convert an evaluated operand to the string used
+     * for concatenation. {@code null} renders as {@code "null"};
+     * objects fall back to their displayValue or a synthetic id-based
+     * string. We do not call {@code toString()} on remote objects
+     * because that would require a JDWP round-trip and the type
+     * information is not always available.
+     */
+    @NonNull
+    private static String toConcatString(@NonNull EvalResult r) {
+        if (r == null) return "null";
+        if (r.displayValue != null && !r.displayValue.isEmpty()) return r.displayValue;
+        if (r.objectId != 0L) return "<object " + r.objectId + ">";
+        return "null";
     }
 
     @Nullable

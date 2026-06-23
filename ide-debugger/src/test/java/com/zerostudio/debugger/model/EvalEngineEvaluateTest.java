@@ -721,16 +721,21 @@ public class EvalEngineEvaluateTest {
 
     @Test
     public void evaluate_stringOperand_returnsError() {
-        // `"x" + 1` -- Phase A1 doesn't support string concat yet; the
-        // helper should report a clean error and not throw.
+        // Phase A3: `"x" + 1` is now string concatenation. The literal
+        // "x" is created via JDWP CreateString, then `+ 1` is appended
+        // locally. We do NOT need a second CreateString for the result
+        // because the local "x1" is what we send.
         FakeJdwpClient fake = new FakeJdwpClient();
-        // CreateString for the literal
+        // CreateString for the literal "x"
         fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        // CreateString for the concatenation result "x1"
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB001L));
         EvalEngine e = newEngine(fake);
         EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "\"x\" + 1");
-        assertTrue(r.isError());
-        assertNotNull(r.error);
-        assertTrue(r.error, r.error.contains("requires numeric"));
+        assertFalse(r.isError());
+        assertEquals(Tag.STRING, r.tag);
+        assertEquals("x1", r.displayValue);
+        assertEquals(0xB001L, r.objectId);
     }
 
     // ---------- Phase A2: 比较+逻辑运算符端到端 ----------
@@ -868,5 +873,99 @@ public class EvalEngineEvaluateTest {
         assertTrue(r.isError());
         assertNotNull(r.error);
         assertTrue(r.error, r.error.contains("requires numeric"));
+    }
+
+    // ---------- Phase A3: 字符串拼接端到端 ----------
+
+    @Test
+    public void evaluate_stringConcat_twoLiterals() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // 1) CreateString "a"
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        // 2) CreateString "ab"
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB001L));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "\"a\" + \"b\"");
+        assertFalse(r.isError());
+        assertEquals(Tag.STRING, r.tag);
+        assertEquals("ab", r.displayValue);
+        assertEquals(0xB001L, r.objectId);
+    }
+
+    @Test
+    public void evaluate_stringConcat_intPlusString() {
+        // 42 + "x" -> "42x"
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB001L));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "42 + \"x\"");
+        assertFalse(r.isError());
+        assertEquals("42x", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_stringConcat_stringPlusInt() {
+        // "x" + 42 -> "x42"
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB001L));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "\"x\" + 42");
+        assertFalse(r.isError());
+        assertEquals("x42", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_stringConcat_chained() {
+        // "a" + "b" + "c" -> "abc" (left-associative).
+        // Each "X" is a literal, each is converted via CreateString.
+        // The whole chain's result is also a CreateString.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB001L));
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB002L));
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB003L));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "\"a\" + \"b\" + \"c\"");
+        assertFalse(r.isError());
+        assertEquals("abc", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_stringConcat_localAppendedToLiteral() {
+        // "count=" + count
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // 1) CreateString "count="
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        // 2) Frames
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        // 3) VariableTable for count
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0L, "count", "I", 1, 0),
+        }));
+        // 4) GetValues for count
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'I', JdwpPayloads.intValue(7)));
+        // 5) CreateString "count=7"
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB001L));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "\"count=\" + count");
+        assertFalse(r.isError());
+        assertEquals(Tag.STRING, r.tag);
+        assertEquals("count=7", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_stringConcat_emptyString() {
+        // "" + "x" -> "x" (empty string still triggers concat path).
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB001L));
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB002L));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "\"\" + \"x\"");
+        assertFalse(r.isError());
+        assertEquals("x", r.displayValue);
     }
 }
