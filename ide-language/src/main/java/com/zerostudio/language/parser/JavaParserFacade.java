@@ -84,11 +84,11 @@ public final class JavaParserFacade implements Parser {
             extractType(path, packageName, null, td, symbols, refs);
         }
 
-        // Top-level expressions are uncommon in Java, but we still harvest
-        // any NameExpr / MethodCallExpr that lives at the top level inside
-        // an initializer (rare in practice).
-        cu.walk(NameExpr.class, n -> addNameRef(path, packageName, null, n, refs));
-        cu.walk(MethodCallExpr.class, n -> addCallRef(path, packageName, null, n, refs));
+        // Note: we intentionally do NOT call cu.walk(NameExpr.class, ...)
+        // or cu.walk(MethodCallExpr.class, ...) at the top level. The
+        // extractType() method already walks every method body and field
+        // initializer. A second top-level walk would double-count every
+        // reference inside a method body.
 
         return new ParsedFile(path, LanguageId.JAVA, System.currentTimeMillis(),
                 text, symbols, refs, cu, null);
@@ -119,18 +119,26 @@ public final class JavaParserFacade implements Parser {
                 symbols.add(new Symbol(md.getNameAsString(), sig,
                         SymbolKind.METHOD, fqn, path,
                         toRange(md.getRange().orElse(null)), LanguageId.JAVA));
-                // references inside method
+                // references inside method - use the method signature as the
+                // container so CallNavigation.calleesOf() can find them
+                // by symbol FQN match.
                 BlockStmt body = md.getBody().orElse(null);
                 if (body != null) {
-                    final String methodName = md.getNameAsString();
-                    body.walk(NameExpr.class, n -> addNameRef(path, classFqn, methodName, n, refs));
-                    body.walk(MethodCallExpr.class, n -> addCallRef(path, classFqn, methodName, n, refs));
+                    final String methodSig = sig;
+                    body.walk(NameExpr.class, n -> addNameRef(path, methodSig, null, n, refs));
+                    body.walk(MethodCallExpr.class, n -> addCallRef(path, methodSig, null, n, refs));
                 }
             } else if (member instanceof ConstructorDeclaration) {
                 ConstructorDeclaration cd = (ConstructorDeclaration) member;
                 String sig = fqn + "#<init>(" + paramTypes(cd.getParameters()) + ")";
                 symbols.add(new Symbol("<init>", sig, SymbolKind.CONSTRUCTOR, fqn,
                         path, toRange(cd.getRange().orElse(null)), LanguageId.JAVA));
+                BlockStmt cbody = cd.getBody();
+                if (cbody != null) {
+                    final String ctorSig = sig;
+                    cbody.walk(NameExpr.class, n -> addNameRef(path, ctorSig, null, n, refs));
+                    cbody.walk(MethodCallExpr.class, n -> addCallRef(path, ctorSig, null, n, refs));
+                }
             } else if (member instanceof FieldDeclaration) {
                 FieldDeclaration fd = (FieldDeclaration) member;
                 for (VariableDeclarator vd : fd.getVariables()) {
@@ -139,9 +147,10 @@ public final class JavaParserFacade implements Parser {
                             SymbolKind.FIELD, fqn, path,
                             toRange(vd.getRange().orElse(null)), LanguageId.JAVA));
                 }
+                final String fieldContainer = fqn;
                 fd.getVariables().forEach(v -> v.getInitializer().ifPresent(init -> {
-                    init.walk(NameExpr.class, n -> addNameRef(path, classFqn, null, n, refs));
-                    init.walk(MethodCallExpr.class, n -> addCallRef(path, classFqn, null, n, refs));
+                    init.walk(NameExpr.class, n -> addNameRef(path, fieldContainer, null, n, refs));
+                    init.walk(MethodCallExpr.class, n -> addCallRef(path, fieldContainer, null, n, refs));
                 }));
             } else if (member instanceof ClassOrInterfaceDeclaration
                     || member instanceof EnumDeclaration) {
