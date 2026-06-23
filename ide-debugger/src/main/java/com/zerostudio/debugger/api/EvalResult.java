@@ -17,7 +17,13 @@ public final class EvalResult {
 
     public enum Tag {
         VOID, BOOLEAN, BYTE, CHAR, SHORT, INT, LONG, FLOAT, DOUBLE,
-        OBJECT, ARRAY, STRING
+        OBJECT, ARRAY, STRING,
+        // Phase A4: a class reference (the value is a JDWP refTypeId,
+        // not an object instance id). Used to model static-field /
+        // static-method access: the parser still produces
+        // FIELD / METHOD nodes whose receiver resolves to a class
+        // refTypeId.
+        CLASS
     }
 
     @NonNull public final Tag tag;
@@ -48,6 +54,17 @@ public final class EvalResult {
 
     public static EvalResult object(long objectId, @NonNull String typeSig) {
         return new EvalResult(Tag.OBJECT, typeSig, "<object>", null, objectId);
+    }
+
+    /**
+     * Phase A4: build an {@link EvalResult} representing a class
+     * reference. The {@code refTypeId} is the JDWP
+     * {@code ReferenceTypeID} for the loaded class; the displayValue is
+     * fixed to {@code "<class>"} so that the UI can distinguish class
+     * references from regular objects in the watches panel.
+     */
+    public static EvalResult klass(long refTypeId, @NonNull String classSig) {
+        return new EvalResult(Tag.CLASS, classSig, "<class>", null, refTypeId);
     }
 
     public static EvalResult string(long objectId, @NonNull String displayValue) {

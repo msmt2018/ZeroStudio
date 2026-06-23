@@ -968,4 +968,67 @@ public class EvalEngineEvaluateTest {
         assertFalse(r.isError());
         assertEquals("x", r.displayValue);
     }
+
+    // ---------- Phase A4: static field 访问 ----------
+
+    @Test
+    public void evaluate_unknownLocal_returnsError() {
+        // `notALocal` is not a local and not a class — must produce a
+        // clean error, not a JDWP round-trip.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "notALocal");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("no such local or class"));
+    }
+
+    @Test
+    public void evaluate_fullyQualifiedStaticField_int() {
+        // `java.lang.Integer.MAX_VALUE` should resolve MAX_VALUE via
+        // ClassesBySignature + ReferenceType.GetValues.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // 1) ClassesBySignature for Ljava/lang/Integer;
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0xCAFE, 0x05));
+        // 2) ReferenceType.Fields (lookup) -> MAX_VALUE field id
+        fake.enqueueOkReply(JdwpPayloads.fieldsReply(new JdwpPayloads.Field[] {
+                new JdwpPayloads.Field(0xFEEDL, "MAX_VALUE", "I", 0x0019 /* ACC_PUBLIC|ACC_STATIC|ACC_FINAL */)
+        }));
+        // 3) ReferenceType.GetValues (static)
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'I', JdwpPayloads.intValue(2147483647)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "java.lang.Integer.MAX_VALUE");
+        assertFalse(r.isError());
+        assertEquals(Tag.INT, r.tag);
+        assertEquals("2147483647", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_classUnknown_returnsError() {
+        // `some.unknown.Class.FOO` -- class lookup returns 0.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureEmpty());
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "some.unknown.Class.FOO");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("no such local or class"));
+    }
+
+    @Test
+    public void evaluate_classKnown_fieldNotFound_returnsError() {
+        // Class exists but the field is not on it.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.classesBySignatureReply((byte) 'L', 0xCAFE, 0x05));
+        // Fields reply with a single unrelated field
+        fake.enqueueOkReply(JdwpPayloads.fieldsReply(new JdwpPayloads.Field[] {
+                new JdwpPayloads.Field(0xFEEDL, "OTHER", "I", 0x0009)
+        }));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "com.example.Foo.MISSING");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("no static field"));
+    }
 }

@@ -544,7 +544,16 @@ public final class EvalEngine {
                 }
                 case LOCAL: {
                     VariableInfo vi = findLocalInFrame(threadId, frameId, r.name);
-                    if (vi == null) return EvalResult.error("no such local: " + r.name);
+                    if (vi == null) {
+                        // Phase A4: if the name is not a local, try to
+                        // resolve it as a class reference. The parser
+                        // can't tell the difference at parse time, so
+                        // we always attempt the local lookup first
+                        // and fall through to class resolution. This
+                        // enables `Foo.COUNT` and `Math.max(a, b)`
+                        // without any parser changes.
+                        return resolveClassReference(r.name);
+                    }
                     if (vi.id != 0L) {
                         return EvalResult.object(vi.id, vi.typeSignature);
                     }
@@ -557,6 +566,13 @@ public final class EvalEngine {
                     }
                     EvalResult recv = resolveAndEval(r.receiver, threadId, frameId);
                     if (recv.isError()) return recv;
+                    // Phase A4: a Tag.CLASS receiver means the access
+                    // is a static-field read. Use ReferenceType.GetValues
+                    // instead of ObjectReference.GetValues.
+                    if (recv.tag == EvalResult.Tag.CLASS) {
+                        return getStaticFieldValueOnClass(recv.objectId, r.name,
+                                recv.typeSignature);
+                    }
                     if (recv.tag != EvalResult.Tag.OBJECT) {
                         return EvalResult.error("field access on non-object");
                     }
@@ -1155,6 +1171,73 @@ public final class EvalEngine {
         if (reply.errorCode() != 0) return 0L;
         ByteBuf in = new ByteBuf(reply.data);
         return in.readLong();
+    }
+
+    /**
+     * Phase A4: try to resolve a bare name (no local matches) as a
+     * class reference. The class is looked up by signature; we accept
+     * both dotted form ({@code com.example.Foo}) and slashed form
+     * ({@code com/example/Foo}). The returned {@link EvalResult} has
+     * tag {@code Tag.CLASS} and carries the refTypeId in
+     * {@code objectId}.
+     */
+    @NonNull
+    private EvalResult resolveClassReference(@NonNull String name) {
+        // Accept both fully-qualified class names and bare names.
+        // For bare names we don't have a package, so we try the
+        // slashed form first (Java's canonical form) and then the
+        // dotted form.
+        String[] attempts = {
+            "L" + name.replace('.', '/') + ";",
+            "L" + name + ";",
+        };
+        for (String sig : attempts) {
+            try {
+                long refType = lookupClassByName(sig);
+                if (refType != 0L) {
+                    return EvalResult.klass(refType, sig);
+                }
+            } catch (IOException ex) {
+                return EvalResult.error("io: " + ex.getMessage());
+            }
+        }
+        return EvalResult.error("no such local or class: " + name);
+    }
+
+    /**
+     * Phase A4: read a static field value. Equivalent to
+     * {@link #getFieldValueOnObject} but uses
+     * {@code ReferenceType.GetValues} (which takes a refTypeId) instead
+     * of {@code ObjectReference.GetValues} (which takes an objectId).
+     */
+    @NonNull
+    private EvalResult getStaticFieldValueOnClass(long refType, @NonNull String fieldName,
+                                                   @NonNull String classSig) {
+        try {
+            long fieldId = lookupField(refType, fieldName);
+            if (fieldId == 0) {
+                return EvalResult.error("no static field: " + classSig + "." + fieldName);
+            }
+            ByteBuf buf = new ByteBuf();
+            buf.writeLong(refType);
+            buf.writeInt(1);
+            buf.writeLong(fieldId);
+            JdwpPacket reply = client.sendCommand(
+                    CommandSet.ReferenceType, CommandCodes.ReferenceTypeCmd.GetValues,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) {
+                return EvalResult.error("GetValues error " + reply.errorCode());
+            }
+            ByteBuf in = new ByteBuf(reply.data);
+            int n = in.readInt();
+            if (n < 1) return EvalResult.error("no value returned");
+            byte tag = in.readByte();
+            String v = readValue(in, tag);
+            String typeSig = readFieldTypeSignature(refType, fieldId);
+            return EvalResult.of(evalTag(typeSig), typeSig, v);
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        }
     }
 
     private long lookupClassByName(@NonNull String sig) throws IOException {
