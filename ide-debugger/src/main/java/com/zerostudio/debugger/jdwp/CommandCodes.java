@@ -74,6 +74,20 @@ public final class ClassTypeCmd {
     }
 }
 
+/**
+ * Phase A6: ArrayReference command set (13) command codes. Only the
+ * subset used by the evaluator is listed here.
+ */
+public final class ArrayReferenceCmd {
+    public static final byte Length = 1;
+    public static final byte GetValues = 2;
+    public static final byte SetValues = 3;
+
+    private ArrayReferenceCmd() {
+        // no instances
+    }
+}
+
 /** EventRequest command set (15) command codes. */
 public final class EventRequestCmd {
     public static final byte Set = 1;

@@ -145,13 +145,17 @@ public final class EvalEngine {
 
     /** Resolved identifier in the current scope. */
     static final class Resolved {
-        enum Kind {
-            LOCAL, FIELD, METHOD, THIS,
-            LITERAL_STRING, LITERAL_INT, LITERAL_LONG, LITERAL_DOUBLE, NEW_STRING,
-            // Phase A1: arithmetic binary operators. left/right carry the
-            // operands; name carries the operator string ("+", "-", "*", "/", "%").
-            BINARY
-        }
+            enum Kind {
+                LOCAL, FIELD, METHOD, THIS,
+                LITERAL_STRING, LITERAL_INT, LITERAL_LONG, LITERAL_DOUBLE, NEW_STRING,
+                // Phase A1: arithmetic binary operators. left/right carry the
+                // operands; name carries the operator string ("+", "-", "*", "/", "%").
+                BINARY,
+                // Phase A6: array index. left carries the array
+                // expression; right carries the index expression.
+                // name is unused.
+                INDEX
+            }
         final Kind kind;
         final String name;       // LOCAL, FIELD, METHOD, LITERAL_*, BINARY (op)
         @Nullable final Resolved receiver; // FIELD, METHOD
@@ -211,6 +215,11 @@ public final class EvalEngine {
         /** Phase A1: build a binary-operation AST node. */
         static Resolved binop(String op, @NonNull Resolved left, @NonNull Resolved right) {
             return new Resolved(Kind.BINARY, op, left, right);
+        }
+
+        /** Phase A6: build an array-index node {@code array[index]}. */
+        static Resolved index(@NonNull Resolved array, @NonNull Resolved idx) {
+            return new Resolved(Kind.INDEX, null, array, idx);
         }
     }
 
@@ -419,6 +428,14 @@ public final class EvalEngine {
                     // stored name=foo in the LOCAL node.
                     String methodName = cur.name;
                     cur = new Resolved(Resolved.Kind.METHOD, methodName, cur, args);
+                } else if (peek() == '[') {
+                    // Phase A6: `arr[i]` -> INDEX. The index can be
+                    // any expression; we route through parseExpr so
+                    // things like `arr[i + 1]` work transparently.
+                    consume('[');
+                    Resolved idx = parseExpr();
+                    expect(']');
+                    cur = Resolved.index(cur, idx);
                 } else {
                     break;
                 }
@@ -576,7 +593,36 @@ public final class EvalEngine {
                     if (recv.tag != EvalResult.Tag.OBJECT) {
                         return EvalResult.error("field access on non-object");
                     }
+                    // Phase A6: arrays expose their length through
+                    // ArrayReference.Length rather than a regular field
+                    // read. If the receiver's signature starts with `[`
+                    // and the user typed `.length`, route to the array
+                    // path. Other field reads (incl. normal "length"
+                    // field on Strings, etc.) keep using the existing
+                    // instance-field path.
+                    if ("length".equals(r.name) && isArrayType(recv.typeSignature)) {
+                        return getArrayLength(recv.objectId, recv.typeSignature);
+                    }
                     return getFieldValueOnObject(recv.objectId, r.name, recv.typeSignature);
+                }
+                case INDEX: {
+                    // Phase A6: `arr[i]` -> ArrayReference.GetValues.
+                    if (r.left == null || r.right == null) {
+                        return EvalResult.error("array index without array or index");
+                    }
+                    EvalResult arr = resolveAndEval(r.left, threadId, frameId);
+                    if (arr.isError()) return arr;
+                    if (!isArrayType(arr.typeSignature)) {
+                        return EvalResult.error("index on non-array (sig="
+                                + arr.typeSignature + ")");
+                    }
+                    EvalResult idx = resolveAndEval(r.right, threadId, frameId);
+                    if (idx.isError()) return idx;
+                    if (!isNumeric(idx)) {
+                        return EvalResult.error("array index must be numeric");
+                    }
+                    int i = (int) parseLong(idx);
+                    return getArrayElement(arr.objectId, i, arr.typeSignature);
                 }
                 case METHOD: {
                     if (r.receiver == null) {
@@ -1312,6 +1358,96 @@ public final class EvalEngine {
             String v = readValue(in, tag);
             String typeSig = readFieldTypeSignature(refType, fieldId);
             return EvalResult.of(evalTag(typeSig), typeSig, v);
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Phase A6: true if {@code sig} is an array type signature
+     * (starts with {@code [}).
+     */
+    static boolean isArrayType(@NonNull String sig) {
+        return !sig.isEmpty() && sig.charAt(0) == '[';
+    }
+
+    /**
+     * Phase A6: extract the element type signature from an array
+     * type signature. For {@code [I} returns {@code I}, for
+     * {@code [[Ljava/lang/String;} returns {@code [Ljava/lang/String;}.
+     * (The caller can call this recursively for nested arrays.)
+     */
+    @NonNull
+    static String arrayElementSignature(@NonNull String sig) {
+        if (sig.length() < 2) return sig;
+        return sig.substring(1);
+    }
+
+    /**
+     * Phase A6: read the length of an array via
+     * {@code ArrayReference.Length} (command set 13, command 1).
+     */
+    @NonNull
+    private EvalResult getArrayLength(long arrayId, @NonNull String arraySig) {
+        try {
+            ByteBuf buf = new ByteBuf();
+            buf.writeLong(arrayId);
+            JdwpPacket reply = client.sendCommand(
+                    CommandSet.ArrayReference, CommandCodes.ArrayReferenceCmd.Length,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) {
+                return EvalResult.error("ArrayReference.Length error " + reply.errorCode());
+            }
+            ByteBuf in = new ByteBuf(reply.data);
+            int len = in.readInt();
+            return EvalResult.of(EvalResult.Tag.INT, "I", String.valueOf(len));
+        } catch (IOException ex) {
+            return EvalResult.error("io: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Phase A6: read a single element of an array via
+     * {@code ArrayReference.GetValues} (command set 13, command 2).
+     * The element type is derived from the array's signature; the
+     * result is then returned with that element type and the value
+     * read from the wire.
+     */
+    @NonNull
+    private EvalResult getArrayElement(long arrayId, int index, @NonNull String arraySig) {
+        String elemSig = arrayElementSignature(arraySig);
+        byte elemTag;
+        if (elemSig.isEmpty()) {
+            return EvalResult.error("malformed array signature: " + arraySig);
+        }
+        switch (elemSig.charAt(0)) {
+            case 'Z': elemTag = 'Z'; break;
+            case 'B': elemTag = 'B'; break;
+            case 'C': elemTag = 'C'; break;
+            case 'S': elemTag = 'S'; break;
+            case 'I': elemTag = 'I'; break;
+            case 'J': elemTag = 'J'; break;
+            case 'F': elemTag = 'F'; break;
+            case 'D': elemTag = 'D'; break;
+            case 'L': case '[': elemTag = 'L'; break;
+            default:
+                return EvalResult.error("unsupported array element type: " + elemSig);
+        }
+        try {
+            ByteBuf buf = new ByteBuf();
+            buf.writeLong(arrayId);
+            buf.writeInt(1);
+            buf.writeInt(index);
+            JdwpPacket reply = client.sendCommand(
+                    CommandSet.ArrayReference, CommandCodes.ArrayReferenceCmd.GetValues,
+                    buf.toByteArray());
+            if (reply.errorCode() != 0) {
+                return EvalResult.error("ArrayReference.GetValues error " + reply.errorCode());
+            }
+            ByteBuf in = new ByteBuf(reply.data);
+            byte tag = in.readByte();
+            String v = readValue(in, tag);
+            return EvalResult.of(evalTag(elemSig), elemSig, v);
         } catch (IOException ex) {
             return EvalResult.error("io: " + ex.getMessage());
         }

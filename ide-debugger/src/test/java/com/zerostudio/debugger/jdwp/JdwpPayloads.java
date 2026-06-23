@@ -229,6 +229,29 @@ public final class JdwpPayloads {
         return b.toByteArray();
     }
 
+    /**
+     * Phase A6: ArrayReference.Length 的响应。
+     */
+    @NonNull
+    public static byte[] arrayLengthReply(int length) {
+        ByteBuf b = new ByteBuf();
+        b.writeInt(length);
+        return b.toByteArray();
+    }
+
+    /**
+     * Phase A6: 一个 raw errorReply (4-byte error code, no data)
+     * 用来模拟 JDWP 服务端返回错误。
+     */
+    @NonNull
+    public static byte[] errorReply(int errorCode) {
+        ByteBuf b = new ByteBuf();
+        b.writeShort(errorCode);
+        // 占位 padding 到 4 字节以匹配 JDWP Error 格式
+        b.writeShort(0);
+        return b.toByteArray();
+    }
+
     /** 编码一个 int 值的原始字节(用于 GetValues 的 value 负载)。 */
     @NonNull
     public static byte[] intValue(int v) {

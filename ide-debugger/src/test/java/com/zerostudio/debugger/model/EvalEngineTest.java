@@ -661,4 +661,77 @@ public class EvalEngineTest {
         r = EvalEngine.parseExpressionStrict("a >= b");
         assertEquals(">=", r.name);
     }
+
+    // ---------- Phase A6: 数组下标 + 长度 ----------
+
+    @Test
+    public void parseArrayIndex_literal() {
+        Resolved r = EvalEngine.parseExpressionStrict("arr[0]");
+        assertEquals(Resolved.Kind.INDEX, r.kind);
+        assertEquals(Resolved.Kind.LOCAL, r.left.kind);
+        assertEquals("arr", r.left.name);
+        assertEquals(Resolved.Kind.LITERAL_LONG, r.right.kind);
+        assertEquals(0L, r.right.literalLong);
+    }
+
+    @Test
+    public void parseArrayIndex_localIndex() {
+        Resolved r = EvalEngine.parseExpressionStrict("arr[i]");
+        assertEquals(Resolved.Kind.INDEX, r.kind);
+        assertEquals("arr", r.left.name);
+        assertEquals("i", r.right.name);
+    }
+
+    @Test
+    public void parseArrayIndex_expressionIndex() {
+        // arr[i + 1] -- index is a BINARY expression
+        Resolved r = EvalEngine.parseExpressionStrict("arr[i + 1]");
+        assertEquals(Resolved.Kind.INDEX, r.kind);
+        assertEquals("arr", r.left.name);
+        assertEquals(Resolved.Kind.BINARY, r.right.kind);
+        assertEquals("+", r.right.name);
+    }
+
+    @Test
+    public void parseArrayLength_field() {
+        // arr.length is parsed as a regular FIELD access; the eval
+        // layer detects this case and routes to ArrayReference.Length
+        // when the receiver is an array-typed object.
+        Resolved r = EvalEngine.parseExpressionStrict("arr.length");
+        assertEquals(Resolved.Kind.FIELD, r.kind);
+        assertEquals("length", r.name);
+        assertEquals("arr", r.receiver.name);
+    }
+
+    @Test
+    public void parseArrayIndexThenField() {
+        // arr[0].name -- chained
+        Resolved r = EvalEngine.parseExpressionStrict("arr[0].name");
+        assertEquals(Resolved.Kind.FIELD, r.kind);
+        assertEquals("name", r.name);
+        assertEquals(Resolved.Kind.INDEX, r.receiver.kind);
+    }
+
+    @Test
+    public void parseMultiDimensionalArray() {
+        // matrix[i][j] -- outer INDEX on top, receiver is another INDEX
+        Resolved r = EvalEngine.parseExpressionStrict("matrix[i][j]");
+        assertEquals(Resolved.Kind.INDEX, r.kind);
+        assertEquals(Resolved.Kind.INDEX, r.left.kind);
+        assertEquals("matrix", r.left.left.name);
+        assertEquals("i", r.left.right.name);
+        assertEquals("j", r.right.name);
+    }
+
+    @Test
+    public void parseUnclosedArrayIndexFails() {
+        // arr[0
+        try {
+            EvalEngine.parseExpressionStrict("arr[0");
+            fail("expected RuntimeException for missing ']'");
+        } catch (RuntimeException expected) {
+            assertTrue(expected.getMessage(),
+                    expected.getMessage().startsWith("expected ']'"));
+        }
+    }
 }

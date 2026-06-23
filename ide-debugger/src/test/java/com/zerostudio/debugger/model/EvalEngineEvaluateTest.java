@@ -1099,4 +1099,114 @@ public class EvalEngineEvaluateTest {
         assertFalse(r.isError());
         assertEquals("42", r.displayValue);
     }
+
+    // ---------- Phase A6: 数组下标 + 长度端到端 ----------
+
+    @Test
+    public void evaluate_arrayLength() {
+        // arr (int[] id 0xAA, sig [I) .length -> 5
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // 1) Frames + VarTable + GetValues for the local arr
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0xAAL, "arr", "[I", 1, 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) '[', JdwpPayloads.longValue(0xAA)));
+        // 2) ArrayReference.Length
+        fake.enqueueOkReply(JdwpPayloads.arrayLengthReply(5));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "arr.length");
+        assertFalse(r.isError());
+        assertEquals(Tag.INT, r.tag);
+        assertEquals("5", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_arrayIndex_int() {
+        // arr[2] where arr is int[3] = {10, 20, 30} -> 30
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0xAAL, "arr", "[I", 1, 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) '[', JdwpPayloads.longValue(0xAA)));
+        // ArrayReference.GetValues -> 30
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'I', JdwpPayloads.intValue(30)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "arr[2]");
+        assertFalse(r.isError());
+        assertEquals(Tag.INT, r.tag);
+        assertEquals("30", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_arrayIndex_expressionIndex() {
+        // arr[i + 1] -- index is a binary expression
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // arr lookup
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0xAAL, "arr", "[I", 1, 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) '[', JdwpPayloads.longValue(0xAA)));
+        // i lookup
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0L, "arr", "[I", 1, 0),
+                new Var(0L, "i", "I", 2, 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'I', JdwpPayloads.intValue(1)));
+        // ArrayReference.GetValues
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'I', JdwpPayloads.intValue(99)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "arr[i + 1]");
+        assertFalse(r.isError());
+        assertEquals("99", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_arrayIndexOnNonArray_returnsError() {
+        // x[0] where x is an int -- error
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0L, "x", "I", 1, 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'I', JdwpPayloads.intValue(42)));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "x[0]");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("non-array"));
+    }
+
+    @Test
+    public void evaluate_arrayLengthOnNonArray_fallsBack() {
+        // `s.length` on a non-array receiver should attempt a normal
+        // field lookup (which will likely fail at the JDWP layer, but
+        // we shouldn't crash in the eval layer).
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // s is a String
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0xBBL, "s", "Ljava/lang/String;", 1, 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'L', JdwpPayloads.longValue(0xBB)));
+        // s is a String with no `length` field, so the JDWP GetValues
+        // for the field returns an error. We just need to make sure
+        // the eval returns an error cleanly without throwing.
+        fake.enqueueOkReply(JdwpPayloads.errorReply(101 /* INVALID_FIELDID */));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "s.length");
+        assertTrue(r.isError());
+    }
 }
