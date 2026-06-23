@@ -311,4 +311,50 @@ public final class JdwpPayloads {
         b.writeDouble(v);
         return b.toByteArray();
     }
+
+    // ---------- Phase E2: 断点安装路径 ----------
+
+    /** ReferenceType.SourceFile 的响应:String sourceFileName。 */
+    @NonNull
+    public static byte[] sourceFileReply(@NonNull String sourceFileName) {
+        ByteBuf b = new ByteBuf();
+        b.writeString(sourceFileName);
+        return b.toByteArray();
+    }
+
+    /**
+     * Method.LineTable 的响应:
+     *   start(8) + end(8) + count(4) + [codeIndex(8) + line(4)] * count
+     * 至少需要 1 行匹配传入的 lineNumber。
+     */
+    @NonNull
+    public static byte[] lineTableReply(long start, long end, long codeIndex, int lineNumber) {
+        ByteBuf b = new ByteBuf();
+        b.writeLong(start);
+        b.writeLong(end);
+        b.writeInt(1);
+        b.writeLong(codeIndex);
+        b.writeInt(lineNumber);
+        return b.toByteArray();
+    }
+
+    /** EventRequest.Set 的响应:requestId(int)。 */
+    @NonNull
+    public static byte[] eventRequestSetReply(int requestId) {
+        ByteBuf b = new ByteBuf();
+        b.writeInt(requestId);
+        return b.toByteArray();
+    }
+
+    /**
+     * 构造一个完整的 SourceLocator.installBreakpoint 路径所需的响应链,
+     * 起点是 ClassesBySignature(1 个类),最后是 EventRequest.Set(返回 requestId)。
+     */
+    @NonNull
+    public static byte[] installBreakpointResponses(
+            long classId, long methodId, int requestId, int lineNumber) {
+        // 这个 helper 只用于 SourceLocator 的粗略流程测试,真实的多响应
+        // 编排需要在调用方按顺序 enqueue。
+        return eventRequestSetReply(requestId);
+    }
 }

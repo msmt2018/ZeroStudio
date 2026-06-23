@@ -51,17 +51,24 @@ public final class IdeBreakpoint {
     public final int line;
     /** 命中条件表达式;为空时表示无条件。 */
     @Nullable public String condition;
-    /**
-     * 命中日志消息表达式(如 "x=" + x)。非空时本断点作为
+    /** 命中日志消息表达式(如 "x=" + x)。非空时本断点作为
      * "日志点"使用:命中时求值并写入 LogStore,VM 不暂停。
      */
     @Nullable public String logMessage;
+    /**
+     * 命中次数策略:ALWAYS / EQUAL / GREATER_THAN / MULTIPLE。
+     * 见 {@code com.zerostudio.debugger.api.Breakpoint.HitCountMode}。
+     */
+    @NonNull public com.zerostudio.debugger.api.Breakpoint.HitCountMode hitCountMode
+            = com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS;
+    /** 命中次数阈值;仅在 mode != ALWAYS 时生效。 */
+    public int hitCount;
     /** 当前状态。 */
     @NonNull public State state;
     /** 关联的 ide-debugger 断点 ID;-1 表示尚未安装。 */
     public long debuggerBpId;
     /** 命中次数。 */
-    public int hitCount;
+    public int hitCount_received;
 
     public IdeBreakpoint(@NonNull String file, int line) {
         this(UUID.randomUUID().toString(), file, line, null, null,

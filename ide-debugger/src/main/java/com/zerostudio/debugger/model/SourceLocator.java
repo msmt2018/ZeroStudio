@@ -201,10 +201,21 @@ public final class SourceLocator {
     private void installBreakpointAt(
             long classId, long methodId, long codeIndex, @NonNull Breakpoint bp)
             throws IOException {
+        // Phase E2: count modifiers. We emit at most one Count modifier
+        // (the JDWP spec allows at most one). When the user picked MULTIPLE
+        // we ask the VM to suspend on the Nth hit and then track further
+        // hits client-side; for EQUAL/GREATER_THAN the modifier alone
+        // already gives the right behaviour.
+        boolean emitCount = bp.hasHitCountFilter();
+        int modifierCount = 1 + (emitCount ? 1 : 0);
         ByteBuf buf = new ByteBuf();
         buf.writeByte(EventKind.BREAKPOINT);
         buf.writeByte(SuspendPolicy.ALL);
-        buf.writeInt(1); // one modifier
+        buf.writeInt(modifierCount);
+        if (emitCount) {
+            buf.writeByte(ModKind.COUNT);
+            buf.writeInt(bp.hitCount);
+        }
         buf.writeByte(ModKind.LOCATION);
         // Location: classId, methodId, codeIndex
         buf.writeLong(classId);

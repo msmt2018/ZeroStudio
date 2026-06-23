@@ -145,12 +145,14 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
      * resolved.
      */
     public long addBreakpoint(@NonNull String sourceFile, int line) {
-        return addBreakpoint(sourceFile, line, null, null);
+        return addBreakpoint(sourceFile, line, null, null,
+                Breakpoint.HitCountMode.ALWAYS, 0);
     }
 
     public long addBreakpoint(
             @NonNull String sourceFile, int line, @Nullable String condition) {
-        return addBreakpoint(sourceFile, line, condition, null);
+        return addBreakpoint(sourceFile, line, condition, null,
+                Breakpoint.HitCountMode.ALWAYS, 0);
     }
 
     public long addBreakpoint(
@@ -158,8 +160,26 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
             int line,
             @Nullable String condition,
             @Nullable String logMessage) {
+        return addBreakpoint(sourceFile, line, condition, logMessage,
+                Breakpoint.HitCountMode.ALWAYS, 0);
+    }
+
+    /**
+     * Phase E2: full-fidelity overload. The hit count policy and threshold
+     * are translated into a JDWP {@code Count} modifier on the BREAKPOINT
+     * event request when both are non-default.
+     */
+    public long addBreakpoint(
+            @NonNull String sourceFile,
+            int line,
+            @Nullable String condition,
+            @Nullable String logMessage,
+            @NonNull Breakpoint.HitCountMode hitCountMode,
+            int hitCount) {
         long id = breakpointIdGen.incrementAndGet();
-        Breakpoint bp = new Breakpoint(id, sourceFile, line, condition, logMessage);
+        Breakpoint bp = new Breakpoint(
+                id, sourceFile, line, condition, logMessage,
+                hitCountMode, hitCount);
         breakpoints.add(bp);
         try {
             sourceLocator.installBreakpoint(bp);
