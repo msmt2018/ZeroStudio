@@ -734,4 +734,77 @@ public class EvalEngineTest {
                     expected.getMessage().startsWith("expected ']'"));
         }
     }
+
+    // ---------- Phase A7: 三元运算符 ----------
+
+    @Test
+    public void parseTernary_simple() {
+        Resolved r = EvalEngine.parseExpressionStrict("a > 0 ? 1 : 2");
+        assertEquals(Resolved.Kind.TERNARY, r.kind);
+        assertEquals(Resolved.Kind.BINARY, r.left.kind);
+        assertEquals(">", r.left.name);
+        assertEquals(1L, r.args.get(0).literalLong);
+        assertEquals(2L, r.args.get(1).literalLong);
+    }
+
+    @Test
+    public void parseTernary_nested() {
+        // a > 0 ? (b > 0 ? 1 : 2) : 3
+        Resolved r = EvalEngine.parseExpressionStrict("a > 0 ? b > 0 ? 1 : 2 : 3");
+        assertEquals(Resolved.Kind.TERNARY, r.kind);
+        assertEquals(Resolved.Kind.BINARY, r.left.kind);
+        // then-branch is itself a ternary
+        assertEquals(Resolved.Kind.TERNARY, r.args.get(0).kind);
+        // else-branch is the literal 3
+        assertEquals(Resolved.Kind.LITERAL_LONG, r.args.get(1).kind);
+        assertEquals(3L, r.args.get(1).literalLong);
+    }
+
+    @Test
+    public void parseTernary_rightAssociative() {
+        // a ? b : c ? d : e == a ? b : (c ? d : e)
+        Resolved r = EvalEngine.parseExpressionStrict("a ? b : c ? d : e");
+        assertEquals(Resolved.Kind.TERNARY, r.kind);
+        // then-branch is `b`
+        assertEquals("b", r.args.get(0).name);
+        // else-branch is itself a ternary
+        assertEquals(Resolved.Kind.TERNARY, r.args.get(1).kind);
+        assertEquals("c", r.args.get(1).left.name);
+        assertEquals("d", r.args.get(1).args.get(0).name);
+        assertEquals("e", r.args.get(1).args.get(1).name);
+    }
+
+    @Test
+    public void parseTernary_missingElseFails() {
+        // a ? b (no else)
+        try {
+            EvalEngine.parseExpressionStrict("a ? b");
+            fail("expected RuntimeException for missing ':'");
+        } catch (RuntimeException expected) {
+            assertTrue(expected.getMessage(),
+                    expected.getMessage().startsWith("expected ':'"));
+        }
+    }
+
+    @Test
+    public void parseTernary_withArithmetic() {
+        // a > 0 ? x + 1 : y * 2
+        Resolved r = EvalEngine.parseExpressionStrict("a > 0 ? x + 1 : y * 2");
+        assertEquals(Resolved.Kind.TERNARY, r.kind);
+        assertEquals(Resolved.Kind.BINARY, r.args.get(0).kind);
+        assertEquals("+", r.args.get(0).name);
+        assertEquals(Resolved.Kind.BINARY, r.args.get(1).kind);
+        assertEquals("*", r.args.get(1).name);
+    }
+
+    @Test
+    public void parseTernary_withMethodCall() {
+        // a > 0 ? foo() : bar()
+        Resolved r = EvalEngine.parseExpressionStrict("a > 0 ? foo() : bar()");
+        assertEquals(Resolved.Kind.TERNARY, r.kind);
+        assertEquals(Resolved.Kind.METHOD, r.args.get(0).kind);
+        assertEquals("foo", r.args.get(0).name);
+        assertEquals(Resolved.Kind.METHOD, r.args.get(1).kind);
+        assertEquals("bar", r.args.get(1).name);
+    }
 }

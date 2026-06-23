@@ -154,12 +154,15 @@ public final class EvalEngine {
                 // Phase A6: array index. left carries the array
                 // expression; right carries the index expression.
                 // name is unused.
-                INDEX
+                INDEX,
+                // Phase A7: ternary `cond ? thenExpr : elseExpr`.
+                // left = condition, right = thenExpr, args = [elseExpr].
+                TERNARY
             }
         final Kind kind;
         final String name;       // LOCAL, FIELD, METHOD, LITERAL_*, BINARY (op)
         @Nullable final Resolved receiver; // FIELD, METHOD
-        @Nullable final List<Resolved> args; // METHOD
+        @Nullable final List<Resolved> args; // METHOD, TERNARY ([elseExpr])
         @Nullable final Resolved left, right; // BINARY
         final long literalLong;  // for LITERAL_LONG
         final double literalDouble; // for LITERAL_DOUBLE
@@ -221,6 +224,14 @@ public final class EvalEngine {
         static Resolved index(@NonNull Resolved array, @NonNull Resolved idx) {
             return new Resolved(Kind.INDEX, null, array, idx);
         }
+
+        /** Phase A7: build a ternary node {@code cond ? then : else}. */
+        static Resolved ternary(@NonNull Resolved cond,
+                                 @NonNull Resolved thenExpr,
+                                 @NonNull Resolved elseExpr) {
+            return new Resolved(Kind.TERNARY, null, cond,
+                    java.util.Arrays.asList(thenExpr, elseExpr));
+        }
     }
 
     /** Recursive-descent parser for the subset of Java we support. */
@@ -234,16 +245,37 @@ public final class EvalEngine {
         /**
          * Top of the expression precedence chain.
          * <ul>
-         *   <li>Phase A1: {@code + - * / %} (parseAdditive, parseMultiplicative)
+         *   <li>Phase A7: ternary {@code cond ? then : else} (parseTernary)
          *   <li>Phase A2: {@code == != &lt; &gt; &lt;= &gt;=} and
          *       {@code && ||} (parseLogicalOr, parseLogicalAnd, parseEquality,
          *       parseRelational)
+         *   <li>Phase A1: {@code + - * / %} (parseAdditive, parseMultiplicative)
          * </ul>
          * Future phases will add a real {@code parseUnary} for
          * {@code -x} / {@code !x}.
          */
         @NonNull Resolved parseExpr() {
-            return parseLogicalOr();
+            return parseTernary();
+        }
+
+        /**
+         * Phase A7: ternary expression. Right-associative: {@code a
+         * ? b : c ? d : e} parses as {@code a ? b : (c ? d : e)}. The
+         * then-branch recurses through {@code parseExpr} so it can
+         * itself be a ternary; the else-branch recurses through
+         * {@code parseTernary} (not {@code parseExpr}) so that the
+         * right-associativity doesn't accidentally pull in additional
+         * ternaries that belong to the outer call.
+         */
+        @NonNull private Resolved parseTernary() {
+            Resolved cond = parseLogicalOr();
+            skipWs();
+            if (peek() != '?') return cond;
+            pos++; // consume '?'
+            Resolved thenExpr = parseExpr();
+            expect(':');
+            Resolved elseExpr = parseTernary();
+            return Resolved.ternary(cond, thenExpr, elseExpr);
         }
 
         /**
@@ -623,6 +655,18 @@ public final class EvalEngine {
                     }
                     int i = (int) parseLong(idx);
                     return getArrayElement(arr.objectId, i, arr.typeSignature);
+                }
+                case TERNARY: {
+                    // Phase A7: `cond ? thenExpr : elseExpr`. Short-
+                    // circuit: only the chosen branch is evaluated.
+                    if (r.left == null || r.args == null || r.args.size() != 2) {
+                        return EvalResult.error("malformed ternary");
+                    }
+                    EvalResult c = resolveAndEval(r.left, threadId, frameId);
+                    if (c.isError()) return c;
+                    return isTruthy(c)
+                            ? resolveAndEval(r.args.get(0), threadId, frameId)
+                            : resolveAndEval(r.args.get(1), threadId, frameId);
                 }
                 case METHOD: {
                     if (r.receiver == null) {

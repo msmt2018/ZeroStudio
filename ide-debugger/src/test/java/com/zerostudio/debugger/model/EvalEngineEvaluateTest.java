@@ -1209,4 +1209,66 @@ public class EvalEngineEvaluateTest {
         EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "s.length");
         assertTrue(r.isError());
     }
+
+    // ---------- Phase A7: 三元运算符端到端 ----------
+
+    @Test
+    public void evaluate_ternary_trueBranch() {
+        // 1 > 0 ? 10 : 20 -> 10 (pure literals, zero JDWP)
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 > 0 ? 10 : 20");
+        assertFalse(r.isError());
+        assertEquals(Tag.LONG, r.tag);
+        assertEquals("10", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_ternary_falseBranch() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 < 0 ? 10 : 20");
+        assertFalse(r.isError());
+        assertEquals("20", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_ternary_shortCircuit() {
+        // The else branch contains a division by zero, which the
+        // short-circuit should skip. If short-circuit is broken, we'd
+        // get an error.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID,
+                "1 > 0 ? 10 : 1 / 0");
+        assertFalse(r.isError());
+        assertEquals("10", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_ternary_nested() {
+        // 1 > 0 ? (2 > 0 ? 1 : 2) : 3 -> 1
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID,
+                "1 > 0 ? 2 > 0 ? 1 : 2 : 3");
+        assertFalse(r.isError());
+        assertEquals("1", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_ternary_withMethodCall_choosesElse() {
+        // 1 < 0 ? "x" + 1 : 1 + 1 (1+1 wins). The "x" + 1 is in the
+        // dead branch and must not run.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID,
+                "1 < 0 ? \"x\" + 1 : 1 + 1");
+        assertFalse(r.isError());
+        assertEquals("2", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
 }
