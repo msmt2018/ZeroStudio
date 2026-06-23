@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.io.*;
 
 /**
  * 断点管理器：函数断点 / 字段观察点（数据断点）/ 临时断点 / 普通行断点统一管理。
@@ -42,7 +43,11 @@ public final class BreakpointManager {
         public boolean enabled = true;
 
         public FunctionBreakpoint(String className, String methodName, String condition, int hitLimit) {
-            this.id = "fnb-" + UUID.randomUUID();
+            this("fnb-" + UUID.randomUUID(), className, methodName, condition, hitLimit);
+        }
+
+        public FunctionBreakpoint(String id, String className, String methodName, String condition, int hitLimit) {
+            this.id = id;
             this.className = className;
             this.methodName = methodName;
             this.condition = condition;
@@ -69,7 +74,11 @@ public final class BreakpointManager {
         public boolean enabled = true;
 
         public FieldWatchpoint(String className, String fieldName, AccessMode access) {
-            this.id = "fwp-" + UUID.randomUUID();
+            this("fwp-" + UUID.randomUUID(), className, fieldName, access);
+        }
+
+        public FieldWatchpoint(String id, String className, String fieldName, AccessMode access) {
+            this.id = id;
             this.className = className;
             this.fieldName = fieldName;
             this.access = access;
@@ -193,5 +202,50 @@ public final class BreakpointManager {
         return new SourceRange(
                 new SourcePosition(path, line, 1),
                 new SourcePosition(path, line, 1));
+    }
+
+    public void save(File file) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        for (FunctionBreakpoint fb : functionBreakpoints) {
+            sb.append("FUNCTION\t").append(fb.id).append("\t")
+              .append(fb.className).append("\t").append(fb.methodName).append("\t")
+              .append(fb.condition).append("\t").append(fb.hitCount).append("\t")
+              .append(fb.hitLimit).append("\t").append(fb.enabled).append("\n");
+        }
+        for (FieldWatchpoint wp : fieldWatchpoints) {
+            sb.append("WATCH\t").append(wp.id).append("\t")
+              .append(wp.className).append("\t").append(wp.fieldName).append("\t")
+              .append(wp.access.name()).append("\t").append(wp.hitCount).append("\t")
+              .append(wp.enabled).append("\n");
+        }
+        try (FileWriter w = new FileWriter(file)) {
+            w.write(sb.toString());
+        }
+    }
+
+    public void load(File file) throws IOException {
+        if (!file.exists()) return;
+        functionBreakpoints.clear();
+        fieldWatchpoints.clear();
+        try (BufferedReader r = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                String[] parts = line.split("\t");
+                if (parts.length < 2) continue;
+                if ("FUNCTION".equals(parts[0]) && parts.length >= 8) {
+                    FunctionBreakpoint fb = new FunctionBreakpoint(
+                            parts[1], parts[2], parts[3], parts[4], Integer.parseInt(parts[6]));
+                    fb.hitCount = Integer.parseInt(parts[5]);
+                    fb.enabled = Boolean.parseBoolean(parts[7]);
+                    functionBreakpoints.add(fb);
+                } else if ("WATCH".equals(parts[0]) && parts.length >= 7) {
+                    FieldWatchpoint wp = new FieldWatchpoint(
+                            parts[1], parts[2], parts[3], AccessMode.valueOf(parts[4]));
+                    wp.hitCount = Integer.parseInt(parts[5]);
+                    wp.enabled = Boolean.parseBoolean(parts[6]);
+                    fieldWatchpoints.add(wp);
+                }
+            }
+        }
     }
 }

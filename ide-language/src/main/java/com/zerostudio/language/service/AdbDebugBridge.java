@@ -86,7 +86,7 @@ public final class AdbDebugBridge {
         return events.take();
     }
 
-    private void emit(DebugEvent event) {
+    protected void emit(DebugEvent event) {
         events.offer(event);
         for (EventListener l : new ArrayList<>(listeners)) {
             try { l.onEvent(event); } catch (Exception ignored) {}
