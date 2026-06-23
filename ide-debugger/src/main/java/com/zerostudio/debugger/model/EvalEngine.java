@@ -113,8 +113,35 @@ public final class EvalEngine {
         }
     }
 
+    /**
+     * Package-private entry point used by the unit tests to drive the
+     * parser without going through the JDWP client. Returns the raw
+     * {@link Resolved} AST and does NOT enforce the "no trailing input"
+     * invariant.
+     */
+    @NonNull
+    static Resolved parseExpression(@NonNull String expression) {
+        Parser p = new Parser(expression);
+        return p.parseExpr();
+    }
+
+    /**
+     * Package-private entry point used by the unit tests to drive the
+     * parser strictly - mirrors {@link #evaluate} and throws if there is
+     * leftover input.
+     */
+    @NonNull
+    static Resolved parseExpressionStrict(@NonNull String expression) {
+        Parser p = new Parser(expression);
+        Resolved r = p.parseExpr();
+        if (p.hasMore()) {
+            throw new IllegalArgumentException("trailing input: '" + p.remainder() + "'");
+        }
+        return r;
+    }
+
     /** Resolved identifier in the current scope. */
-    private static final class Resolved {
+    static final class Resolved {
         enum Kind { LOCAL, FIELD, METHOD, THIS, LITERAL_STRING, LITERAL_INT, LITERAL_LONG, LITERAL_DOUBLE, NEW_STRING }
         final Kind kind;
         final String name;       // LOCAL, FIELD, METHOD, LITERAL_*
@@ -158,7 +185,7 @@ public final class EvalEngine {
     }
 
     /** Recursive-descent parser for the subset of Java we support. */
-    private static final class Parser {
+    static final class Parser {
         private final String src;
         private int pos;
         Parser(String s) { this.src = s; }

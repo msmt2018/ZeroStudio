@@ -30,6 +30,11 @@ android {
     aidl = false
     viewBinding = false
   }
+
+  // PR-7: enable JUnit 4 unit tests for the parser.
+  testOptions {
+    unitTests.isReturnDefaultValues = true
+  }
 }
 
 dependencies {
@@ -42,4 +47,7 @@ dependencies {
   // PR-2: depend on the shared logwire module for the IDE ↔ plugin
   // transport that carries JDWP-bridge notifications.
   implementation(project(":utilities:logwire"))
+
+  // PR-7: unit tests for EvalEngine.Parser.
+  testImplementation(libs.tests.junit)
 }
