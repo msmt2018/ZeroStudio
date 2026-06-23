@@ -19,7 +19,7 @@ import java.util.function.Consumer;
  * 真实实现需要通过 socket 与 adb forward tcp:5037 通信，
  * 然后用 jdwp-debugger 协议传输 breakpoint / frame / variable 消息。
  */
-public final class AdbDebugBridge {
+public class AdbDebugBridge {
 
     public static final class DebugEvent {
         public enum Kind { BREAKPOINT_HIT, EXCEPTION, STEP_COMPLETE, PROCESS_EXIT, VM_START }
