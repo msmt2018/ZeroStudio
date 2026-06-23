@@ -59,6 +59,8 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
     private final AtomicLong breakpointIdGen;
     private final AtomicBoolean vmStartReceived;
     @Nullable private volatile SuspendInfo lastSuspend;
+    /** Phase H2: Background executor for ANR protection. */
+    private final DebuggerExecutor bgExecutor;
 
     public Debugger() {
         this(new JdwpClient());
@@ -80,6 +82,7 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
         this.breakpointIdGen = new AtomicLong(0L);
         this.vmStartReceived = new AtomicBoolean(false);
         this.lastSuspend = null;
+        this.bgExecutor = new DebuggerExecutor();
         client.addEventListener(this);
         client.addConnectionListener(this);
     }
@@ -294,6 +297,52 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
             Log.w(TAG, "getStackFrames failed", e);
             return java.util.Collections.emptyList();
         }
+    }
+
+    /**
+     * Phase H2: Asynchronously fetch stack frames off the UI thread.
+     *
+     * Schedules the work on a background thread pool (max 4 concurrent)
+     * and delivers the result to the given callback on the caller's thread.
+     *
+     * If the debugger is not suspended, the callback receives an empty list
+     * with no error.
+     *
+     * @param threadId the thread to get frames for
+     * @param start    first frame index (0 = top)
+     * @param length   max frames to return
+     * @param callback called with the result on the calling thread
+     */
+    public void getStackFramesAsync(long threadId, int start, int length,
+                                    @NonNull Callback<List<StackFrameInfo>> callback) {
+        bgExecutor.execute(() -> {
+            List<StackFrameInfo> result = getStackFrames(threadId, start, length);
+            callback.onResult(result);
+        });
+    }
+
+    /**
+     * Phase H2: Asynchronously evaluate an expression off the UI thread.
+     *
+     * @param threadId  thread to evaluate in
+     * @param frameId   frame to evaluate in (0 = current)
+     * @param expression JDWP expression string
+     * @param callback  called with the result on the calling thread
+     */
+    public void evalAsync(long threadId, long frameId, @NonNull String expression,
+                          @NonNull Callback<EvalEngine.EvalResult> callback) {
+        bgExecutor.execute(() -> {
+            EvalEngine.EvalResult result = eval.evaluate(threadId, frameId, expression);
+            callback.onResult(result);
+        });
+    }
+
+    /**
+     * Phase H2: Shutdown the background executor. Called when the debugger
+     * is being destroyed.
+     */
+    public void shutdownBgExecutor() {
+        bgExecutor.shutdown();
     }
 
     @Nullable
