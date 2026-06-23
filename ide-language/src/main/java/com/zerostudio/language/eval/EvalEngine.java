@@ -31,6 +31,12 @@ public final class EvalEngine {
         public final Object value;
         public final String error;
 
+        public Result(Object value, String error) {
+            this.kind = error == null ? ResultKind.VALUE : ResultKind.ERROR;
+            this.value = value;
+            this.error = error;
+        }
+
         private Result(ResultKind kind, Object value, String error) {
             this.kind = kind; this.value = value; this.error = error;
         }
