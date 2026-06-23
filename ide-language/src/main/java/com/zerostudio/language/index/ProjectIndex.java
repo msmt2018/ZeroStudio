@@ -96,6 +96,11 @@ public final class ProjectIndex {
     public int totalFiles() { return filePathToFile.size(); }
     public int totalClasses() { return classNameToFile.size(); }
 
+    /** 暴露内部 filePath→file map 的快照（供持久化使用） */
+    public java.util.List<Map.Entry<String, ParsedFile>> allFiles() {
+        return new ArrayList<>(filePathToFile.entrySet());
+    }
+
     /** simple pattern matching: `a.b.*` returns classes whose fqn starts with a.b */
     public List<String> matchWildcard(String pattern) {
         if (pattern == null || !pattern.endsWith(".*")) return Collections.emptyList();
