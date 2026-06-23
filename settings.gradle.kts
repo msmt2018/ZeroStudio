@@ -172,6 +172,10 @@ include(
     ":event:eventbus",
     ":event:eventbus-android",
     ":event:eventbus-events",
+
+    ":ide-decompiler",
+    ":ide-language",
+
     ":java:javac-services",
     ":java:lsp",
     ":lsp:kotlin",
