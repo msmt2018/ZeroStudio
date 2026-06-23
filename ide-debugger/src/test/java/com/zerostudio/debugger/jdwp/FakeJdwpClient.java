@@ -51,6 +51,10 @@ public class FakeJdwpClient extends JdwpClient {
     private final List<Responder> queuedResponders = new ArrayList<>();
     private final List<SentCommand> sentCommands = new ArrayList<>();
     private boolean failOnMissingResponder = true;
+    /** Phase H3: simulate connection state for reconnect tests. */
+    private volatile boolean connected = false;
+    /** Phase H3: if true, connect() throws IOException. */
+    private volatile boolean failOnConnect = false;
 
     public FakeJdwpClient() {
         super();
@@ -87,6 +91,34 @@ public class FakeJdwpClient extends JdwpClient {
 
     public int commandCount() {
         return sentCommands.size();
+    }
+
+    @Override
+    public boolean isConnected() {
+        return connected;
+    }
+
+    /** Phase H3: Simulate a disconnection event. */
+    public void simulateDisconnection() {
+        connected = false;
+    }
+
+    /** Phase H3: When true, connect() will throw IOException. */
+    public void setFailOnConnect(boolean v) {
+        this.failOnConnect = v;
+    }
+
+    @Override
+    public void connect(String host, int port) throws IOException {
+        if (failOnConnect) {
+            throw new IOException("simulated connect failure");
+        }
+        connected = true;
+    }
+
+    @Override
+    public void close() {
+        connected = false;
     }
 
     @Override

@@ -32,6 +32,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.zerostudio.debugger.event.DebugEventBus;
 import com.zerostudio.debugger.event.DebugEvents;
+import com.zerostudio.debugger.jdwp.DebugSessionHeartbeat;
 import com.zerostudio.debugger.jdwp.JdwpClient;
 import com.zerostudio.debugger.jdwp.JdwpPacket;
 import com.zerostudio.debugger.model.BreakpointStore;
@@ -43,7 +44,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-public final class Debugger implements JdwpClient.EventListener, JdwpClient.ConnectionListener {
+public final class Debugger
+        implements JdwpClient.EventListener, JdwpClient.ConnectionListener,
+                   DebugSessionHeartbeat.HeartbeatListener {
 
     private static final String TAG = "Debugger";
 
@@ -61,6 +64,13 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
     @Nullable private volatile SuspendInfo lastSuspend;
     /** Phase H2: Background executor for ANR protection. */
     private final DebuggerExecutor bgExecutor;
+    /** Phase H3: Last successful connection parameters for reconnect. */
+    @Nullable private volatile String lastHost;
+    private volatile int lastPort;
+    /** Phase H3: Auto-reconnect on heartbeat death. Default false. */
+    private volatile boolean autoReconnect;
+    /** Phase H3: Maximum reconnect attempts. 0 = disabled. */
+    private volatile int maxReconnectAttempts;
 
     public Debugger() {
         this(new JdwpClient());
@@ -122,9 +132,62 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
      * application. Blocks until the handshake completes.
      */
     public void connect(@NonNull String host, int port) throws java.io.IOException {
+        // Phase H3: store connection parameters for reconnect
+        this.lastHost = host;
+        this.lastPort = port;
         eventBus.bindClient(client); // Phase B6: enable re-subscribe on reconnect.
         client.connect(host, port);
     }
+
+    /**
+     * Phase H3: Enable auto-reconnect on connection loss.
+     *
+     * When enabled, if the heartbeat detects a dead connection, the debugger
+     * will automatically attempt to reconnect using the last known host/port.
+     *
+     * @param enabled      true to enable auto-reconnect
+     * @param maxAttempts maximum reconnect attempts (0 = infinite)
+     */
+    public void setAutoReconnect(boolean enabled, int maxAttempts) {
+        this.autoReconnect = enabled;
+        this.maxReconnectAttempts = maxAttempts;
+    }
+
+    /**
+     * Phase H3: Attempt to reconnect using the last known host and port.
+     *
+     * Does nothing if no previous connection was established (lastHost is null)
+     * or if already connected.
+     *
+     * @return true if reconnect was attempted, false if skipped
+     */
+    public boolean reconnect() {
+        if (lastHost == null) return false;
+        if (client.isConnected()) return false;
+
+        Log.i(TAG, "Attempting auto-reconnect to " + lastHost + ":" + lastPort);
+        try {
+            client.connect(lastHost, lastPort);
+            notifyConnectionChanged(true);
+            return true;
+        } catch (java.io.IOException ex) {
+            Log.w(TAG, "Reconnect failed", ex);
+            return false;
+        }
+    }
+
+    /** Phase H3: Whether auto-reconnect is enabled. */
+    public boolean isAutoReconnectEnabled() { return autoReconnect; }
+
+    /** Phase H3: Maximum reconnect attempts. 0 means infinite. */
+    public int getMaxReconnectAttempts() { return maxReconnectAttempts; }
+
+    /** Phase H3: Last connected host. */
+    @Nullable
+    public String lastConnectedHost() { return lastHost; }
+
+    /** Phase H3: Last connected port. */
+    public int lastConnectedPort() { return lastPort; }
 
     /** Block until the VMStart event has been received. */
     public void waitForVmStart(long timeoutMs) throws InterruptedException {
@@ -629,6 +692,31 @@ public final class Debugger implements JdwpClient.EventListener, JdwpClient.Conn
     private void notifyConnectionChanged(boolean connected) {
         for (Listener l : listeners) {
             try { l.onConnectionChanged(connected); } catch (Throwable ignored) { }
+        }
+    }
+
+    // -- DebugSessionHeartbeat.HeartbeatListener --
+
+    /** Called when the heartbeat round-trip succeeds. */
+    @Override
+    public void onHeartbeatOk() {
+        // Connection is confirmed alive. Session state is managed
+        // by ConnectionListener.onConnected().
+    }
+
+    /** Called when the heartbeat has missed max consecutive pings. */
+    @Override
+    public void onHeartbeatDead() {
+        Log.w(TAG, "Heartbeat dead — connection lost. autoReconnect="
+                + autoReconnect + " lastHost=" + lastHost);
+        session.setState(DebugSession.State.IDLE);
+        notifyConnectionChanged(false);
+        if (autoReconnect && lastHost != null) {
+            // Attempt reconnect on a background thread to avoid blocking heartbeat
+            bgExecutor.execute(() -> {
+                boolean ok = reconnect();
+                Log.i(TAG, "Auto-reconnect " + (ok ? "succeeded" : "failed"));
+            });
         }
     }
 
