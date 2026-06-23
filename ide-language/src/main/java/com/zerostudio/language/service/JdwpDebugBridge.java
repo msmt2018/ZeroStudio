@@ -181,12 +181,12 @@ public final class JdwpDebugBridge extends AdbDebugBridge {
     }
 
     private byte[] findClass(String className) throws IOException {
-        byte[] result = null;
+        byte[][] result = new byte[1][];
         sendCommand(1, 2, className.getBytes(), (cmdSet, cmd, data, errorCode) -> {
-            result = new byte[8];
-            System.arraycopy(data, 0, result, 0, 8);
+            result[0] = new byte[8];
+            System.arraycopy(data, 0, result[0], 0, 8);
         });
-        return result;
+        return result[0];
     }
 
     private byte[] createLocation(byte[] classId, int line) {
