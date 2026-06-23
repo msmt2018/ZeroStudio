@@ -329,6 +329,120 @@ public class EvalEngineHelpersTest {
         assertEquals("-5", r.displayValue);
     }
 
+    // ---------- Phase A2: applyComparisonOp (纯函数) ----------
+
+    @Test
+    public void applyComparisonOp_equalLongs() {
+        EvalResult r = EvalEngine.applyComparisonOp("==",
+                EvalResult.of(Tag.LONG, "J", "5"),
+                EvalResult.of(Tag.LONG, "J", "5"));
+        assertEquals(Tag.BOOLEAN, r.tag);
+        assertEquals("Z", r.typeSignature);
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_notEqualLongs() {
+        EvalResult r = EvalEngine.applyComparisonOp("!=",
+                EvalResult.of(Tag.LONG, "J", "5"),
+                EvalResult.of(Tag.LONG, "J", "6"));
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_lessThan() {
+        EvalResult r = EvalEngine.applyComparisonOp("<",
+                EvalResult.of(Tag.LONG, "J", "3"),
+                EvalResult.of(Tag.LONG, "J", "5"));
+        assertEquals("true", r.displayValue);
+        r = EvalEngine.applyComparisonOp("<",
+                EvalResult.of(Tag.LONG, "J", "5"),
+                EvalResult.of(Tag.LONG, "J", "3"));
+        assertEquals("false", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_greaterThan() {
+        EvalResult r = EvalEngine.applyComparisonOp(">",
+                EvalResult.of(Tag.LONG, "J", "5"),
+                EvalResult.of(Tag.LONG, "J", "3"));
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_lessEquals() {
+        EvalResult r = EvalEngine.applyComparisonOp("<=",
+                EvalResult.of(Tag.LONG, "J", "5"),
+                EvalResult.of(Tag.LONG, "J", "5"));
+        assertEquals("true", r.displayValue);
+        r = EvalEngine.applyComparisonOp("<=",
+                EvalResult.of(Tag.LONG, "J", "6"),
+                EvalResult.of(Tag.LONG, "J", "5"));
+        assertEquals("false", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_greaterEquals() {
+        EvalResult r = EvalEngine.applyComparisonOp(">=",
+                EvalResult.of(Tag.LONG, "J", "5"),
+                EvalResult.of(Tag.LONG, "J", "5"));
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_doubleCompare() {
+        EvalResult r = EvalEngine.applyComparisonOp("<",
+                EvalResult.of(Tag.DOUBLE, "D", "1.5"),
+                EvalResult.of(Tag.DOUBLE, "D", "2.5"));
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_objectIdentityEqual() {
+        EvalResult r = EvalEngine.applyComparisonOp("==",
+                EvalResult.object(0x100L, "Lcom/example/Foo;"),
+                EvalResult.object(0x100L, "Lcom/example/Foo;"));
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_objectIdentityNotEqual() {
+        EvalResult r = EvalEngine.applyComparisonOp("==",
+                EvalResult.object(0x100L, "Lcom/example/Foo;"),
+                EvalResult.object(0x101L, "Lcom/example/Foo;"));
+        assertEquals("false", r.displayValue);
+        r = EvalEngine.applyComparisonOp("!=",
+                EvalResult.object(0x100L, "Lcom/example/Foo;"),
+                EvalResult.object(0x101L, "Lcom/example/Foo;"));
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_refVsPrimitive_neverEqual() {
+        EvalResult r = EvalEngine.applyComparisonOp("==",
+                EvalResult.object(0x100L, "Lcom/example/Foo;"),
+                EvalResult.of(Tag.LONG, "J", "0"));
+        assertEquals("false", r.displayValue);
+    }
+
+    @Test
+    public void applyComparisonOp_relationalOnNonNumeric_returnsError() {
+        EvalResult r = EvalEngine.applyComparisonOp("<",
+                EvalResult.of(Tag.STRING, "Ljava/lang/String;", "x"),
+                EvalResult.of(Tag.LONG, "J", "1"));
+        assertTrue(r.isError());
+        assertTrue(r.error, r.error.contains("requires numeric"));
+    }
+
+    @Test
+    public void applyComparisonOp_unknownOp_returnsError() {
+        EvalResult r = EvalEngine.applyComparisonOp("?",
+                EvalResult.of(Tag.LONG, "J", "1"),
+                EvalResult.of(Tag.LONG, "J", "2"));
+        assertTrue(r.isError());
+        assertTrue(r.error, r.error.contains("unsupported comparison op"));
+    }
+
     // ---------- 辅助 ----------
 
     @SafeVarargs

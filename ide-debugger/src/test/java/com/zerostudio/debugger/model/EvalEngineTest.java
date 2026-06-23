@@ -516,4 +516,149 @@ public class EvalEngineTest {
         assertEquals(1L, r.left.literalLong);
         assertEquals(2L, r.right.literalLong);
     }
+
+    // ---------- Phase A2: 比较与逻辑运算符 ----------
+
+    @Test
+    public void parseEquality_doubleEquals() {
+        Resolved r = EvalEngine.parseExpressionStrict("a == b");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("==", r.name);
+        assertEquals(Resolved.Kind.LOCAL, r.left.kind);
+        assertEquals("a", r.left.name);
+        assertEquals(Resolved.Kind.LOCAL, r.right.kind);
+        assertEquals("b", r.right.name);
+    }
+
+    @Test
+    public void parseEquality_notEquals() {
+        Resolved r = EvalEngine.parseExpressionStrict("a != b");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("!=", r.name);
+    }
+
+    @Test
+    public void parseRelational_lessThan() {
+        Resolved r = EvalEngine.parseExpressionStrict("a < b");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("<", r.name);
+    }
+
+    @Test
+    public void parseRelational_greaterThan() {
+        Resolved r = EvalEngine.parseExpressionStrict("a > b");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals(">", r.name);
+    }
+
+    @Test
+    public void parseRelational_lessEquals() {
+        Resolved r = EvalEngine.parseExpressionStrict("a <= b");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("<=", r.name);
+    }
+
+    @Test
+    public void parseRelational_greaterEquals() {
+        Resolved r = EvalEngine.parseExpressionStrict("a >= b");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals(">=", r.name);
+    }
+
+    @Test
+    public void parseLogicalAnd() {
+        Resolved r = EvalEngine.parseExpressionStrict("a && b");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("&&", r.name);
+    }
+
+    @Test
+    public void parseLogicalOr() {
+        Resolved r = EvalEngine.parseExpressionStrict("a || b");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("||", r.name);
+    }
+
+    @Test
+    public void parsePrecedence_andOverOr() {
+        // a || b && c == a || (b && c)
+        Resolved r = EvalEngine.parseExpressionStrict("a || b && c");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("||", r.name);
+        assertEquals("a", r.left.name);
+        assertEquals(Resolved.Kind.BINARY, r.right.kind);
+        assertEquals("&&", r.right.name);
+        assertEquals("b", r.right.left.name);
+        assertEquals("c", r.right.right.name);
+    }
+
+    @Test
+    public void parsePrecedence_equalityOverAnd() {
+        // a == b && c == d == (a == b) && (c == d)
+        Resolved r = EvalEngine.parseExpressionStrict("a == b && c == d");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("&&", r.name);
+        assertEquals(Resolved.Kind.BINARY, r.left.kind);
+        assertEquals("==", r.left.name);
+        assertEquals(Resolved.Kind.BINARY, r.right.kind);
+        assertEquals("==", r.right.name);
+    }
+
+    @Test
+    public void parsePrecedence_relationalOverEquality() {
+        // a < b == c < d == (a < b) == (c < d)
+        Resolved r = EvalEngine.parseExpressionStrict("a < b == c < d");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("==", r.name);
+        assertEquals(Resolved.Kind.BINARY, r.left.kind);
+        assertEquals("<", r.left.name);
+        assertEquals(Resolved.Kind.BINARY, r.right.kind);
+        assertEquals("<", r.right.name);
+    }
+
+    @Test
+    public void parsePrecedence_additiveOverRelational() {
+        // a + b < c == (a + b) < c
+        Resolved r = EvalEngine.parseExpressionStrict("a + b < c");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("<", r.name);
+        assertEquals(Resolved.Kind.BINARY, r.left.kind);
+        assertEquals("+", r.left.name);
+        assertEquals("c", r.right.name);
+    }
+
+    @Test
+    public void parseChainedAndWithComparison() {
+        // a > 0 && b > 0
+        Resolved r = EvalEngine.parseExpressionStrict("a > 0 && b > 0");
+        assertEquals(Resolved.Kind.BINARY, r.kind);
+        assertEquals("&&", r.name);
+        assertEquals(Resolved.Kind.BINARY, r.left.kind);
+        assertEquals(">", r.left.name);
+        assertEquals("a", r.left.left.name);
+        assertEquals(Resolved.Kind.BINARY, r.right.kind);
+        assertEquals(">", r.right.name);
+        assertEquals("b", r.right.left.name);
+    }
+
+    @Test
+    public void parseNotEqualsDoesNotConsumeSingleEquals() {
+        // a = b (single =) is not a valid expression. Make sure the
+        // parser does NOT silently accept a single `=` as `==`.
+        try {
+            EvalEngine.parseExpressionStrict("a = b");
+            fail("expected RuntimeException for stray '='");
+        } catch (RuntimeException expected) {
+            // ok
+        }
+    }
+
+    @Test
+    public void parseRelationalWithCompoundOperator() {
+        // Make sure <= and >= are NOT split into < + = or > + =.
+        Resolved r = EvalEngine.parseExpressionStrict("a <= b");
+        assertEquals("<=", r.name);
+        r = EvalEngine.parseExpressionStrict("a >= b");
+        assertEquals(">=", r.name);
+    }
 }

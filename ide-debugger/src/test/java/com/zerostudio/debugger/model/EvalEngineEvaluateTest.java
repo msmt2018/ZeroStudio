@@ -732,4 +732,141 @@ public class EvalEngineEvaluateTest {
         assertNotNull(r.error);
         assertTrue(r.error, r.error.contains("requires numeric"));
     }
+
+    // ---------- Phase A2: 比较+逻辑运算符端到端 ----------
+
+    @Test
+    public void evaluate_literalEqual_returnsBoolean() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 == 1");
+        assertFalse(r.isError());
+        assertEquals(Tag.BOOLEAN, r.tag);
+        assertEquals("Z", r.typeSignature);
+        assertEquals("true", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_literalNotEqual_returnsBoolean() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 != 2");
+        assertFalse(r.isError());
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_literalLessThan_returnsBoolean() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "3 < 5");
+        assertFalse(r.isError());
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_literalGreaterEquals_returnsBoolean() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "5 >= 5");
+        assertFalse(r.isError());
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_localEqualsLiteral() {
+        // i (int 7) == 7 -> true
+        FakeJdwpClient fake = new FakeJdwpClient();
+        fake.enqueueOkReply(JdwpPayloads.framesReply(
+                FRAME_ID, (byte) 'L', CLASS_ID, METHOD_ID, 0L));
+        fake.enqueueOkReply(JdwpPayloads.variableTableReply(new Var[] {
+                new Var(0L, "i", "I", 1, 0),
+        }));
+        fake.enqueueOkReply(JdwpPayloads.getValuesReply((byte) 'I', JdwpPayloads.intValue(7)));
+
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "i == 7");
+        assertFalse(r.isError());
+        assertEquals(Tag.BOOLEAN, r.tag);
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_logicalAnd_trueTrue_returnsTrue() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 == 1 && 2 == 2");
+        assertFalse(r.isError());
+        assertEquals("true", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_logicalAnd_trueFalse_returnsFalse() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 == 1 && 2 == 3");
+        assertFalse(r.isError());
+        assertEquals("false", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_logicalOr_falseTrue_returnsTrue() {
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 == 2 || 2 == 2");
+        assertFalse(r.isError());
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_logicalAnd_shortCircuit_rightNotEvaluated() {
+        // 0 && (1 / 0) -- if short-circuit works, the division by zero
+        // never runs and we just get false. If we don't short-circuit,
+        // the divide-by-zero errors out.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "0 && 1 / 0");
+        assertFalse(r.isError());
+        assertEquals(Tag.BOOLEAN, r.tag);
+        assertEquals("false", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_logicalOr_shortCircuit_rightNotEvaluated() {
+        // 1 || (1 / 0) -- left is true, so right is skipped.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "1 || 1 / 0");
+        assertFalse(r.isError());
+        assertEquals("true", r.displayValue);
+        assertEquals(0, fake.commandCount());
+    }
+
+    @Test
+    public void evaluate_combinedExpressions() {
+        // (1 + 2) * 3 > 5 && 10 - 5 == 5
+        FakeJdwpClient fake = new FakeJdwpClient();
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID,
+                "(1 + 2) * 3 > 5 && 10 - 5 == 5");
+        assertFalse(r.isError());
+        assertEquals("true", r.displayValue);
+    }
+
+    @Test
+    public void evaluate_relationalOnStrings_returnsError() {
+        // "abc" < "def" -- Phase A2 relational requires numeric.
+        FakeJdwpClient fake = new FakeJdwpClient();
+        // Two CreateString replies (one for each literal)
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB000L));
+        fake.enqueueOkReply(JdwpPayloads.createStringReply(0xB001L));
+        EvalEngine e = newEngine(fake);
+        EvalResult r = e.evaluate(THREAD_ID, FRAME_ID, "\"abc\" < \"def\"");
+        assertTrue(r.isError());
+        assertNotNull(r.error);
+        assertTrue(r.error, r.error.contains("requires numeric"));
+    }
 }

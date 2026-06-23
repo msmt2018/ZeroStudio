@@ -223,13 +223,107 @@ public final class EvalEngine {
         String remainder() { return src.substring(pos); }
 
         /**
-         * Top of the expression precedence chain. Phase A1 wires up
-         * {@code + - * / %} via the {@code parseAdditive} and
-         * {@code parseMultiplicative} layers; future phases will add
-         * {@code parseLogicalOr} / {@code parseLogicalAnd} / etc.
+         * Top of the expression precedence chain.
+         * <ul>
+         *   <li>Phase A1: {@code + - * / %} (parseAdditive, parseMultiplicative)
+         *   <li>Phase A2: {@code == != &lt; &gt; &lt;= &gt;=} and
+         *       {@code && ||} (parseLogicalOr, parseLogicalAnd, parseEquality,
+         *       parseRelational)
+         * </ul>
+         * Future phases will add a real {@code parseUnary} for
+         * {@code -x} / {@code !x}.
          */
         @NonNull Resolved parseExpr() {
-            return parseAdditive();
+            return parseLogicalOr();
+        }
+
+        /**
+         * Phase A2: logical-or. {@code ||} is the loosest binary
+         * operator. Left-associative.
+         */
+        @NonNull private Resolved parseLogicalOr() {
+            Resolved left = parseLogicalAnd();
+            while (true) {
+                skipWs();
+                if (!tryConsume2("||")) break;
+                Resolved right = parseLogicalAnd();
+                left = Resolved.binop("||", left, right);
+            }
+            return left;
+        }
+
+        /**
+         * Phase A2: logical-and. {@code &&} binds tighter than
+         * {@code ||}. Left-associative.
+         */
+        @NonNull private Resolved parseLogicalAnd() {
+            Resolved left = parseEquality();
+            while (true) {
+                skipWs();
+                if (!tryConsume2("&&")) break;
+                Resolved right = parseEquality();
+                left = Resolved.binop("&&", left, right);
+            }
+            return left;
+        }
+
+        /**
+         * Phase A2: equality. {@code ==} and {@code !=}. Two-character
+         * operators; the parser must NOT greedily consume a single
+         * {@code =} (we don't have assignment).
+         */
+        @NonNull private Resolved parseEquality() {
+            Resolved left = parseRelational();
+            while (true) {
+                skipWs();
+                char c = peek();
+                String op = null;
+                if (c == '=' && peekAt(pos + 1) == '=') {
+                    pos += 2;
+                    op = "==";
+                } else if (c == '!' && peekAt(pos + 1) == '=') {
+                    pos += 2;
+                    op = "!=";
+                }
+                if (op == null) break;
+                Resolved right = parseRelational();
+                left = Resolved.binop(op, left, right);
+            }
+            return left;
+        }
+
+        /**
+         * Phase A2: relational. {@code <}, {@code >}, {@code <=},
+         * {@code >=}. All two-character forms are looked up here.
+         */
+        @NonNull private Resolved parseRelational() {
+            Resolved left = parseAdditive();
+            while (true) {
+                skipWs();
+                char c = peek();
+                String op = null;
+                if (c == '<') {
+                    if (peekAt(pos + 1) == '=') {
+                        pos += 2;
+                        op = "<=";
+                    } else {
+                        pos++;
+                        op = "<";
+                    }
+                } else if (c == '>') {
+                    if (peekAt(pos + 1) == '=') {
+                        pos += 2;
+                        op = ">=";
+                    } else {
+                        pos++;
+                        op = ">";
+                    }
+                }
+                if (op == null) break;
+                Resolved right = parseAdditive();
+                left = Resolved.binop(op, left, right);
+            }
+            return left;
         }
 
         /**
@@ -385,6 +479,27 @@ public final class EvalEngine {
             while (pos < src.length() && Character.isWhitespace(src.charAt(pos))) pos++;
         }
         private char peek() { return pos < src.length() ? src.charAt(pos) : '\0'; }
+        /**
+         * Look ahead one character without consuming. {@code pos == src.length()}
+         * returns {@code '\0'} (sentinel for EOF).
+         */
+        private char peekAt(int idx) {
+            return idx < src.length() ? src.charAt(idx) : '\0';
+        }
+        /**
+         * Phase A2: try to consume a 2-character operator. Returns true
+         * if the next two characters match {@code op} and advances
+         * {@code pos}; otherwise leaves {@code pos} untouched.
+         */
+        private boolean tryConsume2(@NonNull String op) {
+            if (op.length() != 2) return false;
+            if (pos + 1 >= src.length()) return false;
+            if (src.charAt(pos) == op.charAt(0) && src.charAt(pos + 1) == op.charAt(1)) {
+                pos += 2;
+                return true;
+            }
+            return false;
+        }
         private void expect(char c) {
             skipWs();
             if (pos >= src.length() || src.charAt(pos) != c) {
@@ -470,14 +585,45 @@ public final class EvalEngine {
                     return invokeMethod(recv.objectId, r.name, recv.typeSignature, argResults);
                 }
                 case BINARY: {
-                    // Phase A1: arithmetic + - * / % on numeric operands.
-                    // String concat (a + "x") is Phase A3; comparison +
-                    // logical operators are Phase A2.
+                    String op = r.name;
+                    // Phase A2: short-circuit && and ||. The right
+                    // operand is only evaluated when needed.
+                    if ("&&".equals(op)) {
+                        EvalResult l = resolveAndEval(r.left, threadId, frameId);
+                        if (l.isError()) return l;
+                        if (!isTruthy(l)) {
+                            return EvalResult.of(EvalResult.Tag.BOOLEAN, "Z", "false");
+                        }
+                        EvalResult rhs = resolveAndEval(r.right, threadId, frameId);
+                        if (rhs.isError()) return rhs;
+                        return EvalResult.of(EvalResult.Tag.BOOLEAN, "Z",
+                                isTruthy(rhs) ? "true" : "false");
+                    }
+                    if ("||".equals(op)) {
+                        EvalResult l = resolveAndEval(r.left, threadId, frameId);
+                        if (l.isError()) return l;
+                        if (isTruthy(l)) {
+                            return EvalResult.of(EvalResult.Tag.BOOLEAN, "Z", "true");
+                        }
+                        EvalResult rhs = resolveAndEval(r.right, threadId, frameId);
+                        if (rhs.isError()) return rhs;
+                        return EvalResult.of(EvalResult.Tag.BOOLEAN, "Z",
+                                isTruthy(rhs) ? "true" : "false");
+                    }
+                    // Phase A2: comparison operators (== != < > <= >=)
+                    if (isComparisonOp(op)) {
+                        EvalResult l = resolveAndEval(r.left, threadId, frameId);
+                        if (l.isError()) return l;
+                        EvalResult rhs = resolveAndEval(r.right, threadId, frameId);
+                        if (rhs.isError()) return rhs;
+                        return applyComparisonOp(op, l, rhs);
+                    }
+                    // Phase A1: arithmetic + - * / %.
                     EvalResult l = resolveAndEval(r.left, threadId, frameId);
                     if (l.isError()) return l;
                     EvalResult rhs = resolveAndEval(r.right, threadId, frameId);
                     if (rhs.isError()) return rhs;
-                    return applyBinaryOp(r.name, l, rhs);
+                    return applyBinaryOp(op, l, rhs);
                 }
                 default:
                     return EvalResult.error("unsupported expression kind");
@@ -576,6 +722,137 @@ public final class EvalEngine {
         if (r.typeSignature == null || r.typeSignature.isEmpty()) return false;
         char c = r.typeSignature.charAt(0);
         return c == 'B' || c == 'S' || c == 'I' || c == 'J' || c == 'F' || c == 'D';
+    }
+
+    /**
+     * Phase A2 helper: true if {@code op} is one of the comparison
+     * operators. Arithmetic / logical operators return false.
+     */
+    private static boolean isComparisonOp(@NonNull String op) {
+        switch (op) {
+            case "==": case "!=": case "<": case ">": case "<=": case ">=":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Phase A2 helper: true if {@code r} is a truthy value. Used by
+     * short-circuit {@code &&} and {@code ||}. Object references are
+     * always truthy; numeric / boolean values follow Java rules; null
+     * display values are falsy.
+     */
+    private static boolean isTruthy(@NonNull EvalResult r) {
+        if (r == null || r.isError()) return false;
+        String sig = r.typeSignature == null ? "" : r.typeSignature;
+        String v = r.displayValue == null ? "" : r.displayValue;
+        if (sig.isEmpty()) return !v.isEmpty() && !v.equals("false") && !v.equals("0");
+        switch (sig.charAt(0)) {
+            case 'Z': return v.equals("true");
+            case 'B': case 'S': case 'I': case 'J':
+                try { return Long.parseLong(v) != 0L; } catch (NumberFormatException e) { return false; }
+            case 'F': case 'D':
+                try { return Double.parseDouble(v) != 0.0; } catch (NumberFormatException e) { return false; }
+            case 'L': case '[':
+                return r.objectId != 0L;
+            default:
+                return !v.isEmpty();
+        }
+    }
+
+    /**
+     * Phase A2: apply a comparison operator to two evaluated operands.
+     * The result is always boolean ({@code Tag.BOOLEAN}, signature
+     * {@code "Z"}).
+     *
+     * <ul>
+     *   <li>{@code ==} and {@code !=} work on any pair of values;
+     *       primitives compare by parsed value, references compare by
+     *       {@link EvalResult#objectId}.
+     *   <li>{@code <}, {@code >}, {@code <=}, {@code >=} require
+     *       numeric operands.
+     * </ul>
+     */
+    @NonNull
+    static EvalResult applyComparisonOp(@NonNull String op,
+                                         @NonNull EvalResult l,
+                                         @NonNull EvalResult r) {
+        switch (op) {
+            case "==":
+                return EvalResult.of(EvalResult.Tag.BOOLEAN, "Z",
+                        equalsValue(l, r) ? "true" : "false");
+            case "!=":
+                return EvalResult.of(EvalResult.Tag.BOOLEAN, "Z",
+                        equalsValue(l, r) ? "false" : "true");
+            case "<": case ">": case "<=": case ">=":
+                if (!isNumeric(l)) {
+                    return EvalResult.error("operator '" + op
+                            + "' requires numeric left operand (got " + l.typeSignature + ")");
+                }
+                if (!isNumeric(r)) {
+                    return EvalResult.error("operator '" + op
+                            + "' requires numeric right operand (got " + r.typeSignature + ")");
+                }
+                boolean isDouble = "D".equals(l.typeSignature) || "F".equals(l.typeSignature)
+                        || "D".equals(r.typeSignature) || "F".equals(r.typeSignature);
+                boolean res;
+                if (isDouble) {
+                    double a = parseDouble(l);
+                    double b = parseDouble(r);
+                    switch (op) {
+                        case "<":  res = a < b;  break;
+                        case ">":  res = a > b;  break;
+                        case "<=": res = a <= b; break;
+                        case ">=": res = a >= b; break;
+                        default: return EvalResult.error("unsupported op: " + op);
+                    }
+                } else {
+                    long a = parseLong(l);
+                    long b = parseLong(r);
+                    switch (op) {
+                        case "<":  res = a < b;  break;
+                        case ">":  res = a > b;  break;
+                        case "<=": res = a <= b; break;
+                        case ">=": res = a >= b; break;
+                        default: return EvalResult.error("unsupported op: " + op);
+                    }
+                }
+                return EvalResult.of(EvalResult.Tag.BOOLEAN, "Z",
+                        res ? "true" : "false");
+            default:
+                return EvalResult.error("unsupported comparison op: " + op);
+        }
+    }
+
+    /**
+     * Phase A2 helper: structural equality between two evaluated
+     * values. Reference-typed values compare by {@link EvalResult#objectId};
+     * primitives compare by parsed numeric / boolean displayValue.
+     */
+    private static boolean equalsValue(@NonNull EvalResult l, @NonNull EvalResult r) {
+        String lsig = l.typeSignature == null ? "" : l.typeSignature;
+        String rsig = r.typeSignature == null ? "" : r.typeSignature;
+        // Reference types compare by objectId.
+        boolean lref = !lsig.isEmpty() && (lsig.charAt(0) == 'L' || lsig.charAt(0) == '[');
+        boolean rref = !rsig.isEmpty() && (rsig.charAt(0) == 'L' || rsig.charAt(0) == '[');
+        if (lref || rref) {
+            // If both are refs, objectId must match. If one is ref and
+            // the other is primitive, they cannot be equal.
+            if (lref && rref) return l.objectId == r.objectId;
+            return false;
+        }
+        String lv = l.displayValue == null ? "" : l.displayValue;
+        String rv = r.displayValue == null ? "" : r.displayValue;
+        if (!lsig.isEmpty() && lsig.charAt(0) == 'Z') {
+            return lv.equals(rv);
+        }
+        if (!lsig.isEmpty() && (lsig.charAt(0) == 'F' || lsig.charAt(0) == 'D')) {
+            try { return Double.parseDouble(lv) == Double.parseDouble(rv); }
+            catch (NumberFormatException e) { return false; }
+        }
+        try { return Long.parseLong(lv) == Long.parseLong(rv); }
+        catch (NumberFormatException e) { return false; }
     }
 
     @Nullable
