@@ -209,14 +209,7 @@ public class DebugHostSyncTest {
         Symbol caller = language.index().lookup().byName("caller").stream()
                 .filter(s -> s.kind == SymbolKind.METHOD)
                 .findFirst().orElseThrow();
-        System.err.println("DEBUG: caller.fqn=" + caller.fqn);
         ParsedFile aFile = language.index().lookup().file("a/A.java");
-        for (com.zerostudio.language.model.Reference r : aFile.references) {
-            if (r.kind == Reference.ReferenceKind.CALL) {
-                System.err.println("DEBUG: ref name=" + r.name
-                        + " containerFqn=" + r.containerFqn);
-            }
-        }
         List<CallNavigation.CallSite> callees = nav.calleesOf(caller);
         assertEquals(1, callees.size());
         assertEquals("target", callees.get(0).reference.name);
@@ -244,6 +237,128 @@ public class DebugHostSyncTest {
         EditorIntegration.OpenRequest req = open.last.get();
         assertNotNull(req);
         assertEquals(next.position.line, req.range.start.line);
+    }
+
+    /**
+     * The exact scenario the user described in Chinese: paused inside
+     * {@code Toast.makeText(context, text, duration).show()}, the user
+     * Ctrl+clicks on the {@code text} local variable. The editor must:
+     * <ol>
+     *   <li>Resolve to the local variable declaration
+     *       {@code String text = "Hello toast!"}.</li>
+     *   <li>Open the SAME file (the call site is in MainActivity, the
+     *       declaration is too) and put the cursor on the declaration.</li>
+     *   <li>Keep the host frozen while the user navigates.</li>
+     * </ol>
+     */
+    @Test
+    public void gotoDefinitionOnLocalParameter_text() throws Exception {
+        // The exact text the user posted in Chinese:
+        //
+        //   val context = LocalContext.current
+        //   Button(onClick = {
+        //       val text = "Hello toast!"
+        //       Toast.makeText(context, text, duration).show()
+        //   })
+        //
+        // We model it in Java so the JavaParser path exercises it.
+        String mainSrc =
+                "package com.example;\n" +
+                "import android.widget.Toast;\n" +
+                "public class MainActivity {\n" +
+                "    void onButtonClick(Object context, int duration) {\n" +
+                "        String text = \"Hello toast!\";\n" +
+                "        Toast.makeText(context, text, duration).show();\n" +
+                "    }\n" +
+                "}\n";
+        ParsedFile main = language.parseText(
+                "com/example/MainActivity.java", mainSrc, LanguageId.JAVA);
+
+        // Simulate the debugger hitting line 5 (0-based 5) of the call.
+        // The user Ctrl+clicks on the `text` argument - find its position
+        // dynamically by scanning references.
+        SourceLocation textClick = null;
+        for (com.zerostudio.language.model.Reference r : main.references) {
+            if (r.name.equals("text") && r.kind
+                    == com.zerostudio.language.model.Reference.ReferenceKind.READ) {
+                // The first READ of `text` in the body is the one in the
+                // call - the local declaration itself doesn't generate a
+                // reference because it's not a NameExpr usage.
+                textClick = new SourceLocation(main.path, r.range.start);
+                break;
+            }
+        }
+        assertNotNull("expected a 'text' reference in the call site",
+                textClick);
+
+        // Hit the breakpoint first - this must freeze the host.
+        sync.onBreakpointHit(main.path, 5, 9).get(2, TimeUnit.SECONDS);
+        assertTrue("host should be frozen at breakpoint", host.frozen.get());
+
+        // The user invokes Go-to-Definition on the `text` token.
+        ResolutionResult result = sync.goToDefinition(textClick)
+                .get(2, TimeUnit.SECONDS);
+
+        // The resolution must succeed and point at the local variable
+        // declaration in the same file, on the line where `text` is
+        // declared (line 4, 0-based).
+        assertNotNull(result);
+        assertTrue("expected to resolve to local 'text' decl, got: " + result,
+                result.isResolved());
+        assertEquals("text", result.targetSymbol.name);
+        assertEquals(SymbolKind.LOCAL_VARIABLE, result.targetSymbol.kind);
+        assertEquals(main.path, result.targetFile);
+        assertEquals(4, result.targetRange.start.line);
+
+        // The editor must have been told to open that line - and the host
+        // must STILL be frozen (the user is still paused at the breakpoint).
+        EditorIntegration.OpenRequest last = open.last.get();
+        assertNotNull("editor should have been told to open the decl", last);
+        assertEquals(main.path, last.file);
+        assertEquals(4, last.range.start.line);
+        assertTrue("host must remain frozen during navigation",
+                host.frozen.get());
+    }
+
+    /**
+     * Same as above but for a parameter: clicking on {@code context} in
+     * the call must jump to the parameter declaration of
+     * {@code onButtonClick(Object context, ...)}.
+     */
+    @Test
+    public void gotoDefinitionOnParameter() throws Exception {
+        String mainSrc =
+                "package com.example;\n" +
+                "import android.widget.Toast;\n" +
+                "public class MainActivity {\n" +
+                "    void onButtonClick(Object context, int duration) {\n" +
+                "        Toast.makeText(context, \"hi\", duration).show();\n" +
+                "    }\n" +
+                "}\n";
+        ParsedFile main = language.parseText(
+                "com/example/MainActivity.java", mainSrc, LanguageId.JAVA);
+
+        // The first READ of "context" in the call.
+        SourceLocation click = null;
+        for (com.zerostudio.language.model.Reference r : main.references) {
+            if (r.name.equals("context") && r.kind
+                    == com.zerostudio.language.model.Reference.ReferenceKind.READ) {
+                click = new SourceLocation(main.path, r.range.start);
+                break;
+            }
+        }
+        assertNotNull(click);
+
+        sync.onBreakpointHit(main.path, 4, 9).get(2, TimeUnit.SECONDS);
+        ResolutionResult result = sync.goToDefinition(click)
+                .get(2, TimeUnit.SECONDS);
+
+        assertNotNull(result);
+        assertTrue("expected parameter resolution, got: " + result,
+                result.isResolved());
+        assertEquals("context", result.targetSymbol.name);
+        assertEquals(SymbolKind.PARAMETER, result.targetSymbol.kind);
+        assertEquals(main.path, result.targetFile);
     }
 
     // -------- test doubles --------

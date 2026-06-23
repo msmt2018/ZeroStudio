@@ -18,7 +18,9 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ForStmt;
 
 import com.zerostudio.language.model.LanguageId;
 import com.zerostudio.language.model.ParsedFile;
@@ -119,25 +121,42 @@ public final class JavaParserFacade implements Parser {
                 symbols.add(new Symbol(md.getNameAsString(), sig,
                         SymbolKind.METHOD, fqn, path,
                         toRange(md.getRange().orElse(null)), LanguageId.JAVA));
-                // references inside method - use the method signature as the
-                // container so CallNavigation.calleesOf() can find them
-                // by symbol FQN match.
+                // Harvest parameters and local variables so Go-to-Definition
+                // works on parameter / local references (e.g. clicking on
+                // `text` in `Toast.makeText(ctx, text, ...)` jumps to the
+                // local `String text = "..."` declaration).
+                for (Parameter p : md.getParameters()) {
+                    symbols.add(new Symbol(p.getNameAsString(),
+                            sig + "$p:" + p.getNameAsString(),
+                            SymbolKind.PARAMETER, sig, path,
+                            toRange(p.getRange().orElse(null)),
+                            LanguageId.JAVA));
+                }
                 BlockStmt body = md.getBody().orElse(null);
                 if (body != null) {
                     final String methodSig = sig;
-                    body.walk(NameExpr.class, n -> addNameRef(path, methodSig, null, n, refs));
-                    body.walk(MethodCallExpr.class, n -> addCallRef(path, methodSig, null, n, refs));
+                    harvestLocalVariables(path, methodSig, body, symbols);
+                    body.walk(NameExpr.class, n -> addNameRef(path, null, methodSig, n, refs));
+                    body.walk(MethodCallExpr.class, n -> addCallRef(path, null, methodSig, n, refs));
                 }
             } else if (member instanceof ConstructorDeclaration) {
                 ConstructorDeclaration cd = (ConstructorDeclaration) member;
                 String sig = fqn + "#<init>(" + paramTypes(cd.getParameters()) + ")";
                 symbols.add(new Symbol("<init>", sig, SymbolKind.CONSTRUCTOR, fqn,
                         path, toRange(cd.getRange().orElse(null)), LanguageId.JAVA));
+                for (Parameter p : cd.getParameters()) {
+                    symbols.add(new Symbol(p.getNameAsString(),
+                            sig + "$p:" + p.getNameAsString(),
+                            SymbolKind.PARAMETER, sig, path,
+                            toRange(p.getRange().orElse(null)),
+                            LanguageId.JAVA));
+                }
                 BlockStmt cbody = cd.getBody();
                 if (cbody != null) {
                     final String ctorSig = sig;
-                    cbody.walk(NameExpr.class, n -> addNameRef(path, ctorSig, null, n, refs));
-                    cbody.walk(MethodCallExpr.class, n -> addCallRef(path, ctorSig, null, n, refs));
+                    harvestLocalVariables(path, ctorSig, cbody, symbols);
+                    cbody.walk(NameExpr.class, n -> addNameRef(path, null, ctorSig, n, refs));
+                    cbody.walk(MethodCallExpr.class, n -> addCallRef(path, null, ctorSig, n, refs));
                 }
             } else if (member instanceof FieldDeclaration) {
                 FieldDeclaration fd = (FieldDeclaration) member;
@@ -149,8 +168,8 @@ public final class JavaParserFacade implements Parser {
                 }
                 final String fieldContainer = fqn;
                 fd.getVariables().forEach(v -> v.getInitializer().ifPresent(init -> {
-                    init.walk(NameExpr.class, n -> addNameRef(path, fieldContainer, null, n, refs));
-                    init.walk(MethodCallExpr.class, n -> addCallRef(path, fieldContainer, null, n, refs));
+                    init.walk(NameExpr.class, n -> addNameRef(path, null, fieldContainer, n, refs));
+                    init.walk(MethodCallExpr.class, n -> addCallRef(path, null, fieldContainer, n, refs));
                 }));
             } else if (member instanceof ClassOrInterfaceDeclaration
                     || member instanceof EnumDeclaration) {
@@ -158,6 +177,38 @@ public final class JavaParserFacade implements Parser {
                 extractType(path, pkg, fqn, inner, symbols, refs);
             }
         }
+    }
+
+    /**
+     * Walks a method / constructor body and adds every local variable
+     * declaration as a {@link SymbolKind#LOCAL_VARIABLE} symbol. The
+     * container is the enclosing method signature so that lookup-by-name
+     * can disambiguate locals in different methods.
+     */
+    private void harvestLocalVariables(String path, String methodSig,
+                                       BlockStmt body, List<Symbol> symbols) {
+        body.walk(VariableDeclarationExpr.class, vde -> {
+            for (VariableDeclarator vd : vde.getVariables()) {
+                symbols.add(new Symbol(vd.getNameAsString(),
+                        methodSig + "$l:" + vd.getNameAsString(),
+                        SymbolKind.LOCAL_VARIABLE, methodSig, path,
+                        toRange(vd.getRange().orElse(null)),
+                        LanguageId.JAVA));
+            }
+        });
+        // Also catch for-loop init variables (Pattern: for (int i = 0; ...))
+        body.walk(ForStmt.class, fs -> fs.getInitialization().forEach(init -> {
+            if (init instanceof VariableDeclarationExpr) {
+                for (VariableDeclarator vd :
+                        ((VariableDeclarationExpr) init).getVariables()) {
+                    symbols.add(new Symbol(vd.getNameAsString(),
+                            methodSig + "$l:" + vd.getNameAsString(),
+                            SymbolKind.LOCAL_VARIABLE, methodSig, path,
+                            toRange(vd.getRange().orElse(null)),
+                            LanguageId.JAVA));
+                }
+            }
+        }));
     }
 
     private void addNameRef(String path, String pkg, String container,
