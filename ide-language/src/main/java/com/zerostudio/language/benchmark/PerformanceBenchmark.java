@@ -1,7 +1,7 @@
 package com.zerostudio.language.benchmark;
 
 import com.zerostudio.language.index.ProjectIndex;
-import com.zerostudio.language.java.JavaSymbolExtractor;
+import com.zerostudio.language.parser.JavaParserFacade;
 import com.zerostudio.language.model.LanguageId;
 import com.zerostudio.language.model.ParsedFile;
 import com.zerostudio.language.model.Reference;
@@ -71,7 +71,7 @@ public final class PerformanceBenchmark {
 
     private static Result benchJavaParser() {
         int n = 1000;
-        JavaSymbolExtractor ext = new JavaSymbolExtractor();
+        JavaParserFacade ext = new JavaParserFacade();
         long start = t0();
         for (int i = 0; i < n; i++) {
             String src = "package com.bench;\n" +
@@ -80,7 +80,7 @@ public final class PerformanceBenchmark {
                     "    public void m" + i + "(int x) { }\n" +
                     "    public int get(int idx) { return idx; }\n" +
                     "}\n";
-            ext.extract("C" + i + ".java", src);
+            ext.parse("C" + i + ".java", src);
         }
         return new Result("java-parse-1000-files", elapsedMs(start), n);
     }
@@ -215,12 +215,11 @@ public final class PerformanceBenchmark {
         for (int i = 0; i < 5000; i++) {
             sb.append("public class C").append(i).append(" { void m() {} }\n");
         }
-        JavaSymbolExtractor ext = new JavaSymbolExtractor();
+        JavaParserFacade ext = new JavaParserFacade();
         long start = t0();
-        ParsedFile pf = ext.extract("Big.java", sb.toString());
+        ParsedFile pf = ext.parse("Big.java", sb.toString());
         long elapsed = elapsedMs(start);
-        return new Result("large-file-5000-classes", elapsed, 1) {
-        };
+        return new Result("large-file-5000-classes", elapsed, 1);
     }
 
     public static void main(String[] args) {
