@@ -10,6 +10,7 @@ import com.zerostudio.language.model.SourcePosition;
 import com.zerostudio.language.model.Symbol;
 import com.zerostudio.language.parser.Parser;
 import com.zerostudio.language.parser.ParserRegistry;
+import com.zerostudio.language.source.SourceResolver;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,6 +40,8 @@ public final class LanguageService {
     private final java.util.Map<String, ParsedFile> parsedCache =
             new java.util.concurrent.ConcurrentHashMap<>();
     private final GoToDefinitionService goToDefinition;
+    private volatile SourceResolver sourceResolver;
+    private volatile ImportResolver importResolver;
 
     public LanguageService() {
         this(new InMemoryProjectIndex());
@@ -52,6 +55,25 @@ public final class LanguageService {
     public final ProjectIndex index() { return index; }
 
     public GoToDefinitionService goToDefinition() { return goToDefinition; }
+
+    /**
+     * Install a {@link SourceResolver}. Once installed, the
+     * {@link GoToDefinitionService} will follow import chains to
+     * source jars and class-jar decompilations, in addition to the
+     * workspace.
+     */
+    public void setSourceResolver(SourceResolver resolver) {
+        this.sourceResolver = resolver;
+        this.importResolver = resolver == null
+                ? null : new ImportResolver(resolver);
+    }
+
+    /** @return the installed {@link SourceResolver} or {@code null}. */
+    public SourceResolver sourceResolver() { return sourceResolver; }
+
+    /** @return the {@link ImportResolver} (null until
+     *          {@link #setSourceResolver} is called). */
+    public ImportResolver importResolver() { return importResolver; }
 
     /**
      * Lex a file or in-memory text.

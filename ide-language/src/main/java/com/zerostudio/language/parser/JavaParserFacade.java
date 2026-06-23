@@ -92,6 +92,26 @@ public final class JavaParserFacade implements Parser {
         // initializer. A second top-level walk would double-count every
         // reference inside a method body.
 
+        // Harvest every import declaration. We emit one Reference per
+        // import with kind=IMPORT and the fully-qualified name. This
+        // gives the symbol resolver the chain it needs to follow
+        // when the user clicks on `Toast` and the simple name must
+        // be promoted to `android.widget.Toast`.
+        cu.getImports().forEach(imp -> {
+            String fqn = imp.getNameAsString();
+            if (fqn.isEmpty()) return;
+            refs.add(new Reference(
+                    fqn,
+                    toRange(imp.getRange().orElse(null)),
+                    Reference.ReferenceKind.IMPORT,
+                    packageName,
+                    path,
+                    LanguageId.JAVA));
+            // Star imports (e.g. `import java.util.*;`) are recorded
+            // verbatim too - the resolver will treat them as a soft
+            // match against the simple name.
+        });
+
         return new ParsedFile(path, LanguageId.JAVA, System.currentTimeMillis(),
                 text, symbols, refs, cu, null);
     }

@@ -73,6 +73,22 @@ public final class EditorIntegration {
         openHandler.open(new OpenRequest(result.targetFile, result.targetRange));
     }
 
+    /**
+     * Open a virtual buffer (decompiled class, source-jar entry) in the
+     * editor. The handler may display it in a read-only tab with a
+     * "decompiled from" banner; the cursor goes to the given position.
+     */
+    public void openVirtual(String displayPath, String sourceText,
+                            SourcePosition cursor) {
+        if (openHandler == null) return;
+        SourceRange range = cursor == null
+                ? new SourceRange(0, 0, 0, 0)
+                : new SourceRange(cursor.line, cursor.column,
+                        cursor.line, cursor.column);
+        openHandler.open(new OpenRequest(
+                displayPath, range, sourceText, /* readOnly= */ true));
+    }
+
     private OpenHandler openHandler;
 
     public void setOpenHandler(OpenHandler h) { this.openHandler = h; }
@@ -83,11 +99,25 @@ public final class EditorIntegration {
     }
 
     public static final class OpenRequest {
+        /** Path or display identifier of the buffer to open. */
         public final String file;
+        /** Where to place the cursor. */
         public final SourceRange range;
+        /** Pre-loaded content for virtual (decompiled / source-jar) buffers. */
+        public final String bufferContent;
+        /** True for virtual buffers (read-only tab, banner). */
+        public final boolean readOnly;
+
         public OpenRequest(String file, SourceRange range) {
+            this(file, range, null, false);
+        }
+
+        public OpenRequest(String file, SourceRange range,
+                           String bufferContent, boolean readOnly) {
             this.file = file;
             this.range = range;
+            this.bufferContent = bufferContent;
+            this.readOnly = readOnly;
         }
     }
 

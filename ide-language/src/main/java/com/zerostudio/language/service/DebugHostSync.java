@@ -88,19 +88,48 @@ public final class DebugHostSync {
 
     /**
      * Resolve and jump to the declaration of a token the user clicked.
+     *
+     * <p>If the resolution target is a virtual file (decompiled class
+     * from a class jar, or a source-jar entry), the editor is asked
+     * to open the buffer with the decompiled / source-jar content
+     * pre-loaded, so the user sees the decompiled code in a read-only
+     * tab with a banner like {@code [decompiled from android.jar]}.
      */
     public CompletableFuture<ResolutionResult> goToDefinition(SourceLocation where) {
         return CompletableFuture.supplyAsync(
                 () -> language.goToDefinition().resolve(where), io)
                 .thenApply(result -> {
                     if (result != null && result.isResolved()) {
-                        open.open(new EditorIntegration.OpenRequest(
-                                result.targetFile, result.targetRange));
+                        openResolved(result);
                         cursor.moveTo(new SourceLocation(
                                 result.targetFile, result.targetRange.start));
                     }
                     return result;
                 });
+    }
+
+    private void openResolved(ResolutionResult result) {
+        // The result's targetFile is a display path. For workspace
+        // sources it's a real file path; for decompiled / source-jar
+        // sources it's a marker like "[decompiled from android.jar]".
+        // Detect the marker and use the SourceResolver to obtain the
+        // pre-loaded buffer content.
+        if (result.targetFile == null) return;
+        if (result.targetFile.startsWith("[")
+                && language.sourceResolver() != null
+                && result.targetSymbol != null
+                && result.targetSymbol.fqn != null) {
+            com.zerostudio.language.source.SourceResolver.ResolvedSource src =
+                    language.sourceResolver().resolve(result.targetSymbol.fqn);
+            if (src.isResolved()) {
+                open.open(new EditorIntegration.OpenRequest(
+                        src.displayPath, result.targetRange,
+                        src.sourceText, /* readOnly= */ true));
+                return;
+            }
+        }
+        open.open(new EditorIntegration.OpenRequest(
+                result.targetFile, result.targetRange));
     }
 
     /**

@@ -56,6 +56,9 @@ dependencies {
   implementation(libs.common.lang3)
   implementation(libs.guava.listenablefuture)
 
+  // CFR 反编译器 (源码未找到时退化为 .class 反编译)
+  implementation(project(":ide-decompiler"))
+
   // 事件 / 协程
   compileOnly(libs.kotlinx.coroutines.core)
   compileOnly(libs.kotlinx.coroutines.android)

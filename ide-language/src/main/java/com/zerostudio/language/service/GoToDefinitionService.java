@@ -77,9 +77,24 @@ public final class GoToDefinitionService {
                     enclosing.containerName, parsed.path, parsed.language);
         }
         SymbolResolver resolver = ResolverRegistry.get(parsed.language);
-        if (resolver == null) return ResolutionResult.unresolved(ref);
-        ResolutionContext ctx = new ResolutionContext(parsed, language.index());
-        return resolver.resolve(ref, ctx);
+        ResolutionResult result = null;
+        if (resolver != null) {
+            ResolutionContext ctx = new ResolutionContext(parsed, language.index());
+            result = resolver.resolve(ref, ctx);
+        }
+        // Fall back to import chain -> SourceResolver. This is the
+        // path that makes "click on Toast -> jump to decompiled
+        // android.widget.Toast" work.
+        if ((result == null || !result.isResolved())
+                && language.importResolver() != null
+                && parsed.language == LanguageId.JAVA) {
+            java.util.Optional<ResolutionResult> imported =
+                    language.importResolver().resolveImport(parsed, ref);
+            if (imported.isPresent()) {
+                return imported.get();
+            }
+        }
+        return result == null ? ResolutionResult.unresolved(ref) : result;
     }
 
     /**
