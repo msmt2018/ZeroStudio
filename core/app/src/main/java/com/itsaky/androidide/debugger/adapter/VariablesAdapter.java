@@ -1,8 +1,10 @@
 /*
  *  ZeroStudio IDE - 变量 RecyclerView 适配器
  *
- *  PR-4: 显示变量的 名字 : 类型 = 值。
- *  对象类型（typeSignature 以 'L' 或 '[' 开头）显示「object」徽标。
+ *  PR-4: 显示变量的 名字 : 类型 = 值.
+ *  PR-E1: 升级到 DiffUtil + stableIds, 支持 click-to-set-value (设置值).
+ *
+ *  数据来源: Debugger.fetchVariables(threadId, frameId) 返回的 List<VariableInfo>
  */
 
 package com.itsaky.androidide.debugger.adapter;
@@ -13,20 +15,50 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 import com.itsaky.androidide.R;
 import com.zerostudio.debugger.api.VariableInfo;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
-public class VariablesAdapter extends RecyclerView.Adapter<VariablesAdapter.VH> {
+public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter.VH> {
 
-    private final List<VariableInfo> data = new ArrayList<>();
+    public interface Listener {
+        void onVariableLongClick(@NonNull VariableInfo variable);
+    }
 
-    public void submit(@NonNull List<VariableInfo> vars) {
-        data.clear();
-        data.addAll(vars);
-        notifyDataSetChanged();
+    private static final DiffUtil.ItemCallback<VariableInfo> DIFF =
+            new DiffUtil.ItemCallback<VariableInfo>() {
+                @Override
+                public boolean areItemsTheSame(@NonNull VariableInfo a, @NonNull VariableInfo b) {
+                    return a.name.equals(b.name) && a.typeSignature.equals(b.typeSignature);
+                }
+                @Override
+                public boolean areContentsTheSame(@NonNull VariableInfo a, @NonNull VariableInfo b) {
+                    return a.isPrimitive == b.isPrimitive
+                            && Objects.equals(a.value, b.value);
+                }
+            };
+
+    @Nullable private Listener listener;
+    private long highlightedId = -1L;
+
+    public VariablesAdapter() {
+        super(DIFF);
+        setHasStableIds(true);
+    }
+
+    public void setListener(@Nullable Listener l) { this.listener = l; }
+
+    public void setHighlighted(long objectId) { this.highlightedId = objectId; }
+
+    @Override
+    public long getItemId(int position) {
+        // Hash name + typeSignature; will be stable across submits
+        VariableInfo v = getItem(position);
+        return Objects.hash(v.name, v.typeSignature);
     }
 
     @NonNull
@@ -39,15 +71,20 @@ public class VariablesAdapter extends RecyclerView.Adapter<VariablesAdapter.VH> 
 
     @Override
     public void onBindViewHolder(@NonNull VH h, int position) {
-        VariableInfo v = data.get(position);
+        VariableInfo v = getItem(position);
         h.name.setText(v.name);
         h.type.setText(humanType(v.typeSignature));
         h.value.setText(v.value == null ? "null" : v.value);
         h.refBadge.setVisibility(v.isPrimitive ? View.GONE : View.VISIBLE);
+        h.itemView.setSelected(false);
+        h.itemView.setOnLongClickListener(vw -> {
+            if (listener != null) {
+                listener.onVariableLongClick(v);
+                return true;
+            }
+            return false;
+        });
     }
-
-    @Override
-    public int getItemCount() { return data.size(); }
 
     static class VH extends RecyclerView.ViewHolder {
         final TextView name;
@@ -64,7 +101,7 @@ public class VariablesAdapter extends RecyclerView.Adapter<VariablesAdapter.VH> 
     }
 
     /** "Ljava/lang/String;" -> "String", "I" -> "int" etc. */
-    private static String humanType(@Nullable String sig) {
+    public static String humanType(@Nullable String sig) {
         if (sig == null || sig.isEmpty()) return "?";
         char c = sig.charAt(0);
         switch (c) {
