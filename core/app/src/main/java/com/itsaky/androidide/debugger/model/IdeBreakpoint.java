@@ -15,6 +15,10 @@
  *  ide-debugger 的 Breakpoint 拥有 JDWP 协议 ID。
  *
  *  PR-6: 新增 logMessage 字段 + LOG 状态,配套支持"日志点"。
+ *
+ *  Phase E2: 镜像 ide-debugger 的 hitCountMode + hitCount 字段,
+ *  并把原 hitCount 计数器重命名为 hitCountReceived,避免与
+ *  用户配置的命中阈值同名。
  */
 
 package com.itsaky.androidide.debugger.model;
@@ -67,18 +71,19 @@ public final class IdeBreakpoint {
     @NonNull public State state;
     /** 关联的 ide-debugger 断点 ID;-1 表示尚未安装。 */
     public long debuggerBpId;
-    /** 命中次数。 */
-    public int hitCount_received;
+    /** 运行时报告的命中次数(原 hitCount 字段,Phase E2 重命名以避免歧义)。 */
+    public int hitCountReceived;
 
     public IdeBreakpoint(@NonNull String file, int line) {
         this(UUID.randomUUID().toString(), file, line, null, null,
+                com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS, 0,
                 State.NORMAL, -1L, 0);
     }
 
     /**
-     * Legacy constructor preserved for the persistence layer. Use the
-     * 8-arg form when constructing a breakpoint with both condition and
-     * log message from scratch.
+     * Legacy constructor preserved for the persistence layer. The
+     * {@code hitCount} parameter is interpreted as the persisted hit-count
+     * threshold; the runtime hit counter starts at zero.
      */
     public IdeBreakpoint(
             @NonNull String id,
@@ -88,7 +93,9 @@ public final class IdeBreakpoint {
             @NonNull State state,
             long debuggerBpId,
             int hitCount) {
-        this(id, file, line, condition, null, state, debuggerBpId, hitCount);
+        this(id, file, line, condition, null,
+                com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS, hitCount,
+                state, debuggerBpId, 0);
     }
 
     /** Convenience constructor used by BreakpointStore when loading from disk. */
@@ -101,7 +108,8 @@ public final class IdeBreakpoint {
             long debuggerBpId,
             int hitCount) {
         this(UUID.randomUUID().toString(), file, line, condition, logMessage,
-                state, debuggerBpId, hitCount);
+                com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS, hitCount,
+                state, debuggerBpId, 0);
     }
 
     public IdeBreakpoint(
@@ -113,14 +121,38 @@ public final class IdeBreakpoint {
             @NonNull State state,
             long debuggerBpId,
             int hitCount) {
+        this(id, file, line, condition, logMessage,
+                com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS, hitCount,
+                state, debuggerBpId, 0);
+    }
+
+    /**
+     * Phase E2: full-fidelity constructor. The 10-arg form is the canonical
+     * entry point; legacy constructors delegate here.
+     */
+    public IdeBreakpoint(
+            @NonNull String id,
+            @NonNull String file,
+            int line,
+            @Nullable String condition,
+            @Nullable String logMessage,
+            @NonNull com.zerostudio.debugger.api.Breakpoint.HitCountMode hitCountMode,
+            int hitCount,
+            @NonNull State state,
+            long debuggerBpId,
+            int hitCountReceived) {
         this.id = id;
         this.file = file;
         this.line = line;
         this.condition = condition;
         this.logMessage = logMessage;
+        this.hitCountMode = hitCountMode == null
+                ? com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS
+                : hitCountMode;
+        this.hitCount = hitCount;
         this.state = state;
         this.debuggerBpId = debuggerBpId;
-        this.hitCount = hitCount;
+        this.hitCountReceived = hitCountReceived;
     }
 
     /** 是否处于"活跃"状态:用户希望调试器关注它。 */
@@ -153,6 +185,33 @@ public final class IdeBreakpoint {
         }
     }
 
+    /**
+     * Phase E2: 设置命中次数策略与阈值。状态切到 NORMAL/CONDITION
+     * (取决于是否同时有 condition),DISABLED/HIT/LOG 状态保留。
+     */
+    public void setHitCount(
+            @NonNull com.zerostudio.debugger.api.Breakpoint.HitCountMode mode,
+            int count) {
+        this.hitCountMode = mode == null
+                ? com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS
+                : mode;
+        this.hitCount = Math.max(0, count);
+        if (state == State.DISABLED
+                || state == State.HIT
+                || state == State.LOG) {
+            return;
+        }
+        if (this.hitCountMode != com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS) {
+            // 命中次数过滤本身不算"条件断点",用 NORMAL 展示即可
+            return;
+        }
+        if (this.condition != null && !this.condition.isEmpty()) {
+            state = State.CONDITION;
+        } else {
+            state = State.NORMAL;
+        }
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -176,6 +235,10 @@ public final class IdeBreakpoint {
                 + ", state=" + state
                 + (condition != null ? ", condition=" + condition : "")
                 + (logMessage != null ? ", logMessage=" + logMessage : "")
+                + (hitCountMode != com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS
+                        ? ", hitCount=" + hitCountMode + ":" + hitCount
+                        : "")
+                + ", hits=" + hitCountReceived
                 + '}';
     }
 }

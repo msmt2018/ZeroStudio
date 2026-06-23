@@ -89,6 +89,34 @@
             android:visibility="gone"
             android:layout_marginTop="2dp"
             tools:text="日志: x = 42"/>
+
+        <!-- Phase E2: 命中次数阈值 (仅在非 ALWAYS 模式时显示) -->
+        <TextView
+            android:id="@+id/bp_hit_count"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorTertiary"
+            android:textAppearance="?attr/textAppearanceLabelSmall"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:visibility="gone"
+            android:layout_marginTop="2dp"
+            tools:text="命中 = 5"
+            tools:visibility="visible"/>
+
+        <!-- Phase E2: 实际命中次数 -->
+        <TextView
+            android:id="@+id/bp_hit_count_received"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorPrimary"
+            android:textAppearance="?attr/textAppearanceLabelSmall"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:visibility="gone"
+            android:layout_marginTop="2dp"
+            tools:text="已命中 12 次"
+            tools:visibility="visible"/>
     </LinearLayout>
 
 </LinearLayout>

@@ -74,6 +74,27 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         h.logMessage.setVisibility(hasLog ? View.VISIBLE : View.GONE);
         h.logMessage.setText(bp.logMessage != null ? bp.logMessage : "");
 
+        // Phase E2: 命中次数提示 (仅在非 ALWAYS 时显示)
+        boolean hasHitCount = bp.hitCountMode
+                != com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS
+                && bp.hitCount > 0;
+        if (h.hitCount != null) {
+            h.hitCount.setVisibility(hasHitCount ? View.VISIBLE : View.GONE);
+            if (hasHitCount) {
+                h.hitCount.setText(h.itemView.getContext().getString(
+                        hitCountLabelResId(bp.hitCountMode), bp.hitCount));
+            }
+        }
+        // Phase E2: 已命中次数提示
+        if (h.hitCountReceived != null) {
+            boolean showReceived = bp.hitCountReceived > 0;
+            h.hitCountReceived.setVisibility(showReceived ? View.VISIBLE : View.GONE);
+            if (showReceived) {
+                h.hitCountReceived.setText(h.itemView.getContext().getString(
+                        R.string.debugger_bp_hit_received, bp.hitCountReceived));
+            }
+        }
+
         h.itemView.setOnClickListener(v -> {
             if (listener != null) listener.onItemClick(bp);
         });
@@ -96,6 +117,8 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
         final TextView state;
         final TextView condition;
         final TextView logMessage;
+        @Nullable final TextView hitCount;
+        @Nullable final TextView hitCountReceived;
 
         VH(@NonNull View v) {
             super(v);
@@ -105,6 +128,9 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
             state = v.findViewById(R.id.bp_state);
             condition = v.findViewById(R.id.bp_condition);
             logMessage = v.findViewById(R.id.bp_log_message);
+            // Phase E2: 命中次数/已命中次数 (可能为 null,容错处理)
+            hitCount = v.findViewById(R.id.bp_hit_count);
+            hitCountReceived = v.findViewById(R.id.bp_hit_count_received);
         }
     }
 
@@ -131,6 +157,21 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
             case DISABLED: return 0xFF9E9E9E;
             case HIT: return 0xFF1E88E5;
             default: return 0xFFE53935;
+        }
+    }
+
+    /**
+     * Phase E2: helper, 解析 hit count 模式对应的 i18n 字符串 id。
+     * 仅在 onBindViewHolder 中通过 itemView.getContext() 调用,这里
+     * 集中逻辑方便单元测试。
+     */
+    public static int hitCountLabelResId(
+            @NonNull com.zerostudio.debugger.api.Breakpoint.HitCountMode mode) {
+        switch (mode) {
+            case EQUAL: return R.string.debugger_bp_hit_equal;
+            case GREATER_THAN: return R.string.debugger_bp_hit_greater;
+            case MULTIPLE: return R.string.debugger_bp_hit_multiple;
+            default: return R.string.debugger_bp_hit_equal;
         }
     }
 

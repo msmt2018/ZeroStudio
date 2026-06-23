@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.UUID;
 
 public final class BreakpointStore {
 
@@ -66,8 +67,16 @@ public final class BreakpointStore {
                     try {
                         state = IdeBreakpoint.State.valueOf(o.optString("state", "NORMAL"));
                     } catch (IllegalArgumentException ignored) {}
+                    com.zerostudio.debugger.api.Breakpoint.HitCountMode mode =
+                            com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS;
+                    try {
+                        mode = com.zerostudio.debugger.api.Breakpoint.HitCountMode
+                                .valueOf(o.optString("hitCountMode", "ALWAYS"));
+                    } catch (IllegalArgumentException ignored) {}
+                    int hitCount = o.optInt("hitCount", 0);
                     IdeBreakpoint bp = new IdeBreakpoint(
-                            f, line, cond, log, state, -1L, o.optInt("hitCount", 0));
+                            UUID.randomUUID().toString(), f, line, cond, log,
+                            mode, hitCount, state, -1L, 0);
                     mgr.add(bp);
                 }
                 Log.i(TAG, "Loaded " + arr.length() + " breakpoints from " + file);
@@ -98,7 +107,11 @@ public final class BreakpointStore {
                     if (bp.condition != null) o.put("condition", bp.condition);
                     if (bp.logMessage != null) o.put("logMessage", bp.logMessage);
                     o.put("state", bp.state.name());
-                    o.put("hitCount", bp.hitCount);
+                    if (bp.hitCountMode
+                            != com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS) {
+                        o.put("hitCountMode", bp.hitCountMode.name());
+                        o.put("hitCount", bp.hitCount);
+                    }
                     arr.put(o);
                 }
                 try (FileWriter w = new FileWriter(file)) {

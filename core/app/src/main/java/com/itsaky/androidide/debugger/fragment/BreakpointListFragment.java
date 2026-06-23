@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.itsaky.androidide.R;
 import com.itsaky.androidide.activities.editor.BaseEditorActivity;
+import com.itsaky.androidide.debugger.BreakpointConditionDialog;
 import com.itsaky.androidide.debugger.adapter.BreakpointListAdapter;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
@@ -117,12 +118,11 @@ public class BreakpointListFragment extends Fragment
                         bp.state == IdeBreakpoint.State.DISABLED);
                 return true;
             }
-            if (id == R.id.menu_bp_edit_condition) {
-                showConditionDialog(bp);
-                return true;
-            }
-            if (id == R.id.menu_bp_edit_log) {
-                showLogpointDialog(bp);
+            if (id == R.id.menu_bp_edit_condition
+                    || id == R.id.menu_bp_edit_log) {
+                // PR-E2: 统一合并到 BreakpointConditionDialog,
+                // 在对话框内通过 "类型" 单选切换条件/日志。
+                BreakpointConditionDialog.show(getChildFragmentManager(), bp.id);
                 return true;
             }
             if (id == R.id.menu_bp_delete) {
@@ -132,38 +132,6 @@ public class BreakpointListFragment extends Fragment
             return false;
         });
         menu.show();
-    }
-
-    private void showConditionDialog(@NonNull IdeBreakpoint bp) {
-        // 简化版：直接用 input dialog，未来可换成自定义 layout
-        android.widget.EditText input = new android.widget.EditText(requireContext());
-        input.setText(bp.condition != null ? bp.condition : "");
-        input.setHint("条件表达式 (e.g. i > 0)");
-        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle("编辑条件")
-                .setView(input)
-                .setPositiveButton("确定", (d, w) ->
-                        BreakpointManager.getInstance().setCondition(bp.id, input.getText().toString()))
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
-    /**
-     * PR-6: dialog for editing a breakpoint's log message (logpoint).
-     * Setting a non-empty value marks the breakpoint as a logpoint; the
-     * VM will evaluate the message on hit and never pause.
-     */
-    private void showLogpointDialog(@NonNull IdeBreakpoint bp) {
-        android.widget.EditText input = new android.widget.EditText(requireContext());
-        input.setText(bp.logMessage != null ? bp.logMessage : "");
-        input.setHint("日志消息 (e.g. \"x=\" + x)");
-        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle("编辑日志点")
-                .setView(input)
-                .setPositiveButton("确定", (d, w) ->
-                        BreakpointManager.getInstance().setLogMessage(bp.id, input.getText().toString()))
-                .setNegativeButton("取消", null)
-                .show();
     }
 
     private void navigateToBreakpoint(@NonNull IdeBreakpoint bp) {

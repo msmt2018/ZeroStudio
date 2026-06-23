@@ -166,6 +166,23 @@ public final class BreakpointManager {
         fireStateChanged(bp);
     }
 
+    /**
+     * Phase E2: 设置命中次数策略与阈值。null 模式等同 ALWAYS + 计数 0。
+     * 状态变化通过 fireStateChanged 派发,JDWP 端通过 reinstallOnDebugger
+     * 重新安装修饰符。
+     */
+    @MainThread
+    public void setHitCount(
+            @NonNull String id,
+            @NonNull com.zerostudio.debugger.api.Breakpoint.HitCountMode mode,
+            int count) {
+        IdeBreakpoint bp = findById(id);
+        if (bp == null) return;
+        bp.setHitCount(mode, count);
+        reinstallOnDebugger(bp);
+        fireStateChanged(bp);
+    }
+
     @MainThread
     public void setEnabled(@NonNull String id, boolean enabled) {
         IdeBreakpoint bp = findById(id);
@@ -296,7 +313,7 @@ public final class BreakpointManager {
 
     /** ide-debugger 报告该断点被命中。 */
     public void markHit(@NonNull IdeBreakpoint bp) {
-        bp.hitCount++;
+        bp.hitCountReceived++;
         bp.state = IdeBreakpoint.State.HIT;
         fireStateChanged(bp);
     }
@@ -309,7 +326,9 @@ public final class BreakpointManager {
         try {
             String cond = (bp.state == IdeBreakpoint.State.CONDITION) ? bp.condition : null;
             String log = (bp.state == IdeBreakpoint.State.LOG) ? bp.logMessage : null;
-            long id = debugger.addBreakpoint(bp.file, bp.line, cond, log);
+            long id = debugger.addBreakpoint(
+                    bp.file, bp.line, cond, log,
+                    bp.hitCountMode, bp.hitCount);
             bp.debuggerBpId = id;
         } catch (Throwable t) {
             ILogger.debug(TAG, "installOnDebugger failed: " + t.getMessage());

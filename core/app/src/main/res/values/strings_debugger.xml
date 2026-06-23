@@ -94,4 +94,34 @@
     <string name="debugger_msg_install_committed">安装已提交，等待安装完成 …</string>
     <string name="debugger_msg_launched">已启动 %1$s</string>
     <string name="debugger_msg_failed">调试启动失败 @%1$s : %2$s</string>
+
+    <!-- PR-E2: 断点条件/日志点配置对话框 -->
+    <string name="debugger_bcd_title">断点属性</string>
+    <string name="debugger_bcd_type">断点类型</string>
+    <string name="debugger_bcd_type_normal">普通</string>
+    <string name="debugger_bcd_type_condition">条件</string>
+    <string name="debugger_bcd_type_logpoint">日志点</string>
+    <string name="debugger_bcd_condition_label">条件表达式</string>
+    <string name="debugger_bcd_condition_hint">例如 i &gt; 0 &amp;&amp; !done</string>
+    <string name="debugger_bcd_condition_helper">命中时求值,非真则继续运行</string>
+    <string name="debugger_bcd_log_label">日志消息</string>
+    <string name="debugger_bcd_log_hint">例如 \"x=\" + x</string>
+    <string name="debugger_bcd_hit_count">命中次数</string>
+    <string name="debugger_bcd_hit_count_value">N</string>
+    <string name="debugger_bcd_hit_count_helper_always">每次命中都触发</string>
+    <string name="debugger_bcd_hit_count_helper_equal">仅在第 N 次命中时触发</string>
+    <string name="debugger_bcd_hit_count_helper_greater">第 N 次之后每次都触发</string>
+    <string name="debugger_bcd_hit_count_helper_multiple">每命中 N 次触发一次</string>
+    <string name="debugger_bcd_validation_condition_empty">条件表达式不能为空</string>
+    <string name="debugger_bcd_validation_log_empty">日志消息不能为空</string>
+    <string name="debugger_bcd_validation_count_invalid">命中次数必须是 1 - 999999999 的整数</string>
+    <string name="debugger_bcd_btn_save">保存</string>
+    <string name="debugger_bcd_btn_cancel">取消</string>
+    <string name="debugger_bcd_btn_remove">移除</string>
+
+    <!-- PR-E2: 列表项命中次数显示 -->
+    <string name="debugger_bp_hit_equal">命中 = %1$d</string>
+    <string name="debugger_bp_hit_greater">命中 &gt; %1$d</string>
+    <string name="debugger_bp_hit_multiple">每 %1$d 次触发</string>
+    <string name="debugger_bp_hit_received">已命中 %1$d 次</string>
 </resources>
