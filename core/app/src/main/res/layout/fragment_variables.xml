@@ -28,7 +28,8 @@
             android:layout_height="match_parent"
             android:scrollbars="vertical"
             android:clipToPadding="false"
-            android:paddingBottom="48dp"/>
+            android:paddingBottom="48dp"
+            android:contentDescription="@string/debugger_variables_list_desc"/>
 
         <TextView
             android:id="@+id/vars_loading"
