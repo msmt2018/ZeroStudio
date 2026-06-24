@@ -36,8 +36,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class LogcatReader {
 
     private static final String TAG = "LogcatReader";
-    private static final long RECONNECT_BACKOFF_MS = 5_000L;
-    private static final long READ_LINE_TIMEOUT_MS = 5_000L;
+    // PR-D9.3 (#46): 退避改成指数 (1s, 2s, 4s, ... 8s 上限), 比原先固定 5s
+    // 在断连频繁时更友好, 长时间断连时也避免空跑。
+    private static final long BACKOFF_INITIAL_MS = 1_000L;
+    private static final long BACKOFF_MAX_MS = 8_000L;
+    // PR-D9.3 (#46): 行读取 poll 间隔缩短到 1s, 让 stop() 更快生效。
+    private static final long READ_LINE_TIMEOUT_MS = 1_000L;
 
     public interface LineListener {
         /** Called on the reader thread for each non-null line. */
@@ -97,10 +101,15 @@ public final class LogcatReader {
 
     @WorkerThread
     private void runLoop() {
-        // 反复尝试 spawn 进程;失败/结束后等待 backoff 再试 (autoReconnect=true)。
+        // PR-D9.3 (#46): 指数退避。每次 spawn 失败后 backoff 翻倍, 上限 BACKOFF_MAX_MS。
+        // 成功 spawn 后回到 INITIAL, 避免一次成功后下次异常时还卡在长退避上。
+        long backoffMs = BACKOFF_INITIAL_MS;
         while (running.get()) {
             try {
                 spawnOnce();
+                // 进程正常返回 (running 仍为 true 但读循环退出) → 视为瞬时断连,
+                // 也走退避, 但成功 spawn 视为重置 backoff (放在 finally 后做)。
+                backoffMs = BACKOFF_INITIAL_MS;
             } catch (Throwable t) {
                 Log.w(TAG, "logcat process crashed: " + t.getMessage());
                 LineListener l = listener;
@@ -111,11 +120,12 @@ public final class LogcatReader {
             if (!running.get()) return;
             if (!autoReconnect) return;
             try {
-                Thread.sleep(RECONNECT_BACKOFF_MS);
+                Thread.sleep(backoffMs);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 return;
             }
+            backoffMs = Math.min(backoffMs * 2L, BACKOFF_MAX_MS);
         }
     }
 

@@ -226,4 +226,96 @@ public class LogStoreTest {
         // 验证常量值 (防止被误改)
         assertEquals(10_000, LogStore.DEFAULT_CAPACITY);
     }
+
+    // ===== PR-D9.1: exportToFile =====
+
+    @Test
+    public void exportToFile_writesAllEntries() throws Exception {
+        store.append("Main.java", 10, "value=42");
+        store.append("Main.java", 11, "value=43");
+        store.append(null, -1, "no source");
+        java.io.File tmp = java.io.File.createTempFile("logstore-test-", ".txt");
+        tmp.deleteOnExit();
+        int n = store.exportToFile(tmp);
+        assertEquals(3, n);
+        String body = new String(java.nio.file.Files.readAllBytes(tmp.toPath()),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("应有 main.java 引用行: " + body,
+                body.contains("[Main.java:10]"));
+        assertTrue("应有 value=42: " + body, body.contains("value=42"));
+        assertTrue("应有 value=43: " + body, body.contains("value=43"));
+        assertTrue("应有 no source: " + body, body.contains("no source"));
+        // 行数 = 3
+        long lineCount = body.lines().filter(l -> !l.isEmpty()).count();
+        assertEquals(3, lineCount);
+    }
+
+    @Test
+    public void exportToFile_emptyStore_writesZeroLines() throws Exception {
+        java.io.File tmp = java.io.File.createTempFile("logstore-empty-", ".txt");
+        tmp.deleteOnExit();
+        int n = store.exportToFile(tmp);
+        assertEquals(0, n);
+        long lineCount = java.nio.file.Files.readAllBytes(tmp.toPath()).length;
+        assertEquals(0, lineCount);
+    }
+
+    @Test
+    public void exportToFile_createsParentDirs() throws Exception {
+        java.io.File tmp = java.io.File.createTempFile("logstore-parent-", "");
+        //noinspection ResultOfMethodCallIgnored
+        tmp.delete();
+        java.io.File sub = new java.io.File(tmp, "nested/dir/log.txt");
+        store.append("a");
+        int n = store.exportToFile(sub);
+        assertEquals(1, n);
+        assertTrue(sub.exists());
+    }
+
+    // ===== PR-D9.2: enabled / pause =====
+
+    @Test
+    public void enabled_defaultIsTrue() {
+        // 新 store 默认 enabled
+        LogStore fresh = new LogStore();
+        assertTrue(fresh.isEnabled());
+    }
+
+    @Test
+    public void setEnabled_pause_dropsAppends() {
+        store.setEnabled(false);
+        store.append("a");
+        store.append("b");
+        assertEquals(0, store.size());
+        assertTrue(store.snapshot().isEmpty());
+    }
+
+    @Test
+    public void setEnabled_resume_acceptsNewAppends() {
+        store.setEnabled(false);
+        store.append("a");
+        store.setEnabled(true);
+        store.append("b");
+        assertEquals(1, store.size());
+        assertEquals("b", store.snapshot().get(0).text);
+    }
+
+    @Test
+    public void setEnabled_returnsPreviousValue() {
+        assertTrue(store.setEnabled(false));  // was true
+        assertFalse(store.setEnabled(true));  // was false
+        assertTrue(store.setEnabled(true));   // was true (no change)
+    }
+
+    @Test
+    public void setEnabled_pause_doesNotAffectExistingEntries() {
+        store.append("a");
+        store.append("b");
+        store.setEnabled(false);
+        // 暂停后, 已有的 entries 还在
+        assertEquals(2, store.size());
+        store.append("c");
+        // 暂停期间的 c 不进来
+        assertEquals(2, store.size());
+    }
 }

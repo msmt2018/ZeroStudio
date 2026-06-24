@@ -53,6 +53,24 @@ public final class LogStore {
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     private int capacity = DEFAULT_CAPACITY;
 
+    // PR-D9.2 (#45): 暂停标志。append() 早返回, 已累积的 entries 不动,
+    // 恢复后从下一次 append 开始。listener 不发 onLogPaused 之类的额外事件,
+    // 由 UI 层 (LogpointFragment) 自己反映状态 (按钮文本 / Switch)。
+    private volatile boolean enabled = true;
+
+    /** PR-D9.2 (#45): 当前是否接受新 append。 */
+    public boolean isEnabled() { return enabled; }
+
+    /**
+     * PR-D9.2 (#45): 启用/暂停 append。返回旧状态, 便于 UI 做 toggle 文本切换。
+     * 暂停时已有的 entries 保留, 不清空;clear() 行为不受影响。
+     */
+    public boolean setEnabled(boolean enabled) {
+        boolean prev = this.enabled;
+        this.enabled = enabled;
+        return prev;
+    }
+
     /** PR-D7: 后台派发线程,避免 listener.onLogAppended 在调用方线程上跑。 */
     private final android.os.HandlerThread dispatchThread =
             new android.os.HandlerThread("LogStore-Dispatch");
@@ -80,6 +98,8 @@ public final class LogStore {
     }
 
     public void append(@Nullable String sourceFile, int line, @NonNull String text) {
+        // PR-D9.2 (#45): 暂停时直接丢弃, 不进 entries 也不派发。
+        if (!enabled) return;
         Entry e = new Entry(System.currentTimeMillis(),
                 sourceFile == null ? "" : sourceFile, line, text);
         synchronized (entries) {
@@ -166,5 +186,52 @@ public final class LogStore {
 
     public int size() {
         synchronized (entries) { return entries.size(); }
+    }
+
+    /**
+     * PR-D9.1 (#41): 把当前快照以纯文本格式导出到指定文件。
+     * <p>
+     * 调用方负责选目标 (例如 {@code Environment.DIRECTORY_DOWNLOADS}) 和
+     * 异常处理。导出期间不清空 LogStore;若 {@code snapshot} 期间有新条目
+     * append,会写到内存里但不会进入本次导出 (snapshot 是原子读)。
+     * <p>
+     * 行格式: {@code HH:mm:ss.SSS  [sourceFile:line]  text}
+     *
+     * @param file 目标文件;若父目录不存在则创建
+     * @return 实际写入的条目数
+     * @throws IOException 写盘失败
+     */
+    public int exportToFile(@NonNull java.io.File file) throws java.io.IOException {
+        final List<Entry> snap = snapshot();
+        if (file.getParentFile() != null && !file.getParentFile().exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            file.getParentFile().mkdirs();
+        }
+        final java.text.SimpleDateFormat fmt =
+                new java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault());
+        try (java.io.BufferedWriter w =
+                     new java.io.BufferedWriter(new java.io.OutputStreamWriter(
+                             new java.io.FileOutputStream(file, false),
+                             java.nio.charset.StandardCharsets.UTF_8))) {
+            for (Entry e : snap) {
+                final String ts = fmt.format(new java.util.Date(e.timestamp));
+                if (e.sourceFile.isEmpty()) {
+                    w.write(ts);
+                    w.write("  ");
+                    w.write(e.text);
+                } else {
+                    w.write(ts);
+                    w.write("  [");
+                    w.write(e.sourceFile);
+                    w.write(":");
+                    w.write(Integer.toString(e.line));
+                    w.write("]  ");
+                    w.write(e.text);
+                }
+                w.newLine();
+            }
+            w.flush();
+        }
+        return snap.size();
     }
 }

@@ -116,10 +116,19 @@ public final class ShizukuBridge {
      * 直接的 `exec` API,但它会通过 binder 给我们一个可以 newProcess
      * 的接口,而 newProcess 走的是 `java.lang.ProcessBuilder` 等价
      * 的实现。
+     *
+     * PR-D9.4 (#47) 安全审计: caller 必须保证 [command] 不含 shell
+     * 元字符。优先用 [CommandValidator.isSafeArg] 校验;若含 `;` `|`
+     * `` ` `` 等字符,容易在拼接时引入 shell injection。
      */
     @WorkerThread
     @NonNull
     public String exec(@NonNull String command) {
+        if (!CommandValidator.isSafeArg(command)) {
+            Log.w(TAG, "exec: refusing command with shell metacharacters: "
+                    + redact(command));
+            return "";
+        }
         if (!isBinderReady()) {
             Log.w(TAG, "exec: binder not ready");
             return "";
@@ -142,6 +151,12 @@ public final class ShizukuBridge {
     /** 尝试通过 shizuku 静默 install (走 `pm install` 而不是 PackageInstaller). */
     @WorkerThread
     public boolean installApk(@NonNull String apkPath) {
+        // PR-D9.4 (#47): 路径必须不含 shell 元字符, 否则 `pm install -r -t <path>`
+        // 会因为空格 / `;` 等变成多命令拼接。
+        if (!CommandValidator.isSafePath(apkPath)) {
+            Log.w(TAG, "installApk: refusing unsafe apk path");
+            return false;
+        }
         String out = exec("pm install -r -t " + apkPath);
         boolean ok = out.contains("Success") || out.contains("success");
         if (!ok) {
@@ -154,7 +169,26 @@ public final class ShizukuBridge {
     @WorkerThread
     @NonNull
     public String runAs(@NonNull String pkg, @NonNull String cmd) {
+        // PR-D9.4 (#47): pkg 是 Android 包名, 严格白名单; cmd 也要先过元字符检查。
+        if (!CommandValidator.isSafePackageName(pkg)) {
+            Log.w(TAG, "runAs: refusing unsafe package name");
+            return "";
+        }
+        if (!CommandValidator.isSafeArg(cmd)) {
+            Log.w(TAG, "runAs: refusing unsafe command");
+            return "";
+        }
         return exec("run-as " + pkg + " " + cmd);
+    }
+
+    /**
+     * PR-D9.4 (#47): 把日志里可能含 shell 注入的字符串脱敏。
+     * 保留首 8 字符 + `...` 以便诊断, 中间段替换成 `*`。
+     */
+    @NonNull
+    static String redact(@NonNull String s) {
+        if (s.length() <= 8) return "***";
+        return s.substring(0, 8) + "***(" + s.length() + ")";
     }
 
     private static boolean detectApiClass() {

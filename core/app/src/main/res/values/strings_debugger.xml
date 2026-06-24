@@ -81,6 +81,14 @@
     <string name="debugger_log_empty">没有日志点输出\n在断点上设置日志消息表达式</string>
     <string name="debugger_log_clear">清空</string>
     <string name="debugger_log_autoscroll">自动滚动</string>
+    <!-- PR-D9.1: 导出日志到文件 -->
+    <string name="debugger_log_export">导出</string>
+    <string name="debugger_log_export_ok">已导出 %1$d 条日志到 %2$s</string>
+    <string name="debugger_log_export_empty">没有日志可导出</string>
+    <string name="debugger_log_export_failed">导出失败: %1$s</string>
+    <!-- PR-D9.2: 暂停 / 恢复 日志追加 -->
+    <string name="debugger_log_pause">暂停</string>
+    <string name="debugger_log_pause_desc">暂停 / 恢复日志追加</string>
 
     <!-- PR-D1: 顶层 "调试" 工具栏按钮 -->
     <string name="debugger_action_start_debug">🪲 开始调试</string>
