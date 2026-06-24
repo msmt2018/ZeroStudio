@@ -474,7 +474,7 @@ okhttp-sse = { group = "com.squareup.okhttp3", name = "okhttp-sse", version.ref 
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 
 # 文件反编译器
-org-jetbrains-fernflower = { module = "zerostudio:fernflower", version = "1.0" }
+org-jetbrains-fernflower = { module = "com.jetbrains.intellij.java", name = "java-decompiler-engine", version.ref = "fernFlowerVersion" }
 org-bitbucket-mstrobel-procyon-compilertools = { module = "org.bitbucket.mstrobel:procyon-compilertools", version = "0.6.0" }
 com-jetbrains-intellij-java-decompiler = { module = "com.jetbrains.intellij.java:java-decompiler-engine", version.ref = "fernFlowerVersion" }
 
