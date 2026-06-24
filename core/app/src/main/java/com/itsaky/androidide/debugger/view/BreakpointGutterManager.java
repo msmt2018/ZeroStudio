@@ -141,12 +141,12 @@ public final class BreakpointGutterManager {
     }
 
     private void subscribeEditorEvents() {
-        editor.subscribeEvent(ScrollEvent.class, (event, _) -> {
+        editor.subscribeEvent(ScrollEvent.class, (event, subscriber) -> {
             layoutSidebar();
             refreshSidebar();
             return null;
         });
-        editor.subscribeEvent(ContentChangeEvent.class, (event, _) -> {
+        editor.subscribeEvent(ContentChangeEvent.class, (event, subscriber) -> {
             refreshSidebar();
             return null;
         });
