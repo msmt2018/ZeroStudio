@@ -44,6 +44,17 @@ dependencies {
   api(libs.androidx.core.ktx)
   api(libs.common.kotlin)
 
+  // Java & dex/smali decompilers (declared in libs.versions.toml).
+  // Exposed as `api` so the decompilers can be reached from the app module without
+  // making every consumer declare them again.
+  api(libs.com.jetbrains.intellij.java.decompiler)
+  api(libs.google.baksmali)
+  api(libs.google.smali)
+  api(libs.google.smali.dexlib2)
+  api(libs.google.smali.util)
+  api(libs.org.jetbrains.fernflower)
+  api(libs.org.bitbucket.mstrobel.procyon.compilertools)
+
   api(projects.core.resources)
   api(projects.editor.lexers)
   api(projects.event.eventbusAndroid)
