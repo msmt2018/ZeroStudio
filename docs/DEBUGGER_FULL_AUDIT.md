@@ -1,7 +1,6 @@
 # ZeroStudio Debugger 真实开发状况审计报告
 
 > **生成日期**: 2026-06-23
-> **PR-D4 增量更新**: 2026-06-24
 > **审计范围**: 用户提出的"宿主 UI 冻结 / 断点跳转 / 多语言 AST / 引用查找"等需求
 > **审计结论**: 前 48 个 Phase 集中于 JDWP 协议层,UI 反向映射、AST 解析、引用查找、NDK 调试**几乎全部未实现**
 
@@ -230,50 +229,92 @@ ide-native-debugger/        # NDK 调试
 
 ---
 
-## 7. PR-D4 增量修复(2026-06-24)
+## 7. 完整源码深度审计(PR-D6 起点)
 
-> 对照"完整断点调试器"的架构 / 业务 / 行为 / 操作 / 交互规范,系统性修复 15 项问题。
+---
 
-### 7.1 业务/操作端修复
+## 8. 完整源码深度审计(PR-D6 起点)
 
-| 修复点 | 改动文件 | 关键改动 |
-|--------|---------|---------|
-| 缺 LogpointFragment 注册 | `EditorBottomSheetTabAdapter.java` + `core/resources/strings.xml` | 把 `LogpointFragment` 加进 TabAdapter 末尾;新增 `editor_tab_watches` + `editor_tab_logpoint` |
-| `BreakpointTypePicker` 弹窗位置错乱 | `BreakpointTypePicker.java` | 新增 `showAtPosition(activity, parent, anchorX, anchorY, file, line)` 重载,放 1x1 ghost View 实现任意坐标 anchor |
-| `BreakpointSidebar` 错误的长按检测 | `BreakpointSidebar.java` | 用 `GestureDetector.SimpleOnGestureListener` 替代 `event.getEventTime() - event.getDownTime() > 500L` 的错误检测 |
-| `WatchesAdapter` items/values 错位 | `WatchesAdapter.java` | 合并 `List<String> items + List<String> values` 为单一 `WatchEntry(expression, value)` 数据源;`setValues(String[])` 原子更新 |
-| 缺 set-value 入口 | `VariablesAdapter.java` + `VariablesFragment.java` | `Listener` 加 `onItemClick(VariableInfo)` 默认方法;`VariablesFragment` 弹 AlertDialog + 调 `EvalEngine.setLocal` 真正实现 set-value |
-| 缺 watch 表达式编辑入口 | `WatchesFragment.java` + `WatchStore.java` | 接 `onItemClick` → `showEditDialog()`;`WatchStore.set(int, String)` 替换并去重 |
-| `DebuggerController.stop()` 未实现 | `DebuggerController.java` | 真正实现:`resume → disconnect → 异步 am force-stop → a11y 公告 → flash`;加 `targetPackage` 字段 + `bg` ExecutorService |
-| `DebugSessionLauncher` 无法取消 | `DebugSessionLauncher.java` | 加 `cancelled AtomicBoolean` + `stop()` 5 个 step 边界检查 + `fireCancelled` 回调 |
-| 缺异常跳转菜单项 | `DebuggerActionMenuProvider.java` + `ids_debugger.xml` + `strings_debugger.xml` | 加 `dbg_action_goto_exception` → `ctl.gotoException()` |
+> 通读全部 32 个源文件后归纳的 5 大类 / 共 47 项问题清单。
+> 优先级:**P0(必修,影响正确性) > P1(应修,影响体验) > P2(可选,锦上添花)**。
 
-### 7.2 交互端修复
+### 8.1 P0 — 正确性 / 并发
 
-| 修复点 | 改动文件 | 关键改动 |
-|--------|---------|---------|
-| 缺 a11y 公告 | `DebuggerAccessibility.java` + `DebuggerController.java` | 加 `Activity` 重载;`onSuspend/Resumed/Connected/Disconnected` 全部挂上 `announceForAccessibility` 公告 |
-| `BreakpointManager` 落盘阻塞 | `BreakpointManager.java` | `schedulePersist` 300ms 防抖 + `ScheduledExecutorService` + 单线程 `persistExecutor` 异步落盘 |
-| `RemoteDeviceScanner` 慢 | `RemoteDeviceScanner.java` | 16 路 `FixedThreadPool` + `CountDownLatch` 并发;每探针 250ms 超时(原 1000ms);`ConcurrentLinkedQueue` 收集 |
-| `BreakpointGutterManager` 事件订阅泄漏 | `BreakpointGutterManager.java` | 加 `List<SubscriptionReceipt<?>> subscriptions`;`unbind()` 调 `unsubscribeEditorEvents` |
-| `closeFile` 未清理 BreakpointGutterManager | `EditorHandlerActivity.kt` | 关闭前 `getEditorAtIndex(index)` + `BreakpointGutterManager.detach` |
-| `onSuspend` 不切底部抽屉 | `DebuggerController.java` + `EditorBottomSheet.kt` + `BaseEditorActivity.kt` | 加 `selectTabByFragmentClass` + `openDebuggerTab`;`onSuspend` 自动切到 `VariablesFragment` tab |
+| # | 文件 | 问题 | 修法 |
+|---|------|------|------|
+| 1 | `WatchesAdapter.java` | 双数据源 `getItem()` (expr) + `values` (val) 错位 | 合并为 `WatchEntry(expr, value)` 单数据源;`setValues(String[])` 走 DiffUtil |
+| 2 | `WatchesAdapter.java` | `submit()` / `setValues()` 调 `notifyDataSetChanged()`,与 `ListAdapter.submitList` 冲突 | 删除 `notifyDataSetChanged`;只调 `submitList` |
+| 3 | `BreakpointSidebar.java` | 长按检测: `event.getEventTime() - event.getDownTime() > 500L`,误触率高 | 改用 `GestureDetector.SimpleOnGestureListener` |
+| 4 | `BreakpointGutterManager.java` | `attached HashMap` 非并发(UI 线程 + Sora 事件线程) | 改 `ConcurrentHashMap` |
+| 5 | `BreakpointGutterManager.java` | `subscribeEvent` 返回 `SubscriptionReceipt` 被丢弃,关闭文件/Activity 仍收到事件 | 收集到 `List<SubscriptionReceipt<?>>`,`unbind()` 时 `unsubscribe()` |
+| 6 | `ide-debugger/model/BreakpointStore.java` | `byLocation HashMap` 并发读写 | 改 `ConcurrentHashMap` |
+| 7 | `ide-debugger/model/BreakpointStore.java` | `removeOneShots` 注释说"source locator will clear JDWP",实际没调 `sourceLocator.uninstallBreakpoint` | 改注释,或实现真正的 uninstall |
+| 8 | `DebugSessionLauncher.java` | `runInstall` 用 `Thread.sleep(2_000L)` 盲等 | 改 `Process.waitFor()`,读 exit code |
+| 9 | `DebugSessionLauncher.java` | `runResolvePort` 用 `probeUid` fallback 时,如果 probe 成功却不连接,UI 不知 | 探到端口后立即进入 connect,失败也 flash |
+| 10 | `DebuggerController.java` | `stop()` 留 TODO,实际只 flash 文字 | 真正实现: resume → disconnect → 异步 `am force-stop` |
+| 11 | `DebuggerController.java` | 无 `targetPackage` 字段,`stop()` 拿不到包名 | 加 `setTargetPackage`/`getTargetPackage` + `bg` ExecutorService |
 
-### 7.3 业务端补全
+### 8.2 P0 — 业务能力缺失
 
-| 补全项 | 改动文件 | 关键改动 |
-|--------|---------|---------|
-| Watch 表达式编辑 | `WatchStore.java` | `set(int index, String expr)` 去重 + 替换 + save |
-| 字符串/ID 资源补全 | `strings_debugger.xml` + `values-en/strings_debugger.xml` | 加 `debugger_msg_logpoint_added` / `debugger_set_value_*` / `debugger_a11y_exception_prefix` / `debugger_action_goto_exception` |
-| 通用编辑器 tab 字符串 | `core/resources/strings.xml` | `editor_tab_watches` / `editor_tab_logpoint` |
+| # | 文件 | 问题 | 修法 |
+|---|------|------|------|
+| 12 | `VariablesFragment.java` | 变量单击/长按都没接 | 接 `onItemClick` → set-value dialog;`onItemLongClick` → popup(复制/添加 watch) |
+| 13 | `VariablesAdapter.java` | 无 listener 接口 | 加 `Listener.onItemClick` / `onVariableLongClick` default |
+| 14 | `WatchesFragment.java` | 只接 `onItemLongClick` | 加 `onItemClick` → 弹编辑表达式 dialog;`WatchStore.set(int, String)` |
+| 15 | `WatchStore.java` | 无 `set(int, String)` | 加替换+去重方法 |
+| 16 | `EditorBottomSheetTabAdapter.java` | `LogpointFragment` 未注册 | 加到 tabs 末尾 |
+| 17 | `core/resources/.../strings.xml` | 缺 `editor_tab_watches` / `editor_tab_logpoint` | 补字符串 |
+| 18 | `ide-debugger/model/BreakpointStore.java` | `removeOneShots` 同 #7 | (重复,见上) |
+| 19 | `BreakpointGutterManager.java` | `closeFile` 时未 `detach`,侧边栏继续占着 view | 在 `EditorHandlerActivity.closeFile` 关闭前 `detach(closingCodeEditor)` |
+| 20 | `EditorHandlerActivity.kt` | 同 #19 | (重复,见上) |
+| 21 | `LogpointFragment.java` | 无条目上限,长会话 OOM | `LogStore` 加 `maxEntries=10_000` FIFO 截断 |
 
-### 7.4 PR-D4 后的剩余扩展点(留作 PR-D5+)
+### 8.3 P1 — 启动 / 性能
 
-- `View → 源码位置` 反向映射(R3)
-- `Find References` / `Peek Definition`(R4)
-- 多语言 AST 解析(R6: Kotlin / C / C++)
-- NDK lldb/gdbserver 集成(R7)
-- `BreakpointTypePicker.showAtPosition` 在 EditorHandlerActivity 接入真实行的屏幕坐标
+| # | 文件 | 问题 | 修法 |
+|---|------|------|------|
+| 22 | `RemoteDeviceScanner.java` | 串行扫描 254 host × 1s = 4 分钟 | 16 路 `FixedThreadPool` + `CountDownLatch` 并发,250ms 超时 |
+| 23 | `RemoteDeviceScanner.java` | `probeAdbPort` 1s 超时太长 | 降到 250ms |
+| 24 | `DebugSessionLauncher.java` | 无 `stop()`,启动后无法取消 | 加 `cancelled AtomicBoolean` + 5 个 step 边界检查 + `worker.interrupt()` |
+| 25 | `DebugSessionLauncher.java` | `runBuild` 不写 `targetPackage` | 在 build 成功后 `DebuggerController.setTargetPackage(variant.applicationId)` |
+| 26 | `BreakpointManager.java` | `fireChanged` 同步落盘 `BreakpointStore.save()`,UI 卡顿 | 抽 `schedulePersist` 300ms 防抖 + 后台 `persistExecutor` |
+| 27 | `LogStore.java` | `notifyAppended` 在 UI 线程上对所有 listener 同步调 | 加 `Executors.newSingleThreadExecutor` 异步派发 |
+| 28 | `AutoAttachManager.java` | `maybeAutoAttach` 在 `Activity.onCreate` 1.5s 后触发,无防抖 | 加`debounce` + 切 Activity 时 `cancelPending()` |
+
+### 8.4 P1 — 交互 / a11y / 触觉
+
+| # | 文件 | 问题 | 修法 |
+|---|------|------|------|
+| 29 | `DebuggerAccessibility.java` | 4 个事件 a11y 公告未挂到 `onSuspend/Resumed/Connected/Disconnected` | 全部接入 |
+| 30 | 全模块 | 无触觉反馈 | 新增 `DebuggerHaptics`(tap/strong/reject),挂到 step/命中/连接/失败 |
+| 31 | `DebuggerController.java` | `stop()` 失败时只有 `log.warn` | 捕获 `am force-stop` 退出码,失败时 post 主线程 flash 提示 |
+| 32 | `DebuggerController.java` | `onSuspend` 不切底部抽屉到 Variables tab | 加 `openDebuggerTab(VariablesFragment.class)` |
+| 33 | `DebuggerActionMenuProvider.java` | 无"跳转到异常源"菜单项 | 加 `dbg_action_goto_exception` → `gotoException()` |
+| 34 | `VariablesFragment.java` | 无长按弹窗 | 弹 PopupMenu(复制名/复制值/添加为 watch/跳转声明) |
+| 35 | `CallStackFragment.java` | 无键盘快捷键(↑/↓ 切栈帧) | 接 onKeyListener |
+| 36 | `BreakpointConditionDialog.java` | 无"启用/禁用"按钮 | 加 toggle,持久化到 BreakpointManager |
+
+### 8.5 P2 — 锦上添花
+
+| # | 文件 | 问题 | 修法 |
+|---|------|------|------|
+| 37 | 全部 Fragment | 无单元测试 | 加 `src/test/java` 跑 JUnit 5 |
+| 38 | `BreakpointStateColors.java` | 暗色主题色板可能不完整 | 用 Theme attr 替换硬编码 |
+| 39 | strings_debugger.xml | 缺 ja/ko/pt-BR 等 | 补多语言 |
+| 40 | `VariablesFragment.java` | `loadingView` 在 `showEmpty` 里总被 set GONE,从未 VISIBLE | 拉取变量前 VISIBLE,完成后 GONE |
+| 41 | `LogStore.java` | 缺 export to file(用户希望保存 log) | 加"导出"按钮 → `Environment.DIRECTORY_DOWNLOADS` |
+| 42 | `BreakpointSidebar.java` | 点击行号区才生效,gutter 宽度变化时位置错乱 | 用 `editor.getRowTop/Height` 算精确坐标 |
+| 43 | `DebuggerController.java` | `selectFrame` 后 `VariablesFragment` 不会主动重拉 | 监听 frame 切换,`EvalEngine.getFrameVariables` |
+| 44 | `WatchesAdapter` (set-value 旁路) | 用户期望在 watch 上也能 set-value(表达式) | 接 `dbg.eval().setLocal` 做表达式 set |
+| 45 | `LogStore.java` | 缺"暂停/继续日志"toggle | 加 `enabled` 标志 |
+| 46 | `AppReadySignalWatcher` | 没读过,可能用 `Runtime.exec` 解析 logcat 慢 | 改用 `LogcatReader` 异步订阅 |
+| 47 | `ShizukuBridge.java` / `RunAsBridge.java` | 高危路径,需读源码 | 审计 shell injection / exit code |
+
+### 8.6 总结
+
+- **P0(20 项)**:直接阻塞"达到完整断点调试器"标准;建议在 1-2 轮内完成。
+- **P1(12 项)**:显著影响可用性 / 性能 / 体验;跟随 P0 完成后做。
+- **P2(15 项)**:锦上添花;资源允许时做。
 
 ---
 
