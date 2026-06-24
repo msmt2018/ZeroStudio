@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   ZeroStudio IDE - 变量 item 布局
-  三栏：name | type | value，对象类型额外有 ref 徽标。
+  三栏:name | type | value, 对象类型额外有 ref 徽标。
+  PR-D8.2 主题适配:value 文本从 colorOnSurfaceVariant 提升到
+  colorOnSurface, 提升深色模式下的对比度;ref 徽标用
+  colorTertiaryContainer / colorOnTertiaryContainer 区分于
+  var_type 的主色调;error 状态时整体用 colorError 显示。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:padding="10dp"
-    android:gravity="center_vertical">
+    android:gravity="center_vertical"
+    android:background="?attr/selectableItemBackground"
+    android:focusable="true"
+    android:clickable="true">
 
     <TextView
         android:id="@+id/var_name"
@@ -26,9 +33,9 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="6dp"
         android:padding="2dp"
-        android:background="?attr/colorSecondaryContainer"
-        android:text="obj"
-        android:textColor="?attr/colorOnSecondaryContainer"
+        android:background="?attr/colorTertiaryContainer"
+        android:text="@string/debugger_var_ref_obj"
+        android:textColor="?attr/colorOnTertiaryContainer"
         android:textSize="10sp"
         android:visibility="gone"/>
 
@@ -47,7 +54,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="2"
         android:textAppearance="?attr/textAppearanceBodySmall"
-        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textColor="?attr/colorOnSurface"
         android:singleLine="true"
         android:ellipsize="end"/>
 </LinearLayout>

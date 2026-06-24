@@ -181,6 +181,7 @@
     <string name="debugger_var_copied">已复制 %1$s</string>
     <string name="debugger_var_watch_added">已添加监视: %1$s</string>
     <string name="debugger_var_no_value_to_copy">该变量没有可复制的值</string>
+    <string name="debugger_var_ref_obj">对象</string>
 
     <!-- PR-D6: 断点类型选择菜单 (gutter long-click) -->
     <string name="debugger_bp_picker_title">选择断点类型</string>

@@ -90,7 +90,8 @@ public final class EvalEngine {
         JdwpPacket reply = client.sendCommand(
                 CommandSet.StackFrame, CommandCodes.StackFrameCmd.GetValues, buf.toByteArray());
         if (reply.errorCode() != 0) {
-            return new VariableInfo(0, "", name, typeSignature, "<error>", true, slot);
+            // PR-D8.2: 标记 isError=true, VariablesAdapter 会用 colorError 高亮
+            return new VariableInfo(0, "", name, typeSignature, "<error>", true, slot, true);
         }
         ByteBuf in = new ByteBuf(reply.data);
         in.readInt(); // count
