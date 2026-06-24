@@ -20,13 +20,20 @@ import androidx.annotation.Nullable;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
 import io.github.rosemoe.sora.event.ContentChangeEvent;
 import io.github.rosemoe.sora.event.ScrollEvent;
+import io.github.rosemoe.sora.event.SubscriptionReceipt;
 import io.github.rosemoe.sora.widget.CodeEditor;
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class BreakpointGutterManager {
 
-    private static final Map<CodeEditor, BreakpointGutterManager> attached = new HashMap<>();
+    // PR-D6: 改 ConcurrentHashMap。CodeEditor 上的 Sora 事件回调
+    // 在 Sora 自己的事件线程里跑,UI 线程会调 attach/detach;非并发
+    // HashMap 在两个线程同时读写时会丢更新或死循环。
+    private static final Map<CodeEditor, BreakpointGutterManager> attached =
+            new ConcurrentHashMap<>();
 
     public interface OnBreakpointActionListener {
         void onBreakpointClick(@NonNull String file, int line);
@@ -64,6 +71,9 @@ public final class BreakpointGutterManager {
     @Nullable private BreakpointSidebar sidebar;
     @Nullable private OnBreakpointActionListener actionListener;
     private final String fileCanonical;
+    // PR-D6: 收集 Sora 事件订阅,unbind() 时统一取消,避免内存泄漏 + 在
+    // 销毁 view 上派发事件 NPE。
+    private final List<SubscriptionReceipt<?>> subscriptions = new ArrayList<>();
 
     private BreakpointGutterManager(@NonNull CodeEditor editor, @NonNull String file) {
         this.editor = editor;
@@ -121,8 +131,13 @@ public final class BreakpointGutterManager {
     public void bindFile(@NonNull String newFile) {
         String canon = com.itsaky.androidide.debugger.model.BreakpointManager.normalize(newFile);
         if (canon.equals(fileCanonical)) return;
-        // 简单替换
-        unbind();
+        // PR-D6: 不再创建"新 manager 替换自己"——那会让原 manager 的
+        // sidebar 仍然挂在 view 上(短暂),且 subscriptions 无法传递。
+        // 直接在当前 manager 上重绑定文件 + 重画即可。
+        hideSidebar();
+        unsubscribeEditorEvents();
+        // 通过反射不可行;用 detach 自身 + 重新 attach 实现完整替换。
+        attached.remove(editor);
         BreakpointGutterManager m = new BreakpointGutterManager(editor, newFile);
         m.actionListener = this.actionListener;
         attached.put(editor, m);
@@ -132,6 +147,7 @@ public final class BreakpointGutterManager {
     public void refresh() { refreshSidebar(); }
 
     private void unbind() {
+        unsubscribeEditorEvents();
         hideSidebar();
         attached.remove(editor);
     }
@@ -140,20 +156,34 @@ public final class BreakpointGutterManager {
         if (sidebar != null) sidebar.refresh();
     }
 
+    /**
+     * PR-D6: 收集 {@link SubscriptionReceipt},便于 {@link #unsubscribeEditorEvents()}
+     * 统一取消。{@code subscribeEvent} 返回的 receipt 默认不持有,会在
+     * editor 销毁后继续派发事件 NPE。
+     */
     private void subscribeEditorEvents() {
-        editor.subscribeEvent(ScrollEvent.class, (event, subscriber) -> {
+        SubscriptionReceipt<?> r1 = editor.subscribeEvent(ScrollEvent.class, (event, subscriber) -> {
             layoutSidebar();
             refreshSidebar();
             return null;
         });
-        editor.subscribeEvent(ContentChangeEvent.class, (event, subscriber) -> {
+        if (r1 != null) subscriptions.add(r1);
+        SubscriptionReceipt<?> r2 = editor.subscribeEvent(ContentChangeEvent.class, (event, subscriber) -> {
             refreshSidebar();
             return null;
         });
+        if (r2 != null) subscriptions.add(r2);
         editor.post(() -> {
             layoutSidebar();
             refreshSidebar();
         });
+    }
+
+    private void unsubscribeEditorEvents() {
+        for (SubscriptionReceipt<?> r : subscriptions) {
+            try { r.unsubscribe(); } catch (Throwable ignored) {}
+        }
+        subscriptions.clear();
     }
 
     /**

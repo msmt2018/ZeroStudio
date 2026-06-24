@@ -61,6 +61,11 @@ public class WatchesFragment extends Fragment
                 WatchStore.getInstance().remove(position);
                 refresh();
             }
+            // PR-D6: 单击 -> 编辑现有 watch 表达式
+            @Override
+            public void onItemClick(int position, @NonNull String expr) {
+                showEditDialog(position, expr);
+            }
         });
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
         list.setAdapter(adapter);
@@ -85,12 +90,25 @@ public class WatchesFragment extends Fragment
     public void onStateChanged(@NonNull DebugSessionState state) {
         // 当程序未暂停或没有当前栈帧时，所有值都显示 "—"
         if (!state.isSuspended()) {
-            adapter.markAll(getString(R.string.debugger_watches_value_pending));
+            adapter.setValues(new String[]{});
+            // 通过 setValues 传入空数组,内部按当前 entry 列表长度补 "",实际上保留 expr,
+            // 但 value 显示为 ""。这里用一种简单方式:先 reset 列表(从 WatchStore 拉 expr,
+            // 全部 value 设为 pending 占位)。
+            java.util.List<String> exprs = WatchStore.getInstance().all();
+            String[] pending = new String[exprs.size()];
+            for (int i = 0; i < pending.length; i++) {
+                pending[i] = getString(R.string.debugger_watches_value_pending);
+            }
+            adapter.setValues(pending);
             return;
         }
         StackFrameInfo frame = state.currentFrame();
         if (frame == null) {
-            adapter.markAll(getString(R.string.debugger_watches_value_pending));
+            String[] pending = new String[WatchStore.getInstance().all().size()];
+            for (int i = 0; i < pending.length; i++) {
+                pending[i] = getString(R.string.debugger_watches_value_pending);
+            }
+            adapter.setValues(pending);
             return;
         }
         // 暂停态：对每个监视表达式走 EvalEngine.evaluate
@@ -133,6 +151,28 @@ public class WatchesFragment extends Fragment
                     String expr = input.getText().toString().trim();
                     if (!expr.isEmpty()) {
                         WatchStore.getInstance().add(expr);
+                        refresh();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    /**
+     * PR-D6: 编辑现有 watch 表达式。如果新表达式和已有其他项重复,自动去重。
+     */
+    private void showEditDialog(int position, @NonNull String current) {
+        EditText input = new EditText(requireContext());
+        input.setHint(R.string.debugger_watches_dialog_hint);
+        input.setText(current);
+        input.setSelection(current.length());
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.debugger_watches_dialog_title)
+                .setView(input)
+                .setPositiveButton(R.string.debugger_watches_add, (d, w) -> {
+                    String expr = input.getText().toString().trim();
+                    if (!expr.isEmpty() && !expr.equals(current)) {
+                        WatchStore.getInstance().set(position, expr);
                         refresh();
                     }
                 })
