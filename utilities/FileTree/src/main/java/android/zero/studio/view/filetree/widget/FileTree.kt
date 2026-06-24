@@ -23,6 +23,7 @@ import android.util.AttributeSet
 import android.zero.studio.view.filetree.adapters.FileTreeAdapter
 import android.zero.studio.view.filetree.interfaces.FileClickListener
 import android.zero.studio.view.filetree.interfaces.FileIconProvider
+import android.zero.studio.view.filetree.interfaces.FileItemTrailingProvider
 import android.zero.studio.view.filetree.interfaces.FileLongClickListener
 import android.zero.studio.view.filetree.interfaces.FileObject
 import android.zero.studio.view.filetree.model.Node
@@ -99,6 +100,15 @@ class FileTree : RecyclerView {
    */
   fun setOnFileLongClickListener(longClickListener: FileLongClickListener) {
     fileTreeAdapter.onLongClickListener = longClickListener
+  }
+
+  /**
+   * Sets a provider that controls an optional trailing widget (icon/button) rendered at
+   * the right edge of each row. When the provider returns `null` for a node, the widget
+   * is hidden for that node.
+   */
+  fun setTrailingProvider(provider: FileItemTrailingProvider?) {
+    fileTreeAdapter.trailingProvider = provider
   }
 
   private var init = false

@@ -30,6 +30,7 @@ import android.widget.TextView
 import android.zero.studio.view.filetree.R
 import android.zero.studio.view.filetree.interfaces.FileClickListener
 import android.zero.studio.view.filetree.interfaces.FileIconProvider
+import android.zero.studio.view.filetree.interfaces.FileItemTrailingProvider
 import android.zero.studio.view.filetree.interfaces.FileLongClickListener
 import android.zero.studio.view.filetree.interfaces.FileObject
 import android.zero.studio.view.filetree.model.Node
@@ -45,6 +46,7 @@ class ViewHolder(v: View) : RecyclerView.ViewHolder(v) {
   val expandView: ImageView = v.findViewById(R.id.expand)
   val fileView: ImageView = v.findViewById(R.id.file_view)
   val textView: TextView = v.findViewById(R.id.text_view)
+  val trailingView: ImageView = v.findViewById(R.id.trailing_view)
   val rootContainer: View = v
 }
 
@@ -64,6 +66,7 @@ class FileTreeAdapter(private val context: Context, val fileTree: FileTree) :
   var onClickListener: FileClickListener? = null
   var onLongClickListener: FileLongClickListener? = null
   var iconProvider: FileIconProvider? = null
+  var trailingProvider: FileItemTrailingProvider? = null
 
   private var animator = fileTree.itemAnimator
 
@@ -113,6 +116,14 @@ class FileTreeAdapter(private val context: Context, val fileTree: FileTree) :
 
     holder.expandView.setOnClickListener(clickListener)
     holder.fileView.setPadding(0, 0, 0, 0)
+
+    holder.trailingView.setOnClickListener {
+      val adapterPosition = holder.adapterPosition
+      if (adapterPosition != RecyclerView.NO_POSITION) {
+        val clickedNode = getItem(adapterPosition)
+        trailingProvider?.onTrailingClick(clickedNode)
+      }
+    }
     return holder
   }
 
@@ -155,6 +166,16 @@ class FileTreeAdapter(private val context: Context, val fileTree: FileTree) :
     }
 
     holder.textView.text = node.value.getName()
+
+    // Render the optional trailing widget (e.g. info badge)
+    val trailing = trailingProvider?.getTrailingDrawable(node)
+    if (trailing != null) {
+      holder.trailingView.visibility = View.VISIBLE
+      holder.trailingView.setImageDrawable(trailing)
+    } else {
+      holder.trailingView.visibility = View.GONE
+      holder.trailingView.setImageDrawable(null)
+    }
 
     // 处理定位高亮效果 (闪烁动画)
     if (node.isHighlighted) {
