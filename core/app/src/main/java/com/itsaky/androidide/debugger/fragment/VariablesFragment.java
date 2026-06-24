@@ -11,11 +11,14 @@
 package com.itsaky.androidide.debugger.fragment;
 
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -23,6 +26,8 @@ import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.DebugSessionState;
 import com.itsaky.androidide.debugger.DebuggerController;
 import com.itsaky.androidide.debugger.adapter.VariablesAdapter;
+import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
+import com.zerostudio.debugger.api.EvalResult;
 import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.VariableInfo;
 import java.util.Collections;
@@ -53,6 +58,19 @@ public class VariablesFragment extends Fragment
         loadingView = view.findViewById(R.id.vars_loading);
 
         adapter = new VariablesAdapter();
+        // PR-D4: 单击 -> 弹出 set-value 对话框;
+        // 长按保留 (保留扩展点)
+        adapter.setListener(new VariablesAdapter.Listener() {
+            @Override
+            public void onItemClick(@NonNull VariableInfo variable) {
+                showSetValueDialog(variable);
+            }
+            @Override
+            public void onVariableLongClick(@NonNull VariableInfo variable) {
+                // PR-D4 暂未启用 set-via-context-menu,留作扩展点。
+                // 例如后续可在此弹出"复制 / 在监视中添加 / 类型详情"。
+            }
+        });
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
         list.setAdapter(adapter);
 
@@ -87,16 +105,83 @@ public class VariablesFragment extends Fragment
         showEmpty(vars.isEmpty(), R.string.debugger_variables_empty);
     }
 
+    /**
+     * PR-D4: 弹窗让用户输入新值,调用 Debugger.eval().assign()
+     * 把表达式赋值给目标变量,赋值后通过 sessionState 重新拉取变量。
+     */
+    private void showSetValueDialog(@NonNull VariableInfo variable) {
+        final EditText input = new EditText(requireContext());
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setHint(variable.name);
+        input.setText(variable.value == null ? "" : variable.value);
+        input.setSelection(input.getText().length());
+        new AlertDialog.Builder(requireContext())
+                .setTitle(getString(R.string.debugger_set_value_title,
+                        variable.name, humanType(variable.typeSignature)))
+                .setView(input)
+                .setPositiveButton(android.R.string.ok, (d, w) -> {
+                    String newValue = input.getText().toString();
+                    assignVariable(variable, newValue);
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void assignVariable(@NonNull VariableInfo variable, @NonNull String newValue) {
+        StackFrameInfo frame = DebuggerController.getInstance()
+                .sessionState().currentFrame();
+        if (frame == null) {
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
+                    R.string.debugger_set_value_not_suspended);
+            return;
+        }
+        com.zerostudio.debugger.api.Debugger dbg =
+                DebuggerController.getInstance().debugger();
+        if (dbg == null) {
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
+                    R.string.debugger_set_value_not_connected);
+            return;
+        }
+        // PR-D4: 通过 EvalEngine.setLocal(...) 给当前栈帧的局部变量
+        // 槽位写入新值(只对原始类型有效;对对象引用暂时要求"完整 JDWP
+        // 表达式",保持为后续 PR 扩展点)。
+        EvalResult r = dbg.eval().setLocal(
+                frame.threadId, frame.frameId, variable.slot,
+                variable.typeSignature, newValue);
+        if (r.isError()) {
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
+                    getString(R.string.debugger_set_value_error, r.error));
+        } else {
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
+                    R.string.debugger_set_value_ok);
+            // 重新拉取当前帧的变量,让 UI 立刻反映新值。
+            refreshVariables(dbg, frame);
+        }
+    }
+
+    private void refreshVariables(com.zerostudio.debugger.api.Debugger dbg,
+                                  @NonNull StackFrameInfo frame) {
+        try {
+            java.util.List<VariableInfo> fresh = dbg.eval()
+                    .getFrameVariables(frame.threadId, frame.frameId);
+            if (adapter != null) adapter.submit(fresh);
+        } catch (Throwable ignored) {
+            // 取不到也不致命,下一个状态变化时会自然刷新。
+        }
+    }
+
     private void showEmpty(boolean empty, int msgRes) {
         if (emptyView != null) {
             emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
-            // emptyView is declared as View in the layout; cast to TextView
-            // so we can set the empty-state message text.
             if (empty && emptyView instanceof android.widget.TextView) {
                 ((android.widget.TextView) emptyView).setText(msgRes);
             }
         }
         if (loadingView != null) loadingView.setVisibility(View.GONE);
         if (list != null) list.setVisibility(empty ? View.GONE : View.VISIBLE);
+    }
+
+    private static String humanType(@Nullable String sig) {
+        return VariablesAdapter.humanType(sig);
     }
 }

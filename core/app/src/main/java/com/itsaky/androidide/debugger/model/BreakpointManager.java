@@ -411,14 +411,51 @@ public final class BreakpointManager {
         for (Listener l : listeners) {
             try { l.onBreakpointsChanged(snap); } catch (Throwable ignored) {}
         }
-        if (autoPersist) BreakpointStore.getInstance().save();
+        // PR-D4: 持久化走后台线程 + 防抖 300ms,避免在 setBreakpoints
+        // 频繁触发时把每次都同步写 JSON。
+        if (autoPersist) schedulePersist();
     }
 
     private void fireStateChanged(@NonNull IdeBreakpoint bp) {
         for (Listener l : listeners) {
             try { l.onBreakpointStateChanged(bp); } catch (Throwable ignored) {}
         }
-        if (autoPersist) BreakpointStore.getInstance().save();
+        if (autoPersist) schedulePersist();
+    }
+
+    /**
+     * PR-D4: 防抖 + 异步持久化。300ms 内的多次 fireChanged 只会触发
+     * 一次实际 save(),落盘操作在单线程 executor 里执行,不会阻塞 UI。
+     * 防止 BreakpointStore.save() 在主线程上做 JSON 序列化 + 文件 IO。
+     */
+    private final java.util.concurrent.ExecutorService persistExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "BreakpointPersist");
+                t.setDaemon(true);
+                return t;
+            });
+    private final java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ScheduledFuture<?>> pendingPersist =
+            new java.util.concurrent.atomic.AtomicReference<>();
+    private static final long PERSIST_DEBOUNCE_MS = 300L;
+    private final java.util.concurrent.ScheduledExecutorService scheduler =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "BreakpointPersist-scheduler");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private void schedulePersist() {
+        java.util.concurrent.ScheduledFuture<?> prev = pendingPersist.getAndSet(
+                scheduler.schedule(() -> {
+                    persistExecutor.submit(() -> {
+                        try { BreakpointStore.getInstance().save(); }
+                        catch (Throwable t) {
+                            com.itsaky.androidide.utils.ILogger.ROOT.warn(
+                                    "BreakpointStore.save failed: " + t.getMessage());
+                        }
+                    });
+                }, PERSIST_DEBOUNCE_MS, java.util.concurrent.TimeUnit.MILLISECONDS));
+        if (prev != null) prev.cancel(false);
     }
 
     /** 标准化文件路径（用于 byFile 键） */

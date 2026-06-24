@@ -31,6 +31,8 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -105,14 +107,42 @@ public final class RemoteDeviceScanner {
     @WorkerThread
     private void doScan(long timeoutMs) {
         long deadline = System.currentTimeMillis() + timeoutMs;
-        List<DeviceInfo> devices = new ArrayList<>();
-        for (String host : candidateHosts()) {
-            if (System.currentTimeMillis() > deadline) break;
-            int port = probeAdbPort(host, 1_000);
-            if (port > 0) {
-                devices.add(new DeviceInfo("device", host, port));
-            }
+        // PR-D4: 把候选主机分成 16 路并发,每路串行做 probe;每探针
+        // 超时从 1000ms 降到 250ms,这样 /24 子网(254 主机)最坏情况
+        // ~254/16 = 16 探针/路,每路 16 * 250ms = 4s, 实际整体基本
+        // 在 timeoutMs(默认 3s) 内结束。
+        List<String> candidates = candidateHosts();
+        int parallelism = 16;
+        java.util.concurrent.ExecutorService pool =
+                java.util.concurrent.Executors.newFixedThreadPool(parallelism, r -> {
+                    Thread t = new Thread(r, "RemoteDeviceScanner-probe");
+                    t.setDaemon(true);
+                    return t;
+                });
+        java.util.concurrent.ConcurrentLinkedQueue<DeviceInfo> q =
+                new java.util.concurrent.ConcurrentLinkedQueue<>();
+        java.util.concurrent.CountDownLatch latch =
+                new java.util.concurrent.CountDownLatch(candidates.size());
+        for (String host : candidates) {
+            pool.submit(() -> {
+                try {
+                    if (System.currentTimeMillis() > deadline) {
+                        // 超时,不再做新 probe,但要把 latch 减掉
+                        return;
+                    }
+                    int port = probeAdbPort(host, 250);
+                    if (port > 0) {
+                        q.add(new DeviceInfo("device", host, port));
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
         }
+        try { latch.await(timeoutMs, TimeUnit.MILLISECONDS); }
+        catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+        pool.shutdownNow();
+        List<DeviceInfo> devices = new ArrayList<>(q);
         lastResult.set(devices);
         ScanListener l = listener;
         if (l != null) l.onScanFinished(devices);

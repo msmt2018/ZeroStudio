@@ -1,6 +1,7 @@
 # ZeroStudio Debugger 真实开发状况审计报告
 
 > **生成日期**: 2026-06-23
+> **PR-D4 增量更新**: 2026-06-24
 > **审计范围**: 用户提出的"宿主 UI 冻结 / 断点跳转 / 多语言 AST / 引用查找"等需求
 > **审计结论**: 前 48 个 Phase 集中于 JDWP 协议层,UI 反向映射、AST 解析、引用查找、NDK 调试**几乎全部未实现**
 
@@ -226,6 +227,53 @@ ide-native-debugger/        # NDK 调试
 4. 实现 R3/R4/R5/R6/R7/R8
 
 **重要提醒**: 用户在中文 prompt 中提到的 "Toast.makeText 触发后跳转到 Activity 中的 onClick" 这类功能,目前完全没有实现。这需要 hook Android 框架 + AST 解析 + Activity 栈追踪,工作量相当于本审计的 1/4。
+
+---
+
+## 7. PR-D4 增量修复(2026-06-24)
+
+> 对照"完整断点调试器"的架构 / 业务 / 行为 / 操作 / 交互规范,系统性修复 15 项问题。
+
+### 7.1 业务/操作端修复
+
+| 修复点 | 改动文件 | 关键改动 |
+|--------|---------|---------|
+| 缺 LogpointFragment 注册 | `EditorBottomSheetTabAdapter.java` + `core/resources/strings.xml` | 把 `LogpointFragment` 加进 TabAdapter 末尾;新增 `editor_tab_watches` + `editor_tab_logpoint` |
+| `BreakpointTypePicker` 弹窗位置错乱 | `BreakpointTypePicker.java` | 新增 `showAtPosition(activity, parent, anchorX, anchorY, file, line)` 重载,放 1x1 ghost View 实现任意坐标 anchor |
+| `BreakpointSidebar` 错误的长按检测 | `BreakpointSidebar.java` | 用 `GestureDetector.SimpleOnGestureListener` 替代 `event.getEventTime() - event.getDownTime() > 500L` 的错误检测 |
+| `WatchesAdapter` items/values 错位 | `WatchesAdapter.java` | 合并 `List<String> items + List<String> values` 为单一 `WatchEntry(expression, value)` 数据源;`setValues(String[])` 原子更新 |
+| 缺 set-value 入口 | `VariablesAdapter.java` + `VariablesFragment.java` | `Listener` 加 `onItemClick(VariableInfo)` 默认方法;`VariablesFragment` 弹 AlertDialog + 调 `EvalEngine.setLocal` 真正实现 set-value |
+| 缺 watch 表达式编辑入口 | `WatchesFragment.java` + `WatchStore.java` | 接 `onItemClick` → `showEditDialog()`;`WatchStore.set(int, String)` 替换并去重 |
+| `DebuggerController.stop()` 未实现 | `DebuggerController.java` | 真正实现:`resume → disconnect → 异步 am force-stop → a11y 公告 → flash`;加 `targetPackage` 字段 + `bg` ExecutorService |
+| `DebugSessionLauncher` 无法取消 | `DebugSessionLauncher.java` | 加 `cancelled AtomicBoolean` + `stop()` 5 个 step 边界检查 + `fireCancelled` 回调 |
+| 缺异常跳转菜单项 | `DebuggerActionMenuProvider.java` + `ids_debugger.xml` + `strings_debugger.xml` | 加 `dbg_action_goto_exception` → `ctl.gotoException()` |
+
+### 7.2 交互端修复
+
+| 修复点 | 改动文件 | 关键改动 |
+|--------|---------|---------|
+| 缺 a11y 公告 | `DebuggerAccessibility.java` + `DebuggerController.java` | 加 `Activity` 重载;`onSuspend/Resumed/Connected/Disconnected` 全部挂上 `announceForAccessibility` 公告 |
+| `BreakpointManager` 落盘阻塞 | `BreakpointManager.java` | `schedulePersist` 300ms 防抖 + `ScheduledExecutorService` + 单线程 `persistExecutor` 异步落盘 |
+| `RemoteDeviceScanner` 慢 | `RemoteDeviceScanner.java` | 16 路 `FixedThreadPool` + `CountDownLatch` 并发;每探针 250ms 超时(原 1000ms);`ConcurrentLinkedQueue` 收集 |
+| `BreakpointGutterManager` 事件订阅泄漏 | `BreakpointGutterManager.java` | 加 `List<SubscriptionReceipt<?>> subscriptions`;`unbind()` 调 `unsubscribeEditorEvents` |
+| `closeFile` 未清理 BreakpointGutterManager | `EditorHandlerActivity.kt` | 关闭前 `getEditorAtIndex(index)` + `BreakpointGutterManager.detach` |
+| `onSuspend` 不切底部抽屉 | `DebuggerController.java` + `EditorBottomSheet.kt` + `BaseEditorActivity.kt` | 加 `selectTabByFragmentClass` + `openDebuggerTab`;`onSuspend` 自动切到 `VariablesFragment` tab |
+
+### 7.3 业务端补全
+
+| 补全项 | 改动文件 | 关键改动 |
+|--------|---------|---------|
+| Watch 表达式编辑 | `WatchStore.java` | `set(int index, String expr)` 去重 + 替换 + save |
+| 字符串/ID 资源补全 | `strings_debugger.xml` + `values-en/strings_debugger.xml` | 加 `debugger_msg_logpoint_added` / `debugger_set_value_*` / `debugger_a11y_exception_prefix` / `debugger_action_goto_exception` |
+| 通用编辑器 tab 字符串 | `core/resources/strings.xml` | `editor_tab_watches` / `editor_tab_logpoint` |
+
+### 7.4 PR-D4 后的剩余扩展点(留作 PR-D5+)
+
+- `View → 源码位置` 反向映射(R3)
+- `Find References` / `Peek Definition`(R4)
+- 多语言 AST 解析(R6: Kotlin / C / C++)
+- NDK lldb/gdbserver 集成(R7)
+- `BreakpointTypePicker.showAtPosition` 在 EditorHandlerActivity 接入真实行的屏幕坐标
 
 ---
 

@@ -822,9 +822,19 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
       .firstOrNull { it.tag == expectedTag }
 
     editorViewModel.removeFile(index)
+    // PR-D4: 在 editorContainer.removeViewAt 之前先取一次 CodeEditorView,
+    // removeViewAt 之后 index 位置已被"下一个 editor"接管, getEditorAtIndex
+    // 拿到的就不是被关闭的 editor 了。拿到 CodeEditor 引用后立即 detach
+    // BreakpointGutterManager,避免侧边栏继续占用屏幕 + 事件订阅命中已
+    // 销毁的 view。
+    val closingEditor = getEditorAtIndex(index)
+    val closingCodeEditor = closingEditor?.editor
     content.apply {
       tabToRemove?.let { tabs.removeTab(it) }
       editorContainer.removeViewAt(index)
+    }
+    if (closingCodeEditor != null) {
+      com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(closingCodeEditor)
     }
 
     editorViewModel.areFilesModified = hasUnsavedFiles()

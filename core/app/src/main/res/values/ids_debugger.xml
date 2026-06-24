@@ -24,6 +24,7 @@
 
     <!-- 视图子菜单 -->
     <item name="dbg_action_goto_current_bp" type="id" />
+    <item name="dbg_action_goto_exception" type="id" />
     <item name="dbg_action_show_current_frame" type="id" />
     <item name="dbg_action_refresh" type="id" />
     <item name="dbg_action_add_watch" type="id" />

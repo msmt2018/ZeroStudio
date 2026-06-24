@@ -41,6 +41,7 @@
 
     <!-- View actions -->
     <string name="debugger_action_goto_current_bp">Go to current breakpoint</string>
+    <string name="debugger_action_goto_exception">Go to exception source</string>
     <string name="debugger_action_show_current_frame">Show current frame</string>
 
     <!-- Side panels -->
@@ -101,6 +102,13 @@
     <!-- PR-D4: BreakpointTypePicker confirmation when a logpoint is added -->
     <string name="debugger_msg_logpoint_added">Logpoint added at this line</string>
 
+    <!-- PR-D4: Variable set-value dialog and messages -->
+    <string name="debugger_set_value_title">Set new value for %1$s (%2$s)</string>
+    <string name="debugger_set_value_ok">Variable updated</string>
+    <string name="debugger_set_value_error">Set value failed: %1$s</string>
+    <string name="debugger_set_value_not_suspended">Program is not paused; cannot set value</string>
+    <string name="debugger_set_value_not_connected">Debugger is not connected; cannot set value</string>
+
     <!-- Breakpoint condition / logpoint dialog -->
     <string name="debugger_bcd_title">Breakpoint properties</string>
     <string name="debugger_bcd_type">Breakpoint type</string>
@@ -155,4 +163,5 @@
     <string name="debugger_a11y_disconnected">Disconnected from debugger</string>
     <string name="debugger_a11y_paused">Program paused at %1$s line %2$d</string>
     <string name="debugger_a11y_resumed">Program resumed</string>
+    <string name="debugger_a11y_exception_prefix">Exception: %1$s</string>
 </resources>

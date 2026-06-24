@@ -26,6 +26,8 @@ import java.util.Objects;
 public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter.VH> {
 
     public interface Listener {
+        /** PR-D4: 短按 -> 弹出 set-value 对话框（仅对非 final 变量可写） */
+        default void onItemClick(@NonNull VariableInfo variable) {}
         void onVariableLongClick(@NonNull VariableInfo variable);
     }
 
@@ -86,6 +88,9 @@ public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter
         h.value.setText(v.value == null ? "null" : v.value);
         h.refBadge.setVisibility(v.isPrimitive ? View.GONE : View.VISIBLE);
         h.itemView.setSelected(false);
+        h.itemView.setOnClickListener(vw -> {
+            if (listener != null) listener.onItemClick(v);
+        });
         h.itemView.setOnLongClickListener(vw -> {
             if (listener != null) {
                 listener.onVariableLongClick(v);

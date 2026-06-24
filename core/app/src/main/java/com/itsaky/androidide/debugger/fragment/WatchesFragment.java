@@ -61,6 +61,12 @@ public class WatchesFragment extends Fragment
                 WatchStore.getInstance().remove(position);
                 refresh();
             }
+
+            @Override
+            public void onItemClick(int position, @NonNull String expr) {
+                // PR-D4: 点击监视项 -> 弹出编辑对话框,允许修改表达式
+                showEditDialog(position, expr);
+            }
         });
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
         list.setAdapter(adapter);
@@ -124,7 +130,7 @@ public class WatchesFragment extends Fragment
     }
 
     private void showAddDialog() {
-        EditText input = new EditText(requireContext());
+        final EditText input = new EditText(requireContext());
         input.setHint(R.string.debugger_watches_dialog_hint);
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.debugger_watches_dialog_title)
@@ -135,6 +141,30 @@ public class WatchesFragment extends Fragment
                         WatchStore.getInstance().add(expr);
                         refresh();
                     }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    /**
+     * PR-D4: 点击监视项后弹出编辑对话框,允许用户修改表达式。
+     * 改完后原地替换 (通过 remove + add) 保持顺序与索引稳定。
+     */
+    private void showEditDialog(int position, @NonNull String currentExpr) {
+        final EditText input = new EditText(requireContext());
+        input.setText(currentExpr);
+        input.setHint(R.string.debugger_watches_dialog_hint);
+        input.setSelection(currentExpr.length());
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.debugger_watches_dialog_title)
+                .setView(input)
+                .setPositiveButton(android.R.string.ok, (d, w) -> {
+                    String newExpr = input.getText().toString().trim();
+                    if (newExpr.isEmpty() || newExpr.equals(currentExpr)) {
+                        return;
+                    }
+                    WatchStore.getInstance().set(position, newExpr);
+                    refresh();
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();

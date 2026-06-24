@@ -144,6 +144,8 @@
      <string name="editor_tab_breakpoints">Breakpoints</string>
      <string name="editor_tab_variables">Variables</string>
      <string name="editor_tab_callstack">Call Stack</string>
+     <string name="editor_tab_watches">Watches</string>
+     <string name="editor_tab_logpoint">Logpoints</string>
 
      <!-- LSP, Diagnostics & Completions -->
      <string name="get_started">Get started</string>

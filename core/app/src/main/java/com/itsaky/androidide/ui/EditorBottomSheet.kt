@@ -293,6 +293,25 @@ class EditorBottomSheet @JvmOverloads constructor(
   }
 
   /**
+   * PR-D4: 按 Fragment 类型在底部抽屉里选中对应的 Tab,找不到则 no-op。
+   * 给断点调试器在 suspend 时跳到 "Variables" / "Call Stack" / "Watches"
+   * Tab 用,让用户立刻看到断点状态,不需要手动切。
+   */
+  fun selectTabByFragmentClass(
+      fragmentClass: Class<out androidx.fragment.app.Fragment>
+  ) {
+    val adapter = pagerAdapter
+    val count = adapter.itemCount
+    for (i in 0 until count) {
+      val f = adapter.getFragmentAtIndex(i)
+      if (f != null && fragmentClass.isInstance(f)) {
+        binding.tabs.getTabAt(i)?.select()
+        return
+      }
+    }
+  }
+
+  /**
    * 处理软键盘 (IME) 同步和 PeekHeight 自动适配。
    * 让 CoordinatorLayout 与系统的 WindowInsets 联合接管所有位移交互。
    */

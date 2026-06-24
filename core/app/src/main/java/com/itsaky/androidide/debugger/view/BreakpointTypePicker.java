@@ -98,6 +98,38 @@ public final class BreakpointTypePicker {
                             @NonNull View anchor,
                             @NonNull String file,
                             int line) {
+        showInternal(activity, anchor, file, line, /*anchorOnLine=*/ false);
+    }
+
+    /**
+     * PR-D4: 增强重载 —— 接受屏幕坐标 (anchorX, anchorY) 并把弹窗定位
+     * 到那一行,而不是整个编辑器顶部。
+     *
+     * <p>实现策略:ListPopupWindow 只能锚定到某个 View,所以先在
+     * {@code parent} 视图树里放一个不可见的 1x1 "ghost" View,把它
+     * 摆到目标位置,再锚定到它。弹窗关闭后通过 OnDismissListener 移除
+     * 该 ghost,避免持续占用 View 树。
+     */
+    public static void showAtPosition(@NonNull FragmentActivity activity,
+                                      @NonNull View parent,
+                                      int anchorX, int anchorY,
+                                      @NonNull String file,
+                                      int line) {
+        final View ghost = new View(parent.getContext());
+        ghost.setLayoutParams(new android.view.ViewGroup.LayoutParams(1, 1));
+        if (parent instanceof android.view.ViewGroup) {
+            ((android.view.ViewGroup) parent).addView(ghost);
+        }
+        ghost.setX(anchorX);
+        ghost.setY(anchorY);
+        showInternal(activity, ghost, file, line, /*anchorOnLine=*/ true);
+    }
+
+    private static void showInternal(@NonNull FragmentActivity activity,
+                                     @NonNull View anchor,
+                                     @NonNull String file,
+                                     int line,
+                                     boolean anchorOnLine) {
         final ListPopupWindow popup = new ListPopupWindow(activity);
         popup.setAdapter(new ArrayAdapter<>(activity,
                 android.R.layout.simple_list_item_1, LABELS));
@@ -134,7 +166,14 @@ public final class BreakpointTypePicker {
         // On dismiss (item picked OR outside tap), do nothing — the popup
         // is already gone and we have either dispatched the action above
         // (item picked) or chosen to add no breakpoint (outside tap).
-        popup.setOnDismissListener(() -> { /* no-op */ });
+        popup.setOnDismissListener(() -> {
+            // 如果是 anchorOnLine 模式,弹窗关闭后立即把 ghost anchor 移除,
+            // 避免它持续占据编辑器的 View 树。
+            if (anchorOnLine
+                    && anchor.getParent() instanceof android.view.ViewGroup) {
+                ((android.view.ViewGroup) anchor.getParent()).removeView(anchor);
+            }
+        });
         popup.show();
     }
 

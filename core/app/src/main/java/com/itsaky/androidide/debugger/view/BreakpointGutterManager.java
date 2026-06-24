@@ -20,8 +20,11 @@ import androidx.annotation.Nullable;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
 import io.github.rosemoe.sora.event.ContentChangeEvent;
 import io.github.rosemoe.sora.event.ScrollEvent;
+import io.github.rosemoe.sora.event.SubscriptionReceipt;
 import io.github.rosemoe.sora.widget.CodeEditor;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class BreakpointGutterManager {
@@ -64,6 +67,11 @@ public final class BreakpointGutterManager {
     @Nullable private BreakpointSidebar sidebar;
     @Nullable private OnBreakpointActionListener actionListener;
     private final String fileCanonical;
+    /**
+     * PR-D4: 持有 CodeEditor 事件的订阅回执,detach 时统一 unsubscribe,
+     * 避免侧边栏释放后回调仍命中本对象造成内存泄漏。
+     */
+    private final List<SubscriptionReceipt<?>> subscriptions = new ArrayList<>();
 
     private BreakpointGutterManager(@NonNull CodeEditor editor, @NonNull String file) {
         this.editor = editor;
@@ -132,6 +140,7 @@ public final class BreakpointGutterManager {
     public void refresh() { refreshSidebar(); }
 
     private void unbind() {
+        unsubscribeEditorEvents();
         hideSidebar();
         attached.remove(editor);
     }
@@ -144,17 +153,29 @@ public final class BreakpointGutterManager {
         // CodeEditor.subscribeEvent takes a Consumer-style handler that
         // must not return a value. Returning null from a lambda would
         // break the SAM conversion in Java 17.
-        editor.subscribeEvent(ScrollEvent.class, (event, subscriber) -> {
+        SubscriptionReceipt<?> r1 = editor.subscribeEvent(ScrollEvent.class, (event, subscriber) -> {
             layoutSidebar();
             refreshSidebar();
         });
-        editor.subscribeEvent(ContentChangeEvent.class, (event, subscriber) -> {
+        SubscriptionReceipt<?> r2 = editor.subscribeEvent(ContentChangeEvent.class, (event, subscriber) -> {
             refreshSidebar();
         });
+        subscriptions.add(r1);
+        subscriptions.add(r2);
         editor.post(() -> {
             layoutSidebar();
             refreshSidebar();
         });
+    }
+
+    /**
+     * PR-D4: 统一 unsubscribe 所有 CodeEditor 事件订阅。
+     */
+    private void unsubscribeEditorEvents() {
+        for (SubscriptionReceipt<?> r : subscriptions) {
+            try { r.unsubscribe(); } catch (Throwable ignored) {}
+        }
+        subscriptions.clear();
     }
 
     /**

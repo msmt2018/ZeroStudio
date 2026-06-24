@@ -81,12 +81,14 @@ public class DebuggerActionMenuProvider implements MenuProvider {
         SubMenu view = menu.addSubMenu(R.string.debugger_menu_view);
         view.add(0, R.id.dbg_action_goto_current_bp, 0, R.string.debugger_action_goto_current_bp)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        view.add(0, R.id.dbg_action_show_current_frame, 1, R.string.debugger_action_show_current_frame)
+        view.add(0, R.id.dbg_action_goto_exception, 1, R.string.debugger_action_goto_exception)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        view.add(0, R.id.dbg_action_show_current_frame, 2, R.string.debugger_action_show_current_frame)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         // PR-4: 刷新当前帧 / 打开添加监视对话框
-        view.add(0, R.id.dbg_action_refresh, 2, R.string.debugger_action_refresh)
+        view.add(0, R.id.dbg_action_refresh, 3, R.string.debugger_action_refresh)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        view.add(0, R.id.dbg_action_add_watch, 3, R.string.debugger_action_add_watch)
+        view.add(0, R.id.dbg_action_add_watch, 4, R.string.debugger_action_add_watch)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
     }
 
@@ -129,6 +131,9 @@ public class DebuggerActionMenuProvider implements MenuProvider {
             return true;
         } else if (id == R.id.dbg_action_goto_current_bp) {
             ctl.gotoCurrentBreakpoint();
+            return true;
+        } else if (id == R.id.dbg_action_goto_exception) {
+            ctl.gotoException();
             return true;
         } else if (id == R.id.dbg_action_show_current_frame) {
             ctl.showCurrentFrame();

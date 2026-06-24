@@ -49,6 +49,26 @@ public final class WatchStore {
         save();
     }
 
+    /**
+     * PR-D4: 原地修改指定位置的表达式。{@code expr} 必须非空,且
+     * 在去重后与原值不同才落盘。
+     */
+    public synchronized void set(int index, @NonNull String expr) {
+        if (index < 0 || index >= watches.size()) return;
+        String t = expr.trim();
+        if (t.isEmpty()) return;
+        String prev = watches.get(index);
+        if (prev.equals(t)) return;
+        // 去重:如果新表达式已存在,直接移除旧位置(避免重复显示)。
+        int existing = watches.indexOf(t);
+        if (existing >= 0 && existing != index) {
+            watches.remove(index);
+        } else {
+            watches.set(index, t);
+        }
+        save();
+    }
+
     public synchronized void clear() {
         watches.clear();
         save();

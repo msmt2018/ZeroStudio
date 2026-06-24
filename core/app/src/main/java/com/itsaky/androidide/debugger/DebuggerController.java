@@ -13,6 +13,7 @@
 
 package com.itsaky.androidide.debugger;
 
+import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
@@ -47,6 +48,29 @@ public final class DebuggerController
     /** PR-5: raw access to the underlying JDWP debugger (used by WatchesFragment). */
     @Nullable
     public com.zerostudio.debugger.api.Debugger debugger() { return debugger; }
+
+    /**
+     * PR-D4: 目标应用包名(由 DebugSessionLauncher 在 launch 后写入)。
+     * 用于 stop() 时通过 am force-stop 终止进程。
+     */
+    @Nullable private String targetPackage;
+
+    /**
+     * PR-D4: 单一后台线程,用于 stop() 中的 force-stop 等不可阻塞 UI
+     * 的命令;也用于异步触发 a11y 公告(避免公告过密影响 UI 渲染)。
+     */
+    private final java.util.concurrent.ExecutorService bg =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "DebuggerController-bg");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /** PR-D4: 暴露 targetPackage 给需要它的 Fragment (例如 VariablesFragment)。 */
+    @Nullable public String targetPackage() { return targetPackage; }
+
+    /** PR-D4: 在 launch 成功后由 DebugSessionLauncher 写入。 */
+    public void setTargetPackage(@Nullable String pkg) { this.targetPackage = pkg; }
 
     private DebuggerController() {
         BreakpointManager.getInstance().addListener(new BreakpointManager.Listener() {
@@ -105,6 +129,8 @@ public final class DebuggerController
         BreakpointManager.getInstance().bindDebugger(null);
         sessionState.onDisconnected();
         pausedAtThreadId = -1L;
+        targetPackage = null;
+        DebuggerAccessibility.announceDisconnected(attachedActivity);
     }
 
     public void resume() {
@@ -117,10 +143,44 @@ public final class DebuggerController
         debugger.pause();
     }
 
+    /**
+     * PR-D4: 真正"停止"调试 —— 流程:
+     *   1. 尝试 resume(让被暂停的线程继续运行,避免 force-stop 后留下
+     *      VM 处于挂起态导致 JDWP disconnect 失败)
+     *   2. 调用 debugger.disconnect() 关闭 JDWP 客户端
+     *   3. 异步在后台线程用 {@code am force-stop <pkg>} 终止目标进程
+     *   4. 清空 targetPackage,通知 UI
+     * 如果 debugger 还没连接,只清空 targetPackage。
+     */
     public void stop() {
-        if (debugger == null) { flash("未连接调试器"); return; }
-        // TODO: 终止目标进程
-        flash("已请求停止调试");
+        if (debugger == null && TextUtils.isEmpty(targetPackage)) {
+            flash("未连接调试器");
+            return;
+        }
+        // 1) 先 resume 让 VM 回到运行态,避免后续 disconnect 因为 suspend policy
+        //    而 hang 住。
+        try { if (debugger != null) debugger.resume(); } catch (Throwable ignored) {}
+        // 2) 关闭 JDWP。
+        try { if (debugger != null) debugger.disconnect(); } catch (Throwable ignored) {}
+        BreakpointManager.getInstance().bindDebugger(null);
+        sessionState.onDisconnected();
+        pausedAtThreadId = -1L;
+        // 3) 异步 force-stop 目标进程,避免阻塞 UI 线程。
+        final String pkg = targetPackage;
+        targetPackage = null;
+        if (!TextUtils.isEmpty(pkg)) {
+            bg.submit(() -> {
+                try {
+                    Process p = new ProcessBuilder("sh", "-c",
+                            "am force-stop " + pkg).redirectErrorStream(true).start();
+                    p.waitFor();
+                } catch (Throwable t) {
+                    ILogger.ROOT.warn(TAG + ": force-stop failed: " + t.getMessage());
+                }
+            });
+        }
+        DebuggerAccessibility.announceDisconnected(attachedActivity);
+        flash("已停止调试" + (TextUtils.isEmpty(pkg) ? "" : " (" + pkg + ")"));
     }
 
     public void stepOver() {
@@ -161,13 +221,7 @@ public final class DebuggerController
         if (info == null) { flash("当前没有暂停点"); return; }
         StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
         if (frame == null) { flash("当前没有可显示的栈帧"); return; }
-        com.itsaky.androidide.models.Range range =
-                new com.itsaky.androidide.models.Range(
-                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0),
-                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0));
-        if (attachedActivity != null) {
-            attachedActivity.openFileAndSelect(new File(frame.sourceFile), range);
-        }
+        openFrame(frame);
     }
 
     public void showCurrentFrame() {
@@ -227,6 +281,7 @@ public final class DebuggerController
     public void onResumed() {
         pausedAtThreadId = -1L;
         sessionState.onResume();
+        DebuggerAccessibility.announceResumed(attachedActivity);
     }
 
     @Override
@@ -250,6 +305,61 @@ public final class DebuggerController
         if (bp != null) {
             BreakpointManager.getInstance().markHit(bp);
         }
+        // PR-D4: 切到 Variables tab,让用户立刻看到当前帧的变量(以及
+        // Call Stack 中的 frame 切换和 Watch 视图的实时求值)。
+        if (attachedActivity != null) {
+            try {
+                attachedActivity.openDebuggerTab(
+                    com.itsaky.androidide.debugger.fragment.VariablesFragment.class);
+            } catch (Throwable t) {
+                // 切 tab 失败不影响调试器本身的工作
+            }
+        }
+        // PR-D4: a11y 公告:如果是断点命中,优先播报断点 id;
+        // 其它原因(单步、异常等)播报当前位置。
+        if (bp != null) {
+            DebuggerAccessibility.announceBreakpointHit(
+                    attachedActivity, bp.id, frame.sourceFile, frame.lineNumber);
+        } else if (info.reason == SuspendInfo.Reason.EXCEPTION) {
+            // 异常挂起:SuspendInfo 没有 exception 对象引用,只有
+            // exceptionClassId + exceptionMessage;但有 JDWP refTypeId 也
+            // 拿不到类名,所以这里用 description 字段顶上。
+            String exName = info.description == null ? "" : info.description;
+            DebuggerAccessibility.announceException(
+                    attachedActivity, exName,
+                    frame.sourceFile, frame.lineNumber);
+        } else {
+            DebuggerAccessibility.announcePaused(
+                    attachedActivity, frame.sourceFile, frame.lineNumber);
+        }
+    }
+
+    /**
+     * PR-D4: 跳转到异常源位置。当前没有源位置时,会退回到第一个栈帧;
+     * 若 {@link SuspendInfo} 不是异常挂起,直接走 {@link #gotoCurrentBreakpoint()}。
+     */
+    public void gotoException() {
+        if (debugger == null) { flash("未连接调试器"); return; }
+        SuspendInfo info = debugger.lastSuspendInfo();
+        if (info == null) { flash("当前没有暂停点"); return; }
+        if (info.reason != SuspendInfo.Reason.EXCEPTION) {
+            gotoCurrentBreakpoint();
+            return;
+        }
+        StackFrameInfo frame = (info.frames == null || info.frames.isEmpty())
+                ? null : info.frames.get(0);
+        if (frame == null) { flash("无法定位异常源"); return; }
+        openFrame(frame);
+    }
+
+    /** PR-D4: 抽出 gotoCurrentBreakpoint / gotoException 复用逻辑。 */
+    private void openFrame(@NonNull StackFrameInfo frame) {
+        if (attachedActivity == null) return;
+        com.itsaky.androidide.models.Range range =
+                new com.itsaky.androidide.models.Range(
+                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0),
+                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0));
+        attachedActivity.openFileAndSelect(new File(frame.sourceFile), range);
     }
 
     /** PR-4: switch the current frame (drives Variables / Watches reload). */

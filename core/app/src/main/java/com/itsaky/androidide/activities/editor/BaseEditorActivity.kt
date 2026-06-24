@@ -689,6 +689,17 @@ abstract class BaseEditorActivity :
     }
   }
 
+  /**
+   * PR-D4: 调试器在 suspend / logpoint 事件里要自动切到某个 fragment tab
+   * 时调用。先把抽屉展开,再选中目标 Fragment 对应的 tab。
+   * 这个方法会在所有派生 Activity(例如 EditorHandlerActivity)里也可见。
+   */
+  open fun openDebuggerTab(fragmentClass: Class<out androidx.fragment.app.Fragment>) {
+    if (isDestroying || _binding == null) return
+    content.bottomSheet.tryExpandSheetFromControl()
+    content.bottomSheet.selectTabByFragmentClass(fragmentClass)
+  }
+
   open fun handleDiagnosticsResultVisibility(errorVisible: Boolean) {
     if (isDestroying || _binding == null) return
     content.bottomSheet.handleDiagnosticsResultVisibility(errorVisible)

@@ -38,6 +38,7 @@
 
     <!-- 视图动作 -->
     <string name="debugger_action_goto_current_bp">转到当前断点</string>
+    <string name="debugger_action_goto_exception">跳转到异常源</string>
     <string name="debugger_action_show_current_frame">显示当前帧</string>
 
     <!-- PR-4: 调试侧边面板 (调用栈 / 变量 / 监视) -->
@@ -98,6 +99,13 @@
     <!-- PR-D4: BreakpointTypePicker 添加 logpoint 后的提示 -->
     <string name="debugger_msg_logpoint_added">已在该行添加日志点</string>
 
+    <!-- PR-D4: 变量 set-value 对话框与提示 -->
+    <string name="debugger_set_value_title">设置 %1$s (%2$s) 的新值</string>
+    <string name="debugger_set_value_ok">已更新变量值</string>
+    <string name="debugger_set_value_error">设置变量值失败:%1$s</string>
+    <string name="debugger_set_value_not_suspended">程序未暂停,无法设置变量值</string>
+    <string name="debugger_set_value_not_connected">未连接调试器,无法设置变量值</string>
+
     <!-- PR-E2: 断点条件/日志点配置对话框 -->
     <string name="debugger_bcd_title">断点属性</string>
     <string name="debugger_bcd_type">断点类型</string>
@@ -152,4 +160,5 @@
     <string name="debugger_a11y_disconnected">已断开调试器</string>
     <string name="debugger_a11y_paused">程序已暂停于 %1$s 第 %2$d 行</string>
     <string name="debugger_a11y_resumed">程序已恢复运行</string>
+    <string name="debugger_a11y_exception_prefix">异常:%1$s</string>
 </resources>

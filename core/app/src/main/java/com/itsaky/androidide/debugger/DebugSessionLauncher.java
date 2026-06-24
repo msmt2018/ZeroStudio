@@ -38,6 +38,7 @@ import com.itsaky.androidide.utils.ApkInstaller;
 import com.itsaky.androidide.utils.InstallationResultHandler;
 import com.itsaky.androidide.utils.IntentUtils;
 import java.io.File;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +64,11 @@ public final class DebugSessionLauncher {
         @MainThread default void onConnected(@NonNull String host, int port) {}
         /** 任意阶段失败,后续步骤不会再执行. */
         @MainThread default void onFailed(@NonNull Step step, @NonNull String message) {}
+        /**
+         * PR-D4: 流程被 stop() 主动取消(用户点了停止按钮);
+         * 后续步骤不会再执行,worker 线程即将退出。
+         */
+        @MainThread default void onCancelled(@NonNull Step step) {}
     }
 
     public enum Step {
@@ -74,6 +80,11 @@ public final class DebugSessionLauncher {
     @Nullable private Thread worker;
     @Nullable private ShizukuBridge shizuku;
     @Nullable private RunAsBridge runAs;
+    /**
+     * PR-D4: stop() 把 cancelled 置 true,worker 在每个 step 之间检查
+     * 一下;若已取消,立刻退出并 fire onCancelled。
+     */
+    private final AtomicBoolean cancelled = new AtomicBoolean(false);
 
     public DebugSessionLauncher(@NonNull Context context) {
         this.appContext = context.getApplicationContext();
@@ -82,6 +93,43 @@ public final class DebugSessionLauncher {
     }
 
     public void setListener(@Nullable Listener l) { this.listener = l; }
+
+    /**
+     * PR-D4: 取消正在运行的 build/install/launch/connect 流程。
+     * 内部把 cancelled 置 true,worker 会在下一个 step 边界检测到
+     * 并退出;同时 interrupt() 一下 worker 线程,以便阻塞中的
+     * JDWP poll / install / build 也能尽量早地抛 InterruptedException。
+     *
+     * 如果本来就没有启动流程(worker 还没创建或已经退出),no-op。
+     */
+    public void stop() {
+        if (worker == null || !worker.isAlive()) return;
+        cancelled.set(true);
+        try { worker.interrupt(); } catch (Throwable ignored) {}
+        Log.i(TAG, "stop: cancel requested");
+    }
+
+    /**
+     * 内部 helper: 每次跨过 step 边界时调用一次,判断是否已经被 stop().
+     * 返回 true 表示已取消,调用方应立刻 short-circuit。
+     */
+    @WorkerThread
+    private boolean isCancelled() {
+        if (cancelled.get()) {
+            // fire 一次 onCancelled,具体 step 由调用方传入
+            return true;
+        }
+        return false;
+    }
+
+    private void fireCancelled(@NonNull Step atStep) {
+        Listener l = this.listener;
+        if (l == null) return;
+        // 推到 UI 线程
+        android.os.Handler main = new android.os.Handler(
+                android.os.Looper.getMainLooper());
+        main.post(() -> l.onCancelled(atStep));
+    }
 
     /**
      * 同步入口 (UI 线程). 自动选 module 进入异步流程.
@@ -93,6 +141,8 @@ public final class DebugSessionLauncher {
             Log.w(TAG, "start: worker is already running");
             return false;
         }
+        // PR-D4: 启动时清掉取消标记
+        cancelled.set(false);
         // PR-D2 简化: 多 module 时本工具类无法弹 chooser dialog (那是
         // Kotlin 扩展函数). 退化为只跑工作区中第一个 app module;若需要
         // chooser,PR-D3 可以补一个 Activity-based 的 chooser.
@@ -160,11 +210,17 @@ public final class DebugSessionLauncher {
         }
         TaskExecutionResult result;
         try {
+            // PR-D4: 暴露应用 application id 给 Controller,这样 stop()
+            // 时能 force-stop 目标进程。写到 Controller 后也方便其它
+            // Fragment / menu 查询。
+            DebuggerController.getInstance().setTargetPackage(
+                    variant.getApplicationId());
             result = buildService.executeTasks(taskName).get();
         } catch (Throwable t) {
             fail(Step.BUILD, "Build threw: " + t.getMessage());
             return;
         }
+        if (isCancelled()) { fireCancelled(Step.BUILD); return; }
         if (result == null || !result.isSuccessful()) {
             fail(Step.BUILD, "Build task failed: " + taskName);
             return;
@@ -190,6 +246,7 @@ public final class DebugSessionLauncher {
                             @NonNull AndroidModule module,
                             @NonNull BasicAndroidVariantMetadata variant,
                             @NonNull File apk) {
+        if (isCancelled()) { fireCancelled(Step.INSTALL); return; }
         com.itsaky.androidide.activities.editor.EditorHandlerActivity activity =
                 (com.itsaky.androidide.activities.editor.EditorHandlerActivity) data.get(android.content.Context.class);
         if (activity == null) {
@@ -268,6 +325,7 @@ public final class DebugSessionLauncher {
 
     @WorkerThread
     private void runLaunch(@NonNull String packageName) {
+        if (isCancelled()) { fireCancelled(Step.LAUNCH); return; }
         final boolean[] ok = new boolean[]{false};
         try {
             // runOnUiThread blocks until the message is posted; we then poll a flag.
@@ -301,6 +359,7 @@ public final class DebugSessionLauncher {
 
     @WorkerThread
     private void runResolvePort(@NonNull String packageName) {
+        if (isCancelled()) { fireCancelled(Step.RESOLVE_PORT); return; }
         JdwpPortResolver resolver = new JdwpPortResolver(appContext);
         try {
             int port = resolver.awaitJdwpPort(
@@ -334,6 +393,7 @@ public final class DebugSessionLauncher {
 
     @WorkerThread
     private void runConnect(@NonNull String host, int port) {
+        if (isCancelled()) { fireCancelled(Step.CONNECT); return; }
         fireAttaching(host, port);
         try {
             DebuggerController.getInstance().connect(host, port);
