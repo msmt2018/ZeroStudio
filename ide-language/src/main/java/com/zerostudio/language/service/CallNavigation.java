@@ -1,109 +1,104 @@
 package com.zerostudio.language.service;
 
-import com.zerostudio.language.index.ProjectIndex;
-import com.zerostudio.language.model.ParsedFile;
-import com.zerostudio.language.model.Reference;
-import com.zerostudio.language.model.SourceLocation;
-import com.zerostudio.language.model.SourceRange;
-import com.zerostudio.language.model.Symbol;
+import com.zerostudio.language.model.SourcePosition;
+import com.zerostudio.language.runtime.FrameSnapshot;
+import com.zerostudio.language.runtime.FrameSnapshot.StackFrame;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Optional;
 
 /**
- * Cross-method navigation: "show callers" and "show callees".
- *
- * <p>Callers of a method are the {@link Reference} sites of kind
- * {@code CALL} that point at it. The naive index lookup returns every
- * {@code call()} reference in the project; we then filter by container
- * symbol FQN to narrow to a specific overload.
- *
- * <p>Callees are the call references that originate from the given
- * method's body. We use the {@link Reference#containerFqn} field on each
- * reference to identify them.
- *
- * <p>The service is read-only. It does not modify the index.
+ * 调用栈导航：Step Into / Step Out 真实实现。
+ * 用 FrameSnapshot 模拟 JDI StackFrame 列表，支持：
+ *  - 前进到下一帧（Step Over）
+ *  - 进入被调方法（Step Into — 由 StepFilter 控制是否跳过）
+ *  - 退出当前方法（Step Out — 弹出栈）
  */
 public final class CallNavigation {
 
-    private final ProjectIndex index;
+    public enum Direction { INTO, OVER, OUT }
 
-    public CallNavigation(ProjectIndex index) {
-        this.index = Objects.requireNonNull(index);
+    /** 决定 Step Into 是否进入某个 frame 的过滤器 */
+    public interface StepFilter {
+        boolean shouldStepInto(StackFrame frame);
     }
 
-    /**
-     * Find every call site that may invoke {@code target}.
-     *
-     * <p>The result is an over-approximation: it is the list of every
-     * {@code CALL} reference in the project whose name matches the
-     * target's name. The caller can use the source range to disambiguate
-     * overloads in the UI.
-     */
-    public List<CallSite> callersOf(Symbol target) {
-        if (target == null) return Collections.emptyList();
-        List<CallSite> out = new ArrayList<>();
-        for (ParsedFile f : index.lookup().files()) {
-            for (Reference r : f.references) {
-                if (r.kind != Reference.ReferenceKind.CALL) continue;
-                if (!target.name.equals(r.name)) continue;
-                out.add(new CallSite(f.path, r));
+    /** 默认过滤器：跳过 synthetic 帧与 simple getter */
+    public static final StepFilter DEFAULT_FILTER = new StepFilter() {
+        @Override
+        public boolean shouldStepInto(StackFrame frame) {
+            if (frame.methodName.startsWith("access$") || frame.methodName.contains("$")) return false;
+            if (frame.methodName.startsWith("get") && frame.methodName.length() > 3
+                    && Character.isUpperCase(frame.methodName.charAt(3))) return false;
+            return true;
+        }
+    };
+
+    private final Deque<StackFrame> callStack = new ArrayDeque<>();
+    private StepFilter filter = DEFAULT_FILTER;
+    private int currentIndex = 0;
+
+    public void setFilter(StepFilter f) { this.filter = f != null ? f : DEFAULT_FILTER; }
+    public void reset() { callStack.clear(); currentIndex = 0; }
+
+    public void loadFrom(FrameSnapshot snapshot) {
+        reset();
+        if (snapshot == null) return;
+        // frames()[0] = top frame (per FrameSnapshot.topFrame convention)
+        // addLast preserves that order so callStack.peek() returns the top.
+        for (StackFrame f : snapshot.frames()) callStack.addLast(f);
+        currentIndex = 0;
+    }
+
+    public Optional<SourcePosition> step(Direction dir) {
+        if (callStack.isEmpty()) return Optional.empty();
+        switch (dir) {
+            case OVER: {
+                // 移动到栈中下一个位置（向调用者方向）
+                int nextIdx = currentIndex + 1;
+                if (nextIdx >= callStack.size()) return Optional.empty();
+                StackFrame next = null;
+                int i = 0;
+                for (StackFrame f : callStack) {
+                    if (i++ == nextIdx) { next = f; break; }
+                }
+                if (next == null) return Optional.empty();
+                if (!filter.shouldStepInto(next)) return Optional.empty();
+                currentIndex = nextIdx;
+                return Optional.of(toPosition(next));
+            }
+            case INTO: {
+                // 查找第一个通过 filter 的 frame（自栈顶向下）
+                int idx = 0;
+                for (StackFrame f : callStack) {
+                    if (filter.shouldStepInto(f)) {
+                        currentIndex = idx;
+                        return Optional.of(toPosition(f));
+                    }
+                    idx++;
+                }
+                return Optional.empty();
+            }
+            case OUT: {
+                // 弹出当前帧（末尾的），返回当前 top
+                callStack.pollLast();
+                StackFrame top = callStack.peek();
+                if (top == null) return Optional.empty();
+                return Optional.of(toPosition(top));
             }
         }
-        return out;
+        return Optional.empty();
     }
 
-    /**
-     * Find every method/function called from inside {@code from}.
-     *
-     * <p>Returns the names of the called methods and their call sites.
-     * Resolving each callee to its declaration is a separate
-     * {@link GoToDefinitionService} call.
-     */
-    public List<CallSite> calleesOf(Symbol from) {
-        if (from == null) return Collections.emptyList();
-        List<CallSite> out = new ArrayList<>();
-        ParsedFile file = index.lookup().file(from.sourceFile);
-        if (file == null) return out;
-        for (Reference r : file.references) {
-            if (r.kind != Reference.ReferenceKind.CALL) continue;
-            if (from.fqn != null && !from.fqn.equals(r.containerFqn)) continue;
-            out.add(new CallSite(file.path, r));
-        }
-        return out;
+    public Optional<SourcePosition> currentPosition() {
+        if (callStack.isEmpty()) return Optional.empty();
+        StackFrame f = callStack.stream().skip(currentIndex).findFirst().orElse(null);
+        return f == null ? Optional.empty() : Optional.of(toPosition(f));
     }
 
-    /**
-     * @return a one-line summary used by hover / inline UI.
-     */
-    public String describeCallers(Symbol target) {
-        int n = callersOf(target).size();
-        return n + " call site" + (n == 1 ? "" : "s");
-    }
-
-    /** A call site: a (file, reference) pair. */
-    public static final class CallSite {
-        public final String file;
-        public final Reference reference;
-
-        public CallSite(String file, Reference reference) {
-            this.file = file;
-            this.reference = reference;
-        }
-
-        public SourceLocation location() {
-            return new SourceLocation(file, reference.range.start);
-        }
-
-        public SourceRange range() {
-            return reference.range;
-        }
-
-        @Override
-        public String toString() {
-            return reference.name + " @ " + file + reference.range;
-        }
+    private SourcePosition toPosition(StackFrame f) {
+        return new SourcePosition(f.sourcePath != null ? f.sourcePath : f.className,
+                f.lineNumber, 1);
     }
 }

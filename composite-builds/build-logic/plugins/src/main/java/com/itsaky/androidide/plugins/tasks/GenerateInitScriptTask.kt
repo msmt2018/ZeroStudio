@@ -24,16 +24,7 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 
-/**
- * Generates the Gradle init script for the ZeroStudio IDE.
- *
- * <p>As of PR-1 the init script classpath references the new
- * `ide-log-plugin` AAR instead of the legacy `zerostudio-gradle-plugin`
- * jar; the latter is removed in PR-1.
- *
- * <p>PR-2 adds the `ide-debugger-1.0.0` AAR to the classpath so that the
- * per-project plugin can install the JDWP bridge in the host application.
- */
+/** Generates the Gradle init script for AndroidIDE. */
 abstract class GenerateInitScriptTask : DefaultTask() {
 
   @get:Input abstract val downloadVersion: Property<String>
@@ -61,22 +52,11 @@ abstract class GenerateInitScriptTask : DefaultTask() {
               }
 
               dependencies {
-                  // PR-1: replaces the legacy zerostudio-gradle-plugin-1.0.0.jar.
-                  // The new AAR is produced by the :ide-log-plugin module and
-                  // copied into the init classpath by GradleBuildService.
-                  classpath  name: "ide-log-plugin-1.0.0"
-                  // PR-2: new debugger engine. Resolved the same way as the
-                  // log plugin; the AAR is copied next to ide-log-plugin-1.0.0.aar.
-                  classpath  name: "ide-debugger-1.0.0"
+                  classpath  name: "zerostudio-gradle-plugin-1.0.0"
               }
           }
-
-                // PR-1: replaced by com.zerostudio.logplugin.plugin.IdeLogInitScriptPlugin
-                apply plugin: com.zerostudio.logplugin.plugin.IdeLogInitScriptPlugin
-                // PR-2: the debugger init script plugin lives in the
-                //       :ide-debugger module; the IDE side wires up its
-                //       handler when the AAR is loaded.
-                // apply plugin: com.zerostudio.debugger.IdeDebuggerInitScriptPlugin
+                
+                apply plugin: com.itsaky.androidide.gradle.AndroidIDEInitScriptPlugin
           """
               .trimIndent()
       )

@@ -172,6 +172,10 @@ include(
     ":event:eventbus",
     ":event:eventbus-android",
     ":event:eventbus-events",
+
+    ":ide-decompiler",
+    ":ide-language",
+
     ":java:javac-services",
     ":java:lsp",
     ":lsp:kotlin",
@@ -182,11 +186,6 @@ include(
     ":logging:idestats",
     ":logging:logger",
     ":logging:logsender",
-    ":ide-log-plugin",
-    ":ide-debugger",
-    ":ide-decompiler",
-    ":ide-language",
-    ":utilities:logwire",
     ":termux:application",
     ":termux:emulator",
     ":termux:shared",

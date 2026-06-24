@@ -408,23 +408,7 @@ abstract class BaseEditorActivity :
       setupDiagnosticInfo()
       setupMemUsageChart()
       watchMemory()
-      // PR-3: 调试器 Action 菜单
-      setupDebuggerMenu()
-      com.itsaky.androidide.debugger.DebuggerController.getInstance().attachActivity(this)
     }
-  }
-
-  /**
-   * PR-3: 把 DebuggerActionMenuProvider 注入到 Toolbar 菜单。
-   * 9 个动作 (🪲/▶️/⏸️/⏹️/⤵️/⬇️/⤴️/👉/...) 分布在 4 个 submenu 中。
-   */
-  private fun setupDebuggerMenu() {
-    val provider = com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider(
-        object : com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider.Host {
-          override fun requireContext() = this@BaseEditorActivity
-          override fun getCurrentEditor() = this@BaseEditorActivity.getCurrentEditor()
-        })
-    addMenuProvider(provider, this, androidx.lifecycle.Lifecycle.State.RESUMED)
   }
 
   private fun onSwipeRevealDragProgress(progress: Float) {

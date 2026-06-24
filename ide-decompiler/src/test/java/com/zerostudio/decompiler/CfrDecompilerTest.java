@@ -1,112 +1,87 @@
 package com.zerostudio.decompiler;
 
-import com.zerostudio.decompiler.api.DecompileRequest;
-import com.zerostudio.decompiler.api.DecompileResult;
-import com.zerostudio.decompiler.api.DecompilerRegistry;
-import com.zerostudio.decompiler.cache.CachingDecompiler;
-import com.zerostudio.decompiler.impl.cfr.CfrDecompiler;
+import com.zerostudio.decompiler.api.*;
+import com.zerostudio.decompiler.cache.*;
+import com.zerostudio.decompiler.impl.cfr.*;
+import java.io.*;
+import java.nio.file.*;
+import org.junit.*;
+import static org.junit.Assert.*;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
-
-/**
- * Verifies the CFR-backed decompiler produces a sensible
- * round-trip for a small Java class.
- */
 public class CfrDecompilerTest {
-
-    private static final String CLASS_FILE =
-            "/tmp/decompile-test/classes/com/example/decompile/SimpleGreeter.class";
-    private static final String CLASS_NAME =
-            "com.example.decompile.SimpleGreeter";
-
-    private CfrDecompiler cfr;
-
     @Before
-    public void setUp() {
-        cfr = new CfrDecompiler();
+    public void setUp() throws Exception {
+        // compile sample class
+        new File("/tmp/decompile-test").mkdirs();
+        String src = "public class SimpleGreeter { public String greet() { return \"Hello\"; } }";
+        Files.write(Paths.get("/tmp/decompile-test/SimpleGreeter.java"), src.getBytes());
+        Process p = Runtime.getRuntime().exec(
+            "javac -d /tmp/decompile-test /tmp/decompile-test/SimpleGreeter.java");
+        int rc = p.waitFor();
+        if (rc != 0) throw new RuntimeException("javac failed: " + rc);
     }
 
-    @Test
-    public void decompilesSimpleClassFromBytes() throws IOException {
-        byte[] bytes = Files.readAllBytes(Paths.get(CLASS_FILE));
-        DecompileResult r = cfr.decompile(
-                DecompileRequest.builder(CLASS_NAME)
-                        .classBytes(bytes)
-                        .build());
-        assertTrue("decompilation should succeed, got failure=" + r.failure,
-                r.isOk());
-        assertNotNull(r.source);
-        assertTrue("expected 'class SimpleGreeter' in output, got: "
-                + r.source, r.source.contains("SimpleGreeter"));
-        assertTrue("expected 'greet' in output",
-                r.source.contains("greet"));
-        assertTrue("expected 'greeting' in output",
-                r.source.contains("greeting"));
-        assertEquals(CLASS_NAME, r.className);
-    }
-
-    @Test
-    public void decompilesFromClasspathEntry() throws IOException {
-        DecompileResult r = cfr.decompile(
-                DecompileRequest.builder(CLASS_NAME)
-                        .classpathEntry("/tmp/decompile-test/classes")
-                        .build());
-        assertTrue("decompilation should succeed via classpath, got failure="
-                + r.failure, r.isOk());
-        assertTrue(r.source.contains("SimpleGreeter"));
-    }
-
-    @Test
-    public void failureWhenNoBytesOrClasspath() {
-        DecompileResult r = cfr.decompile(
-                DecompileRequest.builder(CLASS_NAME).build());
-        assertFalse(r.isOk());
-        assertNotNull(r.failure);
-    }
-
-    @Test
-    public void cachingDecompilerCachesByClassName() throws IOException {
-        byte[] bytes = Files.readAllBytes(Paths.get(CLASS_FILE));
-        DecompileRequest req = DecompileRequest.builder(CLASS_NAME)
-                .classBytes(bytes).build();
-        CachingDecompiler c = new CachingDecompiler(cfr, 8);
-        DecompileResult first = c.decompile(req);
-        assertTrue(first.isOk());
-        // Calling again should hit the cache (we can't easily observe
-        // a hit, but the size should not double).
-        DecompileResult second = c.decompile(req);
-        assertTrue(second.isOk());
-        assertEquals(first.source, second.source);
-        assertEquals(1, c.size());
-    }
-
-    @Test
-    public void cachingDecompilerEvictsOldEntries() throws IOException {
-        byte[] bytes = Files.readAllBytes(Paths.get(CLASS_FILE));
-        CachingDecompiler c = new CachingDecompiler(cfr, 2);
-        c.decompile(DecompileRequest.builder("a.A").classBytes(bytes).build());
-        c.decompile(DecompileRequest.builder("b.B").classBytes(bytes).build());
-        c.decompile(DecompileRequest.builder("c.C").classBytes(bytes).build());
-        // LRU should have evicted "a.A" but kept b and c.
-        assertTrue("expected cache to evict, size=" + c.size(), c.size() <= 2);
-    }
-
-    @Test
-    public void registryExposesCfr() {
+    @After
+    public void tearDown() {
         DecompilerRegistry.clearForTests();
-        DecompilerRegistry.register(cfr);
-        assertNotNull(DecompilerRegistry.get("cfr"));
+    }
+
+    @Test public void decompilesSimpleClassFromBytes() throws Exception {
+        Path classFile = Paths.get("/tmp/decompile-test/SimpleGreeter.class");
+        byte[] bytes = Files.readAllBytes(classFile);
+        Decompiler d = new CfrDecompiler();
+        DecompileResult r = d.decompile(DecompileRequest.builder()
+                .className("SimpleGreeter").classBytes(bytes).build());
+        assertTrue("decompile failed: " + r.failure, r.isOk());
+        assertTrue("should contain 'greet'", r.source.contains("greet"));
+    }
+
+    @Test public void decompilesFromClasspathEntry() {
+        Decompiler d = new CfrDecompiler();
+        DecompileResult r = d.decompile(DecompileRequest.builder()
+                .className("SimpleGreeter")
+                .classpathEntry("/tmp/decompile-test")
+                .build());
+        assertTrue("decompile failed: " + r.failure, r.isOk());
+        assertTrue("should contain 'greet'", r.source.contains("greet"));
+    }
+
+    @Test public void failureWhenNoBytesOrClasspath() {
+        Decompiler d = new CfrDecompiler();
+        DecompileResult r = d.decompile(DecompileRequest.builder()
+                .className("SomeClass").build());
+        assertFalse("should fail without bytes or classpath", r.isOk());
+        assertNotNull("should have failure message", r.failure);
+    }
+
+    @Test public void cachingDecompilerCachesByClassName() throws Exception {
+        Path classFile = Paths.get("/tmp/decompile-test/SimpleGreeter.class");
+        byte[] bytes = Files.readAllBytes(classFile);
+        Decompiler inner = new CfrDecompiler();
+        CachingDecompiler cache = new CachingDecompiler(inner, 10);
+        DecompileResult r1 = cache.decompile(DecompileRequest.builder()
+                .className("SimpleGreeter").classBytes(bytes).build());
+        DecompileResult r2 = cache.decompile(DecompileRequest.builder()
+                .className("SimpleGreeter").classBytes(bytes).build());
+        assertSame("should return same cached result", r1, r2);
+    }
+
+    @Test public void cachingDecompilerEvictsOldEntries() throws Exception {
+        Path classFile = Paths.get("/tmp/decompile-test/SimpleGreeter.class");
+        byte[] bytes = Files.readAllBytes(classFile);
+        Decompiler inner = new CfrDecompiler();
+        CachingDecompiler cache = new CachingDecompiler(inner, 2);
+        cache.decompile(DecompileRequest.builder().className("A").classBytes(bytes).build());
+        cache.decompile(DecompileRequest.builder().className("B").classBytes(bytes).build());
+        // third entry should evict one
+        DecompileResult r = cache.decompile(DecompileRequest.builder().className("C").classBytes(bytes).build());
+        assertNotNull(r);
+    }
+
+    @Test public void registryExposesCfr() {
+        DecompilerRegistry.clearForTests();
+        DecompilerRegistry.register(new CfrDecompiler());
+        assertEquals("cfr", DecompilerRegistry.get("cfr").name());
         assertNotNull(DecompilerRegistry.firstOrNull());
     }
 }

@@ -25,11 +25,6 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import com.itsaky.androidide.fragments.DiagnosticsListFragment;
 import com.itsaky.androidide.fragments.SearchResultFragment;
-import com.itsaky.androidide.debugger.fragment.BreakpointListFragment;
-import com.itsaky.androidide.debugger.fragment.CallStackFragment;
-import com.itsaky.androidide.debugger.fragment.LogpointFragment;
-import com.itsaky.androidide.debugger.fragment.VariablesFragment;
-import com.itsaky.androidide.debugger.fragment.WatchesFragment;
 import com.itsaky.androidide.fragments.output.AppLogFragment;
 import com.itsaky.androidide.fragments.output.BuildOutputFragment;
 import com.itsaky.androidide.fragments.output.IDELogFragment;
@@ -80,22 +75,6 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
     //编辑器工具箱：集成 AI Chat、MCP、依赖分析等常用工具到底部抽屉中
     this.fragments.add(new Tab(fragmentActivity.getString(R.string.title_editor_toolbox),
         EditorToolboxFragment.class, ++index));
-
-    // PR-3: 断点管理 - 列出 IDE 中所有断点，支持启用/禁用/编辑条件/删除
-    this.fragments.add(new Tab(fragmentActivity.getString(R.string.debugger_breakpoints_tab),
-        BreakpointListFragment.class, ++index));
-
-    // PR-4: 调试侧边面板 - 调用栈 / 变量 / 监视
-    this.fragments.add(new Tab(fragmentActivity.getString(R.string.debugger_callstack_tab),
-        CallStackFragment.class, ++index));
-    this.fragments.add(new Tab(fragmentActivity.getString(R.string.debugger_variables_tab),
-        VariablesFragment.class, ++index));
-    this.fragments.add(new Tab(fragmentActivity.getString(R.string.debugger_watches_tab),
-        WatchesFragment.class, ++index));
-
-    // PR-6: 日志点输出 tab
-    this.fragments.add(new Tab(fragmentActivity.getString(R.string.debugger_logpoint_tab),
-        LogpointFragment.class, ++index));
   }
 
   public Fragment getFragmentAtIndex(int index) {
@@ -178,31 +157,6 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
   @Nullable
   public SearchResultFragment getSearchResultFragment() {
     return findFragmentByClass(SearchResultFragment.class);
-  }
-
-  @Nullable
-  public BreakpointListFragment getBreakpointListFragment() {
-    return findFragmentByClass(BreakpointListFragment.class);
-  }
-
-  @Nullable
-  public CallStackFragment getCallStackFragment() {
-    return findFragmentByClass(CallStackFragment.class);
-  }
-
-  @Nullable
-  public VariablesFragment getVariablesFragment() {
-    return findFragmentByClass(VariablesFragment.class);
-  }
-
-  @Nullable
-  public WatchesFragment getWatchesFragment() {
-    return findFragmentByClass(WatchesFragment.class);
-  }
-
-  @Nullable
-  public LogpointFragment getLogpointFragment() {
-    return findFragmentByClass(LogpointFragment.class);
   }
 
   public <T extends Fragment> int findIndexOfFragmentByClass(@NonNull Class<T> tClass) {

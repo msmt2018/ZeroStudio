@@ -1,261 +1,166 @@
 package com.zerostudio.language.source;
 
-import com.zerostudio.decompiler.api.DecompileRequest;
-import com.zerostudio.decompiler.api.DecompileResult;
-import com.zerostudio.decompiler.api.Decompiler;
-import com.zerostudio.decompiler.api.DecompilerRegistry;
+import com.zerostudio.decompiler.api.*;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.jar.*;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-
-/**
- * Three-tier source resolver used by Go-to-Definition when the user
- * clicks on an imported class / method that is NOT in the workspace:
- *
- * <ol>
- *   <li>Workspace source (a parsed file in the project index).</li>
- *   <li>Source JAR: an attached {@code -sources.jar} whose entry
- *       matches the class FQN. We extract the .java / .kt file
- *       directly without decompilation.</li>
- *   <li>Class JAR + Decompiler (CFR): the .class file is decompiled
- *       on demand and the result is presented as a virtual file
- *       with a banner like {@code [decompiled from android.jar]}.</li>
- * </ol>
- *
- * <p>The resolver is read-only. It does not modify the project index.
- * All classpath entries are passed in at construction time; the
- * resolver never re-reads Gradle / Maven configuration.
- */
 public final class SourceResolver {
+    public enum Kind { WORKSPACE_SOURCE, SOURCE_JAR, DECOMPILED, BUILTIN, MISSING }
 
-    /** How the source was obtained. */
-    public enum Kind {
-        /** A file that lives in the user's workspace and is already parsed. */
-        WORKSPACE_SOURCE,
-        /** A .java / .kt file extracted from a -sources.jar. */
-        SOURCE_JAR,
-        /** Java source reconstructed by the decompiler from a .class file. */
-        DECOMPILED,
-        /** Built-in (e.g. java.lang.* on the bootclasspath). */
-        BUILTIN,
-        /** Nothing usable was found. */
-        MISSING
-    }
-
-    /** The result of a resolution. */
     public static final class ResolvedSource {
         public final Kind kind;
-        @Nullable public final String className;
-        @NonNull public final String displayPath;
-        @NonNull public final String sourceText;
-        @Nullable public final String originPath;
-        @Nullable public final String failure;
-
-        private ResolvedSource(Kind kind, @Nullable String className,
-                               @NonNull String displayPath,
-                               @NonNull String sourceText,
-                               @Nullable String originPath,
-                               @Nullable String failure) {
-            this.kind = kind;
-            this.className = className;
-            this.displayPath = displayPath;
-            this.sourceText = sourceText;
-            this.originPath = originPath;
-            this.failure = failure;
+        public final String className;
+        public final String displayPath;
+        public final String sourceText;
+        public final String originPath;
+        public final String failure;
+        private ResolvedSource(Kind kind, String className, String displayPath,
+                               String sourceText, String originPath, String failure) {
+            this.kind = kind; this.className = className; this.displayPath = displayPath;
+            this.sourceText = sourceText; this.originPath = originPath; this.failure = failure;
         }
-
-        public boolean isResolved() {
-            return kind != Kind.MISSING;
-        }
-
-        public static ResolvedSource workspace(String path, String source) {
-            return new ResolvedSource(Kind.WORKSPACE_SOURCE, null,
-                    path, source, path, null);
-        }
-        public static ResolvedSource sourceJar(String className, String jar,
-                                               String entry, String source) {
-            return new ResolvedSource(Kind.SOURCE_JAR, className,
-                    "[" + jar + "]" + entry, source, jar, null);
-        }
-        public static ResolvedSource decompiled(String className, String jar,
-                                                String source, String banner) {
-            return new ResolvedSource(Kind.DECOMPILED, className,
-                    banner, source, jar, null);
-        }
-        public static ResolvedSource missing(String className, String reason) {
-            return new ResolvedSource(Kind.MISSING, className,
-                    className, "", null, reason);
-        }
+        public boolean isResolved() { return kind != Kind.MISSING && sourceText != null; }
     }
 
-    /** A classpath entry: source jar, class jar, or both. */
     public static final class ClasspathEntry {
         public enum Kind { SOURCE_JAR, CLASS_JAR }
-        public final Kind kind;
         public final String path;
-        public ClasspathEntry(Kind k, String p) {
-            this.kind = Objects.requireNonNull(k);
-            this.path = Objects.requireNonNull(p);
-        }
-        public static ClasspathEntry sourceJar(String p) {
-            return new ClasspathEntry(Kind.SOURCE_JAR, p);
-        }
-        public static ClasspathEntry classJar(String p) {
-            return new ClasspathEntry(Kind.CLASS_JAR, p);
-        }
+        public final Kind kind;
+        public ClasspathEntry(String path, Kind kind) { this.path = path; this.kind = kind; }
+        public static ClasspathEntry sourceJar(String path) { return new ClasspathEntry(path, Kind.SOURCE_JAR); }
+        public static ClasspathEntry classJar(String path) { return new ClasspathEntry(path, Kind.CLASS_JAR); }
     }
 
-    private final List<ClasspathEntry> classpath;
-    private final Function<String, String> workspaceSourceLookup;
-    private final Decompiler decompiler;
-    private final ConcurrentHashMap<String, ResolvedSource> cache =
-            new ConcurrentHashMap<>();
+    private File workspaceRoot;
+    private Decompiler decompiler;
+    private final List<ClasspathEntry> classpath = new ArrayList<>();
 
-    public SourceResolver(@NonNull List<ClasspathEntry> classpath,
-                          @NonNull Function<String, String> workspaceSourceLookup) {
-        this(classpath, workspaceSourceLookup,
-                DecompilerRegistry.firstOrNull());
-    }
+    public void setWorkspaceRoot(File root) { this.workspaceRoot = root; }
 
-    public SourceResolver(@NonNull List<ClasspathEntry> classpath,
-                          @NonNull Function<String, String> workspaceSourceLookup,
-                          @Nullable Decompiler decompiler) {
-        this.classpath = Collections.unmodifiableList(
-                new ArrayList<>(classpath));
-        this.workspaceSourceLookup = workspaceSourceLookup;
-        this.decompiler = decompiler;
-    }
+    public void setDecompiler(Decompiler d) { this.decompiler = d; }
 
-    /**
-     * Resolve a class to source code.
-     *
-     * @param className fully qualified class name, e.g.
-     *                  {@code android.widget.Toast}
-     */
-    @NonNull
-    public ResolvedSource resolve(@NonNull String className) {
-        Objects.requireNonNull(className);
-        ResolvedSource cached = cache.get(className);
-        if (cached != null) return cached;
-        ResolvedSource r = doResolve(className);
-        cache.put(className, r);
-        return r;
-    }
+    public void addClasspathEntry(ClasspathEntry entry) { this.classpath.add(entry); }
 
-    private ResolvedSource doResolve(String className) {
-        // 1) Workspace.
-        String wsPath = workspacePathOf(className);
-        if (wsPath != null) {
-            String src = workspaceSourceLookup.apply(wsPath);
-            if (src != null) {
-                return ResolvedSource.workspace(wsPath, src);
-            }
+    public ResolvedSource resolve(String className) {
+        // 1) workspace
+        if (workspaceRoot != null) {
+            ResolvedSource ws = resolveWorkspace(className);
+            if (ws != null && ws.isResolved()) return ws;
         }
-        // 2) Source JAR.
+        // 2) source JAR
         for (ClasspathEntry cp : classpath) {
-            if (cp.kind != ClasspathEntry.Kind.SOURCE_JAR) continue;
-            SourceJarRead r = readFromSourceJar(cp.path, className);
-            if (r != null) {
-                return ResolvedSource.sourceJar(className, cp.path, r.entry, r.text);
+            if (cp.kind == ClasspathEntry.Kind.SOURCE_JAR) {
+                ResolvedSource src = readFromSourceJar(cp.path, className);
+                if (src != null && src.isResolved()) return src;
             }
         }
-        // 3) Class JAR + decompiler.
+        // 3) class JAR -> decompile
         for (ClasspathEntry cp : classpath) {
-            if (cp.kind != ClasspathEntry.Kind.CLASS_JAR) continue;
-            byte[] bytes = readClassBytes(cp.path, className);
-            if (bytes == null) continue;
-            if (decompiler == null) {
-                return ResolvedSource.missing(className,
-                        "class " + className
-                                + " found in " + cp.path
-                                + " but no decompiler registered");
-            }
-            DecompileResult dr = decompiler.decompile(
-                    DecompileRequest.builder(className)
-                            .classBytes(bytes)
-                            .build());
-            if (dr.isOk()) {
-                String banner = "[decompiled from " + cp.path + "]";
-                return ResolvedSource.decompiled(className, cp.path,
-                        dr.source, banner);
+            if (cp.kind == ClasspathEntry.Kind.CLASS_JAR) {
+                ResolvedSource dec = readClassBytes(cp.path, className);
+                if (dec != null && dec.isResolved()) return dec;
             }
         }
-        return ResolvedSource.missing(className,
-                "class " + className + " not found in any source location");
+        // 4) builtin
+        ResolvedSource builtin = builtin(className);
+        if (builtin != null) return builtin;
+        return new ResolvedSource(Kind.MISSING, className, null, null, null,
+                "Cannot find source for: " + className);
     }
 
-    /** Test-only: clear the resolution cache. */
-    public void clearCache() { cache.clear(); }
-
-    /**
-     * Convert a FQN to the canonical workspace file path.
-     * {@code com.example.Foo} becomes {@code com/example/Foo.java}.
-     * Returns null when the FQN cannot be a source file (e.g. it
-     * contains characters that cannot appear in a source file name).
-     */
-    @Nullable
-    public static String workspacePathOf(@NonNull String fqn) {
-        if (fqn.indexOf('/') >= 0) return null;
-        return fqn.replace('.', '/') + ".java";
-    }
-
-    private static class SourceJarRead {
-        final String entry;
-        final String text;
-        SourceJarRead(String e, String t) { this.entry = e; this.text = t; }
-    }
-
-    @Nullable
-    private static SourceJarRead readFromSourceJar(String jar, String className) {
-        String rel = className.replace('.', '/');
-        // Try .java and .kt as both are valid sources.
-        String[] candidates = { rel + ".java", rel + ".kt" };
-        try (ZipFile zf = new ZipFile(jar)) {
-            Enumeration<? extends ZipEntry> es = zf.entries();
-            while (es.hasMoreElements()) {
-                ZipEntry e = es.nextElement();
-                String name = e.getName();
-                for (String c : candidates) {
-                    if (name.equals(c)) {
-                        byte[] b = readAll(zf.getInputStream(e));
-                        return new SourceJarRead(name, new String(b));
-                    }
-                }
+    private ResolvedSource resolveWorkspace(String className) {
+        if (workspaceRoot == null) return null;
+        String relative = className.replace('.', '/');
+        for (String ext : Arrays.asList(".java", ".kt")) {
+            File f = new File(workspaceRoot, relative + ext);
+            if (f.exists()) {
+                try {
+                    String text = new String(Files.readAllBytes(f.toPath()));
+                    return new ResolvedSource(Kind.WORKSPACE_SOURCE, className,
+                            f.getAbsolutePath(), text, f.getAbsolutePath(), null);
+                } catch (IOException e) { return null; }
             }
-        } catch (IOException ex) {
-            return null;
         }
         return null;
     }
 
-    @Nullable
-    private static byte[] readClassBytes(String jar, String className) {
-        String entry = className.replace('.', '/') + ".class";
-        try (ZipFile zf = new ZipFile(jar)) {
-            ZipEntry e = zf.getEntry(entry);
-            if (e == null) return null;
-            return readAll(zf.getInputStream(e));
-        } catch (IOException ex) {
-            return null;
-        }
+    private ResolvedSource readFromSourceJar(String jarPath, String className) {
+        String entryName = className.replace('.', '/');
+        File f = new File(jarPath);
+        if (!f.exists()) return null;
+        try (JarFile jf = new JarFile(f)) {
+            for (String ext : Arrays.asList("", "-src", "-sources")) {
+                for (String pkg : Arrays.asList("", "/src/main/java", "/src")) {
+                    String path = entryName + ext + ".java";
+                    JarEntry e = jf.getJarEntry(path);
+                    if (e == null) {
+                        path = entryName + ext + ".kt";
+                        e = jf.getJarEntry(path);
+                    }
+                    if (e != null) {
+                        try (InputStream is = jf.getInputStream(e)) {
+                            String text = new String(is.readAllBytes());
+                            return new ResolvedSource(Kind.SOURCE_JAR, className,
+                                    jarPath + "!/" + e.getName(), text, jarPath + "!/" + e.getName(), null);
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) { /* ignore */ }
+        return null;
     }
 
-    private static byte[] readAll(java.io.InputStream in) throws IOException {
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-        return out.toByteArray();
+    private ResolvedSource readClassBytes(String jarPath, String className) {
+        if (decompiler == null) return null;
+        String entryName = className.replace('.', '/') + ".class";
+        File f = new File(jarPath);
+        if (!f.exists()) return null;
+        byte[] bytes = null;
+        
+        // Check if it's a directory (classpath directory) or a JAR file
+        if (f.isDirectory()) {
+            // Directories contain .class files directly on filesystem
+            File classFile = new File(f, entryName);
+            if (classFile.exists()) {
+                try {
+                    bytes = Files.readAllBytes(classFile.toPath());
+                } catch (IOException e) { return null; }
+            }
+        } else {
+            // JAR file
+            try (JarFile jf = new JarFile(f)) {
+                JarEntry e = jf.getJarEntry(entryName);
+                if (e != null) {
+                    try (InputStream is = jf.getInputStream(e)) {
+                        bytes = is.readAllBytes();
+                    }
+                }
+            } catch (IOException e) { return null; }
+        }
+        
+        if (bytes == null) return null;
+        DecompileResult r = decompiler.decompile(DecompileRequest.builder()
+                .className(className).classBytes(bytes).classpathEntry(jarPath).build());
+        if (r.isOk()) {
+            return new ResolvedSource(Kind.DECOMPILED, className,
+                    "[" + className + "] (decompiled from " + jarPath + ")",
+                    r.source, jarPath, null);
+        }
+        return new ResolvedSource(Kind.MISSING, className, null, null, jarPath,
+                "decompile failed: " + r.failure);
+    }
+
+    private ResolvedSource builtin(String className) {
+        // java.lang.*, java.util.* etc - return synthetic source
+        if (className.startsWith("java.lang.") || className.startsWith("java.util.")
+                || className.startsWith("java.io.") || className.startsWith("java.nio.")) {
+            String simpleName = className.substring(className.lastIndexOf('.') + 1);
+            String text = "public final class " + simpleName + " { /* builtin */ }";
+            return new ResolvedSource(Kind.BUILTIN, className,
+                    "[" + className + "] (builtin)", text, "builtin:" + className, null);
+        }
+        return null;
     }
 }

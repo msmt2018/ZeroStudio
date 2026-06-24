@@ -22,7 +22,6 @@ import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TABS
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TREE
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_TOOLBAR
 import com.itsaky.androidide.actions.ActionsRegistry
-import com.itsaky.androidide.actions.build.DebugProjectAction
 import com.itsaky.androidide.actions.build.ProjectSyncAction
 import com.itsaky.androidide.actions.build.QuickRunWithCancellationAction
 import com.itsaky.androidide.actions.build.RunTasksAction
@@ -82,9 +81,6 @@ class EditorActivityActions {
       registry.registerAction(RedoAction(context, order++))
       registry.registerAction(QuickRunWithCancellationAction(context, order++))
       registry.registerAction(RunTasksAction(context, order++))
-      // PR-D1: 顶层 "🪲 调试" 按钮 — 一键 attach / detach JDWP 调试器。
-      // 真实 build+install+launch+JDWP-attach 流程在 PR-D2 中实现；当前只 connect。
-      registry.registerAction(DebugProjectAction(context, order++))
       registry.registerAction(SaveFileAction(context, order++))
       registry.registerAction(EditorEditLineMenuAction(context, order++))
       registry.registerAction(CodeActionsMenu(context, order++))

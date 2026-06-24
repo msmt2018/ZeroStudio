@@ -1,59 +1,14 @@
 package com.zerostudio.decompiler.api;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-
-/**
- * Input to a decompilation request.
- *
- * <p>Either {@code classBytes} or {@code classpathEntry} (or both) must
- * be supplied. When both are present the decompiler prefers
- * {@code classpathEntry} for cross-references (so inner classes resolve
- * correctly) and uses {@code classBytes} for the actual class under
- * analysis.
- */
 public final class DecompileRequest {
-
-    /** Fully qualified class name, e.g. {@code android.widget.Toast}. */
-    @NonNull
     public final String className;
-
-    /** Raw bytes of the primary class. May be null when classpathEntry is set. */
-    @Nullable
     public final byte[] classBytes;
-
-    /**
-     * Optional classpath entry (a directory, a JAR file, or a list of
-     * such) that the decompiler can use to resolve references.
-     */
-    @Nullable
     public final String classpathEntry;
+    public final java.util.List<String> additionalClasspath;
+    public final java.util.Map<String, String> options;
 
-    /**
-     * Optional {@code classpath:} scheme entries for cross-references.
-     * For example: {@code /path/to/android.jar}.
-     */
-    @NonNull
-    public final List<String> additionalClasspath;
-
-    /**
-     * Options passed through to the underlying decompiler engine.
-     * Keys are engine-specific; see {@link CfrOptionKeys} for the
-     * canonical set.
-     */
-    @NonNull
-    public final Map<String, String> options;
-
-    private DecompileRequest(@NonNull String className,
-                             @Nullable byte[] classBytes,
-                             @Nullable String classpathEntry,
-                             @NonNull List<String> additionalClasspath,
-                             @NonNull Map<String, String> options) {
+    private DecompileRequest(String className, byte[] classBytes, String classpathEntry,
+            java.util.List<String> additionalClasspath, java.util.Map<String, String> options) {
         this.className = className;
         this.classBytes = classBytes;
         this.classpathEntry = classpathEntry;
@@ -61,46 +16,22 @@ public final class DecompileRequest {
         this.options = options;
     }
 
-    public static Builder builder(@NonNull String className) {
-        return new Builder(className);
-    }
+    public static Builder builder() { return new Builder(); }
 
     public static final class Builder {
-        private final String className;
+        private String className;
         private byte[] classBytes;
         private String classpathEntry;
-        private List<String> additionalClasspath = Collections.emptyList();
-        private Map<String, String> options = Collections.emptyMap();
+        private java.util.List<String> additionalClasspath = new java.util.ArrayList<>();
+        private java.util.Map<String, String> options = new java.util.HashMap<>();
 
-        private Builder(String className) {
-            this.className = Objects.requireNonNull(className);
-        }
-
-        public Builder classBytes(byte[] b) {
-            this.classBytes = b;
-            return this;
-        }
-
-        public Builder classpathEntry(String e) {
-            this.classpathEntry = e;
-            return this;
-        }
-
-        public Builder additionalClasspath(List<String> cp) {
-            this.additionalClasspath = cp == null
-                    ? Collections.<String>emptyList() : cp;
-            return this;
-        }
-
-        public Builder options(Map<String, String> o) {
-            this.options = o == null
-                    ? Collections.<String, String>emptyMap() : o;
-            return this;
-        }
-
+        public Builder className(String v) { this.className = v; return this; }
+        public Builder classBytes(byte[] v) { this.classBytes = v; return this; }
+        public Builder classpathEntry(String v) { this.classpathEntry = v; return this; }
+        public Builder additionalClasspath(java.util.List<String> v) { this.additionalClasspath = v; return this; }
+        public Builder option(String key, String value) { this.options.put(key, value); return this; }
         public DecompileRequest build() {
-            return new DecompileRequest(className, classBytes,
-                    classpathEntry, additionalClasspath, options);
+            return new DecompileRequest(className, classBytes, classpathEntry, additionalClasspath, options);
         }
     }
 }

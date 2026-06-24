@@ -105,35 +105,7 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             }
 
         variant.sources.assets?.addGeneratedSourceDirectory(
-            copyIdeLogPluginAar,
-            AddFileToAssetsTask::outputDirectory,
-        )
-
-        // PR-2: copy the new `ide-debugger` AAR into the assets so that
-        // the IDE build can extract it at install time. The AAR is
-        // produced by the `:ide-debugger` module.
-        val copyIdeDebuggerAar =
-            tasks.register(
-                "copy${variantNameCapitalized}IdeDebuggerAar",
-                AddFileToAssetsTask::class.java,
-            ) {
-              val ideDebuggerPath = ":ide-debugger"
-              val ideDebugger =
-                  checkNotNull(rootProject.findProject(ideDebuggerPath)) {
-                    "Cannot find the ide-debugger module with project path: '$ideDebuggerPath'"
-                  }
-              dependsOn(ideDebugger.tasks.getByName("assembleRelease"))
-
-              val aar =
-                  ideDebugger.layout.buildDirectory.file("outputs/aar/ide-debugger-release.aar")
-
-              inputFile.set(aar)
-              baseAssetsPath.set("data/common")
-              fileName.set("ide-debugger-1.0.0.aar")
-            }
-
-        variant.sources.assets?.addGeneratedSourceDirectory(
-            copyIdeDebuggerAar,
+            copyToolingApiJar,
             AddFileToAssetsTask::outputDirectory,
         )
       }

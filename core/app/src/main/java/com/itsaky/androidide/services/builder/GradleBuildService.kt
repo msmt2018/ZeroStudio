@@ -295,16 +295,7 @@ class GradleBuildService :
                         }
                         
                         dependencies {
-                            // PR-1: the legacy logger-runtime.aar is replaced by
-                            //   the new ide-log-plugin AAR (see
-                            //   :ide-log-plugin module). The AAR is published as
-                            //   part of the IDE build and resolved through the
-                            //   maven repository configured in
-                            //   IdeLogInitScriptPlugin.
-                            implementation 'com.zerostudio:ide-log-plugin:1.0.0'
-                            // PR-2: debugger engine. The AAR is published as
-                            //   part of the IDE build and resolved the same way.
-                            implementation 'com.zerostudio:ide-debugger:1.0.0'
+                            implementation files('${getLoggerRuntimeAar().absolutePath}')
                             coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
                         }
                     }
@@ -331,16 +322,16 @@ class GradleBuildService :
 
   /** Extracts and returns the logger runtime AAR file. */
   private fun getLoggerRuntimeAar(): File {
-    val aar = File(getLoggerPluginDir(), "ide-log-plugin-1.0.0.aar")
+    val aar = File(getLoggerPluginDir(), "logger-runtime.aar")
     if (!aar.exists()) {
       // Extract from assets
       if (
           !ResourceUtils.copyFileFromAssets(
-              "data/common/ide-log-plugin-1.0.0.aar",
+              "data/common/logger-runtime.aar",
               aar.absolutePath,
           )
       ) {
-        log.error("Failed to extract ide-log-plugin-1.0.0.aar from assets")
+        log.error("Failed to extract logger-runtime.aar from assets")
       }
     }
     return aar

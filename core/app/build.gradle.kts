@@ -226,13 +226,6 @@ dependencies {
   implementation(projects.lsp.clangd)
   implementation(projects.logging.idestats)
   implementation(projects.logging.logsender)
-
-  // PR-1: shared wire protocol for the ide-log-plugin AAR.
-  implementation(project(":utilities:logwire"))
-
-  // PR-2: debugger engine. The library is consumed from the IDE side and
-  // talks to the JDWP server running inside the host application.
-  implementation(project(":ide-debugger"))
   implementation(projects.termux.application)
   implementation(projects.termux.view)
   implementation(projects.termux.emulator)

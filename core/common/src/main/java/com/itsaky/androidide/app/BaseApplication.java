@@ -74,13 +74,6 @@ public class BaseApplication extends Application {
     Environment.init(this);
 
     mPrefsManager = new PreferenceManager(this);
-
-    // PR-3: 加载持久化的断点（如果有）
-    try {
-      com.itsaky.androidide.debugger.model.BreakpointStore.getInstance().load();
-      // PR-4: 加载持久化的监视表达式
-      com.itsaky.androidide.debugger.model.WatchStore.getInstance().load();
-    } catch (Throwable ignored) {}
   }
 
   public void writeException(Throwable th) {
