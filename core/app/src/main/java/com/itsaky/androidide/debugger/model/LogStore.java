@@ -88,16 +88,24 @@ public final class LogStore {
             // 旧实现 entries.remove(0) 是 O(n)。
             while (entries.size() > capacity) entries.pollFirst();
         }
-        for (Listener l : listeners) {
-            try { l.onLogAppended(e); } catch (Throwable ignored) {}
-        }
+        // PR-D7: listener 派发切到 dispatchHandler 线程,
+        // 避免在 JDWP read 线程上做 UI 更新(例如 LogFragment 增条目)。
+        final Entry copy = e;
+        dispatchHandler.post(() -> {
+            for (Listener l : listeners) {
+                try { l.onLogAppended(copy); } catch (Throwable ignored) {}
+            }
+        });
     }
 
     public void clear() {
         synchronized (entries) { entries.clear(); }
-        for (Listener l : listeners) {
-            try { l.onLogCleared(); } catch (Throwable ignored) {}
-        }
+        // PR-D7: clear 同样在后台派发。
+        dispatchHandler.post(() -> {
+            for (Listener l : listeners) {
+                try { l.onLogCleared(); } catch (Throwable ignored) {}
+            }
+        });
     }
 
     @NonNull

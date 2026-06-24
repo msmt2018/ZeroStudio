@@ -1,89 +1,98 @@
 /*
- *  ZeroStudio IDE - 断点调试器触觉反馈辅助
+ *  ZeroStudio IDE - 调试器触觉反馈 (Phase D7)
  *
- *  PR-D5: 给断点命中、force-stop 失败、step 成功等关键事件提供短震反馈,
- *  提升操作可感知性(在真机/调试机上尤其重要,IDE 本身没声音的时候)。
+ *  集中提供调试相关动作的震动反馈:
+ *    - onPaused         : 命中断点/暂停目标线程
+ *    - onResumed        : 恢复目标线程
+ *    - onBreakpointToggled: 切换断点 (true=添加/启用, false=删除/禁用)
+ *    - onStop           : 强制停止目标进程
  *
  *  设计:
- *   - 单例 + 静态方法,无状态,无外部依赖,易于在 Java 端调用。
- *   - 在没有 attachedActivity 时静默 no-op,不做 toast / flash(避免和
- *     已有 flashInfo 双倍提示)。
- *   - 用 {@link android.view.HapticFeedbackConstants#LONG_PRESS}
- *     作为"重要事件已发生"的提示 — 短按({@code VIRTUAL_KEY}) 会过于频繁。
+ *    - 全部使用 VibrationEffect.createOneShot/createWaveform (API 26+);
+ *      minSdk 已是 26+ 故无需旧 API fallback
+ *    - 静默失败:设备没有 vibrator / 没有权限 / 任何异常都吞掉,
+ *      不能让震动失败阻塞调试主流程
+ *    - 系统设置里"触感反馈"被关掉时由 framework 自动忽略,无需应用层处理
  */
 
 package com.itsaky.androidide.debugger;
 
-import android.app.Activity;
-import android.view.HapticFeedbackConstants;
-import android.view.View;
-
+import android.content.Context;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresPermission;
 
 public final class DebuggerHaptics {
 
-    private DebuggerHaptics() {
-        // no instances
+    private DebuggerHaptics() {}
+
+    /** 命中断点/暂停。短促 30ms,中度振幅。 */
+    @RequiresPermission(android.Manifest.permission.VIBRATE)
+    public static void onPaused(@Nullable Context ctx) {
+        vibrate(ctx, 30L, 160);
     }
 
-    /**
-     * 在宿主 Activity 的根 View 上触发一次"长按"级别的短震。
-     * 没有可用的 View 时静默 no-op。
-     */
-    public static void tick(@Nullable Activity activity) {
-        if (activity == null) return;
-        View root = activity.getWindow() == null ? null
-                : activity.getWindow().getDecorView();
-        if (root == null) return;
-        try {
-            root.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-        } catch (Throwable ignored) {
-            // 部分设备没有震动器 / 系统禁用 — 不致命
+    /** 恢复目标线程。20ms 轻量。 */
+    @RequiresPermission(android.Manifest.permission.VIBRATE)
+    public static void onResumed(@Nullable Context ctx) {
+        vibrate(ctx, 20L, 120);
+    }
+
+    /** 切换断点。添加/启用: 双短 12+18ms;删除/禁用: 单一 20ms。 */
+    @RequiresPermission(android.Manifest.permission.VIBRATE)
+    public static void onBreakpointToggled(@Nullable Context ctx, boolean enabled) {
+        if (enabled) {
+            vibrate(ctx, new long[]{0L, 12L, 30L, 18L}, 100);
+        } else {
+            vibrate(ctx, 20L, 100);
         }
     }
 
-    /**
-     * 在指定 View 上触发"软键短按"级别的极轻反馈(20ms 短震)。
-     * 适合高频事件,例如"切换断点"、"set-value 成功"。
-     */
-    public static void tap(@Nullable View view) {
-        if (view == null) return;
+    /** 强制停止目标进程。50ms 长震。 */
+    @RequiresPermission(android.Manifest.permission.VIBRATE)
+    public static void onStop(@Nullable Context ctx) {
+        vibrate(ctx, 50L, 200);
+    }
+
+    // ----------------- internal -----------------
+
+    @RequiresPermission(android.Manifest.permission.VIBRATE)
+    private static void vibrate(@Nullable Context ctx, long ms, int amplitude) {
+        Vibrator v = resolveVibrator(ctx);
+        if (v == null || !v.hasVibrator()) return;
         try {
-            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-        } catch (Throwable ignored) {
-            // no-op
+            v.vibrate(VibrationEffect.createOneShot(ms, amplitude));
+        } catch (Throwable t) {
+            // silent: never break debugger flow on haptics failure
         }
     }
 
-    /**
-     * 在指定 View 上触发"长按"级别的反馈(40ms 短震)。
-     * 适合低频重要事件,例如"断点命中"、"stop 成功"、"连接成功"。
-     */
-    public static void strong(@Nullable View view) {
-        if (view == null) return;
+    @RequiresPermission(android.Manifest.permission.VIBRATE)
+    private static void vibrate(@Nullable Context ctx, @NonNull long[] pattern, int amplitude) {
+        Vibrator v = resolveVibrator(ctx);
+        if (v == null || !v.hasVibrator()) return;
         try {
-            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-        } catch (Throwable ignored) {
-            // no-op
+            v.vibrate(VibrationEffect.createWaveform(pattern, -1));
+        } catch (Throwable t) {
+            // silent
         }
     }
 
-    /**
-     * 在指定 View 上触发"拒绝"反馈(60ms 双短震),用于"操作被拒"的场景,
-     * 例如"未连接调试器时按了 step over"。
-     */
-    public static void reject(@Nullable View view) {
-        if (view == null) return;
+    @Nullable
+    private static Vibrator resolveVibrator(@Nullable Context ctx) {
+        if (ctx == null) return null;
         try {
-            view.performHapticFeedback(HapticFeedbackConstants.REJECT);
-        } catch (Throwable ignored) {
-            // no-op
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                VibratorManager vm =
+                        (VibratorManager) ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                if (vm != null) return vm.getDefaultVibrator();
+            }
+            return (Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
+        } catch (Throwable t) {
+            return null;
         }
-    }
-
-    /** {@link #tick(Activity)} 的 {@link NonNull} 便利重载。 */
-    public static void tick(@NonNull Activity activity) {
-        tick((Activity) activity);
     }
 }

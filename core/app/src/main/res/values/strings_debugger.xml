@@ -67,6 +67,8 @@
 
     <string name="debugger_action_refresh">刷新</string>
     <string name="debugger_action_add_watch">添加监视</string>
+    <!-- PR-D7: 跳转到异常抛出栈帧 -->
+    <string name="debugger_action_goto_exception">转到异常</string>
 
     <!-- PR-5: 表达式求值 -->
     <string name="debugger_eval_error">求值失败：%1$s</string>

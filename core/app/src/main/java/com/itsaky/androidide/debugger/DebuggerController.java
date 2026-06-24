@@ -13,7 +13,6 @@
 
 package com.itsaky.androidide.debugger;
 
-import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
@@ -25,7 +24,9 @@ import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.SuspendInfo;
 import com.zerostudio.debugger.event.DebugEventBus;
 import com.zerostudio.debugger.event.DebugEvents;
+import com.zerostudio.debugger.model.DebugSession.State;
 import java.io.File;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -65,29 +66,6 @@ public final class DebuggerController
     /** PR-5: raw access to the underlying JDWP debugger (used by WatchesFragment). */
     @Nullable
     public com.zerostudio.debugger.api.Debugger debugger() { return debugger; }
-
-    /**
-     * PR-D4: 目标应用包名(由 DebugSessionLauncher 在 launch 后写入)。
-     * 用于 stop() 时通过 am force-stop 终止进程。
-     */
-    @Nullable private String targetPackage;
-
-    /**
-     * PR-D4: 单一后台线程,用于 stop() 中的 force-stop 等不可阻塞 UI
-     * 的命令;也用于异步触发 a11y 公告(避免公告过密影响 UI 渲染)。
-     */
-    private final java.util.concurrent.ExecutorService bg =
-            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "DebuggerController-bg");
-                t.setDaemon(true);
-                return t;
-            });
-
-    /** PR-D4: 暴露 targetPackage 给需要它的 Fragment (例如 VariablesFragment)。 */
-    @Nullable public String targetPackage() { return targetPackage; }
-
-    /** PR-D4: 在 launch 成功后由 DebugSessionLauncher 写入。 */
-    public void setTargetPackage(@Nullable String pkg) { this.targetPackage = pkg; }
 
     private DebuggerController() {
         BreakpointManager.getInstance().addListener(new BreakpointManager.Listener() {
@@ -151,9 +129,9 @@ public final class DebuggerController
             new Thread(() -> {
                 try { debugger.waitForVmStart(30_000L); } catch (Throwable ignored) {}
             }, "jdwp-wait-vmstart").start();
-            ILogger.ROOT.info("Debugger connected to " + host + ":" + port);
+            ILogger.info(TAG, "Debugger connected to " + host + ":" + port);
         } catch (Throwable t) {
-            ILogger.ROOT.error("Failed to connect to JDWP server: " + t.getMessage(), t);
+            ILogger.error(TAG, "Failed to connect to JDWP server: " + t.getMessage(), t);
         }
     }
 
@@ -163,95 +141,74 @@ public final class DebuggerController
         BreakpointManager.getInstance().bindDebugger(null);
         sessionState.onDisconnected();
         pausedAtThreadId = -1L;
-        targetPackage = null;
-        DebuggerAccessibility.announceDisconnected(attachedActivity);
+        announceDisconnected();
     }
 
     public void resume() {
-        if (debugger == null) {
-            flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
-            DebuggerHaptics.reject(attachedActivity);
-            return;
-        }
+        if (debugger == null) { flash("未连接调试器"); return; }
         debugger.resume();
-        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void pause() {
-        if (debugger == null) {
-            flash(getString(com.itsaky.androidide.R.string.debugger_msg_pause_reject));
-            DebuggerHaptics.reject(attachedActivity);
-            return;
-        }
+        if (debugger == null) { flash("未连接调试器"); return; }
         debugger.pause();
-        DebuggerHaptics.tap(attachedActivity);
     }
 
     /**
      * PR-D6: 真正实现 stop():先 JDWP Resume 让目标进程从暂停态出来,
      * 然后用 {@code am force-stop} 终止目标包,最后断 JDWP。
      * 不阻塞调用线程 (通常是 UI 线程)。
-     *
-     * <p>PR-D5: 捕获 force-stop 退出码,失败时通过 [flash] 给用户
-     * 可见提示(原版只有 [ILogger.ROOT.warn]),并加触觉反馈。
      */
     public void stop() {
-        if (debugger == null && TextUtils.isEmpty(targetPackage)) {
-            flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
-            if (attachedActivity != null) {
-                com.itsaky.androidide.debugger.DebuggerHaptics.reject(attachedActivity);
-            }
+        if (debugger == null && (targetPackage == null || targetPackage.isEmpty())) {
+            flash("未连接调试器");
             return;
         }
         final String pkg = targetPackage;
-        targetPackage = null;
-        if (!TextUtils.isEmpty(pkg)) {
-            bgExecutor().execute(() -> {
-                Integer exitCode = null;
-                boolean ok = false;
-                try {
-                    ok = forceStopPackage(pkg);
-                    exitCode = ok ? 0 : 1;
-                } catch (Throwable t) {
-                    ILogger.ROOT.warn(TAG + ": force-stop failed: " + t.getMessage());
+        bgExecutor().execute(() -> {
+            // 1) 尝试恢复目标线程,避免 force-stop 时堆栈卡在暂停态。
+            try {
+                if (debugger != null) debugger.resume();
+            } catch (Throwable ignored) {}
+            // 2) force-stop 目标包。
+            boolean forceStopped = false;
+            if (pkg != null && !pkg.isEmpty()) {
+                forceStopped = forceStopPackage(pkg);
+            }
+            // 3) 断开 JDWP。
+            try {
+                if (debugger != null) debugger.disconnect();
+            } catch (Throwable ignored) {}
+            // 4) 通知 UI。
+            final boolean ok = forceStopped;
+            postMain(() -> {
+                if (attachedActivity != null) {
+                    if (ok && pkg != null) {
+                        attachedActivity.flashInfo(attachedActivity.getString(
+                                com.itsaky.androidide.R.string.debugger_stop_ok, pkg));
+                    } else if (pkg == null || pkg.isEmpty()) {
+                        attachedActivity.flashInfo(attachedActivity.getString(
+                                com.itsaky.androidide.R.string.debugger_stop_no_target));
+                    } else {
+                        attachedActivity.flashInfo(attachedActivity.getString(
+                                com.itsaky.androidide.R.string.debugger_stop_failed,
+                                "force-stop exit != 0"));
+                    }
                 }
-                if (!ok) {
-                    final String err = exitCode == null
-                            ? "process error"
-                            : ("exit " + exitCode);
-                    postMain(() -> {
-                        if (attachedActivity != null) {
-                            attachedActivity.flashInfo(attachedActivity.getString(
-                                com.itsaky.androidide.R.string.debugger_msg_stop_force_stop_failed,
-                                pkg + " (" + err + ")"));
-                            com.itsaky.androidide.debugger.DebuggerHaptics.reject(
-                                    attachedActivity);
-                        }
-                    });
-                }
+                // 重置本地状态
+                debugger = null;
+                BreakpointManager.getInstance().bindDebugger(null);
+                sessionState.onDisconnected();
+                pausedAtThreadId = -1L;
+                // targetPackage 不清,用户可能紧接着再次启动调试;
+                // 若想强制清,可在 connect() 时再覆盖。
             });
-        } else {
-            flash(getString(com.itsaky.androidide.R.string.debugger_msg_stop_no_target));
-        }
-        // 1) 先 resume 让 VM 回到运行态,避免后续 disconnect 因为 suspend policy
-        //    而 hang 住。
-        try { if (debugger != null) debugger.resume(); } catch (Throwable ignored) {}
-        // 2) 关闭 JDWP。
-        try { if (debugger != null) debugger.disconnect(); } catch (Throwable ignored) {}
-        BreakpointManager.getInstance().bindDebugger(null);
-        sessionState.onDisconnected();
-        pausedAtThreadId = -1L;
-        if (attachedActivity != null) {
-            DebuggerAccessibility.announceDisconnected(attachedActivity);
-            // 成功路径触觉反馈 — 区分"已成功停止"
-            com.itsaky.androidide.debugger.DebuggerHaptics.strong(attachedActivity);
-        }
+        });
     }
 
     /**
      * PR-D6: 用 {@code am force-stop <pkg>} 终止目标包。
-     * 优先 IPackageManager.forceStopPackage 隐藏 API,
-     * 失败时回退到 `am force-stop <pkg>` shell 命令。
+     * 用公开 API 优先,失败时回退到 shell。
      */
     private static boolean forceStopPackage(@NonNull String pkg) {
         // 1) 公开 API:ApplicationPackageManager (隐藏 API,但 Android 系统应用可见)
@@ -289,62 +246,36 @@ public final class DebuggerController
     }
 
     public void stepOver() {
-        if (!requireThread()) {
-            DebuggerHaptics.reject(attachedActivity);
-            return;
-        }
+        if (!requireThread()) return;
         debugger.stepOver(pausedAtThreadId);
-        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void stepInto() {
-        if (!requireThread()) {
-            DebuggerHaptics.reject(attachedActivity);
-            return;
-        }
+        if (!requireThread()) return;
         debugger.stepInto(pausedAtThreadId);
-        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void stepOut() {
-        if (!requireThread()) {
-            DebuggerHaptics.reject(attachedActivity);
-            return;
-        }
+        if (!requireThread()) return;
         debugger.stepOut(pausedAtThreadId);
-        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void runToCursor() {
         CodeEditorView view = attachedActivity == null
                 ? null
                 : attachedActivity.getCurrentEditor();
-        if (view == null) {
-            flash("请先打开文件");
-            DebuggerHaptics.reject(attachedActivity);
-            return;
-        }
+        if (view == null) { flash("请先打开文件"); return; }
         com.itsaky.androidide.editor.ui.IDEEditor ed = view.getEditor();
-        if (ed == null) {
-            flash("请先打开文件");
-            DebuggerHaptics.reject(attachedActivity);
-            return;
-        }
+        if (ed == null) { flash("请先打开文件"); return; }
         File file = ed.getFile();
         io.github.rosemoe.sora.text.Cursor cursor = ed.getCursor();
         if (file == null || cursor == null) {
             flash("请先把光标放在目标行");
-            DebuggerHaptics.reject(attachedActivity);
             return;
         }
         int line = cursor.getLeftLine() + 1; // 0-based -> 1-based
-        if (debugger == null) {
-            flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
-            DebuggerHaptics.reject(attachedActivity);
-            return;
-        }
+        if (debugger == null) { flash("未连接调试器"); return; }
         debugger.runToCursor(BreakpointManager.normalize(file), line);
-        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void gotoCurrentBreakpoint() {
@@ -352,7 +283,69 @@ public final class DebuggerController
         if (info == null) { flash("当前没有暂停点"); return; }
         StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
         if (frame == null) { flash("当前没有可显示的栈帧"); return; }
-        openFrame(frame);
+        com.itsaky.androidide.models.Range range =
+                new com.itsaky.androidide.models.Range(
+                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0),
+                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0));
+        if (attachedActivity != null) {
+            attachedActivity.openFileAndSelect(new File(frame.sourceFile), range);
+        }
+    }
+
+    /**
+     * PR-D7: 跳转到异常抛出处。
+     *
+     * <p>当前实现策略:在栈帧列表中找第一个 sourceFile 命名空间看起来是
+     * 用户应用代码的 (即 frame 来自用户包名,而不是 java.* / android.* /
+     * kotlin.* / dalvik.* 等系统栈);找不到时回退到栈顶 (与
+     * [gotoCurrentBreakpoint] 行为一致)。
+     *
+     * <p>真正的"异常位置"需要 JDWP ExceptionEvent 携带的 throwLocation
+     * 字段,目前 [com.zerostudio.debugger.api.SuspendInfo] 没暴露这字段,
+     * 等 ide-debugger 那边补上后,这里会直接使用 throwLocation。
+     */
+    public void gotoException() {
+        SuspendInfo info = debugger == null ? null : debugger.lastSuspendInfo();
+        if (info == null) { flash("当前没有暂停点"); return; }
+        if (info.frames == null || info.frames.isEmpty()) {
+            flash("当前没有可显示的栈帧");
+            return;
+        }
+        StackFrameInfo target = findUserCodeFrame(info.frames);
+        if (target == null) {
+            target = info.frames.get(0); // fallback: 栈顶
+        }
+        com.itsaky.androidide.models.Range range =
+                new com.itsaky.androidide.models.Range(
+                        new com.itsaky.androidide.models.Position(target.lineNumber - 1, 0),
+                        new com.itsaky.androidide.models.Position(target.lineNumber - 1, 0));
+        if (attachedActivity != null) {
+            attachedActivity.openFileAndSelect(new File(target.sourceFile), range);
+        }
+    }
+
+    /** 跳过 java.*/android.*/kotlin.*/dalvik.* 等系统栈,找第一帧用户代码。 */
+    @Nullable
+    private static StackFrameInfo findUserCodeFrame(@NonNull List<StackFrameInfo> frames) {
+        String userPkg = DebuggerController.getInstance().getTargetPackage();
+        for (StackFrameInfo f : frames) {
+            if (f == null || f.sourceFile == null) continue;
+            String sf = f.sourceFile;
+            if (sf.startsWith("java/") || sf.startsWith("javax/")
+                    || sf.startsWith("android/") || sf.startsWith("androidx/")
+                    || sf.startsWith("kotlin/") || sf.startsWith("kotlinx/")
+                    || sf.startsWith("dalvik/") || sf.startsWith("com/android/")) {
+                continue;
+            }
+            if (userPkg != null && !userPkg.isEmpty()) {
+                String pkgPath = userPkg.replace('.', '/');
+                if (sf.contains(pkgPath)) return f;
+            } else {
+                // 没目标包信息,只根据"非系统栈"判断
+                return f;
+            }
+        }
+        return null;
     }
 
     public void showCurrentFrame() {
@@ -361,10 +354,10 @@ public final class DebuggerController
         StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
         if (attachedActivity == null) return;
         if (frame == null) {
-            attachedActivity.showFlashInfo("线程 " + info.threadId + " 暂停中 (无栈帧信息)");
+            attachedActivity.flashInfo("线程 " + info.threadId + " 暂停中 (无栈帧信息)");
             return;
         }
-        attachedActivity.showFlashInfo(
+        attachedActivity.flashInfo(
                 "线程 " + info.threadId + " 暂停于 " + frame.sourceFile
                         + ":" + frame.lineNumber);
     }
@@ -377,34 +370,71 @@ public final class DebuggerController
         }
     }
 
+    @Nullable
+    public com.zerostudio.debugger.api.Debugger debugger() {
+        return debugger;
+    }
+
+    @Nullable
+    public DebugSession.State sessionState() {
+        return debugger == null ? null : debugger.session().getState();
+    }
+
     private boolean requireThread() {
-        if (debugger == null) {
-            flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
-            return false;
-        }
-        if (pausedAtThreadId <= 0L) {
-            flash(getString(com.itsaky.androidide.R.string.debugger_msg_step_reject));
-            return false;
-        }
+        if (debugger == null) { flash("未连接调试器"); return false; }
+        if (pausedAtThreadId <= 0L) { flash("当前没有暂停的线程"); return false; }
         return true;
     }
 
     private void flash(String msg) {
-        if (msg == null) return;
-        if (attachedActivity != null) attachedActivity.showFlashInfo(msg);
+        if (attachedActivity != null) attachedActivity.flashInfo(msg);
     }
 
-    /** PR-D5: 把资源 id 解析为字符串(attachedActivity 为 null 时回退到 context 包名)。 */
+    // ------- PR-D7: 4 事件 a11y announce + haptics -------
+
+    /** 取 attachedActivity 的 root view 作为 announce anchor。无 attach 时返回 null。 */
     @Nullable
-    private String getString(int resId) {
-        if (attachedActivity != null) return attachedActivity.getString(resId);
-        return null;
+    private android.view.View a11yAnchor() {
+        if (attachedActivity == null) return null;
+        try {
+            return attachedActivity.findViewById(android.R.id.content);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
-    @Nullable
-    private String getString(int resId, @Nullable Object... args) {
-        if (attachedActivity != null) return attachedActivity.getString(resId, args);
-        return null;
+    private void announceConnected() {
+        final android.view.View v = a11yAnchor();
+        if (v == null || attachedActivity == null) return;
+        try {
+            DebuggerAccessibility.announceConnected(v, attachedActivity);
+        } catch (Throwable ignored) {}
+    }
+
+    private void announceDisconnected() {
+        final android.view.View v = a11yAnchor();
+        if (v == null || attachedActivity == null) return;
+        try {
+            DebuggerAccessibility.announceDisconnected(v, attachedActivity);
+        } catch (Throwable ignored) {}
+    }
+
+    private void announceResumed() {
+        final android.view.View v = a11yAnchor();
+        if (v == null || attachedActivity == null) return;
+        try {
+            DebuggerAccessibility.announceResumed(v, attachedActivity);
+        } catch (Throwable ignored) {}
+        DebuggerHaptics.onResumed(attachedActivity);
+    }
+
+    private void announcePaused(@NonNull String file, int line) {
+        final android.view.View v = a11yAnchor();
+        if (v == null || attachedActivity == null) return;
+        try {
+            DebuggerAccessibility.announcePaused(v, attachedActivity, file, line);
+        } catch (Throwable ignored) {}
+        DebuggerHaptics.onPaused(attachedActivity);
     }
 
     // -- Debugger.Listener --
@@ -432,20 +462,18 @@ public final class DebuggerController
     public void onResumed() {
         pausedAtThreadId = -1L;
         sessionState.onResume();
-        DebuggerAccessibility.announceResumed(attachedActivity);
-        // PR-D5: 恢复运行时给一次弱触觉反馈,告知"程序已开始运行"
-        DebuggerHaptics.tap(attachedActivity);
+        announceResumed();
     }
 
     @Override
     public void onConnectionChanged(boolean connected) {
         if (attachedActivity == null) return;
         if (connected) {
-            attachedActivity.showFlashInfo("调试器已连接");
-            // PR-D5: 连接成功用强反馈
-            DebuggerHaptics.strong(attachedActivity);
+            attachedActivity.flashInfo("调试器已连接");
+            announceConnected();
         } else {
-            attachedActivity.showFlashInfo("调试器已断开");
+            attachedActivity.flashInfo("调试器已断开");
+            announceDisconnected();
         }
     }
 
@@ -460,68 +488,24 @@ public final class DebuggerController
         if (bp != null) {
             BreakpointManager.getInstance().markHit(bp);
         }
-        // PR-D5: 断点命中用强反馈(只有断点命中才用 strong,普通 step
-        // / 异常只用 tap,避免频繁强震让用户疲劳)。
-        if (bp != null) {
-            DebuggerHaptics.strong(attachedActivity);
-        } else {
-            DebuggerHaptics.tap(attachedActivity);
-        }
-        // PR-D4: 切到 Variables tab,让用户立刻看到当前帧的变量(以及
-        // Call Stack 中的 frame 切换和 Watch 视图的实时求值)。
-        if (attachedActivity != null) {
-            try {
-                attachedActivity.openDebuggerTab(
-                    com.itsaky.androidide.debugger.fragment.VariablesFragment.class);
-            } catch (Throwable t) {
-                // 切 tab 失败不影响调试器本身的工作
-            }
-        }
-        // PR-D4: a11y 公告:如果是断点命中,优先播报断点 id;
-        // 其它原因(单步、异常等)播报当前位置。
-        if (bp != null) {
-            DebuggerAccessibility.announceBreakpointHit(
-                    attachedActivity, bp.id, frame.sourceFile, frame.lineNumber);
-        } else if (info.reason == SuspendInfo.Reason.EXCEPTION) {
-            // 异常挂起:SuspendInfo 没有 exception 对象引用,只有
-            // exceptionClassId + exceptionMessage;但有 JDWP refTypeId 也
-            // 拿不到类名,所以这里用 description 字段顶上。
-            String exName = info.description == null ? "" : info.description;
-            DebuggerAccessibility.announceException(
-                    attachedActivity, exName,
-                    frame.sourceFile, frame.lineNumber);
-        } else {
-            DebuggerAccessibility.announcePaused(
-                    attachedActivity, frame.sourceFile, frame.lineNumber);
-        }
+        announcePaused(frame.sourceFile, frame.lineNumber);
+        autoOpenDebuggerTab();
     }
 
     /**
-     * PR-D4: 跳转到异常源位置。当前没有源位置时,会退回到第一个栈帧;
-     * 若 {@link SuspendInfo} 不是异常挂起,直接走 {@link #gotoCurrentBreakpoint()}。
+     * PR-D7: 命中断点 / 暂停线程时自动把底部 sheet 切到调试 tab 并半展开。
+     * 这样用户能直接看到 Logpoint 输出 / Variables 等上下文,不必手点。
+     * 静默失败:任何异常都不能阻塞调试主流程。
      */
-    public void gotoException() {
-        if (debugger == null) { flash("未连接调试器"); return; }
-        SuspendInfo info = debugger.lastSuspendInfo();
-        if (info == null) { flash("当前没有暂停点"); return; }
-        if (info.reason != SuspendInfo.Reason.EXCEPTION) {
-            gotoCurrentBreakpoint();
-            return;
+    private void autoOpenDebuggerTab() {
+        if (!(attachedActivity instanceof com.itsaky.androidide.activities.editor.BaseEditorActivity)) return;
+        final com.itsaky.androidide.activities.editor.BaseEditorActivity bea =
+                (com.itsaky.androidide.activities.editor.BaseEditorActivity) attachedActivity;
+        try {
+            bea.getContent().getBottomSheet().openDebuggerTab();
+        } catch (Throwable t) {
+            ILogger.warn(TAG, "autoOpenDebuggerTab failed: " + t.getMessage());
         }
-        StackFrameInfo frame = (info.frames == null || info.frames.isEmpty())
-                ? null : info.frames.get(0);
-        if (frame == null) { flash("无法定位异常源"); return; }
-        openFrame(frame);
-    }
-
-    /** PR-D4: 抽出 gotoCurrentBreakpoint / gotoException 复用逻辑。 */
-    private void openFrame(@NonNull StackFrameInfo frame) {
-        if (attachedActivity == null) return;
-        com.itsaky.androidide.models.Range range =
-                new com.itsaky.androidide.models.Range(
-                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0),
-                        new com.itsaky.androidide.models.Position(frame.lineNumber - 1, 0));
-        attachedActivity.openFileAndSelect(new File(frame.sourceFile), range);
     }
 
     /** PR-4: switch the current frame (drives Variables / Watches reload). */
@@ -545,7 +529,7 @@ public final class DebuggerController
                     if (!expr.isEmpty()) {
                         com.itsaky.androidide.debugger.model.WatchStore.getInstance().add(expr);
                         if (attachedActivity != null) {
-                            attachedActivity.showFlashInfo("已添加监视: " + expr);
+                            attachedActivity.flashInfo("已添加监视: " + expr);
                         }
                     }
                 })

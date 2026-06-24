@@ -71,14 +71,27 @@ public final class RemoteDeviceScanner {
         void onScanFinished(@NonNull List<DeviceInfo> devices);
     }
 
-    private final ExecutorService executor;
+    private final ExecutorService startExecutor;
+    /**
+     * PR-D7: 实际 probe host 用的固定大小线程池。16 路并发,
+     * 把串行遍历 254 个候选 host 的耗时从 ~254s (单线程 + 1s timeout)
+     * 降到 ~4s (16 路并行 + 250ms timeout)。
+     */
+    private final ExecutorService probePool;
     @Nullable private ScanListener listener;
     private final AtomicReference<List<DeviceInfo>> lastResult =
             new AtomicReference<>(Collections.emptyList());
 
     public RemoteDeviceScanner() {
-        executor = Executors.newSingleThreadExecutor(r -> {
+        // 串行入口:防止 startScan() 重入(用户连点 扫描 按钮)
+        startExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "RemoteDeviceScanner");
+            t.setDaemon(true);
+            return t;
+        });
+        // 16 路并发 probe pool
+        probePool = Executors.newFixedThreadPool(16, r -> {
+            Thread t = new Thread(r, "RemoteDeviceScanner-Probe");
             t.setDaemon(true);
             return t;
         });
@@ -101,51 +114,63 @@ public final class RemoteDeviceScanner {
 
     @AnyThread
     public void startScan(long timeoutMs) {
-        executor.submit(() -> doScan(timeoutMs));
+        startExecutor.submit(() -> doScan(timeoutMs));
     }
 
+    /**
+     * PR-D7: 并行 probe 候选 host。16 路并发 + 250ms per-host timeout,
+     * 配合全局 timeout (默认 3s) 给出合理 UX。
+     *
+     * <p>任何一个 host probe 成功都立即加入结果列表,但不会打断其他正在
+     * 跑的 probe —— 让它们自然超时(250ms 内必然结束)。整体通过
+     * CountDownLatch 等待所有 worker 完成 或 全局 timeout。
+     */
     @WorkerThread
     private void doScan(long timeoutMs) {
         long deadline = System.currentTimeMillis() + timeoutMs;
-        // PR-D4: 把候选主机分成 16 路并发,每路串行做 probe;每探针
-        // 超时从 1000ms 降到 250ms,这样 /24 子网(254 主机)最坏情况
-        // ~254/16 = 16 探针/路,每路 16 * 250ms = 4s, 实际整体基本
-        // 在 timeoutMs(默认 3s) 内结束。
-        List<String> candidates = candidateHosts();
-        int parallelism = 16;
-        java.util.concurrent.ExecutorService pool =
-                java.util.concurrent.Executors.newFixedThreadPool(parallelism, r -> {
-                    Thread t = new Thread(r, "RemoteDeviceScanner-probe");
-                    t.setDaemon(true);
-                    return t;
-                });
-        java.util.concurrent.ConcurrentLinkedQueue<DeviceInfo> q =
-                new java.util.concurrent.ConcurrentLinkedQueue<>();
+        // PR-D7: 使用类成员 probePool(16 路并发)而不是每次新建,减少
+        // 线程池反复创建/销毁的开销。同时加 empty 优化,没有候选 host
+        // 时直接返回,不做无意义的 latch.await。
+        List<String> hosts = candidateHosts();
+        if (hosts.isEmpty()) {
+            lastResult.set(Collections.emptyList());
+            ScanListener l = listener;
+            if (l != null) l.onScanFinished(Collections.emptyList());
+            return;
+        }
+        List<DeviceInfo> devices = Collections.synchronizedList(new ArrayList<>());
         java.util.concurrent.CountDownLatch latch =
-                new java.util.concurrent.CountDownLatch(candidates.size());
-        for (String host : candidates) {
-            pool.submit(() -> {
+                new java.util.concurrent.CountDownLatch(hosts.size());
+        for (String host : hosts) {
+            // 提交前再做一次 deadline check,避免 1k+ 候选 host 时堆积任务
+            if (System.currentTimeMillis() > deadline) {
+                latch.countDown(); // 跳过这个 host,也要把 latch 减下来
+                continue;
+            }
+            probePool.submit(() -> {
                 try {
-                    if (System.currentTimeMillis() > deadline) {
-                        // 超时,不再做新 probe,但要把 latch 减掉
-                        return;
-                    }
                     int port = probeAdbPort(host, 250);
                     if (port > 0) {
-                        q.add(new DeviceInfo("device", host, port));
+                        devices.add(new DeviceInfo("device", host, port));
                     }
+                } catch (Throwable t) {
+                    Log.d(TAG, "probe " + host + " failed: " + t.getMessage());
                 } finally {
                     latch.countDown();
                 }
             });
         }
-        try { latch.await(timeoutMs, TimeUnit.MILLISECONDS); }
-        catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-        pool.shutdownNow();
-        List<DeviceInfo> devices = new ArrayList<>(q);
-        lastResult.set(devices);
+        long remaining = Math.max(0L, deadline - System.currentTimeMillis());
+        try {
+            latch.await(remaining, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+        // 即使 latch 还没归零,已有的命中也要给出去
+        List<DeviceInfo> snapshot = new ArrayList<>(devices);
+        lastResult.set(snapshot);
         ScanListener l = listener;
-        if (l != null) l.onScanFinished(devices);
+        if (l != null) l.onScanFinished(snapshot);
     }
 
     /**
@@ -191,7 +216,8 @@ public final class RemoteDeviceScanner {
 
     @WorkerThread
     public void shutdown() {
-        executor.shutdownNow();
+        startExecutor.shutdownNow();
+        probePool.shutdownNow();
     }
 
     /**
