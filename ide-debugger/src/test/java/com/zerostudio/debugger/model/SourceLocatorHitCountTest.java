@@ -20,6 +20,7 @@ import com.zerostudio.debugger.api.Breakpoint;
 import com.zerostudio.debugger.api.Debugger;
 import com.zerostudio.debugger.jdwp.CommandCodes;
 import com.zerostudio.debugger.jdwp.CommandSet;
+import com.zerostudio.debugger.jdwp.JdwpEvents;
 import com.zerostudio.debugger.jdwp.FakeJdwpClient;
 import com.zerostudio.debugger.jdwp.JdwpPayloads;
 import com.zerostudio.debugger.util.ByteBuf;
@@ -85,7 +86,7 @@ public class SourceLocatorHitCountTest {
         int modifierCount = in.readInt();
         assertEquals(1, modifierCount);
         // 第一个 modifier: LOCATION
-        assertEquals(7 /* ModKind.LOCATION */, in.readByte());
+        assertEquals(7 /* JdwpEvents.ModKind.LOCATION */, in.readByte());
     }
 
     @Test
@@ -107,12 +108,12 @@ public class SourceLocatorHitCountTest {
         assertEquals(2, modifierCount);
 
         // 第一个 modifier: COUNT (kind 1)
-        assertEquals(1 /* ModKind.COUNT */, in.readByte());
+        assertEquals(1 /* JdwpEvents.ModKind.COUNT */, in.readByte());
         int count = in.readInt();
         assertEquals(5, count);
 
         // 第二个 modifier: LOCATION
-        assertEquals(7 /* ModKind.LOCATION */, in.readByte());
+        assertEquals(7 /* JdwpEvents.ModKind.LOCATION */, in.readByte());
     }
 
     @Test

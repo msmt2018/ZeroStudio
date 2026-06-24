@@ -15,6 +15,10 @@
  *  The parser is lenient: it returns whatever it can extract even if
  *  some parts of the file fail to parse (e.g., syntax errors in method
  *  bodies, unresolved imports).
+ *
+ *  The auxiliary data classes ({@link SourceMethod}, {@link SourceClass},
+ *  {@link ParsedSource}) are nested inside {@link JavaSourceParser} so
+ *  callers can keep using {@code JavaSourceParser.ParsedSource} etc.
  */
 
 package com.zerostudio.debugger.model;
@@ -36,138 +40,119 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * A method declaration with its line number, extracted from a parsed source file.
- * Used by SourceLocator to find methods containing a specific line.
- */
-public final class SourceMethod {
-
-    /** The JVM descriptor of this method (e.g., "doIt", "()V", "(ILjava/lang/String;)V"). */
-    public final String name;
-    /** The JVM signature (e.g., "(I)V"). */
-    public final String signature;
-    /** The 1-based line number where this method is declared. */
-    public final int lineNumber;
-
-    public SourceMethod(@NonNull String name, @NonNull String signature, int lineNumber) {
-        this.name = name;
-        this.signature = signature;
-        this.lineNumber = lineNumber;
-    }
-}
-
-/**
- * A class declaration extracted from a parsed .java file.
- * Contains the fully-qualified JVM signature and optionally its declared methods.
- */
-public final class SourceClass {
+public final class JavaSourceParser {
 
     /**
-     * The JVM type signature (e.g., {@code "Lcom/example/Foo;"} or
-     * {@code "Lcom/example/Foo$Inner;"}). Used directly in JDWP
-     * ClassesBySignature requests.
+     * A method declaration with its line number, extracted from a parsed source file.
+     * Used by SourceLocator to find methods containing a specific line.
      */
-    @NonNull
-    public final String signature;
+    public static final class SourceMethod {
 
-    /**
-     * Whether this is a top-level class (false for inner/nested classes).
-     * Inner classes are kept for completeness but SourceLocator currently
-     * only uses the top-level class.
-     */
-    public final boolean isTopLevel;
+        /** The JVM descriptor of this method (e.g., "doIt", "()V", "(ILjava/lang/String;)V"). */
+        public final String name;
+        /** The JVM signature (e.g., "(I)V"). */
+        public final String signature;
+        /** The 1-based line number where this method is declared. */
+        public final int lineNumber;
 
-    /** Declared methods, sorted by line number. May be empty if not yet resolved. */
-    @NonNull
-    public final List<SourceMethod> methods;
-
-    public SourceClass(@NonNull String signature, boolean isTopLevel, @NonNull List<SourceMethod> methods) {
-        this.signature = signature;
-        this.isTopLevel = isTopLevel;
-        this.methods = methods;
-    }
-}
-
-/**
- * The result of parsing a .java file. Contains the package name, all declared
- * classes (top-level and inner), and the raw CompilationUnit for advanced use.
- */
-public final class ParsedSource {
-
-    /**
-     * The package name (e.g., {@code "com.example.ui"}). Empty string if no
-     * package declaration was found.
-     */
-    @NonNull
-    public final String packageName;
-
-    /**
-     * All classes declared in this source file, in declaration order.
-     * The first element is always the top-level class.
-     */
-    @NonNull
-    public final List<SourceClass> classes;
-
-    /** The raw CompilationUnit. May be null if parsing failed. */
-    @Nullable
-    public final CompilationUnit compilationUnit;
-
-    public ParsedSource(@NonNull String packageName, @NonNull List<SourceClass> classes,
-                        @Nullable CompilationUnit compilationUnit) {
-        this.packageName = packageName;
-        this.classes = classes;
-        this.compilationUnit = compilationUnit;
+        public SourceMethod(@NonNull String name, @NonNull String signature, int lineNumber) {
+            this.name = name;
+            this.signature = signature;
+            this.lineNumber = lineNumber;
+        }
     }
 
     /**
-     * Convenience: returns the top-level class signature, or null if the file
-     * contains no class declarations.
+     * A class declaration extracted from a parsed .java file.
+     * Contains the fully-qualified JVM signature and optionally its declared methods.
      */
-    @Nullable
-    public String topLevelSignature() {
-        if (classes.isEmpty()) return null;
-        return classes.get(0).signature;
+    public static final class SourceClass {
+
+        /**
+         * The JVM type signature (e.g., {@code "Lcom/example/Foo;"} or
+         * {@code "Lcom/example/Foo$Inner;"}). Used directly in JDWP
+         * ClassesBySignature requests.
+         */
+        @NonNull
+        public final String signature;
+
+        /**
+         * Whether this is a top-level class (false for inner/nested classes).
+         * Inner classes are kept for completeness but SourceLocator currently
+         * only uses the top-level class.
+         */
+        public final boolean isTopLevel;
+
+        /** Declared methods, sorted by line number. May be empty if not yet resolved. */
+        @NonNull
+        public final List<SourceMethod> methods;
+
+        public SourceClass(@NonNull String signature, boolean isTopLevel, @NonNull List<SourceMethod> methods) {
+            this.signature = signature;
+            this.isTopLevel = isTopLevel;
+            this.methods = methods;
+        }
     }
 
     /**
-     * Find a method that contains the given line number.
-     * Returns the first matching method, or null if no method spans that line.
+     * The result of parsing a .java file. Contains the package name, all declared
+     * classes (top-level and inner), and the raw CompilationUnit for advanced use.
      */
-    @Nullable
-    public SourceMethod findMethodAtLine(int line) {
-        for (SourceClass cls : classes) {
-            for (SourceMethod m : cls.methods) {
-                // Heuristic: method spans from its declaration line to the
-                // next method's line - 1, or the end of the file.
-                if (m.lineNumber <= line) {
-                    return m;
+    public static final class ParsedSource {
+
+        /**
+         * The package name (e.g., {@code "com.example.ui"}). Empty string if no
+         * package declaration was found.
+         */
+        @NonNull
+        public final String packageName;
+
+        /**
+         * All classes declared in this source file, in declaration order.
+         * The first element is always the top-level class.
+         */
+        @NonNull
+        public final List<SourceClass> classes;
+
+        /** The raw CompilationUnit. May be null if parsing failed. */
+        @Nullable
+        public final CompilationUnit compilationUnit;
+
+        public ParsedSource(@NonNull String packageName, @NonNull List<SourceClass> classes,
+                            @Nullable CompilationUnit compilationUnit) {
+            this.packageName = packageName;
+            this.classes = classes;
+            this.compilationUnit = compilationUnit;
+        }
+
+        /**
+         * Convenience: returns the top-level class signature, or null if the file
+         * contains no class declarations.
+         */
+        @Nullable
+        public String topLevelSignature() {
+            if (classes.isEmpty()) return null;
+            return classes.get(0).signature;
+        }
+
+        /**
+         * Find a method that contains the given line number.
+         * Returns the first matching method, or null if no method spans that line.
+         */
+        @Nullable
+        public SourceMethod findMethodAtLine(int line) {
+            for (SourceClass cls : classes) {
+                for (SourceMethod m : cls.methods) {
+                    // Heuristic: method spans from its declaration line to the
+                    // next method's line - 1, or the end of the file.
+                    if (m.lineNumber <= line) {
+                        return m;
+                    }
                 }
             }
+            return null;
         }
-        return null;
     }
-}
-
-/**
- * Phase G1: Java source parser using JavaParser.
- *
- * Parses .java files on disk and extracts class signatures, package names,
- * and method declarations. This information is used by SourceLocator to
- * accurately map source files to their corresponding JDWP class signatures,
- * replacing the previous heuristic that only used the source file basename.
- *
- * Usage:
- * <pre>
- *   JavaSourceParser parser = new JavaSourceParser();
- *   ParsedSource parsed = parser.parse(new File("/path/to/MainActivity.java"));
- *   if (parsed != null) {
- *       for (SourceClass cls : parsed.classes) {
- *           System.out.println(cls.signature);
- *       }
- *   }
- * </pre>
- */
-public final class JavaSourceParser {
 
     private final JavaParser parser;
 
@@ -192,7 +177,7 @@ public final class JavaSourceParser {
         }
         try {
             String source = new String(Files.readAllBytes(file.toPath()));
-            return parse(source);
+            return parseContent(source);
         } catch (IOException ex) {
             return null;
         }
@@ -202,7 +187,7 @@ public final class JavaSourceParser {
      * Parse a .java source file given its path string.
      */
     @Nullable
-    public ParsedSource parse(@NonNull String filePath) {
+    public ParsedSource parsePath(@NonNull String filePath) {
         return parse(new File(filePath));
     }
 
@@ -211,11 +196,6 @@ public final class JavaSourceParser {
      */
     @Nullable
     public ParsedSource parseContent(@NonNull String source) {
-        return parse(source);
-    }
-
-    @Nullable
-    private ParsedSource parse(@NonNull String source) {
         CompilationUnit cu;
         try {
             cu = parser.parse(source).getResult().orElse(null);

@@ -28,6 +28,7 @@
 package com.zerostudio.debugger.model;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import com.zerostudio.debugger.api.Breakpoint;
 import com.zerostudio.debugger.api.Debugger;
 import com.zerostudio.debugger.api.StackFrameInfo;
@@ -36,9 +37,7 @@ import com.zerostudio.debugger.jdwp.CommandCodes;
 import com.zerostudio.debugger.jdwp.CommandSet;
 import com.zerostudio.debugger.jdwp.JdwpClient;
 import com.zerostudio.debugger.jdwp.JdwpPacket;
-import com.zerostudio.debugger.jdwp.ModKind;
-import com.zerostudio.debugger.jdwp.SuspendPolicy;
-import com.zerostudio.debugger.jdwp.EventKind;
+import com.zerostudio.debugger.jdwp.JdwpEvents;
 import com.zerostudio.debugger.util.ByteBuf;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -73,8 +72,8 @@ public final class SourceLocator {
     /** Subscribe to CLASS_PREPARE events so pending breakpoints can be installed. */
     public void enableClassPrepare() throws IOException {
         ByteBuf buf = new ByteBuf();
-        buf.writeByte(EventKind.CLASS_PREPARE);
-        buf.writeByte(SuspendPolicy.NONE);
+        buf.writeByte(JdwpEvents.EventKind.CLASS_PREPARE);
+        buf.writeByte(JdwpEvents.SuspendPolicy.NONE);
         buf.writeInt(0); // no modifiers
         JdwpPacket reply = client.sendCommand(
                 CommandSet.EventRequest, CommandCodes.EventRequestCmd.Set, buf.toByteArray());
@@ -86,8 +85,8 @@ public final class SourceLocator {
     /** Subscribe to BREAKPOINT events with thread suspend. */
     public void enableBreakpointEvents() throws IOException {
         ByteBuf buf = new ByteBuf();
-        buf.writeByte(EventKind.BREAKPOINT);
-        buf.writeByte(SuspendPolicy.ALL);
+        buf.writeByte(JdwpEvents.EventKind.BREAKPOINT);
+        buf.writeByte(JdwpEvents.SuspendPolicy.ALL);
         buf.writeInt(0); // no modifiers
         client.sendCommand(CommandSet.EventRequest, CommandCodes.EventRequestCmd.Set,
                 buf.toByteArray());
@@ -139,8 +138,8 @@ public final class SourceLocator {
     /** Subscribe to CLASS_PREPARE events. */
     public void enableSingleStepEvents() throws IOException {
         ByteBuf buf = new ByteBuf();
-        buf.writeByte(EventKind.SINGLE_STEP);
-        buf.writeByte(SuspendPolicy.ALL);
+        buf.writeByte(JdwpEvents.EventKind.SINGLE_STEP);
+        buf.writeByte(JdwpEvents.SuspendPolicy.ALL);
         buf.writeInt(0); // no modifiers
         client.sendCommand(CommandSet.EventRequest, CommandCodes.EventRequestCmd.Set,
                 buf.toByteArray());
@@ -148,8 +147,8 @@ public final class SourceLocator {
 
     public void enableExceptionEvents() throws IOException {
         ByteBuf buf = new ByteBuf();
-        buf.writeByte(EventKind.EXCEPTION);
-        buf.writeByte(SuspendPolicy.ALL);
+        buf.writeByte(JdwpEvents.EventKind.EXCEPTION);
+        buf.writeByte(JdwpEvents.SuspendPolicy.ALL);
         buf.writeInt(0); // no modifiers
         client.sendCommand(CommandSet.EventRequest, CommandCodes.EventRequestCmd.Set,
                 buf.toByteArray());
@@ -187,7 +186,7 @@ public final class SourceLocator {
             return;
         }
         // Take the first matching class.
-        byte typeTag = in.readByte();
+        byte typeTag = (byte) in.readByte();
         long classId = in.readLong();
         in.readInt(); // status, ignored
         // SourceFile
@@ -263,14 +262,14 @@ public final class SourceLocator {
         boolean emitCount = bp.hasHitCountFilter();
         int modifierCount = 1 + (emitCount ? 1 : 0);
         ByteBuf buf = new ByteBuf();
-        buf.writeByte(EventKind.BREAKPOINT);
-        buf.writeByte(SuspendPolicy.ALL);
+        buf.writeByte(JdwpEvents.EventKind.BREAKPOINT);
+        buf.writeByte(JdwpEvents.SuspendPolicy.ALL);
         buf.writeInt(modifierCount);
         if (emitCount) {
-            buf.writeByte(ModKind.COUNT);
+            buf.writeByte(JdwpEvents.ModKind.COUNT);
             buf.writeInt(bp.hitCount);
         }
-        buf.writeByte(ModKind.LOCATION);
+        buf.writeByte(JdwpEvents.ModKind.LOCATION);
         // Location: classId, methodId, codeIndex
         buf.writeLong(classId);
         buf.writeLong(methodId);
@@ -289,7 +288,7 @@ public final class SourceLocator {
     public void uninstallBreakpoint(@NonNull Breakpoint bp) throws IOException {
         if (bp.requestId <= 0) return;
         ByteBuf buf = new ByteBuf();
-        buf.writeByte(EventKind.BREAKPOINT);
+        buf.writeByte(JdwpEvents.EventKind.BREAKPOINT);
         buf.writeInt(bp.requestId);
         client.sendCommand(
                 CommandSet.EventRequest, CommandCodes.EventRequestCmd.Clear, buf.toByteArray());
@@ -354,7 +353,7 @@ public final class SourceLocator {
         ByteBuf buf = new ByteBuf();
         buf.writeLong(threadId);
         buf.writeInt(1); // one modifier
-        buf.writeByte(ModKind.STEP);
+        buf.writeByte(JdwpEvents.ModKind.STEP);
         buf.writeLong(threadId);
         buf.writeInt(1); // step size
         buf.writeByte(size);
@@ -381,7 +380,7 @@ public final class SourceLocator {
         for (int i = 0; i < count; i++) {
             long frameId = in.readLong();
             // location
-            byte typeTag = in.readByte();
+            byte typeTag = (byte) in.readByte();
             long classId = in.readLong();
             long methodId = in.readLong();
             long codeIndex = in.readLong();
@@ -509,7 +508,7 @@ public final class SourceLocator {
             ByteBuf vin = new ByteBuf(valReply.data);
             int count = Math.min(varCount, vin.readInt());
             for (int i = 0; i < count; i++) {
-                byte tag = vin.readByte();
+                byte tag = (byte) vin.readByte();
                 String value = readTagValue(vin, tag);
                 out.add(new VariableInfo(
                         /* id = */ 0L,
@@ -537,7 +536,7 @@ public final class SourceLocator {
                 CommandSet.StackFrame, CommandCodes.StackFrameCmd.ThisObject, buf.toByteArray());
         if (reply.errorCode() != 0) return null;
         ByteBuf in = new ByteBuf(reply.data);
-        byte tag = in.readByte();
+        byte tag = (byte) in.readByte();
         if (tag == 'L') {
             long id = in.readLong();
             // Ask the reference for its type signature so the UI can show it.
@@ -557,7 +556,7 @@ public final class SourceLocator {
                 buf.toByteArray());
         if (reply.errorCode() != 0) return "Ljava/lang/Object;";
         ByteBuf in = new ByteBuf(reply.data);
-        byte typeTag = in.readByte();
+        byte typeTag = (byte) in.readByte();
         long classId = in.readLong();
         return readClassSignature(classId);
     }
@@ -671,7 +670,7 @@ public final class SourceLocator {
         if (valReply.errorCode() != 0) return null;
         ByteBuf vin = new ByteBuf(valReply.data);
         vin.readInt();
-        byte tag = vin.readByte();
+        byte tag = (byte) vin.readByte();
         String value = readTagValue(vin, tag);
         return new VariableInfo(0L, String.valueOf((char) tag), name, targetSig, value,
                 isPrim(tag), targetSlot);

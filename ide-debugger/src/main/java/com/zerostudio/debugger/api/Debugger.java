@@ -463,9 +463,9 @@ public final class Debugger
      * @param callback  called with the result on the calling thread
      */
     public void evalAsync(long threadId, long frameId, @NonNull String expression,
-                          @NonNull Callback<EvalEngine.EvalResult> callback) {
+                          @NonNull Callback<EvalResult> callback) {
         bgExecutor.execute(() -> {
-            EvalEngine.EvalResult result = eval.evaluate(threadId, frameId, expression);
+            EvalResult result = eval.evaluate(threadId, frameId, expression);
             callback.onResult(result);
         });
     }
@@ -554,7 +554,7 @@ public final class Debugger
 
     // -- internal hooks for the event bus --
 
-    void onVmStart() {
+    public void onVmStart() {
         synchronized (vmStartReceived) {
             vmStartReceived.set(true);
             vmStartReceived.notifyAll();
@@ -563,7 +563,7 @@ public final class Debugger
         eventBus.publish(DebugEvents.vmStart());
     }
 
-    void onSuspend(@NonNull SuspendInfo info) {
+    public void onSuspend(@NonNull SuspendInfo info) {
         // PR-6: handle conditional breakpoints and logpoints BEFORE
         // notifying the UI. A logpoint never pauses the program; a
         // conditional breakpoint only pauses if the condition evaluates
@@ -667,7 +667,7 @@ public final class Debugger
         }
     }
 
-    void notifyBreakpointChanged(@NonNull Breakpoint bp) {
+    public void notifyBreakpointChanged(@NonNull Breakpoint bp) {
         for (Listener l : listeners) {
             try { l.onBreakpointChanged(bp); } catch (Throwable ignored) { }
         }

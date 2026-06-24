@@ -23,6 +23,10 @@
  *
  *  The reader is tolerant: it returns whatever it can extract even
  *  if some attributes are missing (e.g., no SourceFile, no line numbers).
+ *
+ *  The auxiliary data classes ({@link ClassMethod}, {@link LineEntry},
+ *  {@link ParsedClass}) are nested inside {@link ClassFileReader} so
+ *  callers can keep using {@code ClassFileReader.ParsedClass} etc.
  */
 
 package com.zerostudio.debugger.model;
@@ -41,147 +45,135 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Attribute;
 
-/**
- * A method from a .class file, including its JVM descriptor and line number table.
- */
-public final class ClassMethod {
-
-    /** Method name (e.g., "doIt", "<init>", "<clinit>"). */
-    @NonNull
-    public final String name;
+public final class ClassFileReader {
 
     /**
-     * JVM descriptor (e.g., "(ILjava/lang/String;)V", "()Ljava/lang/Object;").
-     * Note: ASM stores the raw descriptor string.
+     * A method from a .class file, including its JVM descriptor and line number table.
      */
-    @NonNull
-    public final String descriptor;
+    public static final class ClassMethod {
 
-    /** The start offset in the code array (first instruction). -1 if no code. */
-    public final long codeStart;
+        /** Method name (e.g., "doIt", "<init>", "<clinit>"). */
+        @NonNull
+        public final String name;
 
-    /** The end offset (one-past-last instruction). -1 if no code. */
-    public final long codeEnd;
+        /**
+         * JVM descriptor (e.g., "(ILjava/lang/String;)V", "()Ljava/lang/Object;").
+         * Note: ASM stores the raw descriptor string.
+         */
+        @NonNull
+        public final String descriptor;
 
-    /** Sorted list of (codeOffset, lineNumber) pairs. Never null. */
-    @NonNull
-    public final List<LineEntry> lines;
+        /** The start offset in the code array (first instruction). -1 if no code. */
+        public final long codeStart;
 
-    public ClassMethod(@NonNull String name, @NonNull String descriptor,
-                       long codeStart, long codeEnd, @NonNull List<LineEntry> lines) {
-        this.name = name;
-        this.descriptor = descriptor;
-        this.codeStart = codeStart;
-        this.codeEnd = codeEnd;
-        this.lines = lines;
-    }
+        /** The end offset (one-past-last instruction). -1 if no code. */
+        public final long codeEnd;
 
-    /**
-     * Find the source line number for a given code offset.
-     * Returns the last line entry where codeOffset <= [codeIndex].
-     * Returns -1 if no line information is available.
-     */
-    public int lineForCodeIndex(long codeIndex) {
-        if (lines.isEmpty()) return -1;
-        int best = -1;
-        for (LineEntry e : lines) {
-            if (e.codeOffset <= codeIndex) {
-                best = e.lineNumber;
-            } else {
-                break;
-            }
+        /** Sorted list of (codeOffset, lineNumber) pairs. Never null. */
+        @NonNull
+        public final List<LineEntry> lines;
+
+        public ClassMethod(@NonNull String name, @NonNull String descriptor,
+                           long codeStart, long codeEnd, @NonNull List<LineEntry> lines) {
+            this.name = name;
+            this.descriptor = descriptor;
+            this.codeStart = codeStart;
+            this.codeEnd = codeEnd;
+            this.lines = lines;
         }
-        return best;
-    }
-}
 
-/** A single entry in the LineNumberTable: (bytecode offset, source line). */
-public final class LineEntry {
-    public final long codeOffset;
-    public final int lineNumber;
-    public LineEntry(long codeOffset, int lineNumber) {
-        this.codeOffset = codeOffset;
-        this.lineNumber = lineNumber;
-    }
-}
-
-/**
- * The result of reading a .class file. Contains all extracted information.
- */
-public final class ParsedClass {
-
-    /**
-     * The JVM type signature (e.g., {@code "Lcom/example/Foo;"}).
-     * This is the same format used by JDWP ClassesBySignature.
-     */
-    @NonNull
-    public final String signature;
-
-    /**
-     * The class file's SourceFile attribute, if present (e.g., "Foo.java").
-     * This is the original source file name used during compilation.
-     */
-    @Nullable
-    public final String sourceFile;
-
-    /**
-     * Whether this class is a top-level class (false for inner/nested classes).
-     */
-    public final boolean isTopLevel;
-
-    /** All methods in this class, in declaration order. */
-    @NonNull
-    public final List<ClassMethod> methods;
-
-    public ParsedClass(@NonNull String signature, @Nullable String sourceFile,
-                       boolean isTopLevel, @NonNull List<ClassMethod> methods) {
-        this.signature = signature;
-        this.sourceFile = sourceFile;
-        this.isTopLevel = isTopLevel;
-        this.methods = methods;
-    }
-
-    /**
-     * Find the method that contains the given code index.
-     * Returns null if no method spans that code index.
-     */
-    @Nullable
-    public ClassMethod findMethodAtCodeIndex(long codeIndex) {
-        for (ClassMethod m : methods) {
-            if (m.codeStart >= 0 && m.codeEnd >= 0) {
-                if (m.codeStart <= codeIndex && codeIndex < m.codeEnd) {
-                    return m;
+        /**
+         * Find the source line number for a given code offset.
+         * Returns the last line entry where codeOffset <= [codeIndex].
+         * Returns -1 if no line information is available.
+         */
+        public int lineForCodeIndex(long codeIndex) {
+            if (lines.isEmpty()) return -1;
+            int best = -1;
+            for (LineEntry e : lines) {
+                if (e.codeOffset <= codeIndex) {
+                    best = e.lineNumber;
+                } else {
+                    break;
                 }
             }
+            return best;
         }
-        return null;
+    }
+
+    /** A single entry in the LineNumberTable: (bytecode offset, source line). */
+    public static final class LineEntry {
+        public final long codeOffset;
+        public final int lineNumber;
+        public LineEntry(long codeOffset, int lineNumber) {
+            this.codeOffset = codeOffset;
+            this.lineNumber = lineNumber;
+        }
     }
 
     /**
-     * Find the source line for a given code index, scanning all methods.
-     * Returns -1 if not found.
+     * The result of reading a .class file. Contains all extracted information.
      */
-    public int findLineForCodeIndex(long codeIndex) {
-        ClassMethod m = findMethodAtCodeIndex(codeIndex);
-        if (m == null) return -1;
-        return m.lineForCodeIndex(codeIndex);
-    }
-}
+    public static final class ParsedClass {
 
-/**
- * Phase G2: Reads compiled .class files using ASM.
- *
- * This reader is used alongside JavaSourceParser to provide a complete picture
- * of the breakpoint location:
- *   - JavaSourceParser: source text → class signature + package
- *   - ClassFileReader: compiled .class → SourceFile + LineNumberTable + methods
- *
- * The key use case is verifying that a .class file matches a source file
- * (via the SourceFile attribute) and getting accurate line → codeIndex mappings.
- */
-public final class ClassFileReader {
+        /**
+         * The JVM type signature (e.g., {@code "Lcom/example/Foo;"}).
+         * This is the same format used by JDWP ClassesBySignature.
+         */
+        @NonNull
+        public final String signature;
+
+        /**
+         * The class file's SourceFile attribute, if present (e.g., "Foo.java").
+         * This is the original source file name used during compilation.
+         */
+        @Nullable
+        public final String sourceFile;
+
+        /**
+         * Whether this class is a top-level class (false for inner/nested classes).
+         */
+        public final boolean isTopLevel;
+
+        /** All methods in this class, in declaration order. */
+        @NonNull
+        public final List<ClassMethod> methods;
+
+        public ParsedClass(@NonNull String signature, @Nullable String sourceFile,
+                           boolean isTopLevel, @NonNull List<ClassMethod> methods) {
+            this.signature = signature;
+            this.sourceFile = sourceFile;
+            this.isTopLevel = isTopLevel;
+            this.methods = methods;
+        }
+
+        /**
+         * Find the method that contains the given code index.
+         * Returns null if no method spans that code index.
+         */
+        @Nullable
+        public ClassMethod findMethodAtCodeIndex(long codeIndex) {
+            for (ClassMethod m : methods) {
+                if (m.codeStart >= 0 && m.codeEnd >= 0) {
+                    if (m.codeStart <= codeIndex && codeIndex < m.codeEnd) {
+                        return m;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Find the source line for a given code index, scanning all methods.
+         * Returns -1 if not found.
+         */
+        public int findLineForCodeIndex(long codeIndex) {
+            ClassMethod m = findMethodAtCodeIndex(codeIndex);
+            if (m == null) return -1;
+            return m.lineForCodeIndex(codeIndex);
+        }
+    }
 
     /**
      * Parse a .class file and return a ParsedClass with all extracted information.
@@ -206,7 +198,7 @@ public final class ClassFileReader {
      * Parse .class content from a byte array.
      */
     @Nullable
-    public ParsedClass parse(@NonNull byte[] classData) {
+    public ParsedClass parseBytes(@NonNull byte[] classData) {
         try {
             ClassReader cr = new ClassReader(classData);
             ClassInfoBuilder builder = new ClassInfoBuilder();

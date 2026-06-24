@@ -27,9 +27,9 @@ import com.zerostudio.debugger.api.Debugger;
 import com.zerostudio.debugger.api.SuspendInfo;
 import com.zerostudio.debugger.jdwp.CommandCodes;
 import com.zerostudio.debugger.jdwp.CommandSet;
+import com.zerostudio.debugger.jdwp.JdwpEvents;
 import com.zerostudio.debugger.jdwp.FakeJdwpClient;
 import com.zerostudio.debugger.jdwp.JdwpPacket;
-import com.zerostudio.debugger.jdwp.SuspendPolicy;
 import com.zerostudio.debugger.util.ByteBuf;
 
 import org.junit.Test;
@@ -59,9 +59,9 @@ public class DebugEventBusExceptionTest {
      */
     private static JdwpPacket buildExceptionEvent(boolean caught) {
         ByteBuf b = new ByteBuf();
-        b.writeByte(SuspendPolicy.ALL);
+        b.writeByte(JdwpEvents.SuspendPolicy.ALL);
         b.writeInt(1);
-        b.writeByte(com.zerostudio.debugger.jdwp.EventKind.EXCEPTION);
+        b.writeByte(com.zerostudio.debugger.jdwp.JdwpEvents.EventKind.EXCEPTION);
         b.writeInt(REQUEST_ID);
         b.writeLong(THREAD_ID);
         b.writeLong(EX_CLASS_ID);

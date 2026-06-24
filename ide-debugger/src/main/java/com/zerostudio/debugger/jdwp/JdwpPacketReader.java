@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Reads packets from the JDWP socket and dispatches them to the listener
  * associated with the connection.
  */
-public final class JdwpPacketReader {
+public class JdwpPacketReader {
 
     private static final String TAG = "JdwpPacketReader";
 
