@@ -825,7 +825,10 @@
   <string name="git_operations_section">Git Operations</string>
   <string name="git_init_title">Initialize Git</string>
   <string name="git_init_subtitle">Create .git repository</string>
-  <!-- 2c2: dead string "git_settings_under_construction" removed; replaced by 快捷设置 / 设置用户名邮箱 入口 -->
+  <!-- 2c2: dead string "git_settings_under_construction" removed; replaced by 快捷设置 / 设置用户名邮箱 入口.
+       String kept here as a default so that the 24 locale-specific translations
+       don't trigger AAPT's "removing resource without required default value" warning. -->
+  <string name="git_settings_under_construction" translatable="false">Git settings page is under construction</string>
   <string name="git_quick_settings_section">Quick Settings</string>
   <string name="git_set_user_info_title">Set Username / Email</string>
   <string name="git_set_user_info_subtitle">Configure global git identity</string>
