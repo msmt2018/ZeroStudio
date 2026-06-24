@@ -57,7 +57,7 @@ class ComposableSymbolExtractor {
         return try {
             val lexer = KotlinLexer(CharStreams.fromString(source))
             val tokens = CommonTokenStream(lexer)
-            val parser = KotlinParser(tokens).also { it.removeErrorListeners() }
+            val parser = KotlinParser(tokens).withoutErrorListeners()
             val collector = ComposableFunctionCollector(source)
             ParseTreeWalker.DEFAULT.walk(collector, parser.kotlinFile())
             collector.functions.sortedBy { it.line }
@@ -122,7 +122,7 @@ class ComposableSymbolExtractor {
         private fun ParserRuleContext.cleanedText(): String {
             val start = this.start.startIndex
             val stop = this.stop.stopIndex
-            return this@ComposableFunctionCollector.source.substring(start, stop + 1)
+            return this@ComposableSymbolExtractor.source.substring(start, stop + 1)
         }
 
         private fun <T : Parser> T.withoutErrorListeners(): T {
