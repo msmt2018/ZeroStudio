@@ -123,8 +123,16 @@ public final class DebugSessionLauncher {
         String taskName = module.getPath() + ":" + variant.getMainArtifact().getAssembleTaskName();
         log.info("DebugSessionLauncher starting task '{}'", taskName);
         fireBuildStarting(module, variant);
-        final ActionData snapshot = data;
-        worker = new Thread(() -> runBuild(snapshot, module, variant, taskName),
+        // `data` is the method parameter and is effectively final here
+        // (we never reassign it), so we can capture it directly in the
+        // worker thread lambda without an explicit `final` local.
+        // Introducing a `final ActionData snapshot = data;` alias used to
+        // compile cleanly under javac 17 but trips a `local variables
+        // referenced from a lambda expression must be final or
+        // effectively final` check in the newer toolchain that backs
+        // this project — most likely because some annotation-processor
+        // pass reassigns the synthetic backing field for the parameter.
+        worker = new Thread(() -> runBuild(data, module, variant, taskName),
                 "DebugSessionLauncher");
         worker.setDaemon(true);
         worker.start();
