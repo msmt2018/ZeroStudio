@@ -360,14 +360,14 @@ public final class BreakpointManager {
         for (Listener l : listeners) {
             try { l.onBreakpointsChanged(snap); } catch (Throwable ignored) {}
         }
-        if (autoPersist) BreakpointStore.getInstance().save();
+        if (autoPersist) BreakpointStore.getInstance().schedulePersist();
     }
 
     private void fireStateChanged(@NonNull IdeBreakpoint bp) {
         for (Listener l : listeners) {
             try { l.onBreakpointStateChanged(bp); } catch (Throwable ignored) {}
         }
-        if (autoPersist) BreakpointStore.getInstance().save();
+        if (autoPersist) BreakpointStore.getInstance().schedulePersist();
     }
 
     /** 标准化文件路径（用于 byFile 键） */

@@ -48,10 +48,19 @@ public final class LogStore {
     private static final LogStore INSTANCE = new LogStore();
     public static LogStore getInstance() { return INSTANCE; }
 
-    /** PR-D6: Deque FIFO,pollFirst 是 O(1)。 */
+    /** PR-D7: Deque FIFO,pollFirst 是 O(1)。 */
     private final Deque<Entry> entries = new ArrayDeque<>();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     private int capacity = DEFAULT_CAPACITY;
+
+    /** PR-D7: 后台派发线程,避免 listener.onLogAppended 在调用方线程上跑。 */
+    private final android.os.HandlerThread dispatchThread =
+            new android.os.HandlerThread("LogStore-Dispatch");
+    @NonNull private final android.os.Handler dispatchHandler;
+    {
+        dispatchThread.start();
+        dispatchHandler = new android.os.Handler(dispatchThread.getLooper());
+    }
 
     private LogStore() {}
 
