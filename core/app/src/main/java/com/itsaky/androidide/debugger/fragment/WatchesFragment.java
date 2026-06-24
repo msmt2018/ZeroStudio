@@ -147,7 +147,7 @@ public class WatchesFragment extends Fragment
                 String expr = exprs.get(i);
                 EvalResult r = dbg.eval().evaluate(targetThreadId, targetFrameId, expr);
                 if (r.isError()) {
-                    values[i] = getString(R.string.debugger_watches_error, r.error);
+                    values[i] = EvalErrorMapper.friendly(r.error == null ? "" : r.error);
                 } else if (r.displayValue == null) {
                     values[i] = "<" + r.tag.name().toLowerCase() + ">";
                 } else {

@@ -188,7 +188,8 @@ public class VariablesFragment extends Fragment
                                   @NonNull com.zerostudio.debugger.api.EvalResult result) {
         if (!isAdded()) return;
         if (result.isError()) {
-            flash(getString(R.string.debugger_set_value_error, result.error));
+            // PR-D6 batch 3/3: 错误翻译成中文友好提示
+            flash(EvalErrorMapper.friendly(result.error == null ? "" : result.error));
             return;
         }
         flash(R.string.debugger_set_value_ok);
