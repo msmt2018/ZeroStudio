@@ -15,6 +15,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.AttributeSet;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import androidx.annotation.NonNull;
@@ -35,16 +36,9 @@ import java.util.List;
 public class BreakpointSidebar extends View {
 
     public interface OnBreakpointClickListener {
-        /** 短按:切换(添加/删除)该行断点。 */
+        /** 短按：切换（添加/删除）该行断点。 */
         void onBreakpointClick(@NonNull String file, int line);
-        /**
-         * PR-D4+: 短按带点击位置。宿主可用此把弹窗锚定到具体行,而不是整
-         * 个 sidebar 视口。默认实现 fallback 到无坐标版本,保留向后兼容。
-         */
-        default void onBreakpointClick(@NonNull String file, int line, float x, float y) {
-            onBreakpointClick(file, line);
-        }
-        /** 长按:弹出条件/禁用/删除菜单。 */
+        /** 长按：弹出条件/禁用/删除菜单。 */
         void onBreakpointLongClick(@NonNull IdeBreakpoint bp);
     }
 
@@ -57,12 +51,7 @@ public class BreakpointSidebar extends View {
     @Nullable private CodeEditor editor;
     @Nullable private String currentFile;
     @Nullable private OnBreakpointClickListener clickListener;
-
-    /**
-     * PR-D4: 用 GestureDetector 替代"在 ACTION_UP 算松手时间"的错误做法,
-     * 让单击 / 长按的检测与 Android 标准控件行为一致。
-     */
-    private final android.view.GestureDetector gestureDetector;
+    @Nullable private GestureDetector gestureDetector;
 
     public BreakpointSidebar(Context context) {
         this(context, null);
@@ -89,43 +78,6 @@ public class BreakpointSidebar extends View {
         setLongClickable(true);
         setContentDescription(context.getString(
                 com.itsaky.androidide.R.string.debugger_a11y_bp_long_press));
-
-        gestureDetector = new android.view.GestureDetector(
-                context, new android.view.GestureDetector.SimpleOnGestureListener() {
-                    @Override
-                    public boolean onDown(MotionEvent e) {
-                        // 必须返回 true 才会收到后续事件
-                        return true;
-                    }
-
-                    @Override
-                    public boolean onSingleTapUp(MotionEvent e) {
-                        if (clickListener == null || currentFile == null) return false;
-                        int row = rowAtY(e.getY());
-                        if (row < 0) return false;
-                        // 短按：切换该行断点（若已存在则删,否则加）。
-                        // 之前的实现是"已存在则删,新行则加",这里合并为 toggle 语义。
-                        clickListener.onBreakpointClick(currentFile, row, e.getX(), e.getY());
-                        performClick();
-                        return true;
-                    }
-
-                    @Override
-                    public void onLongPress(MotionEvent e) {
-                        if (clickListener == null || currentFile == null) return;
-                        int row = rowAtY(e.getY());
-                        if (row < 0) return;
-                        // 命中：在该行 ±2 行内查找最近断点
-                        IdeBreakpoint nearest = findNearest(currentFile, row);
-                        if (nearest != null) {
-                            clickListener.onBreakpointLongClick(nearest);
-                        } else {
-                            // 没有断点时,长按也走"切换"路径,行为与单击一致。
-                            clickListener.onBreakpointClick(currentFile, row, e.getX(), e.getY());
-                        }
-                        performLongClick();
-                    }
-                });
         // 自定义 a11y action: 命中 toggle 行为
         ViewCompat.setAccessibilityDelegate(this, new androidx.core.view.AccessibilityDelegateCompat() {
             @Override
@@ -160,6 +112,58 @@ public class BreakpointSidebar extends View {
 
     public void setOnBreakpointClickListener(@Nullable OnBreakpointClickListener l) {
         this.clickListener = l;
+        // PR-D6: 每次设置 listener 时重建 GestureDetector,以确保
+        // 闭包引用最新的 clickListener;在没 listener 的状态下 GestureDetector
+        // 也保留(便于 a11y 事件)但 dispatch 内部判空。
+        initGestureDetector();
+    }
+
+    private void initGestureDetector() {
+        gestureDetector = new GestureDetector(getContext(),
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onDown(@NonNull MotionEvent e) {
+                        // 必须返回 true 才能接收后续 onSingleTapUp/onLongPress
+                        return true;
+                    }
+                    @Override
+                    public boolean onSingleTapUp(@NonNull MotionEvent e) {
+                        if (clickListener == null || currentFile == null || editor == null) {
+                            return false;
+                        }
+                        int row = rowAtY(e.getY());
+                        if (row < 0) return false;
+                        clickListener.onBreakpointClick(currentFile, row);
+                        performClick();
+                        return true;
+                    }
+                    @Override
+                    public void onLongPress(@NonNull MotionEvent e) {
+                        if (clickListener == null || currentFile == null || editor == null) {
+                            return;
+                        }
+                        int row = rowAtY(e.getY());
+                        if (row < 0) return;
+                        IdeBreakpoint nearest = findNearest(currentFile, row);
+                        if (nearest != null) {
+                            clickListener.onBreakpointLongClick(nearest);
+                        } else {
+                            // 无最近断点时,长按也走"切换"路径(与单击一致)
+                            clickListener.onBreakpointClick(currentFile, row);
+                        }
+                        performLongClick();
+                    }
+                });
+        // 不需要长按超时二次触发 (我们已在 onLongPress 中处理)
+        gestureDetector.setIsLongpressEnabled(true);
+    }
+
+    private int rowAtY(float y) {
+        if (editor == null) return -1;
+        int firstRow = editor.getFirstVisibleRow();
+        float rowHeight = editor.getRowHeight();
+        if (rowHeight <= 0f) return -1;
+        return firstRow + (int) (y / rowHeight);
     }
 
     public void refresh() {
@@ -178,14 +182,7 @@ public class BreakpointSidebar extends View {
         final float rowHeight = editor.getRowHeight();
         final float textOffset = editor.getOffsetX();
         final float firstVisibleRow = editor.getFirstVisibleRow();
-        // Sora editor doesn't expose a `getRowCountOnScreen()` helper, so
-        // approximate it from the editor's height and the row height. We
-        // add a 1-row slack for the partially visible trailing row.
-        // `getFirstVisibleRow()` returns a float, so the final addition is
-        // also a float; cast back to int for the row index comparison.
-        final int visibleRowCount = (int) Math.ceil(
-                editor.getHeight() / Math.max(1f, editor.getRowHeight()));
-        final int lastVisibleRow = (int) (firstVisibleRow + visibleRowCount + 1);
+        final int lastVisibleRow = firstVisibleRow + editor.getRowCountOnScreen() + 1;
 
         final float cx = getWidth() / 2f;
         final float r = dp(GLYPH_RADIUS_DP);
@@ -242,32 +239,21 @@ public class BreakpointSidebar extends View {
     public boolean onTouchEvent(MotionEvent event) {
         if (editor == null || currentFile == null) return super.onTouchEvent(event);
         if (clickListener == null) return super.onTouchEvent(event);
-        // PR-D4 / E5: 把长按检测交给 GestureDetector,而不是用
-        // event.getEventTime() - event.getDownTime() > 500L 这种
-        // "在 ACTION_UP 才判断松手时间"的错误做法。旧版会让用户必须
-        // 长时间按住再松手才视为长按,体验极差。
-        if (gestureDetector.onTouchEvent(event)) {
-            return true;
+        // PR-D6: 委托给 GestureDetector,正确处理 DOWN/MOVE/UP/CANCEL
+        // 以及单按时长按区分。原实现用 `event.getEventTime() - event.getDownTime() > 500L`
+        // 仅在 ACTION_UP 时判定,既容易误触又没考虑用户在长按期间移动手指。
+        if (gestureDetector == null) initGestureDetector();
+        boolean handled = gestureDetector.onTouchEvent(event);
+        // 让 View 自身的 clickable/longClickable 状态可以保持 a11y 行为
+        if (event.getAction() == MotionEvent.ACTION_UP && !handled) {
+            performClick();
         }
-        return super.onTouchEvent(event);
+        return true;
     }
 
     @Override
     public boolean performClick() {
         return super.performClick();
-    }
-
-    /**
-     * 把 (x, y) 屏幕坐标转换为对应的行号(1-based)。如果 y 超出可见
-     * 行范围,返回 -1。
-     */
-    public int rowAtY(float y) {
-        if (editor == null) return -1;
-        float rowHeight = editor.getRowHeight();
-        if (rowHeight <= 0f) return -1;
-        int firstRow = editor.getFirstVisibleRow();
-        int row = firstRow + (int) (y / rowHeight);
-        return row;
     }
 
     @Nullable

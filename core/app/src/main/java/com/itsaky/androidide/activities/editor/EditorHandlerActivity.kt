@@ -849,6 +849,13 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     val closingCodeEditor = closingEditor?.editor
     content.apply {
       tabToRemove?.let { tabs.removeTab(it) }
+      // PR-D6: 关闭前先取 CodeEditor,detach 断点侧边栏(并取消 Sora 事件订阅),
+      // 避免侧边栏继续占用已销毁 view + NPE。
+      val closingEditor = getEditorAtIndex(index)
+      if (closingEditor != null) {
+        com.itsaky.androidide.debugger.view.BreakpointGutterManager
+            .detach(closingEditor.editor)
+      }
       editorContainer.removeViewAt(index)
     }
     if (closingCodeEditor != null) {
@@ -964,6 +971,14 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     editorViewModel.removeAllFiles()
     fragmentTabManager?.closeAllTabs()
     content.apply {
+      // PR-D6: 在 removeAllViews 之前 detach 所有已注册的断点侧边栏
+      // + 取消它们的 Sora 事件订阅,避免 NPE / 内存泄漏。
+      for (i in 0 until editorContainer.childCount) {
+        val ed = editorContainer.getChildAt(i) as? CodeEditorView
+        if (ed != null) {
+          com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(ed.editor)
+        }
+      }
       tabs.removeAllTabs()
       tabs.requestLayout()
       editorContainer.removeAllViews()

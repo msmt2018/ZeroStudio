@@ -23,27 +23,20 @@ import io.github.rosemoe.sora.event.ScrollEvent;
 import io.github.rosemoe.sora.event.SubscriptionReceipt;
 import io.github.rosemoe.sora.widget.CodeEditor;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class BreakpointGutterManager {
 
-    private static final Map<CodeEditor, BreakpointGutterManager> attached = new HashMap<>();
+    // PR-D6: 改 ConcurrentHashMap。CodeEditor 上的 Sora 事件回调
+    // 在 Sora 自己的事件线程里跑,UI 线程会调 attach/detach;非并发
+    // HashMap 在两个线程同时读写时会丢更新或死循环。
+    private static final Map<CodeEditor, BreakpointGutterManager> attached =
+            new ConcurrentHashMap<>();
 
     public interface OnBreakpointActionListener {
-        /** 旧式无坐标 API,保留向后兼容。 */
-        default void onBreakpointClick(@NonNull String file, int line) {
-            // 不通知 — 旧实现者不会用 showAtPosition
-        }
-        /**
-         * PR-D4+: 短按带点击位置(以 sidebar View 局部坐标)。
-         * 宿主可调 {@link com.itsaky.androidide.debugger.view.BreakpointTypePicker#showAtPosition}
-         * 把弹窗锚定到具体行,而非整个 sidebar 视口。
-         */
-        default void onBreakpointClick(@NonNull String file, int line, float x, float y) {
-            onBreakpointClick(file, line);
-        }
+        void onBreakpointClick(@NonNull String file, int line);
         void onBreakpointLongClick(@NonNull IdeBreakpoint bp);
     }
 
@@ -78,10 +71,8 @@ public final class BreakpointGutterManager {
     @Nullable private BreakpointSidebar sidebar;
     @Nullable private OnBreakpointActionListener actionListener;
     private final String fileCanonical;
-    /**
-     * PR-D4: 持有 CodeEditor 事件的订阅回执,detach 时统一 unsubscribe,
-     * 避免侧边栏释放后回调仍命中本对象造成内存泄漏。
-     */
+    // PR-D6: 收集 Sora 事件订阅,unbind() 时统一取消,避免内存泄漏 + 在
+    // 销毁 view 上派发事件 NPE。
     private final List<SubscriptionReceipt<?>> subscriptions = new ArrayList<>();
 
     private BreakpointGutterManager(@NonNull CodeEditor editor, @NonNull String file) {
@@ -96,10 +87,6 @@ public final class BreakpointGutterManager {
                 @Override
                 public void onBreakpointClick(@NonNull String f, int line) {
                     if (actionListener != null) actionListener.onBreakpointClick(f, line);
-                }
-                @Override
-                public void onBreakpointClick(@NonNull String f, int line, float x, float y) {
-                    if (actionListener != null) actionListener.onBreakpointClick(f, line, x, y);
                 }
                 @Override
                 public void onBreakpointLongClick(@NonNull IdeBreakpoint bp) {
@@ -119,7 +106,7 @@ public final class BreakpointGutterManager {
         setActionListener(actionListener);
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                (int) dp(20f), ViewGroup.LayoutParams.MATCH_PARENT);
+                dp(20f), ViewGroup.LayoutParams.MATCH_PARENT);
         lp.gravity = android.view.Gravity.START;
         sidebar.setLayoutParams(lp);
         sidebar.setClickable(true);
@@ -144,8 +131,13 @@ public final class BreakpointGutterManager {
     public void bindFile(@NonNull String newFile) {
         String canon = com.itsaky.androidide.debugger.model.BreakpointManager.normalize(newFile);
         if (canon.equals(fileCanonical)) return;
-        // 简单替换
-        unbind();
+        // PR-D6: 不再创建"新 manager 替换自己"——那会让原 manager 的
+        // sidebar 仍然挂在 view 上(短暂),且 subscriptions 无法传递。
+        // 直接在当前 manager 上重绑定文件 + 重画即可。
+        hideSidebar();
+        unsubscribeEditorEvents();
+        // 通过反射不可行;用 detach 自身 + 重新 attach 实现完整替换。
+        attached.remove(editor);
         BreakpointGutterManager m = new BreakpointGutterManager(editor, newFile);
         m.actionListener = this.actionListener;
         attached.put(editor, m);
@@ -164,28 +156,29 @@ public final class BreakpointGutterManager {
         if (sidebar != null) sidebar.refresh();
     }
 
+    /**
+     * PR-D6: 收集 {@link SubscriptionReceipt},便于 {@link #unsubscribeEditorEvents()}
+     * 统一取消。{@code subscribeEvent} 返回的 receipt 默认不持有,会在
+     * editor 销毁后继续派发事件 NPE。
+     */
     private void subscribeEditorEvents() {
-        // CodeEditor.subscribeEvent takes a Consumer-style handler that
-        // must not return a value. Returning null from a lambda would
-        // break the SAM conversion in Java 17.
         SubscriptionReceipt<?> r1 = editor.subscribeEvent(ScrollEvent.class, (event, subscriber) -> {
             layoutSidebar();
             refreshSidebar();
+            return null;
         });
+        if (r1 != null) subscriptions.add(r1);
         SubscriptionReceipt<?> r2 = editor.subscribeEvent(ContentChangeEvent.class, (event, subscriber) -> {
             refreshSidebar();
+            return null;
         });
-        subscriptions.add(r1);
-        subscriptions.add(r2);
+        if (r2 != null) subscriptions.add(r2);
         editor.post(() -> {
             layoutSidebar();
             refreshSidebar();
         });
     }
 
-    /**
-     * PR-D4: 统一 unsubscribe 所有 CodeEditor 事件订阅。
-     */
     private void unsubscribeEditorEvents() {
         for (SubscriptionReceipt<?> r : subscriptions) {
             try { r.unsubscribe(); } catch (Throwable ignored) {}
@@ -203,7 +196,7 @@ public final class BreakpointGutterManager {
         if (!(lp instanceof FrameLayout.LayoutParams)) return;
         FrameLayout.LayoutParams flp = (FrameLayout.LayoutParams) lp;
 
-        int targetWidth = (int) dp(20f);
+        int targetWidth = dp(20f);
         // 起点：编辑器自带 lineNumberMarginLeft + 一段填充
         float lineNumberStart = editor.getLineNumberMarginLeft();
         if (lineNumberStart <= 0) lineNumberStart = dp(2f);

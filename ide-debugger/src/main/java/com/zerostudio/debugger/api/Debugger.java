@@ -588,7 +588,15 @@ public final class Debugger
         lastSuspend = info;
         session.setState(DebugSession.State.SUSPENDED);
         // Clean up one-shot breakpoints.
-        breakpoints.removeOneShots(info);
+        // PR-D6: 把被删的 BP id 拿出来,逐个 uninstall JDWP 端请求
+        // (原注释"source locator will clear the JDWP request"是错的,
+        // BreakpointStore 并不持有 sourceLocator 引用)。
+        for (long removedId : breakpoints.removeOneShots(info)) {
+            Breakpoint removed = breakpoints.get(removedId);
+            if (removed != null && removed.requestId > 0) {
+                try { sourceLocator.uninstallBreakpoint(removed); } catch (Throwable ignored) {}
+            }
+        }
         eventBus.publish(DebugEvents.suspend(info));
         // Also notify high-level listeners for backward compatibility.
         for (Listener l : listeners) {
