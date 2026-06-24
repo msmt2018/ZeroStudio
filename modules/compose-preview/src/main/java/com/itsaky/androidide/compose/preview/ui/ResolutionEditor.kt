@@ -204,13 +204,15 @@ internal enum class CutoutKind(val displayName: String) {
     NONE("None"),
     NOTCH("Notch"),
     PUNCH_HOLE("Punch"),
-    WATERFALL("Waterfall");
+    WATERFALL("Waterfall"),
+    DYNAMIC_ISLAND("Dynamic Island");
 
     fun toCutoutGeometry(): CutoutGeometry? = when (this) {
         NONE -> null
         NOTCH -> CutoutGeometry.IPHONE_14_NOTCH
         PUNCH_HOLE -> CutoutGeometry.PIXEL_PUNCHHOLE
         WATERFALL -> CutoutGeometry.HUAWEI_WATERFALL
+        DYNAMIC_ISLAND -> CutoutGeometry.IPHONE_14_PRO_DYNAMIC_ISLAND
     }
 }
 
@@ -218,4 +220,5 @@ private fun CutoutGeometry.kind(): CutoutKind = when (this) {
     is CutoutGeometry.Notch -> CutoutKind.NOTCH
     is CutoutGeometry.PunchHole -> CutoutKind.PUNCH_HOLE
     is CutoutGeometry.WaterfallCurve -> CutoutKind.WATERFALL
+    is CutoutGeometry.DynamicIsland -> CutoutKind.DYNAMIC_ISLAND
 }

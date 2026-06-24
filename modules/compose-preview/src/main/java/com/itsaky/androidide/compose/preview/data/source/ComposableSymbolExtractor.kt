@@ -67,6 +67,15 @@ class ComposableSymbolExtractor {
         }
     }
 
+    /**
+     * 关闭 ANTLR Parser 默认的 console error listener, 避免把解析警告
+     * 打印到 stderr. 与 TreeSitterSymbolResolver 行为一致.
+     */
+    private fun <T : Parser> T.withoutErrorListeners(): T {
+        removeErrorListeners()
+        return this
+    }
+
     private class ComposableFunctionCollector(
         private val source: String,
     ) : KotlinParserBaseListener() {
@@ -122,12 +131,8 @@ class ComposableSymbolExtractor {
         private fun ParserRuleContext.cleanedText(): String {
             val start = this.start.startIndex
             val stop = this.stop.stopIndex
-            return this@ComposableSymbolExtractor.source.substring(start, stop + 1)
-        }
-
-        private fun <T : Parser> T.withoutErrorListeners(): T {
-            removeErrorListeners()
-            return this
+            // 直接访问外层 ComposableFunctionCollector 的 source 字段.
+            return source.substring(start, stop + 1)
         }
     }
 }

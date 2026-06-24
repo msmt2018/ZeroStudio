@@ -126,7 +126,7 @@ import androidx.compose.ui.platform.ComposeView
  */
 class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
 
-    private val viewModel: ComposePreviewViewModel by viewModels()
+    internal val viewModel: ComposePreviewViewModel by viewModels()
 
     private val sourceCode: String by lazy {
         intent.getStringExtra(EXTRA_SOURCE_CODE) ?: ""
@@ -167,7 +167,7 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
-        // 【PR-C】订阅 previewState 拿 modulePath, 第一次 Ready 时加载用户 app
+    // 【PR-C】订阅 previewState 拿 modulePath, 第一次 Ready 时加载用户 app
     // (解析 manifest android:icon + label). 失败不阻塞, 桌面还能用.
     lifecycleScope.launch {
         repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -222,6 +222,7 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
             }
         }
     }
+}
 
     /**
      * 【v3.3】公开方法 — ComposableFunctionPicker 选中函数时调, 重新渲染.
@@ -842,7 +843,7 @@ private fun ReadyPanel(
                             Modifier.pointerInput(zoomScale, parentWidthDp, parentHeightDp) {
                                 // PointerInputScope 继承自 Density, 这里拿 px-per-dp
                                 // 把 dragAmount (px) 转成 dp.
-                                val pxPerDp = density
+                                val pxPerDp = density.density
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     // dragAmount 是 px, 还原成 dp.

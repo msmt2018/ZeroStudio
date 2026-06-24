@@ -638,6 +638,22 @@ fun DeviceThumbnail(
                                 }
                         )
                     }
+                    is CutoutGeometry.DynamicIsland -> {
+                        // 灵动岛: 顶部居中, 药丸形带圆角
+                        val w = with(density) { c.widthDp.dp.toPx() } * 0.05f
+                        val h = with(density) { c.heightDp.dp.toPx() } * 0.05f
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        ((width.toPx() - w) / 2f).roundToInt(),
+                                        0
+                                    )
+                                }
+                                .size(with(density) { w.toDp() }, with(density) { h.toDp() })
+                                .background(cutoutColor, RoundedCornerShape(c.cornerRadiusDp.dp))
+                        )
+                    }
                     null -> {}
                 }
             }
