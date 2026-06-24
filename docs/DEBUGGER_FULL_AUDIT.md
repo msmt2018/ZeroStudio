@@ -408,15 +408,15 @@ ide-native-debugger/        # NDK 调试
 
 ---
 
-## 10. Phase E UI 打磨 (PR-419 内推进)
+## 10. Phase E UI 打磨 — ✅ 全部完成
 
 | 子任务 | 范围 | 状态 |
 |------|------|------|
-| E1 Adapter 完整 | CallStackAdapter 加 ↑/↓ 键盘切帧 (已有 onFramePicked, 加 onKeyListener) | ⏳ |
-| E2 条件断点对话框 | BreakpointConditionDialog 完整 enable/disable toggle (持久化到 BreakpointManager) | ⏳ |
-| E3 暗色主题 | BreakpointStateColors 用 ?attr/colorOnSurfaceVariant 替换硬编码 | ⏳ |
-| E4 国际化 | values-ja/values-ko/values-pt-rBR 各补关键 5-10 字符串 | ⏳ |
-| E5 无障碍 | VariablesFragment / LogpointFragment / CallStackFragment contentDescription | ⏳ |
+| E1 Adapter 完整 | CallStackAdapter ↑/↓ 键盘切帧 (PR-D7 已由 trae 完成, onListKey 全 6 个键) | ✅ |
+| E2 条件断点对话框 | BreakpointConditionDialog 加 MaterialSwitch 启用 toggle + isBpEnabled + setEnabled | ✅ |
+| E3 暗色主题 | values/colors_debugger.xml + values-night/colors_debugger.xml (历史已存在) | ✅ |
+| E4 国际化 | values-ja/values-ko/values-pt-rBR 各 30+ 关键字符串 (本轮新增) | ✅ |
+| E5 无障碍 | fragment_variables/watches/callstack/logpoint 关键节点加 contentDescription + 6 条新 string | ✅ |
 
 ---
 
