@@ -22,7 +22,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
-import org.robolectric.shadows.ShadowLooper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -38,6 +37,24 @@ public class LogStoreTest {
     public void setUp() {
         store = new LogStore();
         store.setCapacity(100);  // 测例用小容量
+        // PR-D8.4: 关闭 coalesce 50ms 延迟, 让 listener 测试立即派发。
+        // 不能直接在构造里设, 因为 LogStore 已经在前面初始化 dispatchHandler。
+        store.setCoalesceMsForTest(0L);
+    }
+
+    /**
+     * PR-D8.4: idle LogStore 的 dispatchHandler 关联 looper (非主 looper),
+     * 触发 listener 派发。Robolectric 下 HandlerThread/Looper 用
+     * ShadowLooper 控制, 这里用反射拿到 LogStore 的 dispatchHandler
+     * 调度的 looper 把它 idle 掉。
+     */
+    private void idleDispatch() throws Exception {
+        java.lang.reflect.Field f = LogStore.class.getDeclaredField("dispatchHandler");
+        f.setAccessible(true);
+        android.os.Handler h = (android.os.Handler) f.get(store);
+        org.robolectric.shadows.ShadowLooper
+                .shadowOf(h.getLooper())
+                .idle();
     }
 
     @Test
@@ -124,7 +141,7 @@ public class LogStoreTest {
         });
         store.append("a");
         store.append("b");
-        ShadowLooper.idleMainLooper();
+        idleDispatch();
         assertTrue("listener 应在 2s 内收到 2 条", latch.await(2, TimeUnit.SECONDS));
         assertEquals(2, received.size());
     }
@@ -144,7 +161,7 @@ public class LogStoreTest {
         });
         store.append("a");
         store.clear();
-        ShadowLooper.idleMainLooper();
+        idleDispatch();
         assertTrue(latch.await(2, TimeUnit.SECONDS));
         assertEquals(1, cleared.size());
     }
@@ -171,7 +188,7 @@ public class LogStoreTest {
             public void onLogCleared() {}
         });
         store.append("a");
-        ShadowLooper.idleMainLooper();
+        idleDispatch();
         assertTrue("3 个 listener 全部应收到", latch.await(2, TimeUnit.SECONDS));
     }
 
@@ -199,7 +216,7 @@ public class LogStoreTest {
             public void onLogCleared() {}
         });
         store.append("a");
-        ShadowLooper.idleMainLooper();
+        idleDispatch();
         assertTrue(latch.await(2, TimeUnit.SECONDS));
         assertEquals(1, received.size());
     }

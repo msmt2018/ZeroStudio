@@ -90,22 +90,71 @@ public final class LogStore {
         }
         // PR-D7: listener 派发切到 dispatchHandler 线程,
         // 避免在 JDWP read 线程上做 UI 更新(例如 LogFragment 增条目)。
+        // PR-D8.4: coalesce 50ms 内的多条 append, 合并成 1 次 handler
+        // 消息一次派发, 减少 handler 排队开销。
         final Entry copy = e;
-        dispatchHandler.post(() -> {
-            for (Listener l : listeners) {
-                try { l.onLogAppended(copy); } catch (Throwable ignored) {}
+        final boolean needSchedule;
+        synchronized (pendingBatch) {
+            pendingBatch.add(copy);
+            // 距离上次 flush < coalesceMs 时, 不重新 schedule,
+            // 让已有的 Runnable 把这条也 flush 掉。
+            needSchedule = (System.nanoTime() - lastDispatchNanos) >= coalesceNs;
+            if (needSchedule) {
+                lastDispatchNanos = System.nanoTime();
             }
-        });
+        }
+        if (needSchedule) {
+            dispatchHandler.postDelayed(flushRunnable, coalesceMs);
+        }
     }
+
+    /** PR-D8.4: flush pendingBatch 中累积的 entries 到所有 listener。 */
+    private final Runnable flushRunnable = new Runnable() {
+        @Override
+        public void run() {
+            final java.util.List<Entry> toFlush;
+            synchronized (pendingBatch) {
+                if (pendingBatch.isEmpty()) return;
+                toFlush = new java.util.ArrayList<>(pendingBatch);
+                pendingBatch.clear();
+            }
+            for (Listener l : listeners) {
+                try {
+                    for (Entry e : toFlush) l.onLogAppended(e);
+                } catch (Throwable ignored) {}
+            }
+        }
+    };
+    private final java.util.List<Entry> pendingBatch = new java.util.ArrayList<>();
+    private long lastDispatchNanos = 0L;
+    // PR-D8.4: 实例字段(非 static final)以便 setCoalesceMsForTest
+    // 在测试中改为 0 立即派发。生产代码 50ms 是合理值。
+    private long coalesceMs = 50L;
+    private long coalesceNs = 50L * 1_000_000L;
 
     public void clear() {
         synchronized (entries) { entries.clear(); }
+        // PR-D8.4: clear 时清空 pendingBatch, 否则 flush 线程晚于
+        // onLogCleared 触发的 onLogAppended 会被 listener 看成"已清空
+        // 后又新增",破坏"先 clear 再 append"的语义。
+        synchronized (pendingBatch) { pendingBatch.clear(); }
         // PR-D7: clear 同样在后台派发。
         dispatchHandler.post(() -> {
             for (Listener l : listeners) {
                 try { l.onLogCleared(); } catch (Throwable ignored) {}
             }
         });
+    }
+
+    /**
+     * PR-D8.4 测试钩子 (package-private): 把 coalesce 间隔设为 0,
+     * 让测试中的 listener 立即派发(不走 50ms 延迟)。生产代码不应调用。
+     */
+    void setCoalesceMsForTest(long ms) {
+        synchronized (pendingBatch) {
+            coalesceMs = ms;
+            coalesceNs = ms * 1_000_000L;
+        }
     }
 
     @NonNull
