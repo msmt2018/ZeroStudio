@@ -104,35 +104,39 @@ public final class DebugSessionLauncher {
                 IProjectManager.getInstance()
                         .getWorkspace()
                         .androidProjects());
-        AndroidModule module = null;
+        AndroidModule selectedModule = null;
         for (AndroidModule p : projects) {
             if (p.isApplication()) {
-                module = p;
+                selectedModule = p;
                 break;
             }
         }
+        // `selectedModule` is reassigned inside the loop, so it is not
+        // effectively final. After the loop, we copy it into a final
+        // local so the worker-thread lambda can capture it. The javac
+        // error for `local variables referenced from a lambda expression
+        // must be final or effectively final` mis-attributed the failure
+        // to `data` in earlier reports because the compiler points at
+        // the first non-final capture it finds.
+        final AndroidModule module = selectedModule;
         if (module == null) {
             fail(Step.SELECT_MODULE, "No application modules in workspace");
             return false;
         }
-        BasicAndroidVariantMetadata variant = module.getSelectedVariant();
+        final BasicAndroidVariantMetadata variant = module.getSelectedVariant();
         if (variant == null) {
             fail(Step.SELECT_MODULE, "No build variant selected for " + module.getName());
             return false;
         }
-        String taskName = module.getPath() + ":" + variant.getMainArtifact().getAssembleTaskName();
+        final String taskName = module.getPath() + ":" + variant.getMainArtifact().getAssembleTaskName();
         log.info("DebugSessionLauncher starting task '{}'", taskName);
         fireBuildStarting(module, variant);
-        // `data` is the method parameter and is effectively final here
-        // (we never reassign it), so we can capture it directly in the
-        // worker thread lambda without an explicit `final` local.
-        // Introducing a `final ActionData snapshot = data;` alias used to
-        // compile cleanly under javac 17 but trips a `local variables
-        // referenced from a lambda expression must be final or
-        // effectively final` check in the newer toolchain that backs
-        // this project — most likely because some annotation-processor
-        // pass reassigns the synthetic backing field for the parameter.
-        worker = new Thread(() -> runBuild(data, module, variant, taskName),
+        // `data` is the method parameter and never reassigned, but we
+        // still re-bind it to a final local so the lambda is insulated
+        // from any annotation-processor plumbing that might touch the
+        // synthetic backing field of the parameter.
+        final ActionData dataRef = data;
+        worker = new Thread(() -> runBuild(dataRef, module, variant, taskName),
                 "DebugSessionLauncher");
         worker.setDaemon(true);
         worker.start();
