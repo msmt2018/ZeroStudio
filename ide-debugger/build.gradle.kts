@@ -24,8 +24,6 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
   }
 
-  kotlinOptions { jvmTarget = "17" }
-
   buildFeatures {
     aidl = false
     viewBinding = false
@@ -40,9 +38,6 @@ android {
 dependencies {
   compileOnly(libs.androidx.core.ktx)
   compileOnly(libs.androidx.annotation)
-  compileOnly(libs.kotlin.stdlib)
-  compileOnly(libs.kotlinx.coroutines.core)
-  compileOnly(libs.kotlinx.coroutines.android)
 
   // PR-2: depend on the shared logwire module for the IDE ↔ plugin
   // transport that carries JDWP-bridge notifications.

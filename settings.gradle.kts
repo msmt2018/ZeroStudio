@@ -211,6 +211,7 @@ include(
     ":utilities:build-info",
     ":utilities:flashbar",
     ":utilities:framework-stubs",
+    ":utilities:logwire",
     ":utilities:lookup",
     ":utilities:preferences",
     ":utilities:shared",
