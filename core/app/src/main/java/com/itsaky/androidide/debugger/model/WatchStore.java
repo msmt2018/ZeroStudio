@@ -64,9 +64,9 @@ public final class WatchStore {
             for (int i = 0; i < arr.length(); i++) {
                 watches.add(arr.getString(i));
             }
-            ILogger.info(TAG, "Loaded " + watches.size() + " watches");
+            ILogger.ROOT.info(TAG + ": Loaded " + watches.size() + " watches");
         } catch (Throwable t) {
-            ILogger.error(TAG, "Failed to load watches: " + t.getMessage(), t);
+            ILogger.ROOT.error(TAG + ": Failed to load watches: " + t.getMessage(), t);
         }
     }
 
@@ -79,7 +79,7 @@ public final class WatchStore {
             for (String s : watches) arr.put(s);
             Files.write(f.toPath(), arr.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Throwable t) {
-            ILogger.error(TAG, "Failed to save watches: " + t.getMessage(), t);
+            ILogger.ROOT.error(TAG + ": Failed to save watches: " + t.getMessage(), t);
         }
     }
 

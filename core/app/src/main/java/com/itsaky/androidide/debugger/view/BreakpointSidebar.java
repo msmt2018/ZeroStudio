@@ -128,7 +128,12 @@ public class BreakpointSidebar extends View {
         final float rowHeight = editor.getRowHeight();
         final float textOffset = editor.getOffsetX();
         final float firstVisibleRow = editor.getFirstVisibleRow();
-        final int lastVisibleRow = firstVisibleRow + editor.getRowCountOnScreen() + 1;
+        // Sora editor doesn't expose a `getRowCountOnScreen()` helper, so
+        // approximate it from the editor's height and the row height. We
+        // add a 1-row slack for the partially visible trailing row.
+        final int visibleRowCount = (int) Math.ceil(
+                editor.getHeight() / Math.max(1f, editor.getRowHeight()));
+        final int lastVisibleRow = firstVisibleRow + visibleRowCount + 1;
 
         final float cx = getWidth() / 2f;
         final float r = dp(GLYPH_RADIUS_DP);

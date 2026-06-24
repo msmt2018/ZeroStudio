@@ -48,7 +48,14 @@ public class BreakpointConditionDialog extends DialogFragment {
     private static final String TAG = "BpConditionDialog";
     private static final String ARG_BREAKPOINT_ID = "bp_id";
 
-    public static void show(@NonNull FragmentManager fm, @NonNull String breakpointId) {
+    /**
+     * Show the dialog for editing the given breakpoint. We can't use the
+     * name `show` because [androidx.fragment.app.DialogFragment] exposes
+     * its own non-static `show(FragmentManager, String)` and Java won't
+     * let a static method override a non-static one with the same
+     * signature.
+     */
+    public static void showDialog(@NonNull FragmentManager fm, @NonNull String breakpointId) {
         BreakpointConditionDialog d = new BreakpointConditionDialog();
         Bundle b = new Bundle();
         b.putString(ARG_BREAKPOINT_ID, breakpointId);

@@ -54,6 +54,15 @@ public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter
 
     public void setHighlighted(long objectId) { this.highlightedId = objectId; }
 
+    /**
+     * Java-friendly alias of {@link #submitList(List)}. Mirrors the
+     * {@code WatchesAdapter.submit} helper so callers in
+     * {@code VariablesFragment} can keep a single naming convention.
+     */
+    public void submit(@NonNull List<VariableInfo> vars) {
+        submitList(new java.util.ArrayList<>(vars));
+    }
+
     @Override
     public long getItemId(int position) {
         // Hash name + typeSignature; will be stable across submits

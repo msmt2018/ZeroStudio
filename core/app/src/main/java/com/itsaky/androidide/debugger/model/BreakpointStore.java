@@ -13,6 +13,7 @@ package com.itsaky.androidide.debugger.model;
 import android.content.Context;
 import android.util.Log;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import com.itsaky.androidide.app.BaseApplication;
 import java.io.File;
 import java.io.FileReader;

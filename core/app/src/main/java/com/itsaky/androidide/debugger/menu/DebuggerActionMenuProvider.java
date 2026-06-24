@@ -29,7 +29,7 @@ import androidx.annotation.Nullable;
 import androidx.core.view.MenuProvider;
 import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.DebuggerController;
-import com.itsaky.androidide.utils.flashInfo;
+import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
 
 public class DebuggerActionMenuProvider implements MenuProvider {
 
@@ -136,7 +136,13 @@ public class DebuggerActionMenuProvider implements MenuProvider {
         } else if (id == R.id.dbg_action_refresh) {
             // 通知监听器重新加载（state 自身未变，fire 一次以触发刷新）
             ctl.sessionState().selectFrame(ctl.sessionState().currentFrameId());
-            flashInfo(R.string.debugger_action_refresh);
+            // `flashInfo` is a Kotlin top-level function bound to `Activity`.
+            // From Java we can't import it directly, and the extension receiver
+            // type is `Activity` (not `Context`), so cast the host's context
+            // to Activity before calling. The host is always an editor
+            // activity, so the cast is safe at runtime.
+            final android.app.Activity act = (android.app.Activity) host.requireContext();
+            FlashbarActivityUtilsKt.flashInfo(act, act.getString(R.string.debugger_action_refresh));
             return true;
         } else if (id == R.id.dbg_action_add_watch) {
             ctl.promptAddWatch();

@@ -89,6 +89,7 @@ import com.itsaky.androidide.ui.CodeEditorView
 import com.itsaky.androidide.ui.ContentTranslatingDrawerLayout
 import com.itsaky.androidide.ui.EditorBottomSheetOnboardingController
 import com.itsaky.androidide.ui.SwipeRevealLayout
+import com.itsaky.androidide.utils.FlashbarActivityUtilsKt
 import com.itsaky.androidide.utils.ActionMenuUtils.createMenu
 import com.itsaky.androidide.utils.ApkInstallationSessionCallback
 import com.itsaky.androidide.utils.DialogUtils.newMaterialDialogBuilder
@@ -266,6 +267,34 @@ abstract class BaseEditorActivity :
   protected abstract fun doDismissSearchProgress()
   protected abstract fun getOpenedFiles(): List<OpenedFile>
   internal abstract fun doConfirmProjectClose()
+
+  /**
+   * Java-friendly accessor that delegates to the (protected) abstract
+   * [provideCurrentEditor]. The debugger uses this from Java where it
+   * cannot reach the protected method directly.
+   */
+  open fun getCurrentEditor(): CodeEditorView? = provideCurrentEditor()
+
+  /**
+   * Java-friendly wrapper around [doOpenFile] so the debugger can open a
+   * file and select a range without knowing about the concrete subclass.
+   * Concrete editor activities are free to override this to also apply the
+   * selection to the underlying [io.github.rosemoe.sora.widget.CodeEditor].
+   */
+  open fun openFileAndSelect(file: File, selection: Range?) {
+    doOpenFile(file, selection)
+  }
+
+  /**
+   * Java-friendly proxy for the [com.itsaky.androidide.utils.flashInfo]
+   * extension function. The debugger code that lives in Java cannot import
+   * Kotlin top-level functions, so this is a thin static-style wrapper that
+   * goes through the activity extension variant.
+   */
+  open fun flashInfo(msg: String?) {
+    FlashbarActivityUtilsKt.flashInfo(this, msg)
+  }
+
 
   protected open fun preDestroy() {
     _binding = null

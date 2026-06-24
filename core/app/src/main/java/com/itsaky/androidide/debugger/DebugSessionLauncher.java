@@ -29,7 +29,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
 import com.itsaky.androidide.actions.ActionData;
-import com.itsaky.androidide.models.ApkMetadata;
 import com.itsaky.androidide.projects.IProjectManager;
 import com.itsaky.androidide.projects.android.AndroidModule;
 import com.itsaky.androidide.projects.builder.BuildService;
@@ -97,9 +96,14 @@ public final class DebugSessionLauncher {
         // PR-D2 简化: 多 module 时本工具类无法弹 chooser dialog (那是
         // Kotlin 扩展函数). 退化为只跑工作区中第一个 app module;若需要
         // chooser,PR-D3 可以补一个 Activity-based 的 chooser.
-        Iterable<AndroidModule> projects = IProjectManager.getInstance()
-                .getWorkspace()
-                .androidProjects();
+        // `androidProjects()` is a Kotlin Sequence, not a Java Iterable,
+        // so we eagerly materialize it through `SequencesKt.toList`
+        // before iterating. We can't call Kotlin's `toList()` extension
+        // method directly from Java.
+        java.util.List<AndroidModule> projects = kotlin.sequences.SequencesKt.toList(
+                IProjectManager.getInstance()
+                        .getWorkspace()
+                        .androidProjects());
         AndroidModule module = null;
         for (AndroidModule p : projects) {
             if (p.isApplication()) {
@@ -154,13 +158,17 @@ public final class DebugSessionLauncher {
             return;
         }
 
-        ApkMetadata apkMeta = ApkMetadata.findApkFile(
+        // `ApkMetadata.findApkFile` lives in the companion object; from
+        // Java we have to go through `ApkMetadata.Companion` because the
+        // Kotlin method isn't annotated with `@JvmStatic`. The companion
+        // returns a `java.io.File?` (not an `ApkMetadata`), so we adapt
+        // the variable name accordingly.
+        File apk = com.itsaky.androidide.models.ApkMetadata.Companion.findApkFile(
                 variant.getMainArtifact().getAssembleTaskOutputListingFile());
-        if (apkMeta == null || !apkMeta.exists()) {
+        if (apk == null || !apk.exists()) {
             fail(Step.BUILD, "APK file not found for variant " + variant.getName());
             return;
         }
-        File apk = apkMeta;
         fireInstallStarting(apk);
         runInstall(data, module, variant, apk);
     }
@@ -253,12 +261,15 @@ public final class DebugSessionLauncher {
             // runOnUiThread blocks until the message is posted; we then poll a flag.
             // Since IntentUtils.launchApp is synchronous on the UI thread,
             // we wrap it in a CountDownLatch to wait for completion.
+            // IntentUtils is a Kotlin `object` (singleton), so from Java we
+            // have to reach the singleton instance through `INSTANCE` to
+            // call its (non-static) member function.
             final java.util.concurrent.CountDownLatch latch =
                     new java.util.concurrent.CountDownLatch(1);
             android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
             h.post(() -> {
                 try {
-                    ok[0] = IntentUtils.launchApp(appContext, packageName, false);
+                    ok[0] = IntentUtils.INSTANCE.launchApp(appContext, packageName, false);
                 } finally {
                     latch.countDown();
                 }

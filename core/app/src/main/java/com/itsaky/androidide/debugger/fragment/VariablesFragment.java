@@ -90,7 +90,11 @@ public class VariablesFragment extends Fragment
     private void showEmpty(boolean empty, int msgRes) {
         if (emptyView != null) {
             emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
-            if (empty) emptyView.setText(msgRes);
+            // emptyView is declared as View in the layout; cast to TextView
+            // so we can set the empty-state message text.
+            if (empty && emptyView instanceof android.widget.TextView) {
+                ((android.widget.TextView) emptyView).setText(msgRes);
+            }
         }
         if (loadingView != null) loadingView.setVisibility(View.GONE);
         if (list != null) list.setVisibility(empty ? View.GONE : View.VISIBLE);

@@ -24,7 +24,6 @@ import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.SuspendInfo;
 import com.zerostudio.debugger.event.DebugEventBus;
 import com.zerostudio.debugger.event.DebugEvents;
-import com.zerostudio.debugger.model.DebugSession.State;
 import java.io.File;
 
 public final class DebuggerController
@@ -94,9 +93,9 @@ public final class DebuggerController
             new Thread(() -> {
                 try { debugger.waitForVmStart(30_000L); } catch (Throwable ignored) {}
             }, "jdwp-wait-vmstart").start();
-            ILogger.info(TAG, "Debugger connected to " + host + ":" + port);
+            ILogger.ROOT.info("Debugger connected to " + host + ":" + port);
         } catch (Throwable t) {
-            ILogger.error(TAG, "Failed to connect to JDWP server: " + t.getMessage(), t);
+            ILogger.ROOT.error("Failed to connect to JDWP server: " + t.getMessage(), t);
         }
     }
 
@@ -191,11 +190,6 @@ public final class DebuggerController
         } else {
             disconnect();
         }
-    }
-
-    @Nullable
-    public DebugSession.State sessionState() {
-        return debugger == null ? null : debugger.session().getState();
     }
 
     private boolean requireThread() {

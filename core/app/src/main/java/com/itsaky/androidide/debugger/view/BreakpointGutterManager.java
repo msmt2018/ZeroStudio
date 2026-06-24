@@ -96,7 +96,7 @@ public final class BreakpointGutterManager {
         setActionListener(actionListener);
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                dp(20f), ViewGroup.LayoutParams.MATCH_PARENT);
+                (int) dp(20f), ViewGroup.LayoutParams.MATCH_PARENT);
         lp.gravity = android.view.Gravity.START;
         sidebar.setLayoutParams(lp);
         sidebar.setClickable(true);
@@ -141,14 +141,15 @@ public final class BreakpointGutterManager {
     }
 
     private void subscribeEditorEvents() {
+        // CodeEditor.subscribeEvent takes a Consumer-style handler that
+        // must not return a value. Returning null from a lambda would
+        // break the SAM conversion in Java 17.
         editor.subscribeEvent(ScrollEvent.class, (event, subscriber) -> {
             layoutSidebar();
             refreshSidebar();
-            return null;
         });
         editor.subscribeEvent(ContentChangeEvent.class, (event, subscriber) -> {
             refreshSidebar();
-            return null;
         });
         editor.post(() -> {
             layoutSidebar();
@@ -166,7 +167,7 @@ public final class BreakpointGutterManager {
         if (!(lp instanceof FrameLayout.LayoutParams)) return;
         FrameLayout.LayoutParams flp = (FrameLayout.LayoutParams) lp;
 
-        int targetWidth = dp(20f);
+        int targetWidth = (int) dp(20f);
         // 起点：编辑器自带 lineNumberMarginLeft + 一段填充
         float lineNumberStart = editor.getLineNumberMarginLeft();
         if (lineNumberStart <= 0) lineNumberStart = dp(2f);
