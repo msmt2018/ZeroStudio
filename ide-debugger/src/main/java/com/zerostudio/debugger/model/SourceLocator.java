@@ -696,7 +696,7 @@ public final class SourceLocator {
         String base = basename(sourceFile);
         if (base.endsWith(".java")) {
             // Phase G3: use cache
-            ParsedSource parsed = cache.getSource(sourceFile);
+            JavaSourceParser.ParsedSource parsed = cache.getSource(sourceFile);
             if (parsed != null) {
                 String sig = parsed.topLevelSignature();
                 if (sig != null) {
@@ -714,7 +714,7 @@ public final class SourceLocator {
             // Phase G4: Kotlin files — JavaParser doesn't handle them.
             // Try to find and parse the corresponding .class file.
             String classFilePath = sourceFile.substring(0, sourceFile.length() - 3) + ".class";
-            ParsedClass parsedClass = cache.getClass(classFilePath);
+            ClassFileReader.ParsedClass parsedClass = cache.getClass(classFilePath);
             if (parsedClass != null) {
                 return parsedClass.signature;
             }
@@ -744,10 +744,10 @@ public final class SourceLocator {
         String base = basename(sourceFile);
         if (base.endsWith(".java")) {
             // Phase G4: try all top-level classes in this file
-            ParsedSource parsed = cache.getSource(sourceFile);
+            JavaSourceParser.ParsedSource parsed = cache.getSource(sourceFile);
             if (parsed != null && !parsed.classes.isEmpty()) {
                 List<String> sigs = new ArrayList<>();
-                for (SourceClass cls : parsed.classes) {
+                for (JavaSourceParser.SourceClass cls : parsed.classes) {
                     if (cls.isTopLevel) {
                         sigs.add(cls.signature);
                     }
@@ -763,7 +763,7 @@ public final class SourceLocator {
         } else if (base.endsWith(".kt")) {
             // Kotlin: try .class file first, then fallback to basename
             String classFilePath = sourceFile.substring(0, sourceFile.length() - 3) + ".class";
-            ParsedClass parsedClass = cache.getClass(classFilePath);
+            ClassFileReader.ParsedClass parsedClass = cache.getClass(classFilePath);
             if (parsedClass != null) {
                 return Collections.singletonList(parsedClass.signature);
             }

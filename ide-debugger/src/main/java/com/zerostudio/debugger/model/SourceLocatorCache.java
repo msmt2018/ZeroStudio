@@ -51,8 +51,8 @@ public final class SourceLocatorCache {
     private static final int MAX_CLASS_ENTRIES = 500;
 
     // LRU caches backed by LinkedHashMap (access-order).
-    private final LRUCache<String, ParsedSource> sourceCache;
-    private final LRUCache<String, ParsedClass> classCache;
+    private final LRUCache<String, JavaSourceParser.ParsedSource> sourceCache;
+    private final LRUCache<String, ClassFileReader.ParsedClass> classCache;
 
     // Global invalidation: when a class is loaded, invalidate related source caches.
     private final ConcurrentMap<String, String> sourceToClass = new ConcurrentHashMap<>();
@@ -78,14 +78,14 @@ public final class SourceLocatorCache {
      * @return the ParsedSource, or null if the file doesn't exist or can't be parsed
      */
     @Nullable
-    public ParsedSource getSource(@NonNull String sourceFile) {
+    public JavaSourceParser.ParsedSource getSource(@NonNull String sourceFile) {
         String key = normalize(sourceFile);
         // Fast path: concurrent read
-        ParsedSource cached = sourceCache.get(key);
+        JavaSourceParser.ParsedSource cached = sourceCache.get(key);
         if (cached != null) return cached;
 
         // Slow path: parse and cache
-        ParsedSource parsed = sourceParser.parse(sourceFile);
+        JavaSourceParser.ParsedSource parsed = sourceParser.parsePath(sourceFile);
         if (parsed != null) {
             sourceCache.put(key, parsed);
             // Record the relationship: this source might be compiled to any .class
@@ -115,12 +115,12 @@ public final class SourceLocatorCache {
      * Look up a .class file in the cache, or read it if not present.
      */
     @Nullable
-    public ParsedClass getClass(@NonNull String classFile) {
+    public ClassFileReader.ParsedClass getClass(@NonNull String classFile) {
         String key = normalize(classFile);
-        ParsedClass cached = classCache.get(key);
+        ClassFileReader.ParsedClass cached = classCache.get(key);
         if (cached != null) return cached;
 
-        ParsedClass parsed = classReader.parse(classFile);
+        ClassFileReader.ParsedClass parsed = classReader.parse(new File(classFile));
         if (parsed != null) {
             classCache.put(key, parsed);
         }

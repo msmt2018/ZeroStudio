@@ -34,6 +34,7 @@ import com.zerostudio.debugger.event.DebugEventBus;
 import com.zerostudio.debugger.event.DebugEvents;
 import com.zerostudio.debugger.jdwp.DebugSessionHeartbeat;
 import com.zerostudio.debugger.jdwp.JdwpClient;
+import com.zerostudio.debugger.jdwp.JdwpEvents;
 import com.zerostudio.debugger.jdwp.JdwpPacket;
 import com.zerostudio.debugger.model.BreakpointStore;
 import com.zerostudio.debugger.model.DebugSession;
@@ -385,8 +386,8 @@ public final class Debugger
     /** Step over the current frame. */
     public void stepOver(long threadId) {
         try {
-            sourceLocator.step(threadId, com.zerostudio.debugger.jdwp.StepDepth.OVER,
-                    com.zerostudio.debugger.jdwp.StepSize.LINE);
+            sourceLocator.step(threadId, JdwpEvents.StepDepth.OVER,
+                    JdwpEvents.StepSize.LINE);
             session.setState(DebugSession.State.STEPPING);
         } catch (java.io.IOException e) {
             Log.w(TAG, "stepOver failed", e);
@@ -395,8 +396,8 @@ public final class Debugger
 
     public void stepInto(long threadId) {
         try {
-            sourceLocator.step(threadId, com.zerostudio.debugger.jdwp.StepDepth.INTO,
-                    com.zerostudio.debugger.jdwp.StepSize.LINE);
+            sourceLocator.step(threadId, JdwpEvents.StepDepth.INTO,
+                    JdwpEvents.StepSize.LINE);
             session.setState(DebugSession.State.STEPPING);
         } catch (java.io.IOException e) {
             Log.w(TAG, "stepInto failed", e);
@@ -405,8 +406,8 @@ public final class Debugger
 
     public void stepOut(long threadId) {
         try {
-            sourceLocator.step(threadId, com.zerostudio.debugger.jdwp.StepDepth.OUT,
-                    com.zerostudio.debugger.jdwp.StepSize.LINE);
+            sourceLocator.step(threadId, JdwpEvents.StepDepth.OUT,
+                    JdwpEvents.StepSize.LINE);
             session.setState(DebugSession.State.STEPPING);
         } catch (java.io.IOException e) {
             Log.w(TAG, "stepOut failed", e);

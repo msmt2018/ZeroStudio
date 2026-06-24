@@ -32,7 +32,6 @@ import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -161,7 +160,6 @@ public final class JavaSourceParser {
         // Don't set a language — default is JAVA. We explicitly configure
         // tolerant settings so partial/incorrect files still yield results.
         config.setAttributeComments(false);
-        config.setIgnoreAnnotationsWhenAttributingMultipleTypes(false);
         this.parser = new JavaParser(config);
     }
 
@@ -208,7 +206,7 @@ public final class JavaSourceParser {
         }
 
         String packageName = extractPackage(cu);
-        List<SourceClass> classes = extractClasses(cu, packageName, true);
+        List<SourceClass> classes = extractClasses(cu, packageName);
 
         return new ParsedSource(packageName, classes, cu);
     }
@@ -226,47 +224,59 @@ public final class JavaSourceParser {
     }
 
     /**
-     * Recursively extract all class declarations from a node and its children.
+     * Extract all top-level class declarations from a CompilationUnit.
+     */
+    @NonNull
+    private List<SourceClass> extractClasses(@NonNull CompilationUnit cu, @NonNull String pkg) {
+        List<SourceClass> result = new ArrayList<>();
+        for (TypeDeclaration<?> typeDecl : cu.getTypes()) {
+            if (typeDecl instanceof ClassOrInterfaceDeclaration) {
+                result.addAll(extractFromType((ClassOrInterfaceDeclaration) typeDecl, pkg, true));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Recursively extract a class and any nested classes declared inside it.
      *
-     * @param node     the node to scan (CompilationUnit or nested TypeDeclaration)
+     * @param cls      the class to record
      * @param pkg      the package name (e.g., "com.example")
      * @param topLevel true for the outermost class (not inside another class)
      */
     @NonNull
-    private List<SourceClass> extractClasses(@NonNull NodeWithName node, @NonNull String pkg,
-                                            boolean topLevel) {
-        List<SourceClass> result = new ArrayList<>();
+    private List<SourceClass> extractFromType(@NonNull ClassOrInterfaceDeclaration cls,
+                                               @NonNull String pkg, boolean topLevel) {
+        String simpleName = cls.getName().asString();
+        String signature = buildSignature(pkg, simpleName);
 
-        if (node instanceof TypeDeclaration<?>) {
-            TypeDeclaration<?> typeDecl = (TypeDeclaration<?>) node;
-            if (typeDecl.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cls = (ClassOrInterfaceDeclaration) typeDecl;
-                String simpleName = cls.getName().asString();
-                String signature = buildSignature(pkg, simpleName);
-
-                // Recursively collect inner classes BEFORE this class's methods,
-                // so that inner classes appear after outer classes in the list.
-                List<SourceClass> innerClasses = new ArrayList<>();
-                for (BodyDeclaration<?> member : cls.getMembers()) {
-                    if (member instanceof TypeDeclaration<?>) {
-                        String innerSimpleName = ((TypeDeclaration<?>) member).getName().asString();
-                        String innerSig = buildInnerSignature(signature, innerSimpleName);
-                        List<SourceClass> nested =
-                                extractClasses((TypeDeclaration<?>) member, pkg, false);
-                        for (SourceClass nc : nested) {
-                            nc.methods.clear(); // inner classes' methods not used yet
-                            nc.methods.addAll(extractMethods((TypeDeclaration<?>) member, innerSig));
-                        }
-                        innerClasses.addAll(nested);
-                    }
+        // Recursively collect inner classes BEFORE this class's methods,
+        // so that inner classes appear after outer classes in the list.
+        List<SourceClass> innerClasses = new ArrayList<>();
+        for (BodyDeclaration<?> member : cls.getMembers()) {
+            if (member instanceof TypeDeclaration<?>) {
+                TypeDeclaration<?> innerType = (TypeDeclaration<?>) member;
+                String innerSimpleName = innerType.getName().asString();
+                String innerSig = buildInnerSignature(signature, innerSimpleName);
+                List<SourceClass> nested;
+                if (innerType instanceof ClassOrInterfaceDeclaration) {
+                    nested = extractFromType((ClassOrInterfaceDeclaration) innerType, pkg, false);
+                } else {
+                    // Enum/annotation declarations are not expanded recursively for now.
+                    nested = new ArrayList<>();
                 }
-
-                List<SourceMethod> methods = extractMethods(cls, signature);
-                result.add(new SourceClass(signature, topLevel, methods));
-                result.addAll(innerClasses);
+                for (SourceClass nc : nested) {
+                    nc.methods.clear(); // inner classes' methods not used yet
+                    nc.methods.addAll(extractMethods(innerType, innerSig));
+                }
+                innerClasses.addAll(nested);
             }
         }
 
+        List<SourceMethod> methods = extractMethods(cls, signature);
+        List<SourceClass> result = new ArrayList<>();
+        result.add(new SourceClass(signature, topLevel, methods));
+        result.addAll(innerClasses);
         return result;
     }
 
