@@ -180,4 +180,31 @@
     <string name="debugger_var_copied">Copied %1$s</string>
     <string name="debugger_var_watch_added">Watch added: %1$s</string>
     <string name="debugger_var_no_value_to_copy">This variable has no value to copy</string>
+    <string name="debugger_var_ref_obj">obj</string>
+
+    <!-- PR-D6: Breakpoint type picker (gutter long-click) -->
+    <string name="debugger_bp_picker_title">Select breakpoint type</string>
+    <string name="debugger_bp_picker_normal">Normal breakpoint</string>
+    <string name="debugger_bp_picker_condition">Conditional breakpoint</string>
+    <string name="debugger_bp_picker_logpoint">Logpoint</string>
+
+    <!-- PR-D6: Variable set-value dialog -->
+    <string name="debugger_var_set_value_title">Set value of %1$s</string>
+    <string name="debugger_var_set_value_hint">Enter new value</string>
+    <string name="debugger_var_set_value_btn_set">Set</string>
+    <string name="debugger_var_set_value_btn_cancel">Cancel</string>
+    <string name="debugger_var_set_value_error">Set value failed: %1$s</string>
+    <string name="debugger_var_set_value_ok">Set %1$s = %2$s</string>
+
+    <!-- PR-D6: Stop debugging -->
+    <string name="debugger_stop_no_target">No target package set; cannot stop</string>
+    <string name="debugger_stop_ok">Stopped target process %1$s</string>
+    <string name="debugger_stop_failed">Stop failed: %1$s</string>
+
+    <!-- PR-D6: JDWP port resolution -->
+    <string name="debugger_resolve_port_failed">Failed to resolve JDWP port: %1$s</string>
+    <string name="debugger_install_wait_failed">Failed to wait for install result: %1$s</string>
+
+    <!-- PR-D6: Target package record -->
+    <string name="debugger_target_pkg">Target package: %1$s</string>
 </resources>
