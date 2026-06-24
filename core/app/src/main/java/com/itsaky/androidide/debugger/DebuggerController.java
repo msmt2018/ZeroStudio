@@ -176,10 +176,10 @@ public final class DebuggerController
         StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
         if (attachedActivity == null) return;
         if (frame == null) {
-            attachedActivity.flashInfo("线程 " + info.threadId + " 暂停中 (无栈帧信息)");
+            attachedActivity.showFlashInfo("线程 " + info.threadId + " 暂停中 (无栈帧信息)");
             return;
         }
-        attachedActivity.flashInfo(
+        attachedActivity.showFlashInfo(
                 "线程 " + info.threadId + " 暂停于 " + frame.sourceFile
                         + ":" + frame.lineNumber);
     }
@@ -199,7 +199,7 @@ public final class DebuggerController
     }
 
     private void flash(String msg) {
-        if (attachedActivity != null) attachedActivity.flashInfo(msg);
+        if (attachedActivity != null) attachedActivity.showFlashInfo(msg);
     }
 
     // -- Debugger.Listener --
@@ -233,9 +233,9 @@ public final class DebuggerController
     public void onConnectionChanged(boolean connected) {
         if (attachedActivity == null) return;
         if (connected) {
-            attachedActivity.flashInfo("调试器已连接");
+            attachedActivity.showFlashInfo("调试器已连接");
         } else {
-            attachedActivity.flashInfo("调试器已断开");
+            attachedActivity.showFlashInfo("调试器已断开");
         }
     }
 
@@ -273,7 +273,7 @@ public final class DebuggerController
                     if (!expr.isEmpty()) {
                         com.itsaky.androidide.debugger.model.WatchStore.getInstance().add(expr);
                         if (attachedActivity != null) {
-                            attachedActivity.flashInfo("已添加监视: " + expr);
+                            attachedActivity.showFlashInfo("已添加监视: " + expr);
                         }
                     }
                 })

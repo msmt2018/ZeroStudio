@@ -97,6 +97,7 @@ import com.itsaky.androidide.utils.InstallationResultHandler.onResult
 import com.itsaky.androidide.utils.IntentUtils
 import com.itsaky.androidide.utils.MemoryUsageWatcher
 import com.itsaky.androidide.utils.flashError
+import com.itsaky.androidide.utils.flashInfo
 import com.itsaky.androidide.utils.resolveAttr
 import com.itsaky.androidide.viewmodel.EditorViewModel
 import com.itsaky.androidide.xml.resources.ResourceTableRegistry
@@ -285,20 +286,27 @@ abstract class BaseEditorActivity :
   }
 
   /**
-   * Java-friendly proxy for the [com.itsaky.androidide.utils.flashInfo]
+   * Java-friendly proxy for the
+   * [com.itsaky.androidide.utils.flashInfo][com.itsaky.androidide.utils.ActivityKt.flashInfo]
    * extension function. The debugger code that lives in Java cannot import
    * Kotlin top-level functions, so this is a thin wrapper that just calls
    * the [Activity] extension variant.
    *
-   * We can't write `this.flashInfo(msg)` here because Kotlin would resolve
-   * that to this very member and recurse forever. Binding `this` to a
-   * local of declared type [android.app.Activity] makes the compiler pick
-   * the top-level extension function on `Activity` from
-   * `com.itsaky.androidide.utils.FlashbarActivityUtils`.
+   * We deliberately name this method `showFlashInfo` (not `flashInfo`)
+   * so that, inside the body, the unqualified call resolves to the
+   * `flashInfo` top-level extension on `Activity` rather than recursing
+   * into a same-named member. The Kotlin compiler binds member function
+   * calls on `this` before extension functions, so reusing the name
+   * `flashInfo` here would cause infinite recursion.
    */
-  open fun flashInfo(msg: String?) {
-    val activity: android.app.Activity = this
-    activity.flashInfo(msg)
+  open fun showFlashInfo(msg: String?) {
+    // `this` is an `Activity` (BaseEditorActivity → … → AppCompatActivity),
+    // so the top-level `Activity.flashInfo` extension declared in
+    // `com.itsaky.androidide.utils.FlashbarActivityUtils` is in scope.
+    // The unqualified call resolves to that extension function — using
+    // a different method name here avoids the obvious self-recursion
+    // trap that would occur if we tried to name this `flashInfo` too.
+    flashInfo(msg)
   }
 
 
