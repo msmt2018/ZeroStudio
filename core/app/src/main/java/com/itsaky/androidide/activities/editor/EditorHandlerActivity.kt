@@ -187,6 +187,16 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     mBuildEventListener.setActivity(this)
     super.onCreate(savedInstanceState)
 
+    // PR-D4: 挂载调试器 Action 菜单。
+    // 4 个子菜单 (运行控制 / 单步 / 断点 / 视图) 会被 MenuProvider 添加到
+    // Activity 的 toolbar (与 Build/Run/Debug 等 EDITOR_TOOLBAR action 并列)
+    // 以及 bottom ActionMode 中。`addMenuProvider` 是 androidx.core 提供的
+    // 菜单挂载点,只需一行就能让菜单在 toolbar + overflow + ActionMode 三个
+    // 出现位置都可见。
+    addMenuProvider(
+        com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider(this),
+    )
+
     fragmentTabManager = EditorFragmentTabManager(
       activity = this,
       binding = content,
@@ -480,6 +490,14 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     } else null
   }
 
+  /**
+   * PR-D4: 实现 [com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider.Host]
+   * 接口。`Activity` 本身已经是 `Context` 子类,直接 `return this` 即可;
+   * 调试器菜单中的 `flashInfo(...)` 等调用会把它转成 `Activity` 用作
+   * 扩展函数 receiver。
+   */
+  fun requireContext(): Context = this
+
   override fun getEditorAtIndex(index: Int): CodeEditorView? {
     return _binding?.content?.editorContainer?.getChildAt(index) as CodeEditorView?
   }
@@ -548,6 +566,13 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     content.editorContainer.addView(editor)
     content.tabs.addTab(content.tabs.newTab().apply { tag = editorTabId(file) })
 
+    // PR-D4: 把 BreakpointGutterManager 挂到 CodeEditor 上,点击行号 gutter
+    // 弹出 BreakpointTypePicker 让用户选择"普通/条件/日志点"3 种断点类型。
+    // 这是在 PR-2 引入 BreakpointGutterManager 后一直没有补上的 hook:
+    // 之前只有 attach()/detach() API 暴露给外部,但实际没有人调用,
+    // 所以 onBreakpointClick / onBreakpointLongClick 永远收不到事件。
+    attachBreakpointGutter(editor, file)
+
     editorViewModel.addFile(file)
     editorViewModel.setCurrentFile(position, file)
 
@@ -568,6 +593,54 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
       if (file == editor?.file) return editor
     }
     return null
+  }
+
+  /**
+   * PR-D4: 把 [com.itsaky.androidide.debugger.view.BreakpointGutterManager]
+   * 挂到刚打开的 [CodeEditorView] 上,并注册一个 [BreakpointGutterManager.OnBreakpointActionListener]
+   * 用于在用户点击行号 gutter 时弹 [com.itsaky.androidide.debugger.view.BreakpointTypePicker]。
+   *
+   * <p>这一行 hook 是修复"点击行号后断点类型选择弹窗不响应"的根本 —
+   * 之前 manager 内部已经有事件分发链路 (`setActionListener → sidebar → click`),
+   * 但 `setActionListener` 一直没人调用,事件链路在第一站就断了。
+   */
+  private fun attachBreakpointGutter(
+    view: CodeEditorView,
+    file: File,
+  ) {
+    val codeEditor = view.editor ?: return
+    val gutter =
+        com.itsaky.androidide.debugger.view.BreakpointGutterManager.attach(
+            codeEditor,
+            file.absolutePath,
+        )
+    gutter.setActionListener(
+        object : com.itsaky.androidide.debugger.view.BreakpointGutterManager
+            .OnBreakpointActionListener {
+          override fun onBreakpointClick(filePath: String, line: Int) {
+            // 用户点击行号 gutter → 弹"断点类型"小弹窗,选完后 popup.dismiss()
+            // 关闭自身 (Android ListPopupWindow 的标准行为),选完的 callback
+            // 在 popup.setOnItemClickListener 中调 BreakpointManager 处理。
+            com.itsaky.androidide.debugger.view.BreakpointTypePicker.show(
+                this@EditorHandlerActivity,
+                view,
+                filePath,
+                line,
+            )
+          }
+
+          override fun onBreakpointLongClick(
+              bp: com.itsaky.androidide.debugger.model.IdeBreakpoint,
+          ) {
+            // 长按已有断点:弹条件/禁用/删除菜单
+            com.itsaky.androidide.debugger.BreakpointConditionDialog.showDialog(
+                supportFragmentManager,
+                bp.id,
+            )
+          }
+        }
+    )
+    gutter.showSidebar()
   }
 
   override fun findIndexOfEditorByFile(file: File?): Int {

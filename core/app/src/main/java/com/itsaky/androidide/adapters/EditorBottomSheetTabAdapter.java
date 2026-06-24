@@ -25,6 +25,10 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import com.itsaky.androidide.fragments.DiagnosticsListFragment;
 import com.itsaky.androidide.fragments.SearchResultFragment;
+import com.itsaky.androidide.debugger.fragment.BreakpointListFragment;
+import com.itsaky.androidide.debugger.fragment.VariablesFragment;
+import com.itsaky.androidide.debugger.fragment.CallStackFragment;
+import com.itsaky.androidide.debugger.fragment.WatchesFragment;
 import com.itsaky.androidide.fragments.output.AppLogFragment;
 import com.itsaky.androidide.fragments.output.BuildOutputFragment;
 import com.itsaky.androidide.fragments.output.IDELogFragment;
@@ -75,6 +79,18 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
     //编辑器工具箱：集成 AI Chat、MCP、依赖分析等常用工具到底部抽屉中
     this.fragments.add(new Tab(fragmentActivity.getString(R.string.title_editor_toolbox),
         EditorToolboxFragment.class, ++index));
+
+    // PR-D4: 断点调试器相关页面注册到 IDE 底部抽屉,与 Build/IDE/App
+    // Logs 等日志/构建输出并列,便于用户在调试时直接查看。
+    // 注册顺序:Breakpoints(列表入口) → Variables → Call Stack → Watches。
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_breakpoints),
+        BreakpointListFragment.class, ++index));
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_variables),
+        VariablesFragment.class, ++index));
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_callstack),
+        CallStackFragment.class, ++index));
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_debugger),
+        WatchesFragment.class, ++index));
   }
 
   public Fragment getFragmentAtIndex(int index) {

@@ -95,6 +95,9 @@
     <string name="debugger_msg_launched">已启动 %1$s</string>
     <string name="debugger_msg_failed">调试启动失败 @%1$s : %2$s</string>
 
+    <!-- PR-D4: BreakpointTypePicker 添加 logpoint 后的提示 -->
+    <string name="debugger_msg_logpoint_added">已在该行添加日志点</string>
+
     <!-- PR-E2: 断点条件/日志点配置对话框 -->
     <string name="debugger_bcd_title">断点属性</string>
     <string name="debugger_bcd_type">断点类型</string>

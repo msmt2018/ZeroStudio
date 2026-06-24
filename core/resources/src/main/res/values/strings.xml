@@ -139,6 +139,11 @@
      <string name="reset">Reset</string>
      <string name="app_logs">App Logs</string>
      <string name="ide_logs">IDE Logs</string>
+     <!-- 底部抽屉 (Editor Bottom Sheet) 新增 tab:调试器与断点管理 -->
+     <string name="editor_tab_debugger">Debugger</string>
+     <string name="editor_tab_breakpoints">Breakpoints</string>
+     <string name="editor_tab_variables">Variables</string>
+     <string name="editor_tab_callstack">Call Stack</string>
 
      <!-- LSP, Diagnostics & Completions -->
      <string name="get_started">Get started</string>

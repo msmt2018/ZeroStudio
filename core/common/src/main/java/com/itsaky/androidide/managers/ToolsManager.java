@@ -140,30 +140,12 @@ public class ToolsManager {
    * 专门用于集中管理 Assets 解压/安装的私有方法
    */
   private static void installExtraTools() {
-  
-   // ResourceUtils.copyFileFromAssets(getCommonAsset("logger-runtime.aar"),
-          // new File(Environment.PLUGIN_HOME,"logger").getAbsolutePath());
-          
-   // ResourceUtils.copyFileFromAssets(getCommonAsset("plugin-api.jar"),
-          // Environment.PLUGIN_HOME.getAbsolutePath());
-          
-   // ResourceUtils.copyFileFromAssets(getCommonAsset("zerostudio-gradle-plugin-1.0.0.jar"),
-          // new File(Environment.ANDROIDIDE_HOME, "init").getAbsolutePath());
-          
-          
-  
-    installAsset("data/common/logger-runtime.zip",
-        new File(Environment.PLUGIN_HOME , "logger"), true, 0, null);
-  
-    installAsset("data/common/plugin-api.jar", 
-        Environment.PLUGIN_HOME, false, 0, null);
-  
-    installAsset("data/common/zerostudio-gradle-plugin-1.0.0.jar", 
-        new File(Environment.ANDROIDIDE_HOME , "init"), false, 0, null);
-  
-    // 解压 compose 预览所需文件
-    // installAsset("compose/compose-jars.zip",
-        // Environment.COMPOSE_HOME, true, 0, null);
+
+    // PR-1: 旧的 logger-runtime.zip / plugin-api.jar / zerostudio-gradle-plugin-1.0.0.jar
+    // 已经从 assets/data/common/ 中删除,所有 logger/logsender/log-init
+    // 注入统一改为走 :ide-log-plugin AAR + 新的 init.gradle
+    // (`classpath name: 'ide-log-plugin-1.0.0'`),所以这里不再调用
+    // installAsset() 解压上述三个文件。保留方法体框架以便后续按需扩展。
   }
 
   private static void extractColorScheme(final BaseApplication app) {

@@ -113,6 +113,57 @@ public final class BreakpointManager {
         fireChanged();
     }
 
+    /**
+     * PR-D4: 取得指定 file+line 处的断点 id（UUID 字符串）。
+     * 用于在条件断点弹窗之前先确认 id,再调
+     * {@code BreakpointConditionDialog.showDialog(fm, id)} 让用户编辑 condition。
+     *
+     * @return 断点的稳定 id;若该行没有断点则返回 {@code null}。
+     */
+    @Nullable
+    public String idAt(@NonNull String file, int line) {
+        synchronized (byFile) {
+            final Map<Integer, IdeBreakpoint> map = byFile.get(file);
+            if (map == null) return null;
+            final IdeBreakpoint bp = map.get(line);
+            return bp == null ? null : bp.id;
+        }
+    }
+
+    /**
+     * PR-D4: 便捷的"日志点"添加方法 —— 创建断点并预设 logMessage
+     * (调用 {@link IdeBreakpoint#setLogMessage(String)} 会自动把状态切到
+     * {@link IdeBreakpoint.State#LOG})。命中时调试器只打印日志而不暂停。
+     *
+     * <p>与 {@link #add(IdeBreakpoint)} 的区别在于本方法会覆盖已存在的同位置
+     * 断点为 LOG 状态,适用于"先取消再以 logpoint 形式重新建立"的交互。
+     *
+     * @return 新建的 logpoint (始终非 null)
+     */
+    @MainThread
+    @NonNull
+    public IdeBreakpoint addLogpoint(@NonNull String file, int line, @Nullable String logMessage) {
+        synchronized (byFile) {
+            Map<Integer, IdeBreakpoint> map = byFile.get(file);
+            if (map == null) {
+                map = new LinkedHashMap<>();
+                byFile.put(file, map);
+            }
+            // 如果已经存在同位置断点,先卸载旧的再覆盖,避免与 installOnDebugger
+            // 形成悬挂引用。
+            final IdeBreakpoint existing = map.get(line);
+            if (existing != null) {
+                uninstallFromDebugger(existing);
+            }
+            final IdeBreakpoint bp = new IdeBreakpoint(file, line);
+            bp.setLogMessage(logMessage);
+            map.put(line, bp);
+            installOnDebugger(bp);
+            fireChanged();
+            return bp;
+        }
+    }
+
     @MainThread
     public void remove(@NonNull String id) {
         IdeBreakpoint target = findById(id);

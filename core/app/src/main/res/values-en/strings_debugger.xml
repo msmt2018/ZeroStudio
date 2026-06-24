@@ -98,6 +98,9 @@
     <string name="debugger_msg_launched">Launched %1$s</string>
     <string name="debugger_msg_failed">Debug launch failed @%1$s : %2$s</string>
 
+    <!-- PR-D4: BreakpointTypePicker confirmation when a logpoint is added -->
+    <string name="debugger_msg_logpoint_added">Logpoint added at this line</string>
+
     <!-- Breakpoint condition / logpoint dialog -->
     <string name="debugger_bcd_title">Breakpoint properties</string>
     <string name="debugger_bcd_type">Breakpoint type</string>
