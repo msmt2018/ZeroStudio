@@ -21,7 +21,6 @@ import com.android.tools.smali.baksmali.BaksmaliOptions
 import com.android.tools.smali.dexlib2.Opcodes
 import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile
 import com.android.tools.smali.dexlib2.iface.ClassDef
-import com.android.tools.smali.util.IndentingWriter
 import com.itsaky.androidide.preferences.internal.GeneralPreferences
 import java.io.File
 import java.io.FileOutputStream
@@ -29,6 +28,7 @@ import java.io.StringWriter
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
+import java.nio.file.Files
 import java.util.zip.ZipFile
 
 /**
@@ -565,11 +565,62 @@ private object BaksmaliDecompiler {
       apiLevel = 35
     }
     val targetClass = pickTargetClass(classes, entryName) ?: classes.first()
-    val writer = StringWriter()
-    IndentingWriter(writer).use { w ->
-      Baksmali.disassembleClass(targetClass, w, options)
+
+    // The 3-arg `Baksmali.disassembleClass(...)` overload is private in
+    // baksmali 3.0.9 (and Kotlin would otherwise resolve to the wrong
+    // overload). The only public single-call surface is
+    // `Baksmali.disassembleDexFile(...)`, which writes every class of the
+    // dex as a separate `.smali` file into the given directory. We dump to
+    // a temp directory, read the file that matches the requested class, and
+    // clean up afterwards.
+    val outDir = Files.createTempDirectory(
+        File(System.getProperty("java.io.tmpdir")).toPath(),
+        "baksmali-",
+    ).toFile()
+    try {
+      Baksmali.disassembleDexFile(dex, outDir, options.apiLevel, options)
+      val smaliFile = locateSmaliFile(outDir, targetClass.type)
+      if (smaliFile != null) {
+        return smaliFile.readText(Charsets.UTF_8)
+      }
+      // Fallback: if baksmali mangled the filename (e.g. for Windows reserved
+      // names) and the expected path is missing, fall back to the first
+      // .smali file the disassembler produced.
+      outDir
+          .walkTopDown()
+          .firstOrNull { it.isFile && it.extension == "smali" }
+          ?.let { return it.readText(Charsets.UTF_8) }
+      error(
+          "Baksmali did not produce a smali file for ${targetClass.type} " +
+              "in $outDir"
+      )
+    } finally {
+      outDir.deleteRecursively()
     }
-    return writer.toString()
+  }
+
+  /**
+   * Convert a Dalvik type descriptor to the relative path used by baksmali's
+   * default file layout. `Lcom/example/Foo;` becomes `com/example/Foo.smali`;
+   * the leading `L` and trailing `;` are dropped and inner classes keep the
+   * `$Inner` segment.
+   */
+  private fun smaliRelativePath(type: String): String {
+    val stripped = type.removePrefix("L").removeSuffix(";")
+    return "$stripped.smali"
+  }
+
+  private fun locateSmaliFile(outDir: File, type: String): File? {
+    val expected = File(outDir, smaliRelativePath(type))
+    if (expected.isFile) return expected
+    // Baksmali may shorten paths that exceed the filesystem limit or replace
+    // Windows-reserved names. Look for a case-insensitive suffix match.
+    val suffix = "/" + smaliRelativePath(type)
+    return outDir.walkTopDown().firstOrNull {
+      it.isFile &&
+          it.extension.equals("smali", ignoreCase = true) &&
+          it.absolutePath.endsWith(suffix, ignoreCase = true)
+    }
   }
 
   /**
