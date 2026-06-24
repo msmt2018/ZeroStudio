@@ -6,19 +6,25 @@
  *  并向注册的 listener 派发增量事件。
  *
  *  PR-6: 与 LogFragment 配套。
+ *  PR-D6: 容量从 500 提到 10000,避免长时间调试时日志被过早挤掉。
+ *        改成 ArrayDeque FIFO,remove(0) 是 O(n) —— 10000 条以内可接受,
+ *        后续 PR-D7 可换成 LinkedList 或环形数组。
  */
 
 package com.itsaky.androidide.debugger.model;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class LogStore {
 
-    public static final int DEFAULT_CAPACITY = 500;
+    /** PR-D6: 容量从 500 提到 10000 条。 */
+    public static final int DEFAULT_CAPACITY = 10_000;
 
     public static final class Entry {
         public final long timestamp;
@@ -42,7 +48,8 @@ public final class LogStore {
     private static final LogStore INSTANCE = new LogStore();
     public static LogStore getInstance() { return INSTANCE; }
 
-    private final List<Entry> entries = new ArrayList<>();
+    /** PR-D6: Deque FIFO,pollFirst 是 O(1)。 */
+    private final Deque<Entry> entries = new ArrayDeque<>();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     private int capacity = DEFAULT_CAPACITY;
 
@@ -52,7 +59,7 @@ public final class LogStore {
         if (capacity < 1) return;
         this.capacity = capacity;
         synchronized (entries) {
-            while (entries.size() > capacity) entries.remove(0);
+            while (entries.size() > capacity) entries.pollFirst();
         }
     }
 
@@ -67,8 +74,10 @@ public final class LogStore {
         Entry e = new Entry(System.currentTimeMillis(),
                 sourceFile == null ? "" : sourceFile, line, text);
         synchronized (entries) {
-            entries.add(e);
-            while (entries.size() > capacity) entries.remove(0);
+            entries.addLast(e);
+            // PR-D6: FIFO 驱逐。ArrayDeque.pollFirst 是 O(1),
+            // 旧实现 entries.remove(0) 是 O(n)。
+            while (entries.size() > capacity) entries.pollFirst();
         }
         for (Listener l : listeners) {
             try { l.onLogAppended(e); } catch (Throwable ignored) {}

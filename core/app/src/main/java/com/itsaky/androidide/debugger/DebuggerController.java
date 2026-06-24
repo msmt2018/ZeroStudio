@@ -26,6 +26,8 @@ import com.zerostudio.debugger.event.DebugEventBus;
 import com.zerostudio.debugger.event.DebugEvents;
 import com.zerostudio.debugger.model.DebugSession.State;
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class DebuggerController
         implements Debugger.Listener {
@@ -42,6 +44,21 @@ public final class DebuggerController
 
     /** PR-4: shared runtime state for the side panel (call stack, variables, watches). */
     private final DebugSessionState sessionState = new DebugSessionState();
+
+    /** PR-D6: 被调试的应用包名,由 DebugSessionLauncher 写入。stop() 据此 force-stop。 */
+    @Nullable private volatile String targetPackage;
+
+    /**
+     * PR-D6: 异步执行器,用于把 stop() / wait-for-install / JDWP port probe
+     * 等阻塞操作从调用线程 (可能是 UI 线程) 切走。
+     * 单独的 daemon executor,不与 IDE 其它异步任务共享。
+     */
+    private final ExecutorService bgExecutor =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "DebuggerController-bg");
+                t.setDaemon(true);
+                return t;
+            });
 
     public DebugSessionState sessionState() { return sessionState; }
 
@@ -78,6 +95,23 @@ public final class DebuggerController
 
     public void attachActivity(@Nullable com.itsaky.androidide.activities.editor.BaseEditorActivity activity) {
         this.attachedActivity = activity;
+    }
+
+    /** PR-D6: 写入目标包。DebugSessionLauncher 在 launch 成功后调用。 */
+    public void setTargetPackage(@Nullable String pkg) {
+        this.targetPackage = pkg;
+    }
+
+    /** PR-D6: 取目标包 (供其它模块使用)。 */
+    @Nullable
+    public String getTargetPackage() {
+        return targetPackage;
+    }
+
+    /** PR-D6: 后台执行器,供 DebugSessionLauncher 切走阻塞 IO。 */
+    @NonNull
+    public ExecutorService bgExecutor() {
+        return bgExecutor;
     }
 
     /** 连接到目标应用（按 BuildConfig/配置决定 host:port） */
@@ -118,10 +152,95 @@ public final class DebuggerController
         debugger.pause();
     }
 
+    /**
+     * PR-D6: 真正实现 stop():先 JDWP Resume 让目标进程从暂停态出来,
+     * 然后用 {@code am force-stop} 终止目标包,最后断 JDWP。
+     * 不阻塞调用线程 (通常是 UI 线程)。
+     */
     public void stop() {
-        if (debugger == null) { flash("未连接调试器"); return; }
-        // TODO: 终止目标进程
-        flash("已请求停止调试");
+        if (debugger == null && (targetPackage == null || targetPackage.isEmpty())) {
+            flash("未连接调试器");
+            return;
+        }
+        final String pkg = targetPackage;
+        bgExecutor().execute(() -> {
+            // 1) 尝试恢复目标线程,避免 force-stop 时堆栈卡在暂停态。
+            try {
+                if (debugger != null) debugger.resume();
+            } catch (Throwable ignored) {}
+            // 2) force-stop 目标包。
+            boolean forceStopped = false;
+            if (pkg != null && !pkg.isEmpty()) {
+                forceStopped = forceStopPackage(pkg);
+            }
+            // 3) 断开 JDWP。
+            try {
+                if (debugger != null) debugger.disconnect();
+            } catch (Throwable ignored) {}
+            // 4) 通知 UI。
+            final boolean ok = forceStopped;
+            postMain(() -> {
+                if (attachedActivity != null) {
+                    if (ok && pkg != null) {
+                        attachedActivity.flashInfo(attachedActivity.getString(
+                                com.itsaky.androidide.R.string.debugger_stop_ok, pkg));
+                    } else if (pkg == null || pkg.isEmpty()) {
+                        attachedActivity.flashInfo(attachedActivity.getString(
+                                com.itsaky.androidide.R.string.debugger_stop_no_target));
+                    } else {
+                        attachedActivity.flashInfo(attachedActivity.getString(
+                                com.itsaky.androidide.R.string.debugger_stop_failed,
+                                "force-stop exit != 0"));
+                    }
+                }
+                // 重置本地状态
+                debugger = null;
+                BreakpointManager.getInstance().bindDebugger(null);
+                sessionState.onDisconnected();
+                pausedAtThreadId = -1L;
+                // targetPackage 不清,用户可能紧接着再次启动调试;
+                // 若想强制清,可在 connect() 时再覆盖。
+            });
+        });
+    }
+
+    /**
+     * PR-D6: 用 {@code am force-stop <pkg>} 终止目标包。
+     * 用公开 API 优先,失败时回退到 shell。
+     */
+    private static boolean forceStopPackage(@NonNull String pkg) {
+        // 1) 公开 API:ApplicationPackageManager (隐藏 API,但 Android 系统应用可见)
+        try {
+            android.content.pm.IPackageManager pm =
+                    android.app.ActivityThread.getPackageManager();
+            if (pm != null) {
+                try {
+                    java.lang.reflect.Method m =
+                            android.content.pm.IPackageManager.class.getMethod(
+                                    "forceStopPackage", String.class, int.class);
+                    m.invoke(pm, pkg, android.os.UserHandle.getCallingUserId());
+                    return true;
+                } catch (NoSuchMethodException nsme) {
+                    // 落到下面的 shell 命令回退
+                }
+            }
+        } catch (Throwable ignored) {}
+        // 2) 回退:exec `am force-stop <pkg>` 同步等待。
+        try {
+            Process p = new ProcessBuilder("am", "force-stop", pkg)
+                    .redirectErrorStream(true)
+                    .start();
+            p.waitFor();
+            return p.exitValue() == 0;
+        } catch (Throwable t) {
+            ILogger.error(TAG, "force-stop failed for " + pkg + ": " + t.getMessage(), t);
+            return false;
+        }
+    }
+
+    private static void postMain(@NonNull Runnable r) {
+        android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+        h.post(r);
     }
 
     public void stepOver() {

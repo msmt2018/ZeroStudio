@@ -39,6 +39,7 @@ import com.zerostudio.debugger.model.BreakpointStore;
 import com.zerostudio.debugger.model.DebugSession;
 import com.zerostudio.debugger.model.EvalEngine;
 import com.zerostudio.debugger.model.SourceLocator;
+import com.zerostudio.debugger.api.EvalResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -463,9 +464,30 @@ public final class Debugger
      * @param callback  called with the result on the calling thread
      */
     public void evalAsync(long threadId, long frameId, @NonNull String expression,
-                          @NonNull Callback<EvalEngine.EvalResult> callback) {
+                          @NonNull Callback<EvalResult> callback) {
         bgExecutor.execute(() -> {
-            EvalEngine.EvalResult result = eval.evaluate(threadId, frameId, expression);
+            EvalResult result = eval.evaluate(threadId, frameId, expression);
+            callback.onResult(result);
+        });
+    }
+
+    /**
+     * PR-D6: Set a local variable's value (the "set value" feature in the
+     * variables pane). Wraps {@link EvalEngine#setLocal} and runs on the
+     * background executor for ANR protection.
+     *
+     * @param threadId  paused thread id
+     * @param frameId   frame id (0 = top frame)
+     * @param slot      variable's slot index
+     * @param sig       type signature (e.g. "I", "Ljava/lang/String;")
+     * @param value     new value (string-serialised; for objects, an object id)
+     * @param callback  called with the result on the caller's thread
+     */
+    public void setLocalValueAsync(long threadId, long frameId, int slot,
+                                   @NonNull String sig, @NonNull String value,
+                                   @NonNull Callback<EvalResult> callback) {
+        bgExecutor.execute(() -> {
+            EvalResult result = eval.setLocal(threadId, frameId, slot, sig, value);
             callback.onResult(result);
         });
     }

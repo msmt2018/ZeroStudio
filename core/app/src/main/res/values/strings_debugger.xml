@@ -149,4 +149,30 @@
     <string name="debugger_a11y_disconnected">已断开调试器</string>
     <string name="debugger_a11y_paused">程序已暂停于 %1$s 第 %2$d 行</string>
     <string name="debugger_a11y_resumed">程序已恢复运行</string>
+
+    <!-- PR-D6: 断点类型选择菜单 (gutter long-click) -->
+    <string name="debugger_bp_picker_title">选择断点类型</string>
+    <string name="debugger_bp_picker_normal">普通断点</string>
+    <string name="debugger_bp_picker_condition">条件断点</string>
+    <string name="debugger_bp_picker_logpoint">日志点</string>
+
+    <!-- PR-D6: 变量 set-value 对话框 -->
+    <string name="debugger_var_set_value_title">设置 %1$s 的值</string>
+    <string name="debugger_var_set_value_hint">输入新值</string>
+    <string name="debugger_var_set_value_btn_set">设置</string>
+    <string name="debugger_var_set_value_btn_cancel">取消</string>
+    <string name="debugger_var_set_value_error">设置值失败: %1$s</string>
+    <string name="debugger_var_set_value_ok">已设置 %1$s = %2$s</string>
+
+    <!-- PR-D6: 停止调试 -->
+    <string name="debugger_stop_no_target">未设置目标包,无法停止</string>
+    <string name="debugger_stop_ok">已停止目标进程 %1$s</string>
+    <string name="debugger_stop_failed">停止失败: %1$s</string>
+
+    <!-- PR-D6: 解析 JDWP 端口 -->
+    <string name="debugger_resolve_port_failed">解析 JDWP 端口失败: %1$s</string>
+    <string name="debugger_install_wait_failed">等待安装结果失败: %1$s</string>
+
+    <!-- PR-D6: 目标包记录 -->
+    <string name="debugger_target_pkg">目标包: %1$s</string>
 </resources>

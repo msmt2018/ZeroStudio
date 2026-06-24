@@ -18,6 +18,10 @@
  *
  *  PR-D2 只覆盖"同设备 loopback 127.0.0.1"这一种最常见场景;
  *  远程设备 / shizuku / run-as 等其它路径放在 PR-D3 / D4 / D6。
+ *
+ *  PR-D6: 重写 runInstall 等待逻辑 (Thread.sleep → EventBus latch)、
+ *  runResolvePort 失败时通过 Listener 显式 flash、launch 成功时
+ *  把 targetPackage 写入 DebuggerController 以便 stop() 真正 force-stop。
  */
 
 package com.itsaky.androidide.debugger;
@@ -29,6 +33,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
 import com.itsaky.androidide.actions.ActionData;
+import com.itsaky.androidide.events.InstallationResultEvent;
 import com.itsaky.androidide.models.ApkMetadata;
 import com.itsaky.androidide.projects.IProjectManager;
 import com.itsaky.androidide.projects.android.AndroidModule;
@@ -39,7 +44,12 @@ import com.itsaky.androidide.utils.ApkInstaller;
 import com.itsaky.androidide.utils.InstallationResultHandler;
 import com.itsaky.androidide.utils.IntentUtils;
 import java.io.File;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +57,9 @@ public final class DebugSessionLauncher {
 
     private static final String TAG = "DebugSessionLauncher";
     private static final Logger log = LoggerFactory.getLogger(DebugSessionLauncher.class);
+
+    /** PR-D6: 等待安装结果最长 60 秒 (给冷启动 + 大 APK 留出余量)。 */
+    private static final long INSTALL_RESULT_TIMEOUT_MS = 60_000L;
 
     public interface Listener {
         /** 选定 module / variant;在 launch 之前最后一次机会. */
@@ -72,7 +85,9 @@ public final class DebugSessionLauncher {
 
     private final Context appContext;
     @Nullable private Listener listener;
-    @Nullable private Thread worker;
+    /** PR-D6: 用 AtomicBoolean 防止两个 start() 同时跑。 */
+    private final java.util.concurrent.atomic.AtomicBoolean busy =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
     @Nullable private ShizukuBridge shizuku;
     @Nullable private RunAsBridge runAs;
 
@@ -90,8 +105,8 @@ public final class DebugSessionLauncher {
      */
     @MainThread
     public boolean start(@NonNull ActionData data) {
-        if (worker != null && worker.isAlive()) {
-            Log.w(TAG, "start: worker is already running");
+        if (!busy.compareAndSet(false, true)) {
+            Log.w(TAG, "start: another session is already running");
             return false;
         }
         // PR-D2 简化: 多 module 时本工具类无法弹 chooser dialog (那是
@@ -108,11 +123,13 @@ public final class DebugSessionLauncher {
             }
         }
         if (module == null) {
+            busy.set(false);  // PR-D6: 释放 busy 标记,允许下次 start()
             fail(Step.SELECT_MODULE, "No application modules in workspace");
             return false;
         }
         BasicAndroidVariantMetadata variant = module.getSelectedVariant();
         if (variant == null) {
+            busy.set(false);
             fail(Step.SELECT_MODULE, "No build variant selected for " + module.getName());
             return false;
         }
@@ -120,10 +137,16 @@ public final class DebugSessionLauncher {
         log.info("DebugSessionLauncher starting task '{}'", taskName);
         fireBuildStarting(module, variant);
         final ActionData snapshot = data;
-        worker = new Thread(() -> runBuild(snapshot, module, variant, taskName),
-                "DebugSessionLauncher");
-        worker.setDaemon(true);
-        worker.start();
+        // PR-D6: 复用 DebuggerController 的 daemon 单线程 bg executor,
+        // 不再 new Thread(),避免每次 start 都拉一个 thread。
+        DebuggerController.getInstance().bgExecutor().execute(() -> {
+            try {
+                runBuild(snapshot, module, variant, taskName);
+            } finally {
+                // PR-D6: 无论成功失败都释放 busy,允许下一次 start。
+                busy.set(false);
+            }
+        });
         return true;
     }
 
@@ -186,13 +209,32 @@ public final class DebugSessionLauncher {
             boolean ok = shizuku.installApk(apk.getAbsolutePath());
             if (ok) {
                 fireInstallCommitted();
+                // shizuku install 同步;但仍然读 applicationId 写到 controller。
                 runInstall_postInstall(data, module, variant, apk, true);
                 return;
             }
             log.warn("shizuku install failed, falling back to PackageInstaller");
         }
 
-        final AtomicReference<Throwable> installError = new AtomicReference<>();
+        // PR-D6: 用 EventBus + CountDownLatch 等待真实的 InstallationResultEvent,
+        // 替换原 Thread.sleep(2_000L) 的盲等。
+        final CountDownLatch installLatch = new CountDownLatch(1);
+        final AtomicReference<String> installError = new AtomicReference<>();
+        final InstallResultSubscriber listener = new InstallResultSubscriber(
+                new InstallResultSubscriber.Callback() {
+                    @Override
+                    public void onResult(@Nullable String pkg, @Nullable String error) {
+                        installError.set(error);
+                        installLatch.countDown();
+                    }
+                });
+        boolean registered = false;
+        try {
+            EventBus.getDefault().register(listener);
+            registered = true;
+        } catch (Throwable t) {
+            log.warn("EventBus.register failed: {}", t.getMessage());
+        }
         try {
             activity.runOnUiThread(() -> {
                 try {
@@ -204,28 +246,38 @@ public final class DebugSessionLauncher {
                     );
                     fireInstallCommitted();
                 } catch (Throwable t) {
-                    installError.set(t);
+                    installError.set(t.getMessage());
+                    installLatch.countDown();
                 }
             });
         } catch (Throwable t) {
+            if (registered) try { EventBus.getDefault().unregister(listener); } catch (Throwable ignored) {}
             fail(Step.INSTALL, "installApk threw: " + t.getMessage());
             return;
         }
-        // Wait briefly for installation result, then move on to launch.
-        // The actual success/failure is reported via InstallationResultEvent
-        // (handled by BaseEditorActivity); here we optimistically proceed
-        // to launch after a short delay so that the user can still see
-        // the app appear even if the result broadcast is delayed.
+        // PR-D6: 用 latch.await 替换 Thread.sleep。
         try {
-            Thread.sleep(2_000L);
+            if (!installLatch.await(INSTALL_RESULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                if (registered) try { EventBus.getDefault().unregister(listener); } catch (Throwable ignored) {}
+                fail(Step.INSTALL, "Timed out waiting for InstallationResultEvent after "
+                        + INSTALL_RESULT_TIMEOUT_MS + "ms");
+                return;
+            }
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
+            if (registered) try { EventBus.getDefault().unregister(listener); } catch (Throwable ignored) {}
             return;
+        } finally {
+            if (registered) {
+                try { EventBus.getDefault().unregister(listener); } catch (Throwable ignored) {}
+            }
         }
         if (installError.get() != null) {
-            fail(Step.INSTALL, "installApk threw: " + installError.get().getMessage());
+            fail(Step.INSTALL, "installApk threw: " + installError.get());
             return;
         }
+        // PR-D6: 用 listener 拿到的实际包名(可能与 variant.applicationId 不一致,
+        // 比如测试包被替换);不强制覆盖 targetPackage,以免破坏已存在的覆盖逻辑。
         runInstall_postInstall(data, module, variant, apk, false);
     }
 
@@ -243,6 +295,8 @@ public final class DebugSessionLauncher {
             fail(Step.LAUNCH, "applicationId is null for variant " + variant.getName());
             return;
         }
+        // PR-D6: 写入 targetPackage,DebuggerController.stop() 据此 force-stop。
+        DebuggerController.getInstance().setTargetPackage(pkg);
         runLaunch(pkg);
     }
 
@@ -285,22 +339,24 @@ public final class DebugSessionLauncher {
                     JdwpPortResolver.DEFAULT_TIMEOUT_MS,
                     JdwpPortResolver.DEFAULT_POLL_INTERVAL_MS);
             if (port <= 0) {
-                // PR-D4: ContentProvider.poll 失败 -> 用 run-as 探测
-                // /data/data/<pkg>/jdwp-port 文件 (DebugerBootstrapProvider
-                // 应该会把它写到那里). 这是一个简单的 backoff 方案,不需要
-                // 再去 hack ContentProvider.
+                // PR-D6: ContentProvider poll 失败 -> 用 run-as 探测
+                // /data/data/<pkg>/jdwp-port 文件。如果拿到 uid 则继续轮询一次;
+                // 真正失败时通过 fail(...) 把字符串带到 UI (而不是默默 timeout)。
                 int probed = runAs != null ? runAs.probeUid(packageName) : -1;
-                if (probed <= 0) {
-                    fail(Step.RESOLVE_PORT,
-                            "Timed out waiting for JDWP port of " + packageName
-                                    + " (and run-as probe failed)");
-                    return;
+                if (probed > 0) {
+                    // 目标 app 已起来,再给 ContentProvider 一次机会。
+                    int retryPort = resolver.awaitJdwpPort(
+                            packageName,
+                            5_000L,
+                            JdwpPortResolver.DEFAULT_POLL_INTERVAL_MS);
+                    if (retryPort > 0) {
+                        runConnect("127.0.0.1", retryPort);
+                        return;
+                    }
                 }
-                // 目标 app 已经在跑且可执行;继续尝试 ContentProvider 的下一次轮询
-                // 由上层再次 invoke.
                 fail(Step.RESOLVE_PORT,
                         "Timed out waiting for JDWP port of " + packageName
-                                + " (target uid=" + probed + ")");
+                                + " (uid=" + probed + ")");
                 return;
             }
             runConnect("127.0.0.1", port);
@@ -357,5 +413,55 @@ public final class DebugSessionLauncher {
     private void postMain(@NonNull Runnable r) {
         android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
         h.post(r);
+    }
+
+    // -------- PR-D6: EventBus listener for install result --------
+
+    /**
+     * Callback 收到 install 结果时调用 (onResult 在 EventBus 派发线程上,
+     * 默认 MAIN,与 BaseEditorActivity.onInstallationResult 保持一致)。
+     */
+    public interface InstallResultCallback {
+        void onResult(@Nullable String packageName, @Nullable String error);
+    }
+
+    /**
+     * 一次性的 EventBus subscriber,等 InstallationResultEvent 后回调
+     * {@link InstallResultCallback}。必须在拿到结果或超时后 unregister,
+     * 否则会泄漏。EventBus 要求 @Subscribe 注解必须在具名 class 上,
+     * 所以这里不能直接用 lambda / 匿名类。
+     */
+    public static class InstallResultSubscriber {
+        @Nullable private final InstallResultCallback callback;
+
+        public InstallResultSubscriber(@Nullable InstallResultCallback cb) {
+            this.callback = cb;
+        }
+
+        @Subscribe(threadMode = ThreadMode.MAIN)
+        public void onInstallationResultEvent(@NonNull InstallationResultEvent ev) {
+            // 与 BaseEditorActivity 一致:用 InstallationResultHandler.onResult 解析包名。
+            // 但是这里我们没法拿到 Activity context (只是 EventBus event);
+            // 退而求其次:从 intent.getStringExtra(PACKAGE_NAME) 读。
+            android.content.Intent intent = ev.intent;
+            String pkg = null;
+            String err = null;
+            if (intent != null) {
+                pkg = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_PACKAGE_NAME);
+                if (pkg == null) {
+                    pkg = intent.getStringExtra("android.intent.extra.PACKAGE_NAME");
+                }
+                int status = intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS,
+                        android.content.pm.PackageInstaller.STATUS_FAILURE);
+                if (status != android.content.pm.PackageInstaller.STATUS_SUCCESS) {
+                    String msg = intent.getStringExtra(
+                            android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
+                    err = "status=" + status + (msg != null ? (": " + msg) : "");
+                }
+            }
+            if (callback != null) {
+                try { callback.onResult(pkg, err); } catch (Throwable ignored) {}
+            }
+        }
     }
 }

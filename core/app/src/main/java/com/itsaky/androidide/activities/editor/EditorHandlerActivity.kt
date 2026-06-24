@@ -551,10 +551,145 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     editorViewModel.addFile(file)
     editorViewModel.setCurrentFile(position, file)
 
+    // PR-D6: 挂断点侧边栏 + 设置点击 -> 弹类型选择器 (普通/条件/日志点)。
+    // 之前侧边栏的 onBreakpointClick 没有调用方,此 hook 补上。
+    attachBreakpointGutter(editor)
+
     updateTabs()
     // onFileLoaded(editor, file)
 
     return position
+  }
+
+  /**
+   * PR-D6: 在文件打开后挂 BreakpointGutterManager + 设置点击 / 长按回调。
+   *  - 单击空行 -> {@link BreakpointTypePicker} 选类型后创建断点
+   *  - 长按已有断点 -> 弹上下文菜单 (toggle / 编辑 / 删除)
+   */
+  private fun attachBreakpointGutter(editor: CodeEditorView) {
+    val codeEditor = editor.editor ?: return
+    val file = editor.file ?: return
+    val mgr = com.itsaky.androidide.debugger.view.BreakpointGutterManager
+        .attach(codeEditor, file.absolutePath)
+    mgr.setActionListener(object :
+        com.itsaky.androidide.debugger.view.BreakpointGutterManager.OnBreakpointActionListener {
+      override fun onBreakpointClick(f: String, line: Int) {
+        // 行号 = BreakpointSidebar 报上来的 0-based 行索引 (JDWP 与 line 内部一致)
+        val absFile = File(f)
+        val existing = com.itsaky.androidide.debugger.model.BreakpointManager
+            .getInstance().findAt(absFile.absolutePath, line)
+        if (existing != null) {
+          // 已存在 -> 切换 enable/disable。
+          com.itsaky.androidide.debugger.model.BreakpointManager
+              .getInstance().setEnabled(existing.id, !existing.isActive())
+          return
+        }
+        val picker = com.itsaky.androidide.debugger.view.BreakpointTypePicker(this@EditorHandlerActivity)
+        picker.showAtPosition(
+            content.editorContainer,
+            0,
+            0,
+            object : com.itsaky.androidide.debugger.view.BreakpointTypePicker.Callback {
+              override fun onTypePicked(type: com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type) {
+                when (type) {
+                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.NORMAL -> {
+                    com.itsaky.androidide.debugger.model.BreakpointManager
+                        .getInstance().toggle(absFile.absolutePath, line)
+                  }
+                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.CONDITION -> {
+                    promptCondition(absFile, line)
+                  }
+                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.LOGPOINT -> {
+                    promptLogMessage(absFile, line)
+                  }
+                }
+              }
+            })
+      }
+
+      override fun onBreakpointLongClick(bp: com.itsaky.androidide.debugger.model.IdeBreakpoint) {
+        showBreakpointContextMenu(bp)
+      }
+    })
+    mgr.showSidebar()
+  }
+
+  /** PR-D6: 长按已有断点弹上下文菜单 (toggle / 编辑条件 / 编辑日志 / 删除) */
+  private fun showBreakpointContextMenu(bp: com.itsaky.androidide.debugger.model.IdeBreakpoint) {
+    val mgr = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+    val items = arrayOf<CharSequence>(
+        getString(com.itsaky.androidide.R.string.debugger_action_toggle_bp),
+        getString(com.itsaky.androidide.R.string.debugger_action_edit_condition),
+        getString(com.itsaky.androidide.R.string.debugger_action_edit_log),
+        getString(com.itsaky.androidide.R.string.debugger_action_bp_delete)
+    )
+    androidx.appcompat.app.AlertDialog.Builder(this)
+        .setTitle("断点 @ ${bp.file.substringAfterLast('/')}:${bp.line}")
+        .setItems(items) { _, which ->
+            when (which) {
+                0 -> mgr.setEnabled(bp.id, !bp.isActive())
+                1 -> promptCondition(File(bp.file), bp.line, bp.condition)
+                2 -> promptLogMessage(File(bp.file), bp.line, bp.logMessage)
+                3 -> mgr.remove(bp.id)
+            }
+        }
+        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
+        .show()
+  }
+
+  /** PR-D6: 让用户输入条件表达式。 */
+  private fun promptCondition(file: File, line: Int, current: String? = null) {
+    val input = android.widget.EditText(this)
+    input.setText(current ?: "")
+    input.hint = "i > 0 && !done"
+    androidx.appcompat.app.AlertDialog.Builder(this)
+        .setTitle(com.itsaky.androidide.R.string.debugger_bcd_condition_label)
+        .setView(input)
+        .setPositiveButton(com.itsaky.androidide.R.string.debugger_bcd_btn_save) { _, _ ->
+            val expr = input.text.toString().trim()
+            if (expr.isNotEmpty()) {
+                val bm = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+                val bp = bm.findAt(file.absolutePath, line)
+                if (bp != null) {
+                    // 用 manager 的 setCondition 触发 reinstallOnDebugger
+                    // (直接 bp.setCondition 只改状态,JDWP 端不会更新)
+                    bm.setCondition(bp.id, expr)
+                } else {
+                    val newBp = com.itsaky.androidide.debugger.model.IdeBreakpoint(
+                        file.absolutePath, line)
+                    newBp.setCondition(expr)
+                    bm.add(newBp)
+                }
+            }
+        }
+        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
+        .show()
+  }
+
+  /** PR-D6: 让用户输入日志消息表达式。 */
+  private fun promptLogMessage(file: File, line: Int, current: String? = null) {
+    val input = android.widget.EditText(this)
+    input.setText(current ?: "")
+    input.hint = "\"x=\" + x"
+    androidx.appcompat.app.AlertDialog.Builder(this)
+        .setTitle(com.itsaky.androidide.R.string.debugger_bcd_log_label)
+        .setView(input)
+        .setPositiveButton(com.itsaky.androidide.R.string.debugger_bcd_btn_save) { _, _ ->
+            val expr = input.text.toString().trim()
+            val bm = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+            val bp = bm.findAt(file.absolutePath, line)
+            if (bp != null) {
+                // 走 manager 触发 reinstallOnDebugger
+                bm.setLogMessage(bp.id, expr)
+            } else if (expr.isNotEmpty()) {
+                val newBp = com.itsaky.androidide.debugger.model.IdeBreakpoint(
+                    file.absolutePath, line)
+                newBp.setLogMessage(expr)
+                bm.add(newBp)
+            }
+        }
+        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
+        .show()
   }
 
   private fun isKotlinSourceFile(file: File): Boolean {
