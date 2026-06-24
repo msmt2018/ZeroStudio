@@ -179,7 +179,7 @@ internal object ClassFileAnalyzer {
     while (i < cpCount) {
       val tag = readUnsignedByte()
       when (tag) {
-        CpTag.UTF8 -> cp.entries[i] = CpUtf8(readUtf())
+        CpTag.UTF8 -> cp.entries[i] = CpUtf8(readUTF())
         CpTag.INTEGER -> cp.entries[i] = CpInteger(readInt())
         CpTag.FLOAT -> cp.entries[i] = CpFloat(readFloat())
         CpTag.LONG -> {

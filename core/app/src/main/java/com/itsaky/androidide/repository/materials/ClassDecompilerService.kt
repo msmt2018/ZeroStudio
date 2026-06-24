@@ -567,7 +567,7 @@ private object BaksmaliDecompiler {
     val targetClass = pickTargetClass(classes, entryName) ?: classes.first()
     val writer = StringWriter()
     IndentingWriter(writer).use { w ->
-      Baksmali.disassembleClass(targetClass, options.apiLevel, w, options)
+      Baksmali.disassembleClass(targetClass, w, options)
     }
     return writer.toString()
   }

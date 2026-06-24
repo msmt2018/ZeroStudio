@@ -25,8 +25,9 @@ enum class ProjectMaterialCategory(
       "project_deps",
       "Project Sources & Deps",
       { item ->
-        item.sourceType == MaterialSourceType.PROJECT_FILE && item.path != null &&
-            !item.path.contains("${File.separator}.gradle${File.separator}")
+        val path = item.path
+        item.sourceType == MaterialSourceType.PROJECT_FILE && path != null &&
+            !path.contains("${File.separator}.gradle${File.separator}")
       },
   ),
   MAVEN_SDK(
