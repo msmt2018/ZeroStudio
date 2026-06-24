@@ -165,24 +165,48 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
         if (sourceCode.isNotBlank()) {
             viewModel.onSourceChanged(sourceCode)
         }
-    }
 
-    // 【PR-C】订阅 previewState 拿 modulePath, 第一次 Ready 时加载用户 app
-    // (解析 manifest android:icon + label). 失败不阻塞, 桌面还能用.
-    lifecycleScope.launch {
-        repeatOnLifecycle(Lifecycle.State.STARTED) {
-            viewModel.previewState.collect { state ->
-                if (state is PreviewState.Ready) {
-                    // 加载用户 app 一次 (addUserApp 内部有重复检查)
-                    viewModel.loadUserApp(viewModel.getModulePath().takeIf { it.isNotEmpty() })
-                    // 渲染 preview
+        // 【PR-C】订阅 previewState 拿 modulePath, 第一次 Ready 时加载用户 app
+        // (解析 manifest android:icon + label). 失败不阻塞, 桌面还能用.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.previewState.collect { state ->
+                    if (state is PreviewState.Ready) {
+                        // 加载用户 app 一次 (addUserApp 内部有重复检查)
+                        viewModel.loadUserApp(viewModel.getModulePath().takeIf { it.isNotEmpty() })
+                        // 渲染 preview
+                        renderEngine?.let { engine ->
+                            val functionName = viewModel.selectedPreview.value
+                                ?: state.previewConfigs.firstOrNull()?.functionName
+                                ?: return@collect
+                            // v3.4: 传入对应 @Composable 的 PreviewConfig, 让 uiMode /
+                            // showBackground / backgroundColor 真正生效.
+                            // v3.5: 传 deviceConfig.orientation, 让 LocalConfiguration 注入横竖屏.
+                            val previewConfig = state.previewConfigs
+                                .firstOrNull { it.functionName == functionName }
+                            engine.render(
+                                previewDex = state.dexFile,
+                                projectDex = state.projectDexFiles,
+                                className = state.className,
+                                functionName = functionName,
+                                previewConfig = previewConfig,
+                                orientation = state.deviceConfig.orientation,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 【v3.3】订阅 selectedPreview 变化 — 用户从调试模式下拉选择新 @Composable 时
+        // 立刻重新渲染. 注意: 这里 ready 状态没变, 所以上面的 collect 不会重新触发.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.selectedPreview.collect { functionName ->
+                    if (functionName == null) return@collect
+                    val state = viewModel.previewState.value
+                    if (state !is PreviewState.Ready) return@collect
                     renderEngine?.let { engine ->
-                        val functionName = viewModel.selectedPreview.value
-                            ?: state.previewConfigs.firstOrNull()?.functionName
-                            ?: return@collect
-                        // v3.4: 传入对应 @Composable 的 PreviewConfig, 让 uiMode /
-                        // showBackground / backgroundColor 真正生效.
-                        // v3.5: 传 deviceConfig.orientation, 让 LocalConfiguration 注入横竖屏.
                         val previewConfig = state.previewConfigs
                             .firstOrNull { it.functionName == functionName }
                         engine.render(
@@ -198,31 +222,6 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
             }
         }
     }
-
-    // 【v3.3】订阅 selectedPreview 变化 — 用户从调试模式下拉选择新 @Composable 时
-    // 立刻重新渲染. 注意: 这里 ready 状态没变, 所以上面的 collect 不会重新触发.
-    lifecycleScope.launch {
-        repeatOnLifecycle(Lifecycle.State.STARTED) {
-            viewModel.selectedPreview.collect { functionName ->
-                if (functionName == null) return@collect
-                val state = viewModel.previewState.value
-                if (state !is PreviewState.Ready) return@collect
-                renderEngine?.let { engine ->
-                    val previewConfig = state.previewConfigs
-                        .firstOrNull { it.functionName == functionName }
-                    engine.render(
-                        previewDex = state.dexFile,
-                        projectDex = state.projectDexFiles,
-                        className = state.className,
-                        functionName = functionName,
-                        previewConfig = previewConfig,
-                        orientation = state.deviceConfig.orientation,
-                    )
-                }
-            }
-        }
-    }
-}
 
     /**
      * 【v3.3】公开方法 — ComposableFunctionPicker 选中函数时调, 重新渲染.

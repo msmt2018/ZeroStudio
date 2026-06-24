@@ -212,7 +212,7 @@ internal enum class CutoutKind(val displayName: String) {
         NOTCH -> CutoutGeometry.IPHONE_14_NOTCH
         PUNCH_HOLE -> CutoutGeometry.PIXEL_PUNCHHOLE
         WATERFALL -> CutoutGeometry.HUAWEI_WATERFALL
-        DYNAMIC_ISLAND -> CutoutGeometry.IPHONE_14_PRO_DYNAMIC_ISLAND
+        DYNAMIC_ISLAND -> CutoutGeometry.DYNAMIC_ISLAND
     }
 }
 
