@@ -34,12 +34,12 @@ import com.zerostudio.debugger.event.DebugEventBus;
 import com.zerostudio.debugger.event.DebugEvents;
 import com.zerostudio.debugger.jdwp.DebugSessionHeartbeat;
 import com.zerostudio.debugger.jdwp.JdwpClient;
-import com.zerostudio.debugger.jdwp.JdwpEvents;
 import com.zerostudio.debugger.jdwp.JdwpPacket;
 import com.zerostudio.debugger.model.BreakpointStore;
 import com.zerostudio.debugger.model.DebugSession;
 import com.zerostudio.debugger.model.EvalEngine;
 import com.zerostudio.debugger.model.SourceLocator;
+import com.zerostudio.debugger.api.EvalResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -386,8 +386,8 @@ public final class Debugger
     /** Step over the current frame. */
     public void stepOver(long threadId) {
         try {
-            sourceLocator.step(threadId, JdwpEvents.StepDepth.OVER,
-                    JdwpEvents.StepSize.LINE);
+            sourceLocator.step(threadId, com.zerostudio.debugger.jdwp.StepDepth.OVER,
+                    com.zerostudio.debugger.jdwp.StepSize.LINE);
             session.setState(DebugSession.State.STEPPING);
         } catch (java.io.IOException e) {
             Log.w(TAG, "stepOver failed", e);
@@ -396,8 +396,8 @@ public final class Debugger
 
     public void stepInto(long threadId) {
         try {
-            sourceLocator.step(threadId, JdwpEvents.StepDepth.INTO,
-                    JdwpEvents.StepSize.LINE);
+            sourceLocator.step(threadId, com.zerostudio.debugger.jdwp.StepDepth.INTO,
+                    com.zerostudio.debugger.jdwp.StepSize.LINE);
             session.setState(DebugSession.State.STEPPING);
         } catch (java.io.IOException e) {
             Log.w(TAG, "stepInto failed", e);
@@ -406,8 +406,8 @@ public final class Debugger
 
     public void stepOut(long threadId) {
         try {
-            sourceLocator.step(threadId, JdwpEvents.StepDepth.OUT,
-                    JdwpEvents.StepSize.LINE);
+            sourceLocator.step(threadId, com.zerostudio.debugger.jdwp.StepDepth.OUT,
+                    com.zerostudio.debugger.jdwp.StepSize.LINE);
             session.setState(DebugSession.State.STEPPING);
         } catch (java.io.IOException e) {
             Log.w(TAG, "stepOut failed", e);
@@ -467,6 +467,27 @@ public final class Debugger
                           @NonNull Callback<EvalResult> callback) {
         bgExecutor.execute(() -> {
             EvalResult result = eval.evaluate(threadId, frameId, expression);
+            callback.onResult(result);
+        });
+    }
+
+    /**
+     * PR-D6: Set a local variable's value (the "set value" feature in the
+     * variables pane). Wraps {@link EvalEngine#setLocal} and runs on the
+     * background executor for ANR protection.
+     *
+     * @param threadId  paused thread id
+     * @param frameId   frame id (0 = top frame)
+     * @param slot      variable's slot index
+     * @param sig       type signature (e.g. "I", "Ljava/lang/String;")
+     * @param value     new value (string-serialised; for objects, an object id)
+     * @param callback  called with the result on the caller's thread
+     */
+    public void setLocalValueAsync(long threadId, long frameId, int slot,
+                                   @NonNull String sig, @NonNull String value,
+                                   @NonNull Callback<EvalResult> callback) {
+        bgExecutor.execute(() -> {
+            EvalResult result = eval.setLocal(threadId, frameId, slot, sig, value);
             callback.onResult(result);
         });
     }
@@ -555,7 +576,7 @@ public final class Debugger
 
     // -- internal hooks for the event bus --
 
-    public void onVmStart() {
+    void onVmStart() {
         synchronized (vmStartReceived) {
             vmStartReceived.set(true);
             vmStartReceived.notifyAll();
@@ -564,7 +585,7 @@ public final class Debugger
         eventBus.publish(DebugEvents.vmStart());
     }
 
-    public void onSuspend(@NonNull SuspendInfo info) {
+    void onSuspend(@NonNull SuspendInfo info) {
         // PR-6: handle conditional breakpoints and logpoints BEFORE
         // notifying the UI. A logpoint never pauses the program; a
         // conditional breakpoint only pauses if the condition evaluates
@@ -676,7 +697,7 @@ public final class Debugger
         }
     }
 
-    public void notifyBreakpointChanged(@NonNull Breakpoint bp) {
+    void notifyBreakpointChanged(@NonNull Breakpoint bp) {
         for (Listener l : listeners) {
             try { l.onBreakpointChanged(bp); } catch (Throwable ignored) { }
         }

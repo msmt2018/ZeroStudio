@@ -26,6 +26,8 @@ import com.zerostudio.debugger.api.SuspendInfo;
 import com.zerostudio.debugger.event.DebugEventBus;
 import com.zerostudio.debugger.event.DebugEvents;
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class DebuggerController
         implements Debugger.Listener {
@@ -42,6 +44,21 @@ public final class DebuggerController
 
     /** PR-4: shared runtime state for the side panel (call stack, variables, watches). */
     private final DebugSessionState sessionState = new DebugSessionState();
+
+    /** PR-D6: 被调试的应用包名,由 DebugSessionLauncher 写入。stop() 据此 force-stop。 */
+    @Nullable private volatile String targetPackage;
+
+    /**
+     * PR-D6: 异步执行器,用于把 stop() / wait-for-install / JDWP port probe
+     * 等阻塞操作从调用线程 (可能是 UI 线程) 切走。
+     * 单独的 daemon executor,不与 IDE 其它异步任务共享。
+     */
+    private final ExecutorService bgExecutor =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "DebuggerController-bg");
+                t.setDaemon(true);
+                return t;
+            });
 
     public DebugSessionState sessionState() { return sessionState; }
 
@@ -103,6 +120,23 @@ public final class DebuggerController
         this.attachedActivity = activity;
     }
 
+    /** PR-D6: 写入目标包。DebugSessionLauncher 在 launch 成功后调用。 */
+    public void setTargetPackage(@Nullable String pkg) {
+        this.targetPackage = pkg;
+    }
+
+    /** PR-D6: 取目标包 (供其它模块使用)。 */
+    @Nullable
+    public String getTargetPackage() {
+        return targetPackage;
+    }
+
+    /** PR-D6: 后台执行器,供 DebugSessionLauncher 切走阻塞 IO。 */
+    @NonNull
+    public ExecutorService bgExecutor() {
+        return bgExecutor;
+    }
+
     /** 连接到目标应用（按 BuildConfig/配置决定 host:port） */
     public void connect(@NonNull String host, int port) {
         try {
@@ -154,22 +188,50 @@ public final class DebuggerController
     }
 
     /**
-     * PR-D4: 真正"停止"调试 —— 流程:
-     *   1. 尝试 resume(让被暂停的线程继续运行,避免 force-stop 后留下
-     *      VM 处于挂起态导致 JDWP disconnect 失败)
-     *   2. 调用 debugger.disconnect() 关闭 JDWP 客户端
-     *   3. 异步在后台线程用 {@code am force-stop <pkg>} 终止目标进程
-     *   4. 清空 targetPackage,通知 UI
-     * 如果 debugger 还没连接,只清空 targetPackage。
+     * PR-D6: 真正实现 stop():先 JDWP Resume 让目标进程从暂停态出来,
+     * 然后用 {@code am force-stop} 终止目标包,最后断 JDWP。
+     * 不阻塞调用线程 (通常是 UI 线程)。
      *
-     * <p>PR-D5: 捕获 force-stop 退出码,失败时通过 {@link #flash} 给用户
-     * 可见提示(原版只有 {@code ILogger.ROOT.warn}),并加触觉反馈。
+     * <p>PR-D5: 捕获 force-stop 退出码,失败时通过 [flash] 给用户
+     * 可见提示(原版只有 [ILogger.ROOT.warn]),并加触觉反馈。
      */
     public void stop() {
         if (debugger == null && TextUtils.isEmpty(targetPackage)) {
             flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
-            DebuggerHaptics.reject(attachedActivity);
+            if (attachedActivity != null) {
+                com.itsaky.androidide.debugger.DebuggerHaptics.reject(attachedActivity);
+            }
             return;
+        }
+        final String pkg = targetPackage;
+        targetPackage = null;
+        if (!TextUtils.isEmpty(pkg)) {
+            bgExecutor().execute(() -> {
+                Integer exitCode = null;
+                boolean ok = false;
+                try {
+                    ok = forceStopPackage(pkg);
+                    exitCode = ok ? 0 : 1;
+                } catch (Throwable t) {
+                    ILogger.ROOT.warn(TAG + ": force-stop failed: " + t.getMessage());
+                }
+                if (!ok) {
+                    final String err = exitCode == null
+                            ? "process error"
+                            : ("exit " + exitCode);
+                    postMain(() -> {
+                        if (attachedActivity != null) {
+                            attachedActivity.flashInfo(attachedActivity.getString(
+                                com.itsaky.androidide.R.string.debugger_msg_stop_force_stop_failed,
+                                pkg + " (" + err + ")"));
+                            com.itsaky.androidide.debugger.DebuggerHaptics.reject(
+                                    attachedActivity);
+                        }
+                    });
+                }
+            });
+        } else {
+            flash(getString(com.itsaky.androidide.R.string.debugger_msg_stop_no_target));
         }
         // 1) 先 resume 让 VM 回到运行态,避免后续 disconnect 因为 suspend policy
         //    而 hang 住。
@@ -179,45 +241,51 @@ public final class DebuggerController
         BreakpointManager.getInstance().bindDebugger(null);
         sessionState.onDisconnected();
         pausedAtThreadId = -1L;
-        // 3) 异步 force-stop 目标进程,避免阻塞 UI 线程。
-        //    PR-D5: 等待进程返回退出码,失败时 post 到 UI 线程给 flash 提示。
-        final String pkg = targetPackage;
-        targetPackage = null;
-        if (!TextUtils.isEmpty(pkg)) {
-            bg.submit(() -> {
-                Integer exitCode = null;
-                try {
-                    Process p = new ProcessBuilder("sh", "-c",
-                            "am force-stop " + pkg).redirectErrorStream(true).start();
-                    p.waitFor();
-                    exitCode = p.exitValue();
-                } catch (Throwable t) {
-                    ILogger.ROOT.warn(TAG + ": force-stop failed: " + t.getMessage());
-                }
-                if (exitCode == null || exitCode != 0) {
-                    final String err = exitCode == null
-                            ? "process error"
-                            : ("exit " + exitCode);
-                    // post 到主线程做 flash
-                    new android.os.Handler(android.os.Looper.getMainLooper())
-                            .post(() -> {
-                                if (attachedActivity != null) {
-                                    attachedActivity.showFlashInfo(
-                                        getString(
-                                            com.itsaky.androidide.R.string
-                                                .debugger_msg_stop_force_stop_failed,
-                                            pkg + " (" + err + ")"));
-                                }
-                                DebuggerHaptics.reject(attachedActivity);
-                            });
-                }
-            });
-        } else {
-            flash(getString(com.itsaky.androidide.R.string.debugger_msg_stop_no_target));
+        if (attachedActivity != null) {
+            DebuggerAccessibility.announceDisconnected(attachedActivity);
+            // 成功路径触觉反馈 — 区分"已成功停止"
+            com.itsaky.androidide.debugger.DebuggerHaptics.strong(attachedActivity);
         }
-        DebuggerAccessibility.announceDisconnected(attachedActivity);
-        // 成功路径触觉反馈 — 区分"已成功停止"
-        DebuggerHaptics.strong(attachedActivity);
+    }
+
+    /**
+     * PR-D6: 用 {@code am force-stop <pkg>} 终止目标包。
+     * 优先 IPackageManager.forceStopPackage 隐藏 API,
+     * 失败时回退到 `am force-stop <pkg>` shell 命令。
+     */
+    private static boolean forceStopPackage(@NonNull String pkg) {
+        // 1) 公开 API:ApplicationPackageManager (隐藏 API,但 Android 系统应用可见)
+        try {
+            android.content.pm.IPackageManager pm =
+                    android.app.ActivityThread.getPackageManager();
+            if (pm != null) {
+                try {
+                    java.lang.reflect.Method m =
+                            android.content.pm.IPackageManager.class.getMethod(
+                                    "forceStopPackage", String.class, int.class);
+                    m.invoke(pm, pkg, android.os.UserHandle.getCallingUserId());
+                    return true;
+                } catch (NoSuchMethodException nsme) {
+                    // 落到下面的 shell 命令回退
+                }
+            }
+        } catch (Throwable ignored) {}
+        // 2) 回退:exec `am force-stop <pkg>` 同步等待。
+        try {
+            Process p = new ProcessBuilder("am", "force-stop", pkg)
+                    .redirectErrorStream(true)
+                    .start();
+            p.waitFor();
+            return p.exitValue() == 0;
+        } catch (Throwable t) {
+            ILogger.error(TAG, "force-stop failed for " + pkg + ": " + t.getMessage(), t);
+            return false;
+        }
+    }
+
+    private static void postMain(@NonNull Runnable r) {
+        android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+        h.post(r);
     }
 
     public void stepOver() {
