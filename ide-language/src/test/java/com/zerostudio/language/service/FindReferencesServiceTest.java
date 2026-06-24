@@ -4,6 +4,7 @@ import com.zerostudio.language.model.SourcePosition;
 import com.zerostudio.language.model.SourceRange;
 import com.zerostudio.language.model.ParsedFile;
 import com.zerostudio.language.model.Reference;
+import com.zerostudio.language.index.DefaultProjectIndex;
 import com.zerostudio.language.index.ProjectIndex;
 import com.zerostudio.language.model.LanguageId;
 import org.junit.Before;
@@ -19,7 +20,7 @@ public class FindReferencesServiceTest {
 
     @Before
     public void setUp() {
-        idx = new ProjectIndex();
+        idx = new DefaultProjectIndex();
         // 1. A.java
         ParsedFile a = new ParsedFile("A.java", LanguageId.JAVA, "com.x",
                 Arrays.asList(

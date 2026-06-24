@@ -13,7 +13,7 @@ public class ProjectIndexJsonTest {
 
     @Test
     public void roundTrip() {
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         ParsedFile f = new ParsedFile("F.java", LanguageId.JAVA, "com.x",
                 Arrays.asList(
                         new Reference("com.x.Foo",
@@ -26,7 +26,7 @@ public class ProjectIndexJsonTest {
         assertTrue(json.contains("com.x.Foo"));
         assertTrue(json.contains("F.java"));
 
-        ProjectIndex restored = new ProjectIndex();
+        ProjectIndex restored = new DefaultProjectIndex();
         ProjectIndexJson.deserialize(json, restored);
         // file path should be restored
         assertNotNull(restored.fileForPath("F.java"));
@@ -35,7 +35,7 @@ public class ProjectIndexJsonTest {
 
     @Test
     public void emptyIndexSerializes() {
-        String json = ProjectIndexJson.serialize(new ProjectIndex());
+        String json = ProjectIndexJson.serialize(new DefaultProjectIndex());
         assertTrue(json.contains("\"classes\":"));
         assertTrue(json.contains("\"files\":"));
     }
@@ -43,13 +43,13 @@ public class ProjectIndexJsonTest {
     @Test
     public void nullIndexHandled() {
         assertEquals("{}", ProjectIndexJson.serialize(null));
-        ProjectIndexJson.deserialize(null, new ProjectIndex()); // no throw
+        ProjectIndexJson.deserialize(null, new DefaultProjectIndex()); // no throw
         ProjectIndexJson.deserialize("{}", null); // no throw
     }
 
     @Test
     public void multipleFilesPersisted() {
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         idx.index(new ParsedFile("A.java", LanguageId.JAVA, "p1",
                 java.util.Collections.emptyList(), ""));
         idx.index(new ParsedFile("B.kt", LanguageId.KOTLIN, "p2",

@@ -7,6 +7,7 @@ import com.zerostudio.decompiler.api.DecompilerRegistry;
 import com.zerostudio.decompiler.cache.CachingDecompiler;
 import com.zerostudio.decompiler.cache.MethodLevelDecompiler;
 import com.zerostudio.decompiler.impl.cfr.CfrDecompiler;
+import com.zerostudio.language.index.DefaultProjectIndex;
 import com.zerostudio.language.index.ProjectIndex;
 import com.zerostudio.language.model.ParsedFile;
 import com.zerostudio.language.model.Reference;
@@ -72,7 +73,7 @@ public class EndToEndIntegrationTest {
         assertTrue("expected at least one reference", pf.references.size() > 0);
 
         // 索引
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         idx.index(pf);
 
         // 查找引用 - 使用 findByName，因为 Assert 是被 import 的
@@ -95,7 +96,7 @@ public class EndToEndIntegrationTest {
         assertTrue(r.isOk());
         JavaParserFacade parser = new JavaParserFacade();
         ParsedFile pf = parser.parse("TestCase.java", r.source);
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         idx.index(pf);
 
         // 找到第一个 CLASS 引用，hover 它
@@ -145,7 +146,7 @@ public class EndToEndIntegrationTest {
     /** 4. 跨 .java 源文件 + 反编译类的统一索引 */
     @Test
     public void mixedSourceAndDecompiledIndex() {
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         // 源文件
         JavaParserFacade parser = new JavaParserFacade();
         ParsedFile source = parser.parse("Caller.java",
@@ -226,7 +227,7 @@ public class EndToEndIntegrationTest {
     /** 8. CallHierarchyService 在多文件中工作 */
     @Test
     public void callHierarchyAcrossFiles() {
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         JavaParserFacade parser = new JavaParserFacade();
         ParsedFile a = parser.parse("A.java",
                 "package x;\n" +

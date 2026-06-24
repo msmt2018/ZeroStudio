@@ -1,5 +1,6 @@
 package com.zerostudio.language.benchmark;
 
+import com.zerostudio.language.index.DefaultProjectIndex;
 import com.zerostudio.language.index.ProjectIndex;
 import com.zerostudio.language.parser.JavaParserFacade;
 import com.zerostudio.language.model.LanguageId;
@@ -144,7 +145,7 @@ public final class PerformanceBenchmark {
 
     private static Result benchProjectIndex() {
         int n = 1000;
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         long start = t0();
         Random rng = new Random(42);
         for (int i = 0; i < n; i++) {
@@ -163,7 +164,7 @@ public final class PerformanceBenchmark {
     private static Result benchReferenceSearch() {
         int files = 100;
         int refsPerFile = 100;
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         // 索引 100 个文件，每个 100 个 class 引用
         for (int f = 0; f < files; f++) {
             List<Reference> refs = new ArrayList<>();
@@ -187,7 +188,7 @@ public final class PerformanceBenchmark {
 
     private static Result benchCrossLangSearch() {
         int files = 50;
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         for (int f = 0; f < files; f++) {
             for (int l = 0; l < 4; l++) {
                 LanguageId lang = LanguageId.values()[l % LanguageId.values().length];

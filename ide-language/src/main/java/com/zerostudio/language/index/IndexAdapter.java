@@ -1,6 +1,7 @@
 package com.zerostudio.language.index;
 
 import com.zerostudio.language.model.ParsedFile;
+import com.zerostudio.language.index.DefaultProjectIndex;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -19,7 +20,7 @@ public class IndexAdapter {
     public IndexAdapter(String name, String path) {
         this.name = name;
         this.path = path;
-        this.delegate = new ProjectIndex();
+        this.delegate = new DefaultProjectIndex();
     }
 
     public String getName() { return name; }
