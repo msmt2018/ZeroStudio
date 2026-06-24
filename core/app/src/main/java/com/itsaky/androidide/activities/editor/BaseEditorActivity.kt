@@ -89,7 +89,6 @@ import com.itsaky.androidide.ui.CodeEditorView
 import com.itsaky.androidide.ui.ContentTranslatingDrawerLayout
 import com.itsaky.androidide.ui.EditorBottomSheetOnboardingController
 import com.itsaky.androidide.ui.SwipeRevealLayout
-import com.itsaky.androidide.utils.FlashbarActivityUtilsKt
 import com.itsaky.androidide.utils.ActionMenuUtils.createMenu
 import com.itsaky.androidide.utils.ApkInstallationSessionCallback
 import com.itsaky.androidide.utils.DialogUtils.newMaterialDialogBuilder
@@ -288,11 +287,18 @@ abstract class BaseEditorActivity :
   /**
    * Java-friendly proxy for the [com.itsaky.androidide.utils.flashInfo]
    * extension function. The debugger code that lives in Java cannot import
-   * Kotlin top-level functions, so this is a thin static-style wrapper that
-   * goes through the activity extension variant.
+   * Kotlin top-level functions, so this is a thin wrapper that just calls
+   * the [Activity] extension variant.
+   *
+   * We can't write `this.flashInfo(msg)` here because Kotlin would resolve
+   * that to this very member and recurse forever. Binding `this` to a
+   * local of declared type [android.app.Activity] makes the compiler pick
+   * the top-level extension function on `Activity` from
+   * `com.itsaky.androidide.utils.FlashbarActivityUtils`.
    */
   open fun flashInfo(msg: String?) {
-    FlashbarActivityUtilsKt.flashInfo(this, msg)
+    val activity: android.app.Activity = this
+    activity.flashInfo(msg)
   }
 
 
