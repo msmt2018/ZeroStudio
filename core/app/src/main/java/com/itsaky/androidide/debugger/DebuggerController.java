@@ -134,13 +134,23 @@ public final class DebuggerController
     }
 
     public void resume() {
-        if (debugger == null) { flash("未连接调试器"); return; }
+        if (debugger == null) {
+            flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
+            DebuggerHaptics.reject(attachedActivity);
+            return;
+        }
         debugger.resume();
+        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void pause() {
-        if (debugger == null) { flash("未连接调试器"); return; }
+        if (debugger == null) {
+            flash(getString(com.itsaky.androidide.R.string.debugger_msg_pause_reject));
+            DebuggerHaptics.reject(attachedActivity);
+            return;
+        }
         debugger.pause();
+        DebuggerHaptics.tap(attachedActivity);
     }
 
     /**
@@ -151,10 +161,14 @@ public final class DebuggerController
      *   3. 异步在后台线程用 {@code am force-stop <pkg>} 终止目标进程
      *   4. 清空 targetPackage,通知 UI
      * 如果 debugger 还没连接,只清空 targetPackage。
+     *
+     * <p>PR-D5: 捕获 force-stop 退出码,失败时通过 {@link #flash} 给用户
+     * 可见提示(原版只有 {@code ILogger.ROOT.warn}),并加触觉反馈。
      */
     public void stop() {
         if (debugger == null && TextUtils.isEmpty(targetPackage)) {
-            flash("未连接调试器");
+            flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
+            DebuggerHaptics.reject(attachedActivity);
             return;
         }
         // 1) 先 resume 让 VM 回到运行态,避免后续 disconnect 因为 suspend policy
@@ -166,54 +180,103 @@ public final class DebuggerController
         sessionState.onDisconnected();
         pausedAtThreadId = -1L;
         // 3) 异步 force-stop 目标进程,避免阻塞 UI 线程。
+        //    PR-D5: 等待进程返回退出码,失败时 post 到 UI 线程给 flash 提示。
         final String pkg = targetPackage;
         targetPackage = null;
         if (!TextUtils.isEmpty(pkg)) {
             bg.submit(() -> {
+                Integer exitCode = null;
                 try {
                     Process p = new ProcessBuilder("sh", "-c",
                             "am force-stop " + pkg).redirectErrorStream(true).start();
                     p.waitFor();
+                    exitCode = p.exitValue();
                 } catch (Throwable t) {
                     ILogger.ROOT.warn(TAG + ": force-stop failed: " + t.getMessage());
                 }
+                if (exitCode == null || exitCode != 0) {
+                    final String err = exitCode == null
+                            ? "process error"
+                            : ("exit " + exitCode);
+                    // post 到主线程做 flash
+                    new android.os.Handler(android.os.Looper.getMainLooper())
+                            .post(() -> {
+                                if (attachedActivity != null) {
+                                    attachedActivity.showFlashInfo(
+                                        getString(
+                                            com.itsaky.androidide.R.string
+                                                .debugger_msg_stop_force_stop_failed,
+                                            pkg + " (" + err + ")"));
+                                }
+                                DebuggerHaptics.reject(attachedActivity);
+                            });
+                }
             });
+        } else {
+            flash(getString(com.itsaky.androidide.R.string.debugger_msg_stop_no_target));
         }
         DebuggerAccessibility.announceDisconnected(attachedActivity);
-        flash("已停止调试" + (TextUtils.isEmpty(pkg) ? "" : " (" + pkg + ")"));
+        // 成功路径触觉反馈 — 区分"已成功停止"
+        DebuggerHaptics.strong(attachedActivity);
     }
 
     public void stepOver() {
-        if (!requireThread()) return;
+        if (!requireThread()) {
+            DebuggerHaptics.reject(attachedActivity);
+            return;
+        }
         debugger.stepOver(pausedAtThreadId);
+        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void stepInto() {
-        if (!requireThread()) return;
+        if (!requireThread()) {
+            DebuggerHaptics.reject(attachedActivity);
+            return;
+        }
         debugger.stepInto(pausedAtThreadId);
+        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void stepOut() {
-        if (!requireThread()) return;
+        if (!requireThread()) {
+            DebuggerHaptics.reject(attachedActivity);
+            return;
+        }
         debugger.stepOut(pausedAtThreadId);
+        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void runToCursor() {
         CodeEditorView view = attachedActivity == null
                 ? null
                 : attachedActivity.getCurrentEditor();
-        if (view == null) { flash("请先打开文件"); return; }
+        if (view == null) {
+            flash("请先打开文件");
+            DebuggerHaptics.reject(attachedActivity);
+            return;
+        }
         com.itsaky.androidide.editor.ui.IDEEditor ed = view.getEditor();
-        if (ed == null) { flash("请先打开文件"); return; }
+        if (ed == null) {
+            flash("请先打开文件");
+            DebuggerHaptics.reject(attachedActivity);
+            return;
+        }
         File file = ed.getFile();
         io.github.rosemoe.sora.text.Cursor cursor = ed.getCursor();
         if (file == null || cursor == null) {
             flash("请先把光标放在目标行");
+            DebuggerHaptics.reject(attachedActivity);
             return;
         }
         int line = cursor.getLeftLine() + 1; // 0-based -> 1-based
-        if (debugger == null) { flash("未连接调试器"); return; }
+        if (debugger == null) {
+            flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
+            DebuggerHaptics.reject(attachedActivity);
+            return;
+        }
         debugger.runToCursor(BreakpointManager.normalize(file), line);
+        DebuggerHaptics.tap(attachedActivity);
     }
 
     public void gotoCurrentBreakpoint() {
@@ -247,13 +310,33 @@ public final class DebuggerController
     }
 
     private boolean requireThread() {
-        if (debugger == null) { flash("未连接调试器"); return false; }
-        if (pausedAtThreadId <= 0L) { flash("当前没有暂停的线程"); return false; }
+        if (debugger == null) {
+            flash(getString(com.itsaky.androidide.R.string.debugger_msg_resume_reject));
+            return false;
+        }
+        if (pausedAtThreadId <= 0L) {
+            flash(getString(com.itsaky.androidide.R.string.debugger_msg_step_reject));
+            return false;
+        }
         return true;
     }
 
     private void flash(String msg) {
+        if (msg == null) return;
         if (attachedActivity != null) attachedActivity.showFlashInfo(msg);
+    }
+
+    /** PR-D5: 把资源 id 解析为字符串(attachedActivity 为 null 时回退到 context 包名)。 */
+    @Nullable
+    private String getString(int resId) {
+        if (attachedActivity != null) return attachedActivity.getString(resId);
+        return null;
+    }
+
+    @Nullable
+    private String getString(int resId, @Nullable Object... args) {
+        if (attachedActivity != null) return attachedActivity.getString(resId, args);
+        return null;
     }
 
     // -- Debugger.Listener --
@@ -282,6 +365,8 @@ public final class DebuggerController
         pausedAtThreadId = -1L;
         sessionState.onResume();
         DebuggerAccessibility.announceResumed(attachedActivity);
+        // PR-D5: 恢复运行时给一次弱触觉反馈,告知"程序已开始运行"
+        DebuggerHaptics.tap(attachedActivity);
     }
 
     @Override
@@ -289,6 +374,8 @@ public final class DebuggerController
         if (attachedActivity == null) return;
         if (connected) {
             attachedActivity.showFlashInfo("调试器已连接");
+            // PR-D5: 连接成功用强反馈
+            DebuggerHaptics.strong(attachedActivity);
         } else {
             attachedActivity.showFlashInfo("调试器已断开");
         }
@@ -304,6 +391,13 @@ public final class DebuggerController
                 BreakpointManager.getInstance().findAt(frame.sourceFile, frame.lineNumber);
         if (bp != null) {
             BreakpointManager.getInstance().markHit(bp);
+        }
+        // PR-D5: 断点命中用强反馈(只有断点命中才用 strong,普通 step
+        // / 异常只用 tap,避免频繁强震让用户疲劳)。
+        if (bp != null) {
+            DebuggerHaptics.strong(attachedActivity);
+        } else {
+            DebuggerHaptics.tap(attachedActivity);
         }
         // PR-D4: 切到 Variables tab,让用户立刻看到当前帧的变量(以及
         // Call Stack 中的 frame 切换和 Watch 视图的实时求值)。

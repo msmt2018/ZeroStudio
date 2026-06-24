@@ -335,6 +335,8 @@ public class BreakpointConditionDialog extends DialogFragment {
             default: mode = Breakpoint.HitCountMode.ALWAYS; count = 0; break;
         }
         mgr.setHitCount(bp.id, mode, count);
+        // PR-D5: 触觉反馈告知"配置已保存"
+        DebuggerHaptics.strong(requireActivity());
         return true;
     }
 

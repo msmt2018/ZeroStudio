@@ -161,4 +161,20 @@
     <string name="debugger_a11y_paused">程序已暂停于 %1$s 第 %2$d 行</string>
     <string name="debugger_a11y_resumed">程序已恢复运行</string>
     <string name="debugger_a11y_exception_prefix">异常:%1$s</string>
+
+    <!-- PR-D5: 触觉反馈 / 错误提示 -->
+    <string name="debugger_msg_stop_force_stop_failed">force-stop 失败: %1$s。请手动结束进程。</string>
+    <string name="debugger_msg_stop_no_target">已停止调试(目标包名未记录)</string>
+    <string name="debugger_msg_step_reject">当前没有暂停的线程,无法单步</string>
+    <string name="debugger_msg_resume_reject">未连接调试器,无法恢复</string>
+    <string name="debugger_msg_pause_reject">未连接调试器,无法暂停</string>
+
+    <!-- PR-D5: 变量长按菜单 -->
+    <string name="debugger_var_action_copy_name">复制变量名</string>
+    <string name="debugger_var_action_copy_value">复制值</string>
+    <string name="debugger_var_action_add_watch">添加为监视</string>
+    <string name="debugger_var_action_open_declaration">跳转到声明</string>
+    <string name="debugger_var_copied">已复制 %1$s</string>
+    <string name="debugger_var_watch_added">已添加监视: %1$s</string>
+    <string name="debugger_var_no_value_to_copy">该变量没有可复制的值</string>
 </resources>

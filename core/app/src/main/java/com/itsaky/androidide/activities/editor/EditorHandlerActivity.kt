@@ -618,12 +618,30 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
         object : com.itsaky.androidide.debugger.view.BreakpointGutterManager
             .OnBreakpointActionListener {
           override fun onBreakpointClick(filePath: String, line: Int) {
-            // 用户点击行号 gutter → 弹"断点类型"小弹窗,选完后 popup.dismiss()
-            // 关闭自身 (Android ListPopupWindow 的标准行为),选完的 callback
-            // 在 popup.setOnItemClickListener 中调 BreakpointManager 处理。
+            // 旧式无坐标 API 兜底 — 退回到把弹窗锚定到整个 editor view。
             com.itsaky.androidide.debugger.view.BreakpointTypePicker.show(
                 this@EditorHandlerActivity,
                 view,
+                filePath,
+                line,
+            )
+          }
+
+          override fun onBreakpointClick(
+              filePath: String,
+              line: Int,
+              x: Float,
+              y: Float,
+          ) {
+            // 短按带点击位置 — 把弹窗锚定到具体行,而不是整个 editor 顶部。
+            // 1x1 ghost view 通过 (x, y) 摆到按住的行上,ListPopupWindow 锚定
+            // 到它,关闭后 OnDismissListener 移除 ghost,避免持续占用 View 树。
+            val parent = view.parent as? android.view.ViewGroup ?: view
+            com.itsaky.androidide.debugger.view.BreakpointTypePicker.showAtPosition(
+                this@EditorHandlerActivity,
+                parent,
+                x.toInt(),
+                y.toInt(),
                 filePath,
                 line,
             )

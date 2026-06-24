@@ -59,7 +59,7 @@ public class VariablesFragment extends Fragment
 
         adapter = new VariablesAdapter();
         // PR-D4: 单击 -> 弹出 set-value 对话框;
-        // 长按保留 (保留扩展点)
+        // PR-D5: 长按 -> 弹 popup menu(复制名/复制值/添加监视/跳转声明)。
         adapter.setListener(new VariablesAdapter.Listener() {
             @Override
             public void onItemClick(@NonNull VariableInfo variable) {
@@ -67,8 +67,7 @@ public class VariablesFragment extends Fragment
             }
             @Override
             public void onVariableLongClick(@NonNull VariableInfo variable) {
-                // PR-D4 暂未启用 set-via-context-menu,留作扩展点。
-                // 例如后续可在此弹出"复制 / 在监视中添加 / 类型详情"。
+                showVariablePopupMenu(variable);
             }
         });
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -179,6 +178,64 @@ public class VariablesFragment extends Fragment
         }
         if (loadingView != null) loadingView.setVisibility(View.GONE);
         if (list != null) list.setVisibility(empty ? View.GONE : View.VISIBLE);
+    }
+
+    /**
+     * PR-D5: 变量项长按弹窗菜单(复制名/复制值/添加为监视/跳转声明)。
+     * 4 个动作;其中"跳转声明"在断点未命中当前变量对应的源码时仅占位
+     * (后续 PR 接到 FindDefinition 即可),不弹错误。
+     */
+    private void showVariablePopupMenu(@NonNull VariableInfo variable) {
+        androidx.appcompat.widget.PopupMenu menu = new androidx.appcompat.widget.PopupMenu(
+                requireContext(), list);
+        menu.getMenu().add(0, 1, 0, R.string.debugger_var_action_copy_name);
+        menu.getMenu().add(0, 2, 1, R.string.debugger_var_action_copy_value);
+        menu.getMenu().add(0, 3, 2, R.string.debugger_var_action_add_watch);
+        menu.getMenu().add(0, 4, 3, R.string.debugger_var_action_open_declaration);
+        menu.setOnMenuItemClickListener(item -> {
+            int id = item.getItemId();
+            if (id == 1) {
+                copyToClipboard(variable.name);
+                flashCopied(variable.name);
+            } else if (id == 2) {
+                if (variable.value == null) {
+                    flash(R.string.debugger_var_no_value_to_copy);
+                } else {
+                    copyToClipboard(variable.value);
+                    flashCopied(variable.name);
+                }
+            } else if (id == 3) {
+                com.itsaky.androidide.debugger.model.WatchStore.getInstance()
+                        .add(variable.name);
+                flash(getString(R.string.debugger_var_watch_added, variable.name));
+                DebuggerHaptics.strong(requireActivity());
+            } else if (id == 4) {
+                // "跳转到声明" — 留作 FindDefinition / R4 扩展点。
+                // PR-D5 仅做动作分发,不在此实现(避免 placeholder bug)。
+            }
+            return true;
+        });
+        menu.show();
+    }
+
+    private void copyToClipboard(@NonNull String text) {
+        android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        if (cm == null) return;
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("debugger", text));
+    }
+
+    private void flashCopied(@NonNull String name) {
+        flash(getString(R.string.debugger_var_copied, name));
+        DebuggerHaptics.tap(requireActivity());
+    }
+
+    private void flash(int resId) {
+        FlashbarActivityUtilsKt.flashInfo(requireActivity(), getString(resId));
+    }
+
+    private void flash(@NonNull String msg) {
+        FlashbarActivityUtilsKt.flashInfo(requireActivity(), msg);
     }
 
     private static String humanType(@Nullable String sig) {

@@ -35,9 +35,16 @@ import java.util.List;
 public class BreakpointSidebar extends View {
 
     public interface OnBreakpointClickListener {
-        /** 短按：切换（添加/删除）该行断点。 */
+        /** 短按:切换(添加/删除)该行断点。 */
         void onBreakpointClick(@NonNull String file, int line);
-        /** 长按：弹出条件/禁用/删除菜单。 */
+        /**
+         * PR-D4+: 短按带点击位置。宿主可用此把弹窗锚定到具体行,而不是整
+         * 个 sidebar 视口。默认实现 fallback 到无坐标版本,保留向后兼容。
+         */
+        default void onBreakpointClick(@NonNull String file, int line, float x, float y) {
+            onBreakpointClick(file, line);
+        }
+        /** 长按:弹出条件/禁用/删除菜单。 */
         void onBreakpointLongClick(@NonNull IdeBreakpoint bp);
     }
 
@@ -98,7 +105,7 @@ public class BreakpointSidebar extends View {
                         if (row < 0) return false;
                         // 短按：切换该行断点（若已存在则删,否则加）。
                         // 之前的实现是"已存在则删,新行则加",这里合并为 toggle 语义。
-                        clickListener.onBreakpointClick(currentFile, row);
+                        clickListener.onBreakpointClick(currentFile, row, e.getX(), e.getY());
                         performClick();
                         return true;
                     }
@@ -114,7 +121,7 @@ public class BreakpointSidebar extends View {
                             clickListener.onBreakpointLongClick(nearest);
                         } else {
                             // 没有断点时,长按也走"切换"路径,行为与单击一致。
-                            clickListener.onBreakpointClick(currentFile, row);
+                            clickListener.onBreakpointClick(currentFile, row, e.getX(), e.getY());
                         }
                         performLongClick();
                     }

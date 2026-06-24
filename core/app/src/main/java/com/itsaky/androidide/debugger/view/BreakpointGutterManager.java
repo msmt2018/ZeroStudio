@@ -32,7 +32,18 @@ public final class BreakpointGutterManager {
     private static final Map<CodeEditor, BreakpointGutterManager> attached = new HashMap<>();
 
     public interface OnBreakpointActionListener {
-        void onBreakpointClick(@NonNull String file, int line);
+        /** 旧式无坐标 API,保留向后兼容。 */
+        default void onBreakpointClick(@NonNull String file, int line) {
+            // 不通知 — 旧实现者不会用 showAtPosition
+        }
+        /**
+         * PR-D4+: 短按带点击位置(以 sidebar View 局部坐标)。
+         * 宿主可调 {@link com.itsaky.androidide.debugger.view.BreakpointTypePicker#showAtPosition}
+         * 把弹窗锚定到具体行,而非整个 sidebar 视口。
+         */
+        default void onBreakpointClick(@NonNull String file, int line, float x, float y) {
+            onBreakpointClick(file, line);
+        }
         void onBreakpointLongClick(@NonNull IdeBreakpoint bp);
     }
 
@@ -85,6 +96,10 @@ public final class BreakpointGutterManager {
                 @Override
                 public void onBreakpointClick(@NonNull String f, int line) {
                     if (actionListener != null) actionListener.onBreakpointClick(f, line);
+                }
+                @Override
+                public void onBreakpointClick(@NonNull String f, int line, float x, float y) {
+                    if (actionListener != null) actionListener.onBreakpointClick(f, line, x, y);
                 }
                 @Override
                 public void onBreakpointLongClick(@NonNull IdeBreakpoint bp) {

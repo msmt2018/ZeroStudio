@@ -164,4 +164,20 @@
     <string name="debugger_a11y_paused">Program paused at %1$s line %2$d</string>
     <string name="debugger_a11y_resumed">Program resumed</string>
     <string name="debugger_a11y_exception_prefix">Exception: %1$s</string>
+
+    <!-- PR-D5: Haptic feedback / error toasts -->
+    <string name="debugger_msg_stop_force_stop_failed">force-stop failed: %1$s. Please end the process manually.</string>
+    <string name="debugger_msg_stop_no_target">Debugging stopped (target package not recorded)</string>
+    <string name="debugger_msg_step_reject">No thread is paused, cannot step</string>
+    <string name="debugger_msg_resume_reject">Debugger not connected, cannot resume</string>
+    <string name="debugger_msg_pause_reject">Debugger not connected, cannot pause</string>
+
+    <!-- PR-D5: Variable long-click menu -->
+    <string name="debugger_var_action_copy_name">Copy name</string>
+    <string name="debugger_var_action_copy_value">Copy value</string>
+    <string name="debugger_var_action_add_watch">Add as watch</string>
+    <string name="debugger_var_action_open_declaration">Go to declaration</string>
+    <string name="debugger_var_copied">Copied %1$s</string>
+    <string name="debugger_var_watch_added">Watch added: %1$s</string>
+    <string name="debugger_var_no_value_to_copy">This variable has no value to copy</string>
 </resources>
