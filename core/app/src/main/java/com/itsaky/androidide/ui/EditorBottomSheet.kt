@@ -32,6 +32,7 @@ import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.LinearLayout
 import androidx.annotation.GravityInt
+import androidx.annotation.NonNull
 import androidx.appcompat.widget.TooltipCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -927,6 +928,40 @@ class EditorBottomSheet @JvmOverloads constructor(
   fun forceCollapse() {
     if (behavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
       behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+    }
+  }
+
+  /**
+   * PR-D7: 切到指定 fragment class 所在的 tab,找不到则 no-op。
+   * 不会自动展开底部 sheet —— 调用方自己决定要不要 [tryExpandSheetFromControl]/
+   * [expandToHalf]。
+   *
+   * @return true 表示确实切了;false 表示没有这个 tab 或没初始化
+   */
+  fun selectTabByFragmentClass(@NonNull clazz: Class<out androidx.fragment.app.Fragment>): Boolean {
+    val idx = pagerAdapter.findIndexOfFragmentByClass(clazz)
+    if (idx < 0) return false
+    return runCatching {
+      binding.pager.setCurrentItem(idx, false)
+      val tab = binding.tabs.getTabAt(idx)
+      if (tab != null && tab !== binding.tabs.selectedTab) tab.select()
+      true
+    }.getOrDefault(false)
+  }
+
+  /**
+   * PR-D7: 调试时用户期望看到断点/变量/调用栈/日志点等调试器 UI。
+   * 当前 sheet 只有 LogpointFragment 注册了 tab;展开 + 切到该 tab。
+   * 调用方应确保 [com.itsaky.androidide.debugger.DebuggerController]
+   * 实际连上了 / 暂停了,否则只是空 logpoint 列表。
+   */
+  fun openDebuggerTab() {
+    if (!selectTabByFragmentClass(com.itsaky.androidide.debugger.fragment.LogpointFragment::class.java)) {
+      // 找不到 tab,什么都不做,不要强行 expand 一个空 sheet
+      return
+    }
+    if (canExpandSheet()) {
+      behavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
     }
   }
 

@@ -110,7 +110,57 @@
      <item
           name="fragment_containers_parent"
           type="id" />
-          
+
+     <!-- PR-D6 / PR-D7: DebuggerActionMenuProvider 菜单项 id -->
+     <item
+          name="dbg_action_resume"
+          type="id" />
+     <item
+          name="dbg_action_pause"
+          type="id" />
+     <item
+          name="dbg_action_stop"
+          type="id" />
+     <item
+          name="dbg_action_step_over"
+          type="id" />
+     <item
+          name="dbg_action_step_into"
+          type="id" />
+     <item
+          name="dbg_action_step_out"
+          type="id" />
+     <item
+          name="dbg_action_run_to_cursor"
+          type="id" />
+     <item
+          name="dbg_action_debug_toggle"
+          type="id" />
+     <item
+          name="dbg_action_bp_enable_all"
+          type="id" />
+     <item
+          name="dbg_action_bp_disable_all"
+          type="id" />
+     <item
+          name="dbg_action_bp_clear"
+          type="id" />
+     <item
+          name="dbg_action_goto_current_bp"
+          type="id" />
+     <item
+          name="dbg_action_show_current_frame"
+          type="id" />
+     <item
+          name="dbg_action_refresh"
+          type="id" />
+     <item
+          name="dbg_action_add_watch"
+          type="id" />
+     <item
+          name="dbg_action_goto_exception"
+          type="id" />
+
 </resources>
 
 

@@ -4,6 +4,9 @@
      android:installLocation="internalOnly"
      tools:ignore="Instantiatable">
 
+     <!-- PR-D7: 调试器触觉反馈 (DebuggerHaptics) -->
+     <uses-permission android:name="android.permission.VIBRATE" />
+
      <application
           android:allowBackup="false"
           android:allowNativeHeapPointerTagging="false"

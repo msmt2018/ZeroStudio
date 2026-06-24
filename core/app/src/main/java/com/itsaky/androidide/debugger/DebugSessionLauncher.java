@@ -88,6 +88,16 @@ public final class DebugSessionLauncher {
     /** PR-D6: 用 AtomicBoolean 防止两个 start() 同时跑。 */
     private final java.util.concurrent.atomic.AtomicBoolean busy =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+    /**
+     * PR-D7: cancelled 标志,stop() 设置后,后续每一步的入口处都会先检查它。
+     * - 配合 busy 一起使用:busy 表示"正在跑",cancelled 表示"应该立刻停"。
+     * - 与 DebuggerController.stop() 区分:这里只中止 build/install/launch
+     *   流程,不动 JDWP 端。
+     */
+    private final java.util.concurrent.atomic.AtomicBoolean cancelled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** PR-D7: 取消时调用的 runnable,用于打断 install latch.await 等阻塞。 */
+    @Nullable private volatile java.util.concurrent.Future<?> currentTask;
     @Nullable private ShizukuBridge shizuku;
     @Nullable private RunAsBridge runAs;
 
@@ -100,6 +110,22 @@ public final class DebugSessionLauncher {
     public void setListener(@Nullable Listener l) { this.listener = l; }
 
     /**
+     * PR-D7: 主动取消正在进行的 build / install / launch 流程。
+     * 已经 install 完并 startActivity 的不影响,会继续走完;在那之前的所有
+     * 步骤会因 cancelled=true 而 short-circuit。
+     *
+     * <p>可重入,可在多次 start()/stop() 之间循环使用。
+     */
+    public void stop() {
+        cancelled.set(true);
+        java.util.concurrent.Future<?> f = currentTask;
+        if (f != null) {
+            f.cancel(true);  // mayInterruptIfRunning=true
+        }
+        log.info("DebugSessionLauncher.stop() called by user");
+    }
+
+    /**
      * 同步入口 (UI 线程). 自动选 module 进入异步流程.
      * 若当前 session 已有 worker 在跑,直接返回 false.
      */
@@ -109,6 +135,8 @@ public final class DebugSessionLauncher {
             Log.w(TAG, "start: another session is already running");
             return false;
         }
+        // PR-D7: 每次新 start() 都重置取消标志 (上一次 stop() 可能把它置为 true)。
+        cancelled.set(false);
         // PR-D2 简化: 多 module 时本工具类无法弹 chooser dialog (那是
         // Kotlin 扩展函数). 退化为只跑工作区中第一个 app module;若需要
         // chooser,PR-D3 可以补一个 Activity-based 的 chooser.
@@ -137,13 +165,18 @@ public final class DebugSessionLauncher {
         log.info("DebugSessionLauncher starting task '{}'", taskName);
         fireBuildStarting(module, variant);
         final ActionData snapshot = data;
-        // PR-D6: 复用 DebuggerController 的 daemon 单线程 bg executor,
-        // 不再 new Thread(),避免每次 start 都拉一个 thread。
-        DebuggerController.getInstance().bgExecutor().execute(() -> {
+        // PR-D7: 把 future 保存到 currentTask,stop() 才能取消。
+        currentTask = DebuggerController.getInstance().bgExecutor().submit(() -> {
             try {
                 runBuild(snapshot, module, variant, taskName);
+            } catch (Throwable t) {
+                if (cancelled.get()) {
+                    log.info("run cancelled: {}", t.getMessage());
+                } else {
+                    fail(Step.BUILD, "uncaught: " + t.getMessage());
+                }
             } finally {
-                // PR-D6: 无论成功失败都释放 busy,允许下一次 start。
+                currentTask = null;
                 busy.set(false);
             }
         });
@@ -155,6 +188,7 @@ public final class DebugSessionLauncher {
                           @NonNull AndroidModule module,
                           @NonNull BasicAndroidVariantMetadata variant,
                           @NonNull String taskName) {
+        if (cancelled.get()) { log.info("runBuild: cancelled before start"); return; }
         BuildService buildService = com.itsaky.androidide.lookup.Lookup.getDefault()
                 .lookup(BuildService.KEY_BUILD_SERVICE);
         if (buildService == null) {
@@ -193,6 +227,7 @@ public final class DebugSessionLauncher {
                             @NonNull AndroidModule module,
                             @NonNull BasicAndroidVariantMetadata variant,
                             @NonNull File apk) {
+        if (cancelled.get()) { log.info("runInstall: cancelled before start"); return; }
         com.itsaky.androidide.activities.editor.EditorHandlerActivity activity =
                 (com.itsaky.androidide.activities.editor.EditorHandlerActivity) data.get(android.content.Context.class);
         if (activity == null) {
@@ -302,6 +337,7 @@ public final class DebugSessionLauncher {
 
     @WorkerThread
     private void runLaunch(@NonNull String packageName) {
+        if (cancelled.get()) { log.info("runLaunch: cancelled before start"); return; }
         final boolean[] ok = new boolean[]{false};
         try {
             // runOnUiThread blocks until the message is posted; we then poll a flag.
@@ -332,6 +368,7 @@ public final class DebugSessionLauncher {
 
     @WorkerThread
     private void runResolvePort(@NonNull String packageName) {
+        if (cancelled.get()) { log.info("runResolvePort: cancelled before start"); return; }
         JdwpPortResolver resolver = new JdwpPortResolver(appContext);
         try {
             int port = resolver.awaitJdwpPort(
@@ -367,6 +404,7 @@ public final class DebugSessionLauncher {
 
     @WorkerThread
     private void runConnect(@NonNull String host, int port) {
+        if (cancelled.get()) { log.info("runConnect: cancelled before start"); return; }
         fireAttaching(host, port);
         try {
             DebuggerController.getInstance().connect(host, port);

@@ -9,6 +9,9 @@
  *    tag:    "ZeroStudioDebug"
  *    format: "READY pkg=<packageName> jdwp=<port> build=<variant>"
  *
+ *  PR-D7 重构: 把 logcat 进程管理 / 行读取 / 重连等通用能力抽到
+ *  [LogcatReader],本类只负责 "拿到行 → 解析 → 回调"。
+ *
  *  监听器在 IDE 启动后挂到 Logcat (通过 Shizuku / run-as 拿 logcat 输
  *  出),匹配到上述格式就回调 [onAppReady].
  *
@@ -23,11 +26,6 @@ import androidx.annotation.AnyThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,77 +49,43 @@ public final class AppReadySignalWatcher {
     }
 
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private final ExecutorService executor;
+    @Nullable private LogcatReader reader;
     @Nullable private Listener listener;
-    @Nullable private Thread currentReader;
 
     public AppReadySignalWatcher() {
-        this.executor = Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "AppReadySignalWatcher");
-            t.setDaemon(true);
-            return t;
-        });
+        // 构造时不开 reader, 等 start() 调用
     }
 
     public void setListener(@Nullable Listener l) { this.listener = l; }
 
     /**
-     * Start watching for app-ready signals. Spawns a logcat reader thread
-     * that uses `sh -c "logcat -s <TAG>:V"` via the local shell.
-     * Idempotent: calling start() twice is a no-op.
+     * Start watching for app-ready signals. Spawns a [LogcatReader] that uses
+     * `sh -c "logcat -s <TAG>:V"`. Idempotent: calling start() twice is a no-op.
      */
     @AnyThread
     public void start() {
         if (!running.compareAndSet(false, true)) return;
-        executor.submit(this::runLoop);
+        LogcatReader r = new LogcatReader("logcat -s " + SIGNAL_TAG + ":V", true);
+        r.setListener(new LogcatReader.LineListener() {
+            @Override
+            public void onLine(@NonNull String line) {
+                parseAndDispatch(line);
+            }
+            @Override
+            public void onReaderError(@NonNull Throwable t) {
+                Log.w(TAG, "logcat reader error: " + t.getMessage());
+            }
+        });
+        this.reader = r;
+        r.start();
     }
 
     @AnyThread
     public void stop() {
         if (!running.compareAndSet(true, false)) return;
-        if (currentReader != null) {
-            currentReader.interrupt();
-        }
-        executor.shutdownNow();
-    }
-
-    @WorkerThread
-    private void runLoop() {
-        // 反复尝试连接 logcat; 失败/中断 5s 后重试. logcat 命令对 shell
-        // 始终有 READY 输入流,所以 reader.join() 不会立刻返回.
-        while (running.get()) {
-            try {
-                spawnLogcatReader();
-            } catch (Throwable t) {
-                Log.w(TAG, "logcat reader crashed: " + t.getMessage());
-            }
-            if (running.get()) {
-                try {
-                    Thread.sleep(5_000L);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-            }
-        }
-    }
-
-    @WorkerThread
-    private void spawnLogcatReader() throws java.io.IOException {
-        Process p = new ProcessBuilder("sh", "-c",
-                "logcat -s " + SIGNAL_TAG + ":V")
-                .redirectErrorStream(true)
-                .start();
-        currentReader = Thread.currentThread();
-        try (BufferedReader br = new BufferedReader(
-                new InputStreamReader(p.getInputStream()))) {
-            String line;
-            while (running.get() && (line = br.readLine()) != null) {
-                parseAndDispatch(line);
-            }
-        } finally {
-            try { p.destroy(); } catch (Throwable ignored) {}
-        }
+        LogcatReader r = this.reader;
+        if (r != null) r.stop();
+        this.reader = null;
     }
 
     /** Exposed for tests: parse one line and dispatch. */

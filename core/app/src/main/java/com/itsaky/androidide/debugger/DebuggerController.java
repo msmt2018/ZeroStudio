@@ -26,6 +26,7 @@ import com.zerostudio.debugger.event.DebugEventBus;
 import com.zerostudio.debugger.event.DebugEvents;
 import com.zerostudio.debugger.model.DebugSession.State;
 import java.io.File;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -140,6 +141,7 @@ public final class DebuggerController
         BreakpointManager.getInstance().bindDebugger(null);
         sessionState.onDisconnected();
         pausedAtThreadId = -1L;
+        announceDisconnected();
     }
 
     public void resume() {
@@ -290,6 +292,62 @@ public final class DebuggerController
         }
     }
 
+    /**
+     * PR-D7: 跳转到异常抛出处。
+     *
+     * <p>当前实现策略:在栈帧列表中找第一个 sourceFile 命名空间看起来是
+     * 用户应用代码的 (即 frame 来自用户包名,而不是 java.* / android.* /
+     * kotlin.* / dalvik.* 等系统栈);找不到时回退到栈顶 (与
+     * [gotoCurrentBreakpoint] 行为一致)。
+     *
+     * <p>真正的"异常位置"需要 JDWP ExceptionEvent 携带的 throwLocation
+     * 字段,目前 [com.zerostudio.debugger.api.SuspendInfo] 没暴露这字段,
+     * 等 ide-debugger 那边补上后,这里会直接使用 throwLocation。
+     */
+    public void gotoException() {
+        SuspendInfo info = debugger == null ? null : debugger.lastSuspendInfo();
+        if (info == null) { flash("当前没有暂停点"); return; }
+        if (info.frames == null || info.frames.isEmpty()) {
+            flash("当前没有可显示的栈帧");
+            return;
+        }
+        StackFrameInfo target = findUserCodeFrame(info.frames);
+        if (target == null) {
+            target = info.frames.get(0); // fallback: 栈顶
+        }
+        com.itsaky.androidide.models.Range range =
+                new com.itsaky.androidide.models.Range(
+                        new com.itsaky.androidide.models.Position(target.lineNumber - 1, 0),
+                        new com.itsaky.androidide.models.Position(target.lineNumber - 1, 0));
+        if (attachedActivity != null) {
+            attachedActivity.openFileAndSelect(new File(target.sourceFile), range);
+        }
+    }
+
+    /** 跳过 java.*/android.*/kotlin.*/dalvik.* 等系统栈,找第一帧用户代码。 */
+    @Nullable
+    private static StackFrameInfo findUserCodeFrame(@NonNull List<StackFrameInfo> frames) {
+        String userPkg = DebuggerController.getInstance().getTargetPackage();
+        for (StackFrameInfo f : frames) {
+            if (f == null || f.sourceFile == null) continue;
+            String sf = f.sourceFile;
+            if (sf.startsWith("java/") || sf.startsWith("javax/")
+                    || sf.startsWith("android/") || sf.startsWith("androidx/")
+                    || sf.startsWith("kotlin/") || sf.startsWith("kotlinx/")
+                    || sf.startsWith("dalvik/") || sf.startsWith("com/android/")) {
+                continue;
+            }
+            if (userPkg != null && !userPkg.isEmpty()) {
+                String pkgPath = userPkg.replace('.', '/');
+                if (sf.contains(pkgPath)) return f;
+            } else {
+                // 没目标包信息,只根据"非系统栈"判断
+                return f;
+            }
+        }
+        return null;
+    }
+
     public void showCurrentFrame() {
         SuspendInfo info = debugger == null ? null : debugger.lastSuspendInfo();
         if (info == null) { flash("当前没有暂停点"); return; }
@@ -332,6 +390,53 @@ public final class DebuggerController
         if (attachedActivity != null) attachedActivity.flashInfo(msg);
     }
 
+    // ------- PR-D7: 4 事件 a11y announce + haptics -------
+
+    /** 取 attachedActivity 的 root view 作为 announce anchor。无 attach 时返回 null。 */
+    @Nullable
+    private android.view.View a11yAnchor() {
+        if (attachedActivity == null) return null;
+        try {
+            return attachedActivity.findViewById(android.R.id.content);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private void announceConnected() {
+        final android.view.View v = a11yAnchor();
+        if (v == null || attachedActivity == null) return;
+        try {
+            DebuggerAccessibility.announceConnected(v, attachedActivity);
+        } catch (Throwable ignored) {}
+    }
+
+    private void announceDisconnected() {
+        final android.view.View v = a11yAnchor();
+        if (v == null || attachedActivity == null) return;
+        try {
+            DebuggerAccessibility.announceDisconnected(v, attachedActivity);
+        } catch (Throwable ignored) {}
+    }
+
+    private void announceResumed() {
+        final android.view.View v = a11yAnchor();
+        if (v == null || attachedActivity == null) return;
+        try {
+            DebuggerAccessibility.announceResumed(v, attachedActivity);
+        } catch (Throwable ignored) {}
+        DebuggerHaptics.onResumed(attachedActivity);
+    }
+
+    private void announcePaused(@NonNull String file, int line) {
+        final android.view.View v = a11yAnchor();
+        if (v == null || attachedActivity == null) return;
+        try {
+            DebuggerAccessibility.announcePaused(v, attachedActivity, file, line);
+        } catch (Throwable ignored) {}
+        DebuggerHaptics.onPaused(attachedActivity);
+    }
+
     // -- Debugger.Listener --
 
     @Override
@@ -357,6 +462,7 @@ public final class DebuggerController
     public void onResumed() {
         pausedAtThreadId = -1L;
         sessionState.onResume();
+        announceResumed();
     }
 
     @Override
@@ -364,8 +470,10 @@ public final class DebuggerController
         if (attachedActivity == null) return;
         if (connected) {
             attachedActivity.flashInfo("调试器已连接");
+            announceConnected();
         } else {
             attachedActivity.flashInfo("调试器已断开");
+            announceDisconnected();
         }
     }
 
@@ -379,6 +487,24 @@ public final class DebuggerController
                 BreakpointManager.getInstance().findAt(frame.sourceFile, frame.lineNumber);
         if (bp != null) {
             BreakpointManager.getInstance().markHit(bp);
+        }
+        announcePaused(frame.sourceFile, frame.lineNumber);
+        autoOpenDebuggerTab();
+    }
+
+    /**
+     * PR-D7: 命中断点 / 暂停线程时自动把底部 sheet 切到调试 tab 并半展开。
+     * 这样用户能直接看到 Logpoint 输出 / Variables 等上下文,不必手点。
+     * 静默失败:任何异常都不能阻塞调试主流程。
+     */
+    private void autoOpenDebuggerTab() {
+        if (!(attachedActivity instanceof com.itsaky.androidide.activities.editor.BaseEditorActivity)) return;
+        final com.itsaky.androidide.activities.editor.BaseEditorActivity bea =
+                (com.itsaky.androidide.activities.editor.BaseEditorActivity) attachedActivity;
+        try {
+            bea.getContent().getBottomSheet().openDebuggerTab();
+        } catch (Throwable t) {
+            ILogger.warn(TAG, "autoOpenDebuggerTab failed: " + t.getMessage());
         }
     }
 
