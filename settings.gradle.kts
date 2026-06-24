@@ -174,6 +174,7 @@ include(
     ":event:eventbus-events",
 
     ":ide-decompiler",
+    ":ide-debugger",
     ":ide-language",
 
     ":java:javac-services",
