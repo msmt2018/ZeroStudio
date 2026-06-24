@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - Debugger strings (English)
+
+  Reference translation. Phases E4/F7 will gradually add more locales
+  (ja, ko, ru, etc.) as contributors join.
+-->
+<resources>
+
+    <!-- Breakpoints tab / list -->
+    <string name="debugger_breakpoints_tab">Breakpoints</string>
+    <string name="debugger_breakpoints_title">Breakpoints</string>
+    <string name="debugger_breakpoints_empty">No breakpoints\nClick the editor gutter to add one</string>
+    <string name="debugger_breakpoint_glyph_desc">Breakpoint glyph</string>
+
+    <!-- Breakpoint item menu -->
+    <string name="debugger_action_toggle_bp">Enable / Disable</string>
+    <string name="debugger_action_edit_condition">Edit condition</string>
+    <string name="debugger_action_edit_log">Edit logpoint</string>
+    <string name="debugger_action_bp_delete">Delete</string>
+    <string name="debugger_action_bp_enable_all">Enable all</string>
+    <string name="debugger_action_bp_disable_all">Disable all</string>
+    <string name="debugger_action_bp_clear">Clear</string>
+
+    <!-- Debugger main menu -->
+    <string name="debugger_menu">Debug</string>
+    <string name="debugger_menu_run">Run control</string>
+    <string name="debugger_menu_step">Step</string>
+    <string name="debugger_menu_breakpoints">Breakpoints</string>
+    <string name="debugger_menu_view">View</string>
+
+    <!-- 9 actions -->
+    <string name="debugger_action_debug_toggle">🪲 Debug</string>
+    <string name="debugger_action_resume">▶️ Resume</string>
+    <string name="debugger_action_pause">⏸️ Pause</string>
+    <string name="debugger_action_stop">⏹️ Stop</string>
+    <string name="debugger_action_step_over">⤵️ Step over</string>
+    <string name="debugger_action_step_into">⬇️ Step into</string>
+    <string name="debugger_action_step_out">⤴️ Step out</string>
+    <string name="debugger_action_run_to_cursor">👉 Run to cursor</string>
+
+    <!-- View actions -->
+    <string name="debugger_action_goto_current_bp">Go to current breakpoint</string>
+    <string name="debugger_action_show_current_frame">Show current frame</string>
+
+    <!-- Side panels -->
+    <string name="debugger_callstack_tab">Call stack</string>
+    <string name="debugger_variables_tab">Variables</string>
+    <string name="debugger_watches_tab">Watches</string>
+
+    <string name="debugger_callstack_title">Call stack</string>
+    <string name="debugger_callstack_empty">The program is not paused, no frames to show</string>
+    <string name="debugger_callstack_frame_at">@ %1$s:%2$d</string>
+
+    <string name="debugger_variables_title">Variables</string>
+    <string name="debugger_variables_empty">No variables to display</string>
+    <string name="debugger_variables_loading">Loading variables…</string>
+    <string name="debugger_variables_error">Failed to load variables: %1$s</string>
+
+    <string name="debugger_watches_title">Watches</string>
+    <string name="debugger_watches_empty">No watch expressions\nClick + to add</string>
+    <string name="debugger_watches_add">Add watch</string>
+    <string name="debugger_watches_dialog_title">Add watch expression</string>
+    <string name="debugger_watches_dialog_hint">Expression (e.g. i, list.size())</string>
+    <string name="debugger_watches_action_delete">Delete</string>
+    <string name="debugger_watches_action_clear">Clear</string>
+    <string name="debugger_watches_error">Evaluation failed: %1$s</string>
+    <string name="debugger_watches_value_pending">…</string>
+
+    <string name="debugger_action_refresh">Refresh</string>
+    <string name="debugger_action_add_watch">Add watch</string>
+
+    <!-- Expression evaluation -->
+    <string name="debugger_eval_error">Evaluation failed: %1$s</string>
+    <string name="debugger_eval_object">&lt;object&gt;</string>
+    <string name="debugger_eval_array">&lt;array&gt;</string>
+
+    <!-- Logpoint -->
+    <string name="debugger_logpoint_tab">Logpoints</string>
+    <string name="debugger_log_title">Logpoint output</string>
+    <string name="debugger_log_empty">No logpoint output\nSet a log message on a breakpoint</string>
+    <string name="debugger_log_clear">Clear</string>
+    <string name="debugger_log_autoscroll">Auto-scroll</string>
+
+    <!-- Top-level "Debug" toolbar button -->
+    <string name="debugger_action_start_debug">🪲 Start debugging</string>
+    <string name="debugger_action_start_debug_desc">Connect to JDWP debugger</string>
+    <string name="debugger_err_build_in_progress">Build in progress; please wait until the build finishes</string>
+    <string name="debugger_err_launcher_busy">The debug launcher is already running</string>
+    <string name="debugger_msg_connecting">Connecting to debugger %1$s:%2$d …</string>
+    <string name="debugger_msg_connected">Connected to debugger %1$s:%2$d</string>
+    <string name="debugger_msg_disconnected">Disconnected from debugger</string>
+
+    <!-- DebugSessionLauncher status messages -->
+    <string name="debugger_msg_build_starting">Starting build of %1$s …</string>
+    <string name="debugger_msg_install_starting">Installing %1$s …</string>
+    <string name="debugger_msg_install_committed">Install committed, waiting for completion …</string>
+    <string name="debugger_msg_launched">Launched %1$s</string>
+    <string name="debugger_msg_failed">Debug launch failed @%1$s : %2$s</string>
+
+    <!-- Breakpoint condition / logpoint dialog -->
+    <string name="debugger_bcd_title">Breakpoint properties</string>
+    <string name="debugger_bcd_type">Breakpoint type</string>
+    <string name="debugger_bcd_type_normal">Normal</string>
+    <string name="debugger_bcd_type_condition">Condition</string>
+    <string name="debugger_bcd_type_logpoint">Logpoint</string>
+    <string name="debugger_bcd_condition_label">Condition expression</string>
+    <string name="debugger_bcd_condition_hint">e.g. i &gt; 0 &amp;&amp; !done</string>
+    <string name="debugger_bcd_condition_helper">Evaluated on hit; non-truthy means continue</string>
+    <string name="debugger_bcd_log_label">Log message</string>
+    <string name="debugger_bcd_log_hint">e.g. \"x=\" + x</string>
+    <string name="debugger_bcd_hit_count">Hit count</string>
+    <string name="debugger_bcd_hit_count_value">N</string>
+    <string name="debugger_bcd_hit_count_helper_always">Suspend on every hit</string>
+    <string name="debugger_bcd_hit_count_helper_equal">Suspend only on the Nth hit</string>
+    <string name="debugger_bcd_hit_count_helper_greater">Suspend on every hit after N</string>
+    <string name="debugger_bcd_hit_count_helper_multiple">Suspend every N hits</string>
+    <string name="debugger_bcd_validation_condition_empty">Condition cannot be empty</string>
+    <string name="debugger_bcd_validation_log_empty">Log message cannot be empty</string>
+    <string name="debugger_bcd_validation_count_invalid">Hit count must be an integer in 1..999999999</string>
+    <string name="debugger_bcd_btn_save">Save</string>
+    <string name="debugger_bcd_btn_cancel">Cancel</string>
+    <string name="debugger_bcd_btn_remove">Remove</string>
+
+    <!-- List item hit count display -->
+    <string name="debugger_bp_hit_equal">Hit = %1$d</string>
+    <string name="debugger_bp_hit_greater">Hit &gt; %1$d</string>
+    <string name="debugger_bp_hit_multiple">Every %1$d hits</string>
+    <string name="debugger_bp_hit_received">Hit %1$d time(s)</string>
+
+    <!-- Breakpoint state labels (7) -->
+    <string name="debugger_bp_state_normal">Normal</string>
+    <string name="debugger_bp_state_invalid">Invalid</string>
+    <string name="debugger_bp_state_verified">Verified</string>
+    <string name="debugger_bp_state_condition">Condition</string>
+    <string name="debugger_bp_state_logpoint">Logpoint</string>
+    <string name="debugger_bp_state_disabled">Disabled</string>
+    <string name="debugger_bp_state_hit">Hit</string>
+
+    <!-- Accessibility (TalkBack) strings -->
+    <string name="debugger_a11y_bp_long_press">Long-press to open the actions menu</string>
+    <string name="debugger_a11y_line_prefix">line %1$d</string>
+    <string name="debugger_a11y_condition_prefix">condition: %1$s</string>
+    <string name="debugger_a11y_log_prefix">log: %1$s</string>
+    <string name="debugger_a11y_var_loading">Loading variables</string>
+    <string name="debugger_a11y_watch_pending">Watch %1$s pending evaluation</string>
+    <string name="debugger_a11y_watch_value">Watch %1$s, value is %2$s</string>
+    <string name="debugger_a11y_watch_error">Watch %1$s evaluation failed: %2$s</string>
+    <string name="debugger_a11y_frame_at">Frame %1$s at %2$s line %3$d</string>
+    <string name="debugger_a11y_bp_hit">Breakpoint %1$s hit</string>
+    <string name="debugger_a11y_connected">Connected to debugger</string>
+    <string name="debugger_a11y_disconnected">Disconnected from debugger</string>
+    <string name="debugger_a11y_paused">Program paused at %1$s line %2$d</string>
+    <string name="debugger_a11y_resumed">Program resumed</string>
+</resources>

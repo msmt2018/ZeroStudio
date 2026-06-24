@@ -1,0 +1,3 @@
+# Build artefacts
+build/
+.gradle/

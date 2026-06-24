@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点条件/日志点配置对话框 (Phase E2)
+
+  - 顶部显示断点位置 (file:line)
+  - 类型切换: 普通 / 条件断点 / 日志点
+  - 命中次数 (hit count): ALWAYS / EQUAL / GREATER_THAN / MULTIPLE + 阈值
+  - 条件表达式 (多行, 等宽字体)  / 日志消息 (单行, 含模板)
+  - 实时语法校验提示
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="false">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- 断点位置标题 -->
+        <TextView
+            android:id="@+id/bcd_location"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceTitleSmall"
+            android:textColor="?attr/colorPrimary"
+            android:fontFamily="monospace"
+            tools:text="MainActivity.kt : 27"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="@string/debugger_bcd_type"
+            android:textAppearance="?attr/textAppearanceLabelMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"/>
+
+        <RadioGroup
+            android:id="@+id/bcd_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/bcd_type_normal"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/debugger_bcd_type_normal"
+                android:checked="true"/>
+
+            <RadioButton
+                android:id="@+id/bcd_type_condition"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/debugger_bcd_type_condition"/>
+
+            <RadioButton
+                android:id="@+id/bcd_type_logpoint"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/debugger_bcd_type_logpoint"/>
+        </RadioGroup>
+
+        <!-- ========== 条件断点区 ========== -->
+        <LinearLayout
+            android:id="@+id/bcd_condition_box"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="14dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/debugger_bcd_condition_label"
+                android:textAppearance="?attr/textAppearanceLabelMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"/>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/bcd_condition_input_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:hint="@string/debugger_bcd_condition_hint"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/bcd_condition_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textSize="13sp"
+                    android:gravity="top|start"
+                    android:inputType="textMultiLine"
+                    android:minLines="2"
+                    android:maxLines="6"
+                    android:scrollbars="vertical"
+                    android:contentDescription="@string/debugger_bcd_condition_label"
+                    android:labelFor="@id/bcd_condition_input"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:id="@+id/bcd_condition_helper"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:text="@string/debugger_bcd_condition_helper"/>
+        </LinearLayout>
+
+        <!-- ========== 日志点区 ========== -->
+        <LinearLayout
+            android:id="@+id/bcd_logpoint_box"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="14dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/debugger_bcd_log_label"
+                android:textAppearance="?attr/textAppearanceLabelMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"/>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:hint="@string/debugger_bcd_log_hint"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/bcd_log_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textSize="13sp"
+                    android:inputType="text"
+                    android:singleLine="true"
+                    android:contentDescription="@string/debugger_bcd_log_label"
+                    android:labelFor="@id/bcd_log_input"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/bcd_log_templates"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:singleLine="false"
+                xmlns:app="http://schemas.android.com/apk/res-auto"/>
+        </LinearLayout>
+
+        <!-- ========== 命中次数区 ========== -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="14dp"
+            android:background="?attr/colorOutlineVariant"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_hit_count"
+            android:textAppearance="?attr/textAppearanceLabelMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical">
+
+            <Spinner
+                android:id="@+id/bcd_hit_count_mode"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:minHeight="48dp"
+                android:entries="@array/debugger_bcd_hit_count_modes"/>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/bcd_hit_count_input_layout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:hint="@string/debugger_bcd_hit_count_value"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/bcd_hit_count_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:maxLength="9"
+                    android:singleLine="true"
+                    android:contentDescription="@string/debugger_bcd_hit_count"
+                    android:labelFor="@id/bcd_hit_count_input"/>
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/bcd_hit_count_helper"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:text="@string/debugger_bcd_hit_count_helper_always"/>
+
+        <!-- ========== 实时校验状态 ========== -->
+        <TextView
+            android:id="@+id/bcd_validation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:padding="8dp"
+            android:background="@drawable/bg_validation_chip"
+            android:textColor="?attr/colorOnErrorContainer"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:visibility="gone"
+            tools:text="表达式不能为空"
+            tools:visibility="visible"/>
+    </LinearLayout>
+</ScrollView>

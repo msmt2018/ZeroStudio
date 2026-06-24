@@ -1,0 +1,68 @@
+name: ide-debugger unit tests
+
+# Phase F5: CI workflow for ide-debugger module unit tests.
+# Runs on push to main and on pull requests that touch ide-debugger/**.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ide-debugger/**'
+      - 'utilities/logwire/**'  # ide-debugger depends on logwire
+      - '.github/workflows/ide-debugger-tests.yml'
+  pull_request:
+    paths:
+      - 'ide-debugger/**'
+      - 'utilities/logwire/**'
+      - '.github/workflows/ide-debugger-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure JDK 21 (Zulu 21.0.9)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Configure Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Grant execution permissions to the Gradle wrapper
+        run: chmod +x ./gradlew
+
+      - name: Run ide-debugger unit tests
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx2g -XX:MaxMetaspaceSize=512m' -Dorg.gradle.daemon=false"
+        run: |
+          gradle :ide-debugger:testDebugUnitTest --build-cache --max-workers=2
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ide-debugger-test-reports
+          path: ide-debugger/build/reports/tests/testDebugUnitTest/
+          retention-days: 7
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          if [ -f "ide-debugger/build/reports/tests/testDebugUnitTest/index.html" ]; then
+            echo "Test report generated. Download the artifact to view details." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No test report found." >> $GITHUB_STEP_SUMMARY
+          fi

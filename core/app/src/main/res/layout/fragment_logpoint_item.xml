@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~  ZeroStudio IDE - 日志条目 item (PR-6)
+  ~  显示来源(文件:行)+ 时间戳 + 文本
+  -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical"
+  android:padding="6dp">
+
+  <TextView
+    android:id="@+id/log_item_meta"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:textSize="10sp"
+    android:textColor="?attr/colorOnSurfaceVariant"
+    android:fontFamily="monospace"
+    tools:ignore="MissingDefaultResource"
+    xmlns:tools="http://schemas.android.com/tools"/>
+
+  <TextView
+    android:id="@+id/log_item_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:textSize="13sp"
+    android:textColor="?attr/colorOnSurface"
+    android:fontFamily="monospace"
+    android:textIsSelectable="true"/>
+</LinearLayout>

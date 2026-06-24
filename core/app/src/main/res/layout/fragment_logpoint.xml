@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~  ZeroStudio IDE - 调试日志点输出 Fragment 布局 (PR-6)
+  ~  顶部:清空 / 自动滚动开关
+  ~  中部:日志条目列表 (RecyclerView)
+  ~  底部:空提示
+  -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:orientation="vertical"
+  android:background="?attr/colorSurface">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="8dp"
+    android:gravity="center_vertical"
+    android:background="?attr/colorSurfaceVariant">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:textSize="14sp"
+      android:textStyle="bold"
+      android:textColor="?attr/colorOnSurface"
+      android:text="@string/debugger_log_title"/>
+
+    <Button
+      android:id="@+id/log_clear"
+      style="?attr/borderlessButtonStyle"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:textSize="12sp"
+      android:text="@string/debugger_log_clear"/>
+
+    <CheckBox
+      android:id="@+id/log_autoscroll"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:textSize="12sp"
+      android:checked="true"
+      android:text="@string/debugger_log_autoscroll"/>
+  </LinearLayout>
+
+  <FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <androidx.recyclerview.widget.RecyclerView
+      android:id="@+id/log_list"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:padding="4dp"
+      android:scrollbars="vertical"/>
+
+    <TextView
+      android:id="@+id/log_empty"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_gravity="center"
+      android:gravity="center"
+      android:textSize="14sp"
+      android:textColor="?attr/colorOnSurfaceVariant"
+      android:text="@string/debugger_log_empty"/>
+  </FrameLayout>
+</LinearLayout>

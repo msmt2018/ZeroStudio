@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点列表 item 布局
+
+  | [●]  ../app/src/main/.../MainActivity.kt   27   条件     |
+  |         条件: i > 0                                                     |
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="10dp"
+    android:background="?attr/selectableItemBackground"
+    android:focusable="true"
+    android:clickable="true"
+    android:longClickable="true"
+    android:minHeight="56dp"
+    android:accessibilityLiveRegion="polite"
+    android:importantForAccessibility="yes"
+    tools:ignore="UnusedAttribute">
+
+    <ImageView
+        android:id="@+id/bp_dot"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_breakpoint_normal"
+        tools:ignore="ContentDescription"/>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/bp_file"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="?attr/colorOnSurface"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:singleLine="true"
+                android:ellipsize="middle"
+                tools:text="../app/src/main/.../MainActivity.kt"/>
+
+            <TextView
+                android:id="@+id/bp_line"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                android:layout_marginEnd="8dp"
+                tools:text="27"/>
+
+            <TextView
+                android:id="@+id/bp_state"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                tools:text="已验证"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/bp_condition"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:visibility="gone"
+            android:layout_marginTop="2dp"
+            tools:text="条件: i > 0"/>
+
+        <TextView
+            android:id="@+id/bp_log_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:visibility="gone"
+            android:layout_marginTop="2dp"
+            tools:text="日志: x = 42"/>
+
+        <!-- Phase E2: 命中次数阈值 (仅在非 ALWAYS 模式时显示) -->
+        <TextView
+            android:id="@+id/bp_hit_count"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorTertiary"
+            android:textAppearance="?attr/textAppearanceLabelSmall"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:visibility="gone"
+            android:layout_marginTop="2dp"
+            tools:text="命中 = 5"
+            tools:visibility="visible"/>
+
+        <!-- Phase E2: 实际命中次数 -->
+        <TextView
+            android:id="@+id/bp_hit_count_received"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorPrimary"
+            android:textAppearance="?attr/textAppearanceLabelSmall"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:visibility="gone"
+            android:layout_marginTop="2dp"
+            tools:text="已命中 12 次"
+            tools:visibility="visible"/>
+    </LinearLayout>
+
+</LinearLayout>

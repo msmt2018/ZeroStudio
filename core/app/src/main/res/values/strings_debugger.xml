@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点 + 调试器相关字符串
+-->
+<resources>
+
+    <!-- 断点 Tab / 列表 -->
+    <string name="debugger_breakpoints_tab">断点</string>
+    <string name="debugger_breakpoints_title">断点</string>
+    <string name="debugger_breakpoints_empty">无断点\n点击编辑器左侧空白处可添加</string>
+    <string name="debugger_breakpoint_glyph_desc">断点图标</string>
+
+    <!-- 断点 item 菜单 -->
+    <string name="debugger_action_toggle_bp">启用 / 禁用</string>
+    <string name="debugger_action_edit_condition">编辑条件</string>
+    <string name="debugger_action_edit_log">编辑日志点</string>
+    <string name="debugger_action_bp_delete">删除</string>
+    <string name="debugger_action_bp_enable_all">全部启用</string>
+    <string name="debugger_action_bp_disable_all">全部禁用</string>
+    <string name="debugger_action_bp_clear">清空</string>
+
+    <!-- 调试器主菜单 (submenu) -->
+    <string name="debugger_menu">调试</string>
+    <string name="debugger_menu_run">运行控制</string>
+    <string name="debugger_menu_step">单步</string>
+    <string name="debugger_menu_breakpoints">断点</string>
+    <string name="debugger_menu_view">视图</string>
+
+    <!-- 9 个动作 -->
+    <string name="debugger_action_debug_toggle">🪲 调试</string>
+    <string name="debugger_action_resume">▶️ 恢复</string>
+    <string name="debugger_action_pause">⏸️ 暂停</string>
+    <string name="debugger_action_stop">⏹️ 停止</string>
+    <string name="debugger_action_step_over">⤵️ 单步跳过</string>
+    <string name="debugger_action_step_into">⬇️ 单步进入</string>
+    <string name="debugger_action_step_out">⤴️ 单步返回</string>
+    <string name="debugger_action_run_to_cursor">👉 执行到光标</string>
+
+    <!-- 视图动作 -->
+    <string name="debugger_action_goto_current_bp">转到当前断点</string>
+    <string name="debugger_action_show_current_frame">显示当前帧</string>
+
+    <!-- PR-4: 调试侧边面板 (调用栈 / 变量 / 监视) -->
+    <string name="debugger_callstack_tab">调用栈</string>
+    <string name="debugger_variables_tab">变量</string>
+    <string name="debugger_watches_tab">监视</string>
+
+    <string name="debugger_callstack_title">调用栈</string>
+    <string name="debugger_callstack_empty">程序未暂停，没有可显示的栈帧</string>
+    <string name="debugger_callstack_frame_at">@ %1$s:%2$d</string>
+
+    <string name="debugger_variables_title">变量</string>
+    <string name="debugger_variables_empty">无可显示的变量</string>
+    <string name="debugger_variables_loading">加载变量中…</string>
+    <string name="debugger_variables_error">变量加载失败：%1$s</string>
+
+    <string name="debugger_watches_title">监视</string>
+    <string name="debugger_watches_empty">没有监视表达式\n点击 + 添加表达式</string>
+    <string name="debugger_watches_add">添加监视</string>
+    <string name="debugger_watches_dialog_title">添加监视表达式</string>
+    <string name="debugger_watches_dialog_hint">表达式 (例如 i, list.size())</string>
+    <string name="debugger_watches_action_delete">删除</string>
+    <string name="debugger_watches_action_clear">清空</string>
+    <string name="debugger_watches_error">求值失败：%1$s</string>
+    <string name="debugger_watches_value_pending">…</string>
+
+    <string name="debugger_action_refresh">刷新</string>
+    <string name="debugger_action_add_watch">添加监视</string>
+
+    <!-- PR-5: 表达式求值 -->
+    <string name="debugger_eval_error">求值失败：%1$s</string>
+    <string name="debugger_eval_object">&lt;object&gt;</string>
+    <string name="debugger_eval_array">&lt;array&gt;</string>
+
+    <!-- PR-6: 条件断点 / 日志点 -->
+    <string name="debugger_logpoint_tab">日志点</string>
+    <string name="debugger_log_title">日志点输出</string>
+    <string name="debugger_log_empty">没有日志点输出\n在断点上设置日志消息表达式</string>
+    <string name="debugger_log_clear">清空</string>
+    <string name="debugger_log_autoscroll">自动滚动</string>
+
+    <!-- PR-D1: 顶层 "调试" 工具栏按钮 -->
+    <string name="debugger_action_start_debug">🪲 开始调试</string>
+    <string name="debugger_action_start_debug_desc">连接 JDWP 调试器</string>
+    <string name="debugger_err_build_in_progress">正在构建，请等待构建完成后再启动调试</string>
+    <string name="debugger_err_launcher_busy">调试启动器正在运行</string>
+    <string name="debugger_msg_connecting">正在连接调试器 %1$s:%2$d …</string>
+    <string name="debugger_msg_connected">已连接调试器 %1$s:%2$d</string>
+    <string name="debugger_msg_disconnected">已断开调试器</string>
+
+    <!-- PR-D2: DebugSessionLauncher 流程状态消息 -->
+    <string name="debugger_msg_build_starting">开始构建 %1$s …</string>
+    <string name="debugger_msg_install_starting">正在安装 %1$s …</string>
+    <string name="debugger_msg_install_committed">安装已提交，等待安装完成 …</string>
+    <string name="debugger_msg_launched">已启动 %1$s</string>
+    <string name="debugger_msg_failed">调试启动失败 @%1$s : %2$s</string>
+
+    <!-- PR-E2: 断点条件/日志点配置对话框 -->
+    <string name="debugger_bcd_title">断点属性</string>
+    <string name="debugger_bcd_type">断点类型</string>
+    <string name="debugger_bcd_type_normal">普通</string>
+    <string name="debugger_bcd_type_condition">条件</string>
+    <string name="debugger_bcd_type_logpoint">日志点</string>
+    <string name="debugger_bcd_condition_label">条件表达式</string>
+    <string name="debugger_bcd_condition_hint">例如 i &gt; 0 &amp;&amp; !done</string>
+    <string name="debugger_bcd_condition_helper">命中时求值,非真则继续运行</string>
+    <string name="debugger_bcd_log_label">日志消息</string>
+    <string name="debugger_bcd_log_hint">例如 \"x=\" + x</string>
+    <string name="debugger_bcd_hit_count">命中次数</string>
+    <string name="debugger_bcd_hit_count_value">N</string>
+    <string name="debugger_bcd_hit_count_helper_always">每次命中都触发</string>
+    <string name="debugger_bcd_hit_count_helper_equal">仅在第 N 次命中时触发</string>
+    <string name="debugger_bcd_hit_count_helper_greater">第 N 次之后每次都触发</string>
+    <string name="debugger_bcd_hit_count_helper_multiple">每命中 N 次触发一次</string>
+    <string name="debugger_bcd_validation_condition_empty">条件表达式不能为空</string>
+    <string name="debugger_bcd_validation_log_empty">日志消息不能为空</string>
+    <string name="debugger_bcd_validation_count_invalid">命中次数必须是 1 - 999999999 的整数</string>
+    <string name="debugger_bcd_btn_save">保存</string>
+    <string name="debugger_bcd_btn_cancel">取消</string>
+    <string name="debugger_bcd_btn_remove">移除</string>
+
+    <!-- PR-E2: 列表项命中次数显示 -->
+    <string name="debugger_bp_hit_equal">命中 = %1$d</string>
+    <string name="debugger_bp_hit_greater">命中 &gt; %1$d</string>
+    <string name="debugger_bp_hit_multiple">每 %1$d 次触发</string>
+    <string name="debugger_bp_hit_received">已命中 %1$d 次</string>
+
+    <!-- PR-E4: 断点状态标签 (7 种) -->
+    <string name="debugger_bp_state_normal">普通</string>
+    <string name="debugger_bp_state_invalid">无效</string>
+    <string name="debugger_bp_state_verified">已验证</string>
+    <string name="debugger_bp_state_condition">条件</string>
+    <string name="debugger_bp_state_logpoint">日志点</string>
+    <string name="debugger_bp_state_disabled">禁用</string>
+    <string name="debugger_bp_state_hit">命中</string>
+
+    <!-- PR-E5: 无障碍 (TalkBack) 文案 -->
+    <string name="debugger_a11y_bp_long_press">长按调出操作菜单</string>
+    <string name="debugger_a11y_line_prefix">第 %1$d 行</string>
+    <string name="debugger_a11y_condition_prefix">条件:%1$s</string>
+    <string name="debugger_a11y_log_prefix">日志:%1$s</string>
+    <string name="debugger_a11y_var_loading">正在加载变量</string>
+    <string name="debugger_a11y_watch_pending">监视 %1$s 等待求值</string>
+    <string name="debugger_a11y_watch_value">监视 %1$s,值为 %2$s</string>
+    <string name="debugger_a11y_watch_error">监视 %1$s 求值失败: %2$s</string>
+    <string name="debugger_a11y_frame_at">栈帧 %1$s,位于 %2$s 第 %3$d 行</string>
+    <string name="debugger_a11y_bp_hit">断点 %1$s 命中</string>
+    <string name="debugger_a11y_connected">已连接调试器</string>
+    <string name="debugger_a11y_disconnected">已断开调试器</string>
+    <string name="debugger_a11y_paused">程序已暂停于 %1$s 第 %2$d 行</string>
+    <string name="debugger_a11y_resumed">程序已恢复运行</string>
+</resources>
