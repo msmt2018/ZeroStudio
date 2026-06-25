@@ -53,6 +53,49 @@ public final class BreakpointTypePicker {
     @NonNull private final ListPopupWindow popup;
     @NonNull private final ArrayAdapter<String> adapter;
 
+
+    public static void show(
+            @NonNull Context context,
+            @NonNull View anchor,
+            @NonNull String file,
+            int line) {
+        showAtPosition(context, anchor, 0, 0, file, line);
+    }
+
+    public static void showAtPosition(
+            @NonNull Context context,
+            @NonNull View anchor,
+            int x,
+            int y,
+            @NonNull String file,
+            int line) {
+        BreakpointTypePicker picker = new BreakpointTypePicker(context);
+        picker.showAtPosition(anchor, x, y, type -> {
+            com.itsaky.androidide.debugger.model.BreakpointManager manager =
+                    com.itsaky.androidide.debugger.model.BreakpointManager.getInstance();
+            if (type == Type.NORMAL) {
+                manager.toggle(file, line);
+            } else {
+                com.itsaky.androidide.debugger.model.IdeBreakpoint bp =
+                        manager.findAt(file, line);
+                if (bp == null) {
+                    bp = new com.itsaky.androidide.debugger.model.IdeBreakpoint(file, line);
+                    manager.add(bp);
+                }
+                if (type == Type.CONDITION) {
+                    com.itsaky.androidide.debugger.BreakpointConditionDialog.showDialog(
+                            ((androidx.fragment.app.FragmentActivity) context).getSupportFragmentManager(),
+                            bp.id);
+                } else if (type == Type.LOGPOINT) {
+                    bp.setLogMessage("");
+                    com.itsaky.androidide.debugger.BreakpointConditionDialog.showDialog(
+                            ((androidx.fragment.app.FragmentActivity) context).getSupportFragmentManager(),
+                            bp.id);
+                }
+            }
+        });
+    }
+
     public BreakpointTypePicker(@NonNull Context context) {
         this.ctx = context;
         this.popup = new ListPopupWindow(context);

@@ -152,6 +152,7 @@ public final class ReferenceFinder {
             int cut = Math.max(slash, dollar);
             simpleName = cut < 0 ? internal : internal.substring(cut + 1);
         }
+        final String targetSimpleName = simpleName;
         String key = AstIndex.classKey(classSignature);
         List<AstIndex.Reference> usages = new ArrayList<>();
         for (String f : sourceFiles) {
@@ -161,7 +162,7 @@ public final class ReferenceFinder {
                 @Override
                 public void visit(NameExpr n, Void arg) {
                     super.visit(n, arg);
-                    if (simpleName.equals(n.getNameAsString())) {
+                    if (targetSimpleName.equals(n.getNameAsString())) {
                         int line = n.getBegin().map(p -> p.line).orElse(-1);
                         int col = n.getBegin().map(p -> p.column).orElse(-1);
                         usages.add(new AstIndex.Reference(key, f, line, col));
@@ -170,7 +171,7 @@ public final class ReferenceFinder {
                 @Override
                 public void visit(ObjectCreationExpr n, Void arg) {
                     super.visit(n, arg);
-                    if (simpleName.equals(n.getType().getNameAsString())) {
+                    if (targetSimpleName.equals(n.getType().getNameAsString())) {
                         int line = n.getBegin().map(p -> p.line).orElse(-1);
                         int col = n.getBegin().map(p -> p.column).orElse(-1);
                         usages.add(new AstIndex.Reference(key, f, line, col));
