@@ -20,6 +20,9 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 public final class LogStore {
 
@@ -52,6 +55,7 @@ public final class LogStore {
     private final Deque<Entry> entries = new ArrayDeque<>();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     private int capacity = DEFAULT_CAPACITY;
+    private volatile boolean enabled = true;
 
     /** PR-D7: 后台派发线程,避免 listener.onLogAppended 在调用方线程上跑。 */
     private final android.os.HandlerThread dispatchThread =
@@ -79,7 +83,12 @@ public final class LogStore {
         append(null, -1, text);
     }
 
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+    public boolean isEnabled() { return enabled; }
+
     public void append(@Nullable String sourceFile, int line, @NonNull String text) {
+        if (!enabled) return;
         Entry e = new Entry(System.currentTimeMillis(),
                 sourceFile == null ? "" : sourceFile, line, text);
         synchronized (entries) {
@@ -117,5 +126,19 @@ public final class LogStore {
 
     public int size() {
         synchronized (entries) { return entries.size(); }
+    }
+
+    public int exportToFile(@NonNull File outFile) throws java.io.IOException {
+        List<Entry> snap = snapshot();
+        StringBuilder sb = new StringBuilder();
+        for (Entry e : snap) {
+            sb.append(e.timestamp).append('\t')
+                    .append(e.sourceFile).append(':').append(e.line).append('\t')
+                    .append(e.text).append('\n');
+        }
+        File parent = outFile.getParentFile();
+        if (parent != null) parent.mkdirs();
+        Files.write(outFile.toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
+        return snap.size();
     }
 }

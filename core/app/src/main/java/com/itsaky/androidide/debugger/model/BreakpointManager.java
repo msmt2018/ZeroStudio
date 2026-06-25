@@ -331,7 +331,7 @@ public final class BreakpointManager {
                     bp.hitCountMode, bp.hitCount);
             bp.debuggerBpId = id;
         } catch (Throwable t) {
-            ILogger.debug(TAG, "installOnDebugger failed: " + t.getMessage());
+            ILogger.ROOT.debug(TAG + ": " + "installOnDebugger failed: " + t.getMessage());
         }
     }
 
@@ -350,7 +350,7 @@ public final class BreakpointManager {
         try {
             debugger.removeBreakpoint(bp.debuggerBpId);
         } catch (Throwable t) {
-            ILogger.debug(TAG, "uninstallFromDebugger failed: " + t.getMessage());
+            ILogger.ROOT.debug(TAG + ": " + "uninstallFromDebugger failed: " + t.getMessage());
         }
         bp.debuggerBpId = -1L;
     }

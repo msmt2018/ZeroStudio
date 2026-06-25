@@ -90,9 +90,8 @@ public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter
         // 一眼看出哪个变量求值失败。
         if (v.isError) {
             h.value.setTextColor(
-                    androidx.core.content.ContextCompat.getColor(
-                            h.itemView.getContext(),
-                            com.google.android.material.R.color.material_error));
+                    com.google.android.material.color.MaterialColors.getColor(
+                            h.itemView, com.google.android.material.R.attr.colorError));
         } else {
             h.value.setTextColor(
                     com.google.android.material.color.MaterialColors.getColor(

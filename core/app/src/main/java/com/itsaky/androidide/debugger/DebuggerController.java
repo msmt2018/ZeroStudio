@@ -19,6 +19,7 @@ import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.debugger.model.LogStore;
 import com.itsaky.androidide.ui.CodeEditorView;
 import com.itsaky.androidide.utils.ILogger;
+import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
 import com.zerostudio.debugger.api.Debugger;
 import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.SuspendInfo;
@@ -129,9 +130,9 @@ public final class DebuggerController
             new Thread(() -> {
                 try { debugger.waitForVmStart(30_000L); } catch (Throwable ignored) {}
             }, "jdwp-wait-vmstart").start();
-            ILogger.info(TAG, "Debugger connected to " + host + ":" + port);
+            ILogger.ROOT.info(TAG + ": " + "Debugger connected to " + host + ":" + port);
         } catch (Throwable t) {
-            ILogger.error(TAG, "Failed to connect to JDWP server: " + t.getMessage(), t);
+            ILogger.ROOT.error(TAG + ": " + "Failed to connect to JDWP server: " + t.getMessage(), t);
         }
     }
 
@@ -184,13 +185,13 @@ public final class DebuggerController
             postMain(() -> {
                 if (attachedActivity != null) {
                     if (ok && pkg != null) {
-                        attachedActivity.flashInfo(attachedActivity.getString(
+                        FlashbarActivityUtilsKt.flashInfo(attachedActivity, attachedActivity.getString(
                                 com.itsaky.androidide.R.string.debugger_stop_ok, pkg));
                     } else if (pkg == null || pkg.isEmpty()) {
-                        attachedActivity.flashInfo(attachedActivity.getString(
+                        FlashbarActivityUtilsKt.flashInfo(attachedActivity, attachedActivity.getString(
                                 com.itsaky.androidide.R.string.debugger_stop_no_target));
                     } else {
-                        attachedActivity.flashInfo(attachedActivity.getString(
+                        FlashbarActivityUtilsKt.flashInfo(attachedActivity, attachedActivity.getString(
                                 com.itsaky.androidide.R.string.debugger_stop_failed,
                                 "force-stop exit != 0"));
                     }
@@ -211,23 +212,7 @@ public final class DebuggerController
      * 用公开 API 优先,失败时回退到 shell。
      */
     private static boolean forceStopPackage(@NonNull String pkg) {
-        // 1) 公开 API:ApplicationPackageManager (隐藏 API,但 Android 系统应用可见)
-        try {
-            android.content.pm.IPackageManager pm =
-                    android.app.ActivityThread.getPackageManager();
-            if (pm != null) {
-                try {
-                    java.lang.reflect.Method m =
-                            android.content.pm.IPackageManager.class.getMethod(
-                                    "forceStopPackage", String.class, int.class);
-                    m.invoke(pm, pkg, android.os.UserHandle.getCallingUserId());
-                    return true;
-                } catch (NoSuchMethodException nsme) {
-                    // 落到下面的 shell 命令回退
-                }
-            }
-        } catch (Throwable ignored) {}
-        // 2) 回退:exec `am force-stop <pkg>` 同步等待。
+        // 回退:exec `am force-stop <pkg>` 同步等待。
         try {
             Process p = new ProcessBuilder("am", "force-stop", pkg)
                     .redirectErrorStream(true)
@@ -235,7 +220,7 @@ public final class DebuggerController
             p.waitFor();
             return p.exitValue() == 0;
         } catch (Throwable t) {
-            ILogger.error(TAG, "force-stop failed for " + pkg + ": " + t.getMessage(), t);
+            ILogger.ROOT.error(TAG + ": " + "force-stop failed for " + pkg + ": " + t.getMessage(), t);
             return false;
         }
     }
@@ -354,10 +339,10 @@ public final class DebuggerController
         StackFrameInfo frame = (info.frames == null || info.frames.isEmpty()) ? null : info.frames.get(0);
         if (attachedActivity == null) return;
         if (frame == null) {
-            attachedActivity.flashInfo("线程 " + info.threadId + " 暂停中 (无栈帧信息)");
+            FlashbarActivityUtilsKt.flashInfo(attachedActivity, "线程 " + info.threadId + " 暂停中 (无栈帧信息)");
             return;
         }
-        attachedActivity.flashInfo(
+        FlashbarActivityUtilsKt.flashInfo(attachedActivity,
                 "线程 " + info.threadId + " 暂停于 " + frame.sourceFile
                         + ":" + frame.lineNumber);
     }
@@ -371,12 +356,7 @@ public final class DebuggerController
     }
 
     @Nullable
-    public com.zerostudio.debugger.api.Debugger debugger() {
-        return debugger;
-    }
-
-    @Nullable
-    public DebugSession.State sessionState() {
+    public State currentDebuggerState() {
         return debugger == null ? null : debugger.session().getState();
     }
 
@@ -387,7 +367,7 @@ public final class DebuggerController
     }
 
     private void flash(String msg) {
-        if (attachedActivity != null) attachedActivity.flashInfo(msg);
+        if (attachedActivity != null) FlashbarActivityUtilsKt.flashInfo(attachedActivity, msg);
     }
 
     // ------- PR-D7: 4 事件 a11y announce + haptics -------
@@ -469,10 +449,10 @@ public final class DebuggerController
     public void onConnectionChanged(boolean connected) {
         if (attachedActivity == null) return;
         if (connected) {
-            attachedActivity.flashInfo("调试器已连接");
+            FlashbarActivityUtilsKt.flashInfo(attachedActivity, "调试器已连接");
             announceConnected();
         } else {
-            attachedActivity.flashInfo("调试器已断开");
+            FlashbarActivityUtilsKt.flashInfo(attachedActivity, "调试器已断开");
             announceDisconnected();
         }
     }
@@ -502,9 +482,9 @@ public final class DebuggerController
         final com.itsaky.androidide.activities.editor.BaseEditorActivity bea =
                 (com.itsaky.androidide.activities.editor.BaseEditorActivity) attachedActivity;
         try {
-            bea.getContent().getBottomSheet().openDebuggerTab();
+            bea.openDebuggerTab(com.itsaky.androidide.debugger.fragment.LogpointFragment.class);
         } catch (Throwable t) {
-            ILogger.warn(TAG, "autoOpenDebuggerTab failed: " + t.getMessage());
+            ILogger.ROOT.warn(TAG + ": " + "autoOpenDebuggerTab failed: " + t.getMessage());
         }
     }
 
@@ -529,7 +509,7 @@ public final class DebuggerController
                     if (!expr.isEmpty()) {
                         com.itsaky.androidide.debugger.model.WatchStore.getInstance().add(expr);
                         if (attachedActivity != null) {
-                            attachedActivity.flashInfo("已添加监视: " + expr);
+                            FlashbarActivityUtilsKt.flashInfo(attachedActivity, "已添加监视: " + expr);
                         }
                     }
                 })
