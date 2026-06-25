@@ -209,10 +209,24 @@ public final class DebuggerController
 
     /**
      * PR-D6: 用 {@code am force-stop <pkg>} 终止目标包。
-     * 用公开 API 优先,失败时回退到 shell。
+     * 先通过反射尝试隐藏 PackageManager API,避免直接引用 hidden API
+     * 导致 javac 找不到符号;失败时回退到 shell。
      */
     private static boolean forceStopPackage(@NonNull String pkg) {
-        // 回退:exec `am force-stop <pkg>` 同步等待。
+        try {
+            Class<?> activityThread = Class.forName("android.app.ActivityThread");
+            Object pm = activityThread.getMethod("getPackageManager").invoke(null);
+            if (pm != null) {
+                Class<?> userHandle = Class.forName("android.os.UserHandle");
+                int userId = (Integer) userHandle.getMethod("getCallingUserId").invoke(null);
+                pm.getClass().getMethod("forceStopPackage", String.class, int.class)
+                        .invoke(pm, pkg, userId);
+                return true;
+            }
+        } catch (Throwable ignored) {
+            // Hidden API unavailable: fall back to shell below.
+        }
+
         try {
             Process p = new ProcessBuilder("am", "force-stop", pkg)
                     .redirectErrorStream(true)

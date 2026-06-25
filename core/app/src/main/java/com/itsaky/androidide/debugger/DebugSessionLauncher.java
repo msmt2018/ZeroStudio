@@ -44,6 +44,7 @@ import com.itsaky.androidide.utils.ApkInstaller;
 import com.itsaky.androidide.utils.InstallationResultHandler;
 import com.itsaky.androidide.utils.IntentUtils;
 import java.io.File;
+import java.util.Iterator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -140,11 +141,13 @@ public final class DebugSessionLauncher {
         // PR-D2 简化: 多 module 时本工具类无法弹 chooser dialog (那是
         // Kotlin 扩展函数). 退化为只跑工作区中第一个 app module;若需要
         // chooser,PR-D3 可以补一个 Activity-based 的 chooser.
-        Iterable<AndroidModule> projects = kotlin.sequences.SequencesKt.asIterable(IProjectManager.getInstance()
+        Iterator<AndroidModule> projects = IProjectManager.getInstance()
                 .getWorkspace()
-                .androidProjects());
+                .androidProjects()
+                .iterator();
         AndroidModule module = null;
-        for (AndroidModule p : projects) {
+        while (projects.hasNext()) {
+            AndroidModule p = projects.next();
             if (p.isApplication()) {
                 module = p;
                 break;
