@@ -164,14 +164,17 @@ public final class DebugSessionLauncher {
             fail(Step.SELECT_MODULE, "No build variant selected for " + module.getName());
             return false;
         }
-        String taskName = module.getPath() + ":" + variant.getMainArtifact().getAssembleTaskName();
+        final AndroidModule selectedModule = module;
+        final BasicAndroidVariantMetadata selectedVariant = variant;
+        final String taskName = selectedModule.getPath() + ":"
+                + selectedVariant.getMainArtifact().getAssembleTaskName();
         log.info("DebugSessionLauncher starting task '{}'", taskName);
-        fireBuildStarting(module, variant);
+        fireBuildStarting(selectedModule, selectedVariant);
         final ActionData snapshot = data;
         // PR-D7: 把 future 保存到 currentTask,stop() 才能取消。
         currentTask = DebuggerController.getInstance().bgExecutor().submit(() -> {
             try {
-                runBuild(snapshot, module, variant, taskName);
+                runBuild(snapshot, selectedModule, selectedVariant, taskName);
             } catch (Throwable t) {
                 if (cancelled.get()) {
                     log.info("run cancelled: {}", t.getMessage());
