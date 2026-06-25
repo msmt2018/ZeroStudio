@@ -35,6 +35,7 @@ import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentManager;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.itsaky.androidide.R;
@@ -48,7 +49,14 @@ public class BreakpointConditionDialog extends DialogFragment {
     private static final String TAG = "BpConditionDialog";
     private static final String ARG_BREAKPOINT_ID = "bp_id";
 
-    public static void show(@NonNull FragmentManager fm, @NonNull String breakpointId) {
+    /**
+     * Show the dialog for editing the given breakpoint. We can't use the
+     * name `show` because [androidx.fragment.app.DialogFragment] exposes
+     * its own non-static `show(FragmentManager, String)` and Java won't
+     * let a static method override a non-static one with the same
+     * signature.
+     */
+    public static void showDialog(@NonNull FragmentManager fm, @NonNull String breakpointId) {
         BreakpointConditionDialog d = new BreakpointConditionDialog();
         Bundle b = new Bundle();
         b.putString(ARG_BREAKPOINT_ID, breakpointId);
@@ -61,6 +69,7 @@ public class BreakpointConditionDialog extends DialogFragment {
 
     // views
     private TextView locationView;
+    private MaterialSwitch enabledSwitch;
     private RadioGroup typeGroup;
     private View conditionBox;
     private View logpointBox;
@@ -135,6 +144,7 @@ public class BreakpointConditionDialog extends DialogFragment {
 
     private void bindViews(@NonNull View root) {
         locationView = root.findViewById(R.id.bcd_location);
+        enabledSwitch = root.findViewById(R.id.bcd_enabled);
         typeGroup = root.findViewById(R.id.bcd_type);
         conditionBox = root.findViewById(R.id.bcd_condition_box);
         logpointBox = root.findViewById(R.id.bcd_logpoint_box);
@@ -176,6 +186,13 @@ public class BreakpointConditionDialog extends DialogFragment {
         // 位置
         String name = new File(bp.file).getName();
         locationView.setText(name + " : " + bp.line);
+
+        // Phase E2: 启用 / 禁用 状态
+        // 复选框反映当前断点是否被禁用,默认 checked=true (启用)。
+        // 暂存"原始启用状态"由监听器在用户切换时调用 setEnabled。
+        if (enabledSwitch != null) {
+            enabledSwitch.setChecked(isBpEnabled(bp));
+        }
 
         // 类型
         boolean isLog = bp.logMessage != null && !bp.logMessage.isEmpty();
@@ -304,8 +321,13 @@ public class BreakpointConditionDialog extends DialogFragment {
         // 在最后一次输入后未来得及触发 TextWatcher 时的边界情况。
         String err = validate();
         if (err != null) return false;
-        int checked = typeGroup.getCheckedRadioButtonId();
         BreakpointManager mgr = BreakpointManager.getInstance();
+        // Phase E2: 启用 / 禁用 状态 (先处理,避免后续 setCondition 等触发的
+        // 事件被 BreakpointManager 误判)。
+        if (enabledSwitch != null) {
+            mgr.setEnabled(bp.id, enabledSwitch.isChecked());
+        }
+        int checked = typeGroup.getCheckedRadioButtonId();
         // 1. 条件 / 日志消息
         if (checked == R.id.bcd_type_condition) {
             mgr.setCondition(bp.id, textOf(conditionInput));
@@ -328,6 +350,8 @@ public class BreakpointConditionDialog extends DialogFragment {
             default: mode = Breakpoint.HitCountMode.ALWAYS; count = 0; break;
         }
         mgr.setHitCount(bp.id, mode, count);
+        // PR-D5: 触觉反馈告知"配置已保存"
+        DebuggerHaptics.strong(requireActivity());
         return true;
     }
 
@@ -342,6 +366,11 @@ public class BreakpointConditionDialog extends DialogFragment {
     private static String textOf(@Nullable TextInputEditText e) {
         if (e == null || e.getText() == null) return null;
         return e.getText().toString();
+    }
+
+    /** Phase E2: 把 IdeBreakpoint.State 翻译成"是否启用"。DISABLED → false,其它 → true。 */
+    private static boolean isBpEnabled(@NonNull IdeBreakpoint bp) {
+        return bp.state != IdeBreakpoint.State.DISABLED;
     }
 
     /** 轻量 TextWatcher,把 onTextChanged 转换为 Runnable。 */

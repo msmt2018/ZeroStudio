@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 调试器菜单项 ID
+  DebuggerActionMenuProvider 在 Java 中按 R.id.dbg_action_* 引用这些常量。
+  数值随便选不冲突的即可,运行时只关心唯一性。
+-->
+<resources>
+    <!-- 运行控制子菜单 -->
+    <item name="dbg_action_resume" type="id" />
+    <item name="dbg_action_pause" type="id" />
+    <item name="dbg_action_stop" type="id" />
+
+    <!-- 单步子菜单 -->
+    <item name="dbg_action_step_over" type="id" />
+    <item name="dbg_action_step_into" type="id" />
+    <item name="dbg_action_step_out" type="id" />
+    <item name="dbg_action_run_to_cursor" type="id" />
+
+    <!-- 断点子菜单 -->
+    <item name="dbg_action_debug_toggle" type="id" />
+    <item name="dbg_action_bp_enable_all" type="id" />
+    <item name="dbg_action_bp_disable_all" type="id" />
+    <item name="dbg_action_bp_clear" type="id" />
+
+    <!-- 视图子菜单 -->
+    <item name="dbg_action_goto_current_bp" type="id" />
+    <item name="dbg_action_goto_exception" type="id" />
+    <item name="dbg_action_show_current_frame" type="id" />
+    <item name="dbg_action_refresh" type="id" />
+    <item name="dbg_action_add_watch" type="id" />
+</resources>

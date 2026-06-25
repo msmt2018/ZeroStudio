@@ -187,6 +187,16 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     mBuildEventListener.setActivity(this)
     super.onCreate(savedInstanceState)
 
+    // PR-D4: 挂载调试器 Action 菜单。
+    // 4 个子菜单 (运行控制 / 单步 / 断点 / 视图) 会被 MenuProvider 添加到
+    // Activity 的 toolbar (与 Build/Run/Debug 等 EDITOR_TOOLBAR action 并列)
+    // 以及 bottom ActionMode 中。`addMenuProvider` 是 androidx.core 提供的
+    // 菜单挂载点,只需一行就能让菜单在 toolbar + overflow + ActionMode 三个
+    // 出现位置都可见。
+    addMenuProvider(
+        com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider(this),
+    )
+
     fragmentTabManager = EditorFragmentTabManager(
       activity = this,
       binding = content,
@@ -480,6 +490,14 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     } else null
   }
 
+  /**
+   * PR-D4: 实现 [com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider.Host]
+   * 接口。`Activity` 本身已经是 `Context` 子类,直接 `return this` 即可;
+   * 调试器菜单中的 `flashInfo(...)` 等调用会把它转成 `Activity` 用作
+   * 扩展函数 receiver。
+   */
+  fun requireContext(): Context = this
+
   override fun getEditorAtIndex(index: Int): CodeEditorView? {
     return _binding?.content?.editorContainer?.getChildAt(index) as CodeEditorView?
   }
@@ -548,13 +566,155 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     content.editorContainer.addView(editor)
     content.tabs.addTab(content.tabs.newTab().apply { tag = editorTabId(file) })
 
+    // PR-D4: 把 BreakpointGutterManager 挂到 CodeEditor 上,点击行号 gutter
+    // 弹出 BreakpointTypePicker 让用户选择"普通/条件/日志点"3 种断点类型。
+    // 这是在 PR-2 引入 BreakpointGutterManager 后一直没有补上的 hook:
+    // 之前只有 attach()/detach() API 暴露给外部,但实际没有人调用,
+    // 所以 onBreakpointClick / onBreakpointLongClick 永远收不到事件。
+    attachBreakpointGutter(editor, file)
+
     editorViewModel.addFile(file)
     editorViewModel.setCurrentFile(position, file)
+
+    // PR-D6: 挂断点侧边栏 + 设置点击 -> 弹类型选择器 (普通/条件/日志点)。
+    // 之前侧边栏的 onBreakpointClick 没有调用方,此 hook 补上。
+    attachBreakpointGutter(editor)
 
     updateTabs()
     // onFileLoaded(editor, file)
 
     return position
+  }
+
+  /**
+   * PR-D6: 在文件打开后挂 BreakpointGutterManager + 设置点击 / 长按回调。
+   *  - 单击空行 -> {@link BreakpointTypePicker} 选类型后创建断点
+   *  - 长按已有断点 -> 弹上下文菜单 (toggle / 编辑 / 删除)
+   */
+  private fun attachBreakpointGutter(editor: CodeEditorView) {
+    val codeEditor = editor.editor ?: return
+    val file = editor.file ?: return
+    val mgr = com.itsaky.androidide.debugger.view.BreakpointGutterManager
+        .attach(codeEditor, file.absolutePath)
+    mgr.setActionListener(object :
+        com.itsaky.androidide.debugger.view.BreakpointGutterManager.OnBreakpointActionListener {
+      override fun onBreakpointClick(f: String, line: Int) {
+        // 行号 = BreakpointSidebar 报上来的 0-based 行索引 (JDWP 与 line 内部一致)
+        val absFile = File(f)
+        val existing = com.itsaky.androidide.debugger.model.BreakpointManager
+            .getInstance().findAt(absFile.absolutePath, line)
+        if (existing != null) {
+          // 已存在 -> 切换 enable/disable。
+          com.itsaky.androidide.debugger.model.BreakpointManager
+              .getInstance().setEnabled(existing.id, !existing.isActive())
+          return
+        }
+        val picker = com.itsaky.androidide.debugger.view.BreakpointTypePicker(this@EditorHandlerActivity)
+        picker.showAtPosition(
+            content.editorContainer,
+            0,
+            0,
+            object : com.itsaky.androidide.debugger.view.BreakpointTypePicker.Callback {
+              override fun onTypePicked(type: com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type) {
+                when (type) {
+                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.NORMAL -> {
+                    com.itsaky.androidide.debugger.model.BreakpointManager
+                        .getInstance().toggle(absFile.absolutePath, line)
+                  }
+                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.CONDITION -> {
+                    promptCondition(absFile, line)
+                  }
+                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.LOGPOINT -> {
+                    promptLogMessage(absFile, line)
+                  }
+                }
+              }
+            })
+      }
+
+      override fun onBreakpointLongClick(bp: com.itsaky.androidide.debugger.model.IdeBreakpoint) {
+        showBreakpointContextMenu(bp)
+      }
+    })
+    mgr.showSidebar()
+  }
+
+  /** PR-D6: 长按已有断点弹上下文菜单 (toggle / 编辑条件 / 编辑日志 / 删除) */
+  private fun showBreakpointContextMenu(bp: com.itsaky.androidide.debugger.model.IdeBreakpoint) {
+    val mgr = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+    val items = arrayOf<CharSequence>(
+        getString(com.itsaky.androidide.R.string.debugger_action_toggle_bp),
+        getString(com.itsaky.androidide.R.string.debugger_action_edit_condition),
+        getString(com.itsaky.androidide.R.string.debugger_action_edit_log),
+        getString(com.itsaky.androidide.R.string.debugger_action_bp_delete)
+    )
+    androidx.appcompat.app.AlertDialog.Builder(this)
+        .setTitle("断点 @ ${bp.file.substringAfterLast('/')}:${bp.line}")
+        .setItems(items) { _, which ->
+            when (which) {
+                0 -> mgr.setEnabled(bp.id, !bp.isActive())
+                1 -> promptCondition(File(bp.file), bp.line, bp.condition)
+                2 -> promptLogMessage(File(bp.file), bp.line, bp.logMessage)
+                3 -> mgr.remove(bp.id)
+            }
+        }
+        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
+        .show()
+  }
+
+  /** PR-D6: 让用户输入条件表达式。 */
+  private fun promptCondition(file: File, line: Int, current: String? = null) {
+    val input = android.widget.EditText(this)
+    input.setText(current ?: "")
+    input.hint = "i > 0 && !done"
+    androidx.appcompat.app.AlertDialog.Builder(this)
+        .setTitle(com.itsaky.androidide.R.string.debugger_bcd_condition_label)
+        .setView(input)
+        .setPositiveButton(com.itsaky.androidide.R.string.debugger_bcd_btn_save) { _, _ ->
+            val expr = input.text.toString().trim()
+            if (expr.isNotEmpty()) {
+                val bm = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+                val bp = bm.findAt(file.absolutePath, line)
+                if (bp != null) {
+                    // 用 manager 的 setCondition 触发 reinstallOnDebugger
+                    // (直接 bp.setCondition 只改状态,JDWP 端不会更新)
+                    bm.setCondition(bp.id, expr)
+                } else {
+                    val newBp = com.itsaky.androidide.debugger.model.IdeBreakpoint(
+                        file.absolutePath, line)
+                    newBp.setCondition(expr)
+                    bm.add(newBp)
+                }
+            }
+        }
+        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
+        .show()
+  }
+
+  /** PR-D6: 让用户输入日志消息表达式。 */
+  private fun promptLogMessage(file: File, line: Int, current: String? = null) {
+    val input = android.widget.EditText(this)
+    input.setText(current ?: "")
+    input.hint = "\"x=\" + x"
+    androidx.appcompat.app.AlertDialog.Builder(this)
+        .setTitle(com.itsaky.androidide.R.string.debugger_bcd_log_label)
+        .setView(input)
+        .setPositiveButton(com.itsaky.androidide.R.string.debugger_bcd_btn_save) { _, _ ->
+            val expr = input.text.toString().trim()
+            val bm = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+            val bp = bm.findAt(file.absolutePath, line)
+            if (bp != null) {
+                // 走 manager 触发 reinstallOnDebugger
+                bm.setLogMessage(bp.id, expr)
+            } else if (expr.isNotEmpty()) {
+                val newBp = com.itsaky.androidide.debugger.model.IdeBreakpoint(
+                    file.absolutePath, line)
+                newBp.setLogMessage(expr)
+                bm.add(newBp)
+            }
+        }
+        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
+        .show()
   }
 
   private fun isKotlinSourceFile(file: File): Boolean {
@@ -568,6 +728,72 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
       if (file == editor?.file) return editor
     }
     return null
+  }
+
+  /**
+   * PR-D4: 把 [com.itsaky.androidide.debugger.view.BreakpointGutterManager]
+   * 挂到刚打开的 [CodeEditorView] 上,并注册一个 [BreakpointGutterManager.OnBreakpointActionListener]
+   * 用于在用户点击行号 gutter 时弹 [com.itsaky.androidide.debugger.view.BreakpointTypePicker]。
+   *
+   * <p>这一行 hook 是修复"点击行号后断点类型选择弹窗不响应"的根本 —
+   * 之前 manager 内部已经有事件分发链路 (`setActionListener → sidebar → click`),
+   * 但 `setActionListener` 一直没人调用,事件链路在第一站就断了。
+   */
+  private fun attachBreakpointGutter(
+    view: CodeEditorView,
+    file: File,
+  ) {
+    val codeEditor = view.editor ?: return
+    val gutter =
+        com.itsaky.androidide.debugger.view.BreakpointGutterManager.attach(
+            codeEditor,
+            file.absolutePath,
+        )
+    gutter.setActionListener(
+        object : com.itsaky.androidide.debugger.view.BreakpointGutterManager
+            .OnBreakpointActionListener {
+          override fun onBreakpointClick(filePath: String, line: Int) {
+            // 旧式无坐标 API 兜底 — 退回到把弹窗锚定到整个 editor view。
+            com.itsaky.androidide.debugger.view.BreakpointTypePicker.show(
+                this@EditorHandlerActivity,
+                view,
+                filePath,
+                line,
+            )
+          }
+
+          override fun onBreakpointClick(
+              filePath: String,
+              line: Int,
+              x: Float,
+              y: Float,
+          ) {
+            // 短按带点击位置 — 把弹窗锚定到具体行,而不是整个 editor 顶部。
+            // 1x1 ghost view 通过 (x, y) 摆到按住的行上,ListPopupWindow 锚定
+            // 到它,关闭后 OnDismissListener 移除 ghost,避免持续占用 View 树。
+            val parent = view.parent as? android.view.ViewGroup ?: view
+            com.itsaky.androidide.debugger.view.BreakpointTypePicker.showAtPosition(
+                this@EditorHandlerActivity,
+                parent,
+                x.toInt(),
+                y.toInt(),
+                filePath,
+                line,
+            )
+          }
+
+          override fun onBreakpointLongClick(
+              bp: com.itsaky.androidide.debugger.model.IdeBreakpoint,
+          ) {
+            // 长按已有断点:弹条件/禁用/删除菜单
+            com.itsaky.androidide.debugger.BreakpointConditionDialog.showDialog(
+                supportFragmentManager,
+                bp.id,
+            )
+          }
+        }
+    )
+    gutter.showSidebar()
   }
 
   override fun findIndexOfEditorByFile(file: File?): Int {
@@ -749,9 +975,26 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
       .firstOrNull { it.tag == expectedTag }
 
     editorViewModel.removeFile(index)
+    // PR-D4: 在 editorContainer.removeViewAt 之前先取一次 CodeEditorView,
+    // removeViewAt 之后 index 位置已被"下一个 editor"接管, getEditorAtIndex
+    // 拿到的就不是被关闭的 editor 了。拿到 CodeEditor 引用后立即 detach
+    // BreakpointGutterManager,避免侧边栏继续占用屏幕 + 事件订阅命中已
+    // 销毁的 view。
+    val closingEditor = getEditorAtIndex(index)
+    val closingCodeEditor = closingEditor?.editor
     content.apply {
       tabToRemove?.let { tabs.removeTab(it) }
+      // PR-D6: 关闭前先取 CodeEditor,detach 断点侧边栏(并取消 Sora 事件订阅),
+      // 避免侧边栏继续占用已销毁 view + NPE。
+      val closingEditor = getEditorAtIndex(index)
+      if (closingEditor != null) {
+        com.itsaky.androidide.debugger.view.BreakpointGutterManager
+            .detach(closingEditor.editor)
+      }
       editorContainer.removeViewAt(index)
+    }
+    if (closingCodeEditor != null) {
+      com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(closingCodeEditor)
     }
 
     editorViewModel.areFilesModified = hasUnsavedFiles()
@@ -863,6 +1106,14 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
     editorViewModel.removeAllFiles()
     fragmentTabManager?.closeAllTabs()
     content.apply {
+      // PR-D6: 在 removeAllViews 之前 detach 所有已注册的断点侧边栏
+      // + 取消它们的 Sora 事件订阅,避免 NPE / 内存泄漏。
+      for (i in 0 until editorContainer.childCount) {
+        val ed = editorContainer.getChildAt(i) as? CodeEditorView
+        if (ed != null) {
+          com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(ed.editor)
+        }
+      }
       tabs.removeAllTabs()
       tabs.requestLayout()
       editorContainer.removeAllViews()

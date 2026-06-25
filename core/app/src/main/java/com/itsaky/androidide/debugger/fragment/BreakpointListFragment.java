@@ -28,7 +28,7 @@ import com.itsaky.androidide.debugger.adapter.BreakpointListAdapter;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
 import com.itsaky.androidide.ui.CodeEditorView;
-import com.itsaky.androidide.utils.flashInfo;
+import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
 import java.util.List;
 
 public class BreakpointListFragment extends Fragment
@@ -122,7 +122,7 @@ public class BreakpointListFragment extends Fragment
                     || id == R.id.menu_bp_edit_log) {
                 // PR-E2: 统一合并到 BreakpointConditionDialog,
                 // 在对话框内通过 "类型" 单选切换条件/日志。
-                BreakpointConditionDialog.show(getChildFragmentManager(), bp.id);
+                BreakpointConditionDialog.showDialog(getChildFragmentManager(), bp.id);
                 return true;
             }
             if (id == R.id.menu_bp_delete) {
@@ -136,7 +136,7 @@ public class BreakpointListFragment extends Fragment
 
     private void navigateToBreakpoint(@NonNull IdeBreakpoint bp) {
         if (!(requireActivity() instanceof BaseEditorActivity)) {
-            requireActivity().flashInfo("无法跳转：当前页面非编辑器");
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(), "无法跳转：当前页面非编辑器");
             return;
         }
         BaseEditorActivity activity = (BaseEditorActivity) requireActivity();

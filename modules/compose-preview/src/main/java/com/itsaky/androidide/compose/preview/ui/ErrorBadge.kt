@@ -21,7 +21,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -143,10 +142,7 @@ fun ErrorDetailSheet(
                 androidx.compose.foundation.lazy.LazyColumn(
                     modifier = Modifier.padding(top = 4.dp),
                 ) {
-                    items(
-                        items = diagnostics,
-                        key = { d -> "${d.file}:${d.line}:${d.column}:${d.message}" },
-                    ) { d ->
+                    items(diagnostics) { d: com.itsaky.androidide.compose.preview.compiler.CompileDiagnostic ->
                         androidx.compose.foundation.layout.Column(
                             modifier = Modifier.padding(vertical = 4.dp),
                         ) {

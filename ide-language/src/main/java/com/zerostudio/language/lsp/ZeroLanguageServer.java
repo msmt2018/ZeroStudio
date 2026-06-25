@@ -1,5 +1,6 @@
 package com.zerostudio.language.lsp;
 
+import com.zerostudio.language.index.DefaultProjectIndex;
 import com.zerostudio.language.index.ProjectIndex;
 import com.zerostudio.language.model.ParsedFile;
 import com.zerostudio.language.model.Reference;
@@ -14,7 +15,7 @@ import java.util.Optional;
 
 public class ZeroLanguageServer {
 
-    private final ProjectIndex index = new ProjectIndex();
+    private final ProjectIndex index = new DefaultProjectIndex();
     private final JavaParserFacade parser = new JavaParserFacade();
     private final CodeCompletionService completion = new CodeCompletionService(index);
     private final FindReferencesService references = new FindReferencesService(index);

@@ -126,7 +126,6 @@ import androidx.compose.ui.platform.ComposeView
  */
 class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
 
-    // v3.3 Composable 子树通过 activity.viewModel 反射访问, 因此不能 private.
     internal val viewModel: ComposePreviewViewModel by viewModels()
 
     private val sourceCode: String by lazy {

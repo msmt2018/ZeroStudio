@@ -1,5 +1,6 @@
 package com.zerostudio.language.service;
 
+import com.zerostudio.language.index.DefaultProjectIndex;
 import com.zerostudio.language.index.ProjectIndex;
 import com.zerostudio.language.model.LanguageId;
 import com.zerostudio.language.model.ParsedFile;
@@ -27,7 +28,7 @@ public class CrossLanguageResolverTest {
 
     @Before
     public void setUp() {
-        idx = new ProjectIndex();
+        idx = new DefaultProjectIndex();
         // Java file
         ParsedFile javaFile = new ParsedFile("com/x/JavaClass.java", LanguageId.JAVA, "com.x",
                 Arrays.asList(

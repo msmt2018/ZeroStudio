@@ -90,11 +90,12 @@ public final class EvalEngine {
         JdwpPacket reply = client.sendCommand(
                 CommandSet.StackFrame, CommandCodes.StackFrameCmd.GetValues, buf.toByteArray());
         if (reply.errorCode() != 0) {
-            return new VariableInfo(0, "", name, typeSignature, "<error>", true, slot);
+            // PR-D8.2: 标记 isError=true, VariablesAdapter 会用 colorError 高亮
+            return new VariableInfo(0, "", name, typeSignature, "<error>", true, slot, true);
         }
         ByteBuf in = new ByteBuf(reply.data);
         in.readInt(); // count
-        byte tag = in.readByte();
+        byte tag = (byte) in.readByte();
         String value = readValue(in, tag);
         return new VariableInfo(0, String.valueOf((char) tag), name, typeSignature, value, isPrim(tag), slot);
     }
@@ -178,10 +179,20 @@ public final class EvalEngine {
             this.literalDouble = 0.0;
         }
         Resolved(Kind kind, String name) {
-            this(kind, name, null, null);
+            this.kind = kind;
+            this.name = name;
+            this.receiver = null;
+            this.args = null;
+            this.left = null;
+            this.right = null;
+            this.literalLong = 0L;
+            this.literalDouble = 0.0;
         }
         // BINARY: left/right are the operands, name is the operator.
-        private Resolved(Kind kind, String name, @Nullable Resolved left, @Nullable Resolved right) {
+        // The trailing `boolean` sentinel disambiguates this constructor
+        // from the receiver/args 4-arg form when called with `null`s.
+        private Resolved(Kind kind, String name, @Nullable Resolved left, @Nullable Resolved right,
+                         boolean isBinary) {
             this.kind = kind;
             this.name = name;
             this.receiver = null;
@@ -204,7 +215,7 @@ public final class EvalEngine {
             this.literalDouble = literalDouble;
         }
         static Resolved litString(String s) {
-            return new Resolved(Kind.LITERAL_STRING, s, null, null);
+            return new Resolved(Kind.LITERAL_STRING, s, null, null, 0L, 0.0);
         }
         static Resolved litInt(long v) {
             return new Resolved(Kind.LITERAL_INT, null, null, null, v, 0.0);
@@ -217,12 +228,12 @@ public final class EvalEngine {
         }
         /** Phase A1: build a binary-operation AST node. */
         static Resolved binop(String op, @NonNull Resolved left, @NonNull Resolved right) {
-            return new Resolved(Kind.BINARY, op, left, right);
+            return new Resolved(Kind.BINARY, op, left, right, true);
         }
 
         /** Phase A6: build an array-index node {@code array[index]}. */
         static Resolved index(@NonNull Resolved array, @NonNull Resolved idx) {
-            return new Resolved(Kind.INDEX, null, array, idx);
+            return new Resolved(Kind.INDEX, null, array, idx, true);
         }
 
         /** Phase A7: build a ternary node {@code cond ? then : else}. */
@@ -1066,7 +1077,7 @@ public final class EvalEngine {
             ByteBuf in = new ByteBuf(reply.data);
             int n = in.readInt();
             if (n < 1) return EvalResult.error("no value returned");
-            byte tag = in.readByte();
+            byte tag = (byte) in.readByte();
             String v = readValue(in, tag);
             String typeSig = readFieldTypeSignature(refType, fieldId);
             return EvalResult.of(evalTag(typeSig), typeSig, v);
@@ -1105,7 +1116,7 @@ public final class EvalEngine {
                 return EvalResult.error("InvokeMethod error " + reply.errorCode());
             }
             ByteBuf in = new ByteBuf(reply.data);
-            byte tag = in.readByte();
+            byte tag = (byte) in.readByte();
             String v = readValue(in, tag);
             // PR-9: the actual return type comes from the InvokeMethod
             // response's tag, not the receiver's owner signature.
@@ -1150,7 +1161,7 @@ public final class EvalEngine {
                 return EvalResult.error("ClassType.InvokeMethod error " + reply.errorCode());
             }
             ByteBuf in = new ByteBuf(reply.data);
-            byte tag = in.readByte();
+            byte tag = (byte) in.readByte();
             String v = readValue(in, tag);
             String returnSig = tagToSignature(tag);
             return EvalResult.of(evalTag(returnSig), returnSig, v);
@@ -1398,7 +1409,7 @@ public final class EvalEngine {
             ByteBuf in = new ByteBuf(reply.data);
             int n = in.readInt();
             if (n < 1) return EvalResult.error("no value returned");
-            byte tag = in.readByte();
+            byte tag = (byte) in.readByte();
             String v = readValue(in, tag);
             String typeSig = readFieldTypeSignature(refType, fieldId);
             return EvalResult.of(evalTag(typeSig), typeSig, v);
@@ -1489,7 +1500,7 @@ public final class EvalEngine {
                 return EvalResult.error("ArrayReference.GetValues error " + reply.errorCode());
             }
             ByteBuf in = new ByteBuf(reply.data);
-            byte tag = in.readByte();
+            byte tag = (byte) in.readByte();
             String v = readValue(in, tag);
             return EvalResult.of(evalTag(elemSig), elemSig, v);
         } catch (IOException ex) {

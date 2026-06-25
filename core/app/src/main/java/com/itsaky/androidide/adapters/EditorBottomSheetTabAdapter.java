@@ -25,6 +25,11 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import com.itsaky.androidide.fragments.DiagnosticsListFragment;
 import com.itsaky.androidide.fragments.SearchResultFragment;
+import com.itsaky.androidide.debugger.fragment.BreakpointListFragment;
+import com.itsaky.androidide.debugger.fragment.VariablesFragment;
+import com.itsaky.androidide.debugger.fragment.CallStackFragment;
+import com.itsaky.androidide.debugger.fragment.WatchesFragment;
+import com.itsaky.androidide.debugger.fragment.LogpointFragment;
 import com.itsaky.androidide.fragments.output.AppLogFragment;
 import com.itsaky.androidide.fragments.output.BuildOutputFragment;
 import com.itsaky.androidide.fragments.output.IDELogFragment;
@@ -34,6 +39,8 @@ import com.itsaky.androidide.BuildConfig;
 import android.zero.studio.terminal.TermuxFragment;
 import com.itsaky.androidide.resources.R;
 import com.itsaky.androidide.utils.EditorToolboxActions;
+// PR-D6: 把断点调试器的"日志点输出"页注册到底部 sheet。
+import com.itsaky.androidide.debugger.fragment.LogpointFragment;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
@@ -72,9 +79,32 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
             fragmentActivity.getString(R.string.view_search_results),
             SearchResultFragment.class,++index));
 
+    // PR-D6: 断点调试器的"日志点"输出页。
+    // 名字为 LogStore 驱动的"程序日志中由断点日志点产生的那部分",
+    // 区别于 AppLogFragment (整个 Logcat) 和 IDELogFragment (IDE 自身日志)。
+    this.fragments.add(
+        new Tab(
+            fragmentActivity.getString(R.string.debugger_logpoint_tab),
+            LogpointFragment.class, ++index));
+
     //编辑器工具箱：集成 AI Chat、MCP、依赖分析等常用工具到底部抽屉中
     this.fragments.add(new Tab(fragmentActivity.getString(R.string.title_editor_toolbox),
         EditorToolboxFragment.class, ++index));
+
+    // PR-D4: 断点调试器相关页面注册到 IDE 底部抽屉,与 Build/IDE/App
+    // Logs 等日志/构建输出并列,便于用户在调试时直接查看。
+    // 注册顺序:Breakpoints(列表入口) → Variables → Call Stack → Watches
+    //         → Logpoints(日志点输出)。
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_breakpoints),
+        BreakpointListFragment.class, ++index));
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_variables),
+        VariablesFragment.class, ++index));
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_callstack),
+        CallStackFragment.class, ++index));
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_watches),
+        WatchesFragment.class, ++index));
+    this.fragments.add(new Tab(fragmentActivity.getString(R.string.editor_tab_logpoint),
+        LogpointFragment.class, ++index));
   }
 
   public Fragment getFragmentAtIndex(int index) {
@@ -147,6 +177,12 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
   @Nullable
   public AppLogFragment getLogFragment() {
     return findFragmentByClass(AppLogFragment.class);
+  }
+
+  /** PR-D6: 取出 LogpointFragment (日志点输出) 句柄。 */
+  @Nullable
+  public LogpointFragment getLogpointFragment() {
+    return findFragmentByClass(LogpointFragment.class);
   }
 
   @Nullable

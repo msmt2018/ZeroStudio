@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 调试器文字列 (日本語)
+
+  Phase E4: 主要なユーザー向け文字列を翻訳。欠落した場合は values/strings_debugger.xml
+  (中文) ではなく values-en/strings_debugger.xml (英語) にフォールバックする。
+  英語版に存在しない新文字列は ja/ko/pt-BR にも追加し、未翻訳キーは
+  values-en に揃えていく。
+-->
+<resources>
+
+    <!-- ブレークポイント タブ / リスト -->
+    <string name="debugger_breakpoints_tab">ブレークポイント</string>
+    <string name="debugger_breakpoints_title">ブレークポイント</string>
+    <string name="debugger_breakpoints_empty">ブレークポイントなし\nエディタの左余白をクリックして追加</string>
+    <string name="debugger_breakpoint_glyph_desc">ブレークポイントアイコン</string>
+
+    <!-- ブレークポイント アイテム メニュー -->
+    <string name="debugger_action_toggle_bp">有効 / 無効</string>
+    <string name="debugger_action_edit_condition">条件を編集</string>
+    <string name="debugger_action_remove_bp">削除</string>
+
+    <!-- ブレークポイント条件 / ログポイント設定ダイアログ (Phase E2) -->
+    <string name="debugger_bcd_title">ブレークポイント設定</string>
+    <string name="debugger_bcd_btn_save">保存</string>
+    <string name="debugger_bcd_btn_cancel">キャンセル</string>
+    <string name="debugger_bcd_btn_remove">削除</string>
+    <string name="debugger_bcd_enabled">このブレークポイントを有効化</string>
+    <string name="debugger_bcd_enabled_desc">ブレークポイントの有効/無効を切り替えます</string>
+    <string name="debugger_bcd_disabled_hint">(無効 — ブレークポイントは発火しません)</string>
+
+    <!-- PR-D9.1: ログポイント エクスポート -->
+    <string name="debugger_logpoint_tab">ログポイント</string>
+    <string name="debugger_log_title">ログポイント出力</string>
+    <string name="debugger_log_empty">ログポイント出力なし\nブレークポイントにログメッセージ式を設定してください</string>
+    <string name="debugger_log_clear">クリア</string>
+    <string name="debugger_log_autoscroll">自動スクロール</string>
+    <string name="debugger_log_export">エクスポート</string>
+    <string name="debugger_log_export_ok">%1$d 件のログを %2$s にエクスポートしました</string>
+    <string name="debugger_log_export_empty">エクスポートするログがありません</string>
+    <string name="debugger_log_export_failed">エクスポート失敗: %1$s</string>
+
+    <!-- PR-D9.2: ログ追加の一時停止 / 再開 -->
+    <string name="debugger_log_pause">一時停止</string>
+    <string name="debugger_log_pause_desc">ログ追加を一時停止 / 再開</string>
+
+    <!-- デバッガ起動/接続 状態 -->
+    <string name="debugger_action_start_debug">🪲 デバッグ開始</string>
+    <string name="debugger_action_start_debug_desc">JDWP デバッガに接続</string>
+    <string name="debugger_msg_connecting">デバッガ %1$s:%2$d に接続中 …</string>
+    <string name="debugger_msg_connected">デバッガ %1$s:%2$d に接続しました</string>
+    <string name="debugger_msg_disconnected">デバッガ接続を切断しました</string>
+    <string name="debugger_msg_failed">デバッグ起動失敗 @%1$s : %2$s</string>
+</resources>

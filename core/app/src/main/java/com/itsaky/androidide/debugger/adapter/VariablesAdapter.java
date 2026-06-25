@@ -26,6 +26,8 @@ import java.util.Objects;
 public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter.VH> {
 
     public interface Listener {
+        /** PR-D4: 短按 -> 弹出 set-value 对话框（仅对非 final 变量可写） */
+        default void onItemClick(@NonNull VariableInfo variable) {}
         void onVariableLongClick(@NonNull VariableInfo variable);
     }
 
@@ -54,6 +56,15 @@ public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter
 
     public void setHighlighted(long objectId) { this.highlightedId = objectId; }
 
+    /**
+     * Java-friendly alias of {@link #submitList(List)}. Mirrors the
+     * {@code WatchesAdapter.submit} helper so callers in
+     * {@code VariablesFragment} can keep a single naming convention.
+     */
+    public void submit(@NonNull List<VariableInfo> vars) {
+        submitList(new java.util.ArrayList<>(vars));
+    }
+
     @Override
     public long getItemId(int position) {
         // Hash name + typeSignature; will be stable across submits
@@ -75,8 +86,29 @@ public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter
         h.name.setText(v.name);
         h.type.setText(humanType(v.typeSignature));
         h.value.setText(v.value == null ? "null" : v.value);
-        h.refBadge.setVisibility(v.isPrimitive ? View.GONE : View.VISIBLE);
+        // PR-D8.2: 错误状态时,值文本用 colorError 高亮, 方便用户
+        // 一眼看出哪个变量求值失败。
+        if (v.isError) {
+            h.value.setTextColor(
+                    androidx.core.content.ContextCompat.getColor(
+                            h.itemView.getContext(),
+                            com.google.android.material.R.color.material_error));
+        } else {
+            h.value.setTextColor(
+                    com.google.android.material.color.MaterialColors.getColor(
+                            h.itemView, com.google.android.material.R.attr.colorOnSurface));
+        }
+        // PR-D8.2: ref 徽标文字用 string resource 而不是硬编码 "obj"。
+        if (!v.isPrimitive) {
+            h.refBadge.setText(R.string.debugger_var_ref_obj);
+            h.refBadge.setVisibility(View.VISIBLE);
+        } else {
+            h.refBadge.setVisibility(View.GONE);
+        }
         h.itemView.setSelected(false);
+        h.itemView.setOnClickListener(vw -> {
+            if (listener != null) listener.onItemClick(v);
+        });
         h.itemView.setOnLongClickListener(vw -> {
             if (listener != null) {
                 listener.onVariableLongClick(v);

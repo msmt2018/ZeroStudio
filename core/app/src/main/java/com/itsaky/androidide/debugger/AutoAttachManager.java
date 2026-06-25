@@ -145,6 +145,14 @@ public final class AutoAttachManager {
 
     @WorkerThread
     private void doAutoAttach(@NonNull String host, int port, @NonNull String pkg) {
+        // PR-D7: 防 stale-run。cancelPending() 已经把 mainHandler 上的
+        // callback 摘掉,但已经 post 到后台/已经触发但未执行的 runnable
+        // 仍会进入这里。先看 pendingAttach 是不是还指向自己,不是则跳过。
+        final Runnable scheduled = pendingAttach;
+        if (scheduled == null) {
+            Log.d(TAG, "doAutoAttach skipped: pendingAttach already cleared");
+            return;
+        }
         // PR-D5: 在后台线程做一次 TCP probe,只有 server 接受连接时才
         // 真正调用 DebuggerController.connect. 这避免了 IDE 一开就
         // 弹 "connect refused" 错误.
@@ -156,6 +164,11 @@ public final class AutoAttachManager {
             }
         } catch (Throwable t) {
             Log.w(TAG, "auto-attach probe failed: " + t.getMessage());
+        } finally {
+            // 清掉 pendingAttach 引用,避免 cancelPending 误删别的 callback
+            synchronized (this) {
+                if (pendingAttach == scheduled) pendingAttach = null;
+            }
         }
     }
 }

@@ -13,4 +13,21 @@
         <item>*.txt</item>
         <item>*.properties</item>
     </string-array>
+
+    <!-- Breakpoint condition dialog (Phase E2) - hit count mode dropdown -->
+    <string-array name="debugger_bcd_hit_count_modes">
+        <item>Always</item>
+        <item>Hit count = N</item>
+        <item>Hit count &gt; N</item>
+        <item>Every N hits</item>
+    </string-array>
+
+    <!-- Breakpoint condition dialog - common log message templates -->
+    <string-array name="debugger_bcd_log_templates">
+        <item>name = ${name}</item>
+        <item>${name} = ${name}</item>
+        <item>thread=${Thread.currentThread().getName()}</item>
+        <item>elapsed=${System.nanoTime()}</item>
+        <item>toString=${obj}</item>
+    </string-array>
 </resources>

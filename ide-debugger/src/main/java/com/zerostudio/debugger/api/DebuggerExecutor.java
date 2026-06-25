@@ -36,6 +36,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -104,6 +105,6 @@ public final class DebuggerExecutor implements Executor {
      * The number of active threads in the pool.
      */
     public int getActiveCount() {
-        return ((ExecutorService) delegate).getActiveCount();
+        return ((ThreadPoolExecutor) delegate).getActiveCount();
     }
 }

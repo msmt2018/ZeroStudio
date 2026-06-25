@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - Strings do depurador (português brasileiro)
+
+  Phase E4: Tradução das principais strings visíveis ao usuário. Em caso de
+  chave ausente, o sistema usa a versão em inglês (values-en).
+-->
+<resources>
+
+    <!-- Aba / lista de pontos de interrupção -->
+    <string name="debugger_breakpoints_tab">Pontos de interrupção</string>
+    <string name="debugger_breakpoints_title">Pontos de interrupção</string>
+    <string name="debugger_breakpoints_empty">Sem pontos de interrupção\nClique na margem esquerda do editor para adicionar</string>
+    <string name="debugger_breakpoint_glyph_desc">Ícone do ponto de interrupção</string>
+
+    <!-- Menu de item do ponto de interrupção -->
+    <string name="debugger_action_toggle_bp">Ativar / Desativar</string>
+    <string name="debugger_action_edit_condition">Editar condição</string>
+    <string name="debugger_action_remove_bp">Remover</string>
+
+    <!-- Diálogo de configuração de condição / logpoint (Phase E2) -->
+    <string name="debugger_bcd_title">Configuração do ponto de interrupção</string>
+    <string name="debugger_bcd_btn_save">Salvar</string>
+    <string name="debugger_bcd_btn_cancel">Cancelar</string>
+    <string name="debugger_bcd_btn_remove">Remover</string>
+    <string name="debugger_bcd_enabled">Ativar este ponto de interrupção</string>
+    <string name="debugger_bcd_enabled_desc">Ativar ou desativar este ponto de interrupção; desativado não será acionado</string>
+    <string name="debugger_bcd_disabled_hint">(desativado — não será acionado)</string>
+
+    <!-- PR-D9.1: Exportação de logpoint -->
+    <string name="debugger_logpoint_tab">Logpoint</string>
+    <string name="debugger_log_title">Saída do logpoint</string>
+    <string name="debugger_log_empty">Sem saída de logpoint\nDefina uma expressão de mensagem de log no ponto de interrupção</string>
+    <string name="debugger_log_clear">Limpar</string>
+    <string name="debugger_log_autoscroll">Rolagem automática</string>
+    <string name="debugger_log_export">Exportar</string>
+    <string name="debugger_log_export_ok">%1$d registros exportados para %2$s</string>
+    <string name="debugger_log_export_empty">Nenhum registro para exportar</string>
+    <string name="debugger_log_export_failed">Falha na exportação: %1$s</string>
+
+    <!-- PR-D9.2: Pausar / retomar adição de log -->
+    <string name="debugger_log_pause">Pausar</string>
+    <string name="debugger_log_pause_desc">Pausar / retomar adição de log</string>
+
+    <!-- Status de início / conexão do depurador -->
+    <string name="debugger_action_start_debug">🪲 Iniciar depuração</string>
+    <string name="debugger_action_start_debug_desc">Conectar ao depurador JDWP</string>
+    <string name="debugger_msg_connecting">Conectando ao depurador %1$s:%2$d …</string>
+    <string name="debugger_msg_connected">Depurador %1$s:%2$d conectado</string>
+    <string name="debugger_msg_disconnected">Depurador desconectado</string>
+    <string name="debugger_msg_failed">Falha ao iniciar depuração @%1$s : %2$s</string>
+</resources>

@@ -39,7 +39,10 @@ public final class RunAsBridge {
      */
     @WorkerThread
     public int probeUid(@NonNull String packageName) {
-        if (packageName.isEmpty()) return -1;
+        if (!CommandValidator.isSafePackageName(packageName)) {
+            Log.w(TAG, "probeUid: refusing unsafe package name");
+            return -1;
+        }
         String out = exec(packageName, "id -u", DEFAULT_TIMEOUT_MS);
         if (out.isEmpty()) return -1;
         try {
@@ -56,12 +59,22 @@ public final class RunAsBridge {
      * 实现: `ProcessBuilder("run-as", pkg, "sh", "-c", command)`.
      * 注意 run-as 在 SELinux 严格的设备上可能被拒;遇到失败时上层会
      * 继续 fallback 到 shizuku.
+     *
+     * PR-D9.4 (#47) 安全审计: pkg 用 [CommandValidator.isSafePackageName]
+     * 校验包名格式, command 用 [CommandValidator.isSafeArg] 拒掉
+     * shell 元字符。返回的 String 是空时 caller 应视为失败, 此时
+     * 错误详情已 logcat;本方法不抛异常 (worker 线程友好).
      */
     @WorkerThread
     @NonNull
     public String exec(@NonNull String packageName,
                        @NonNull String command,
                        long timeoutMs) {
+        if (!CommandValidator.isSafePackageName(packageName)
+                || !CommandValidator.isSafeArg(command)) {
+            Log.w(TAG, "exec: refusing unsafe package name or command");
+            return "";
+        }
         if (packageName.isEmpty() || command.isEmpty()) return "";
         Process p = null;
         try {
@@ -108,6 +121,11 @@ public final class RunAsBridge {
      */
     @AnyThread
     public boolean fileExists(@NonNull String packageName, @NonNull String relativePath) {
+        if (!CommandValidator.isSafePackageName(packageName)
+                || !CommandValidator.isSafePath(relativePath)) {
+            Log.w(TAG, "fileExists: refusing unsafe package or path");
+            return false;
+        }
         String out = exec(packageName, "test -e " + relativePath + " && echo yes", DEFAULT_TIMEOUT_MS);
         return "yes".equals(out);
     }

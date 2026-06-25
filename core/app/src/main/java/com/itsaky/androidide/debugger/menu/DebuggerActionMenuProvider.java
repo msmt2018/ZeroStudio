@@ -29,7 +29,7 @@ import androidx.annotation.Nullable;
 import androidx.core.view.MenuProvider;
 import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.DebuggerController;
-import com.itsaky.androidide.utils.flashInfo;
+import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
 
 public class DebuggerActionMenuProvider implements MenuProvider {
 
@@ -81,12 +81,17 @@ public class DebuggerActionMenuProvider implements MenuProvider {
         SubMenu view = menu.addSubMenu(R.string.debugger_menu_view);
         view.add(0, R.id.dbg_action_goto_current_bp, 0, R.string.debugger_action_goto_current_bp)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        view.add(0, R.id.dbg_action_show_current_frame, 1, R.string.debugger_action_show_current_frame)
+        view.add(0, R.id.dbg_action_goto_exception, 1, R.string.debugger_action_goto_exception)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        view.add(0, R.id.dbg_action_show_current_frame, 2, R.string.debugger_action_show_current_frame)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         // PR-4: 刷新当前帧 / 打开添加监视对话框
-        view.add(0, R.id.dbg_action_refresh, 2, R.string.debugger_action_refresh)
+        view.add(0, R.id.dbg_action_refresh, 3, R.string.debugger_action_refresh)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        view.add(0, R.id.dbg_action_add_watch, 3, R.string.debugger_action_add_watch)
+        view.add(0, R.id.dbg_action_add_watch, 4, R.string.debugger_action_add_watch)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        // PR-D7: 跳转到异常源。当目标线程在异常处暂停时,会显示该位置。
+        view.add(0, R.id.dbg_action_goto_exception, 4, R.string.debugger_action_goto_exception)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
     }
 
@@ -130,16 +135,28 @@ public class DebuggerActionMenuProvider implements MenuProvider {
         } else if (id == R.id.dbg_action_goto_current_bp) {
             ctl.gotoCurrentBreakpoint();
             return true;
+        } else if (id == R.id.dbg_action_goto_exception) {
+            ctl.gotoException();
+            return true;
         } else if (id == R.id.dbg_action_show_current_frame) {
             ctl.showCurrentFrame();
             return true;
         } else if (id == R.id.dbg_action_refresh) {
             // 通知监听器重新加载（state 自身未变，fire 一次以触发刷新）
             ctl.sessionState().selectFrame(ctl.sessionState().currentFrameId());
-            flashInfo(R.string.debugger_action_refresh);
+            // `flashInfo` is a Kotlin top-level function bound to `Activity`.
+            // From Java we can't import it directly, and the extension receiver
+            // type is `Activity` (not `Context`), so cast the host's context
+            // to Activity before calling. The host is always an editor
+            // activity, so the cast is safe at runtime.
+            final android.app.Activity act = (android.app.Activity) host.requireContext();
+            FlashbarActivityUtilsKt.flashInfo(act, act.getString(R.string.debugger_action_refresh));
             return true;
         } else if (id == R.id.dbg_action_add_watch) {
             ctl.promptAddWatch();
+            return true;
+        } else if (id == R.id.dbg_action_goto_exception) {
+            ctl.gotoException();
             return true;
         }
         return false;

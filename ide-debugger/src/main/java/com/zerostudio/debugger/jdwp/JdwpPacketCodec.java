@@ -21,7 +21,7 @@ public final class JdwpPacketCodec {
 
     @NonNull
     public static byte[] encode(@NonNull JdwpPacket p) {
-        int payloadLength = HEADER_SIZE - 4 + p.data.length;
+        int payloadLength = JdwpPacket.HEADER_SIZE - 4 + p.data.length;
         // The length field is the number of bytes following the length
         // field itself.
         byte[] out = new byte[4 + payloadLength];

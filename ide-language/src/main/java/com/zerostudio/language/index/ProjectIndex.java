@@ -2,141 +2,93 @@ package com.zerostudio.language.index;
 
 import com.zerostudio.language.model.LanguageId;
 import com.zerostudio.language.model.ParsedFile;
-import com.zerostudio.language.model.Reference;
+import com.zerostudio.language.model.Symbol;
+import com.zerostudio.language.model.SymbolKind;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
 
 /**
- * 项目级内存索引：
- *  - package → [classNames]
- *  - className → ParsedFile
- *  - symbolName → [classNames]   （模糊查询）
- *  - filePath → ParsedFile
+ * 项目级索引抽象：
+ *  - 旧 API（index/remove/fileFor/allClasses/...）：旧 services 与持久化逻辑使用
+ *  - 新 API（updateFile/removeFile/lookup/fileCount）：symbol resolver 使用
+ *
+ * 同时提供 {@link Lookup} 内部接口以支持按名 / FQN / 类型 / 文件的高频只读查询。
  */
-public final class ProjectIndex {
+public interface ProjectIndex {
 
-    private final Map<String, List<String>> packageToClasses = new ConcurrentHashMap<>();
-    private final Map<String, ParsedFile> classNameToFile = new ConcurrentHashMap<>();
-    private final Map<String, List<String>> symbolToClasses = new ConcurrentHashMap<>();
-    private final Map<String, ParsedFile> filePathToFile = new ConcurrentHashMap<>();
+    // —— 旧 API —— //
 
-    public synchronized void index(ParsedFile file) {
-        if (file == null) return;
-        filePathToFile.put(file.path, file);
-        // index imports and references
-        if (file.references == null) return;
-        for (Reference ref : file.references) {
-            if (ref.kind == Reference.ReferenceKind.IMPORT) {
-                String fqn = ref.name;
-                String pkg = fqn.contains(".") ? fqn.substring(0, fqn.lastIndexOf('.')) : "";
-                String cls = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
-                if (cls.endsWith(".*")) continue;
-                packageToClasses.computeIfAbsent(pkg, k -> new ArrayList<>()).add(fqn);
-                classNameToFile.putIfAbsent(fqn, file);
-                symbolToClasses.computeIfAbsent(cls.toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(fqn);
-            }
-            if (ref.kind == Reference.ReferenceKind.CLASS) {
-                String fqn = file.packageName + "." + ref.name;
-                packageToClasses.computeIfAbsent(file.packageName, k -> new ArrayList<>()).add(fqn);
-                classNameToFile.putIfAbsent(fqn, file);
-                symbolToClasses.computeIfAbsent(ref.name.toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(fqn);
-            }
-        }
-    }
+    /** 索引（或更新）一个已解析文件。 */
+    void index(ParsedFile file);
 
-    public synchronized void remove(String filePath) {
-        ParsedFile file = filePathToFile.remove(filePath);
-        if (file == null) return;
-        // simple remove strategy: clear and re-index
-        clear();
-        // re-index all remaining files would be needed; for simplicity just clear
-    }
+    /** 移除指定路径对应的索引条目。 */
+    void remove(String filePath);
 
-    public synchronized void clear() {
-        packageToClasses.clear();
-        classNameToFile.clear();
-        symbolToClasses.clear();
-        filePathToFile.clear();
-    }
+    /** 清空整个索引。 */
+    void clear();
 
-    public List<String> classesInPackage(String pkg) {
-        return Collections.unmodifiableList(packageToClasses.getOrDefault(pkg, Collections.emptyList()));
-    }
+    /** 给定包名返回其下所有类的 FQN。 */
+    List<String> classesInPackage(String pkg);
 
-    public ParsedFile fileFor(String className) { return classNameToFile.get(className); }
+    /** 按 FQN 查找对应的 ParsedFile。 */
+    ParsedFile fileFor(String className);
+
+    /** 严格检查：给定 FQN 是否在索引中作为 CLASS / TYPE 声明存在。 */
+    boolean hasClass(String fqn);
+
+    /** 按文件路径查找 ParsedFile。 */
+    ParsedFile fileForPath(String path);
+
+    /** 模糊查询：name 子串匹配，返回最多 max 个 FQN。 */
+    List<String> fuzzySearch(String query, int max);
+
+    /** 索引中所有类的 FQN。 */
+    List<String> allClasses();
+
+    /** 索引的文件总数。 */
+    int totalFiles();
+
+    /** 索引的类声明总数。 */
+    int totalClasses();
+
+    /** 文件路径 → ParsedFile 的快照。 */
+    List<Map.Entry<String, ParsedFile>> allFiles();
+
+    /** 简单通配符：{@code a.b.*} 返回以 a.b 开头的 FQN。 */
+    List<String> matchWildcard(String pattern);
+
+    // —— 新 API（resolver / 高频查询路径使用） —— //
+
+    /** 更新（或新增）一个文件的索引。语义同 {@link #index(ParsedFile)}。 */
+    void updateFile(ParsedFile parsed);
+
+    /** 按文件路径移除。语义同 {@link #remove(String)}。 */
+    void removeFile(String path);
+
+    /** 返回当前快照的只读查询视图。 */
+    Lookup lookup();
+
+    /** 当前已索引的文件数。语义同 {@link #totalFiles()}。 */
+    int fileCount();
 
     /**
-     * 严格检查：给定 FQN 是否在索引中作为 CLASS 声明存在（而非仅作为 import）。
-     * 用于诊断未解析的 import。
+     * 只读查询视图。实现应保证返回的列表是当前状态的不可变快照，
+     * 避免外部迭代过程中索引被并发修改。
      */
-    public boolean hasClass(String fqn) {
-        if (fqn == null) return false;
-        // 找到声称含此 FQN 的文件
-        ParsedFile pf = classNameToFile.get(fqn);
-        if (pf == null) return false;
-        // 该文件中是否有 CLASS 引用声明了此 FQN
-        if (pf.references == null) return false;
-        String simple = fqn.substring(fqn.lastIndexOf('.') + 1);
-        String pkg = fqn.substring(0, fqn.lastIndexOf('.'));
-        for (Reference r : pf.references) {
-            if (r.kind == Reference.ReferenceKind.CLASS
-                    && simple.equals(r.name)
-                    && pkg.equals(pf.packageName)) {
-                return true;
-            }
-            if (r.kind == Reference.ReferenceKind.TYPE
-                    && simple.equals(r.name)
-                    && pkg.equals(pf.packageName)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    interface Lookup {
+        List<Symbol> byName(String name);
 
-    public ParsedFile fileForPath(String path) { return filePathToFile.get(path); }
+        List<Symbol> byFqn(String fqn);
 
-    public List<String> fuzzySearch(String query, int max) {
-        if (query == null || query.isEmpty()) return Collections.emptyList();
-        String q = query.toLowerCase(Locale.ROOT);
-        List<String> out = new ArrayList<>();
-        for (Map.Entry<String, List<String>> e : symbolToClasses.entrySet()) {
-            if (e.getKey().contains(q)) {
-                out.addAll(e.getValue());
-                if (out.size() >= max) break;
-            }
-        }
-        return out;
-    }
+        List<Symbol> byKind(SymbolKind kindOnly);
 
-    public List<String> allClasses() {
-        List<String> all = new ArrayList<>();
-        for (List<String> list : packageToClasses.values()) all.addAll(list);
-        return all;
-    }
+        List<Symbol> inFile(String path);
 
-    public int totalFiles() { return filePathToFile.size(); }
-    public int totalClasses() { return classNameToFile.size(); }
+        List<ParsedFile> files();
 
-    /** 暴露内部 filePath→file map 的快照（供持久化使用） */
-    public java.util.List<Map.Entry<String, ParsedFile>> allFiles() {
-        return new ArrayList<>(filePathToFile.entrySet());
-    }
+        List<ParsedFile> filesOfLanguage(LanguageId lang);
 
-    /** simple pattern matching: `a.b.*` returns classes whose fqn starts with a.b */
-    public List<String> matchWildcard(String pattern) {
-        if (pattern == null || !pattern.endsWith(".*")) return Collections.emptyList();
-        String prefix = pattern.substring(0, pattern.length() - 2);
-        List<String> out = new ArrayList<>();
-        for (String fqn : allClasses()) {
-            if (fqn.startsWith(prefix + ".") || fqn.equals(prefix)) out.add(fqn);
-        }
-        return out;
+        ParsedFile file(String path);
     }
 }

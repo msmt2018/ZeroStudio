@@ -322,17 +322,19 @@ class GradleBuildService :
 
   /** Extracts and returns the logger runtime AAR file. */
   private fun getLoggerRuntimeAar(): File {
-    val aar = File(getLoggerPluginDir(), "logger-runtime.aar")
+    val aar = File(getLoggerPluginDir(), "ide-log-plugin-1.0.0.aar")
     if (!aar.exists()) {
-      // Extract from assets
-      if (
-          !ResourceUtils.copyFileFromAssets(
-              "data/common/logger-runtime.aar",
-              aar.absolutePath,
-          )
-      ) {
-        log.error("Failed to extract logger-runtime.aar from assets")
-      }
+      // PR-1: 旧 logger-runtime.aar / .zip 已经被替换成 :ide-log-plugin AAR
+      // (logging/{logger,logsender} + tooling/{plugin,plugin-config} 整合),
+      // 资产中只有 `ide-log-plugin-1.0.0.aar` 由构建脚本同步到
+      // `data/common/`。如果目标文件不存在,直接返回缺失的占位,
+      // 由 GenerateInitScriptTask 走 "classpath name: 'ide-log-plugin-1.0.0'"
+      // 的路径,让 Gradle 用本地 init 目录里的 aar。
+      log.warn(
+        "ide-log-plugin-1.0.0.aar not found in {} — debugger/log " +
+          "injection will rely on init script classpath",
+        aar.absolutePath
+      )
     }
     return aar
   }

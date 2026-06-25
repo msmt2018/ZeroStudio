@@ -6,19 +6,25 @@
  *  并向注册的 listener 派发增量事件。
  *
  *  PR-6: 与 LogFragment 配套。
+ *  PR-D6: 容量从 500 提到 10000,避免长时间调试时日志被过早挤掉。
+ *        改成 ArrayDeque FIFO,remove(0) 是 O(n) —— 10000 条以内可接受,
+ *        后续 PR-D7 可换成 LinkedList 或环形数组。
  */
 
 package com.itsaky.androidide.debugger.model;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class LogStore {
 
-    public static final int DEFAULT_CAPACITY = 500;
+    /** PR-D6: 容量从 500 提到 10000 条。 */
+    public static final int DEFAULT_CAPACITY = 10_000;
 
     public static final class Entry {
         public final long timestamp;
@@ -42,9 +48,37 @@ public final class LogStore {
     private static final LogStore INSTANCE = new LogStore();
     public static LogStore getInstance() { return INSTANCE; }
 
-    private final List<Entry> entries = new ArrayList<>();
+    /** PR-D7: Deque FIFO,pollFirst 是 O(1)。 */
+    private final Deque<Entry> entries = new ArrayDeque<>();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     private int capacity = DEFAULT_CAPACITY;
+
+    // PR-D9.2 (#45): 暂停标志。append() 早返回, 已累积的 entries 不动,
+    // 恢复后从下一次 append 开始。listener 不发 onLogPaused 之类的额外事件,
+    // 由 UI 层 (LogpointFragment) 自己反映状态 (按钮文本 / Switch)。
+    private volatile boolean enabled = true;
+
+    /** PR-D9.2 (#45): 当前是否接受新 append。 */
+    public boolean isEnabled() { return enabled; }
+
+    /**
+     * PR-D9.2 (#45): 启用/暂停 append。返回旧状态, 便于 UI 做 toggle 文本切换。
+     * 暂停时已有的 entries 保留, 不清空;clear() 行为不受影响。
+     */
+    public boolean setEnabled(boolean enabled) {
+        boolean prev = this.enabled;
+        this.enabled = enabled;
+        return prev;
+    }
+
+    /** PR-D7: 后台派发线程,避免 listener.onLogAppended 在调用方线程上跑。 */
+    private final android.os.HandlerThread dispatchThread =
+            new android.os.HandlerThread("LogStore-Dispatch");
+    @NonNull private final android.os.Handler dispatchHandler;
+    {
+        dispatchThread.start();
+        dispatchHandler = new android.os.Handler(dispatchThread.getLooper());
+    }
 
     private LogStore() {}
 
@@ -52,7 +86,7 @@ public final class LogStore {
         if (capacity < 1) return;
         this.capacity = capacity;
         synchronized (entries) {
-            while (entries.size() > capacity) entries.remove(0);
+            while (entries.size() > capacity) entries.pollFirst();
         }
     }
 
@@ -64,21 +98,82 @@ public final class LogStore {
     }
 
     public void append(@Nullable String sourceFile, int line, @NonNull String text) {
+        // PR-D9.2 (#45): 暂停时直接丢弃, 不进 entries 也不派发。
+        if (!enabled) return;
         Entry e = new Entry(System.currentTimeMillis(),
                 sourceFile == null ? "" : sourceFile, line, text);
         synchronized (entries) {
-            entries.add(e);
-            while (entries.size() > capacity) entries.remove(0);
+            entries.addLast(e);
+            // PR-D6: FIFO 驱逐。ArrayDeque.pollFirst 是 O(1),
+            // 旧实现 entries.remove(0) 是 O(n)。
+            while (entries.size() > capacity) entries.pollFirst();
         }
-        for (Listener l : listeners) {
-            try { l.onLogAppended(e); } catch (Throwable ignored) {}
+        // PR-D7: listener 派发切到 dispatchHandler 线程,
+        // 避免在 JDWP read 线程上做 UI 更新(例如 LogFragment 增条目)。
+        // PR-D8.4: coalesce 50ms 内的多条 append, 合并成 1 次 handler
+        // 消息一次派发, 减少 handler 排队开销。
+        final Entry copy = e;
+        final boolean needSchedule;
+        synchronized (pendingBatch) {
+            pendingBatch.add(copy);
+            // 距离上次 flush < coalesceMs 时, 不重新 schedule,
+            // 让已有的 Runnable 把这条也 flush 掉。
+            needSchedule = (System.nanoTime() - lastDispatchNanos) >= coalesceNs;
+            if (needSchedule) {
+                lastDispatchNanos = System.nanoTime();
+            }
+        }
+        if (needSchedule) {
+            dispatchHandler.postDelayed(flushRunnable, coalesceMs);
         }
     }
 
+    /** PR-D8.4: flush pendingBatch 中累积的 entries 到所有 listener。 */
+    private final Runnable flushRunnable = new Runnable() {
+        @Override
+        public void run() {
+            final java.util.List<Entry> toFlush;
+            synchronized (pendingBatch) {
+                if (pendingBatch.isEmpty()) return;
+                toFlush = new java.util.ArrayList<>(pendingBatch);
+                pendingBatch.clear();
+            }
+            for (Listener l : listeners) {
+                try {
+                    for (Entry e : toFlush) l.onLogAppended(e);
+                } catch (Throwable ignored) {}
+            }
+        }
+    };
+    private final java.util.List<Entry> pendingBatch = new java.util.ArrayList<>();
+    private long lastDispatchNanos = 0L;
+    // PR-D8.4: 实例字段(非 static final)以便 setCoalesceMsForTest
+    // 在测试中改为 0 立即派发。生产代码 50ms 是合理值。
+    private long coalesceMs = 50L;
+    private long coalesceNs = 50L * 1_000_000L;
+
     public void clear() {
         synchronized (entries) { entries.clear(); }
-        for (Listener l : listeners) {
-            try { l.onLogCleared(); } catch (Throwable ignored) {}
+        // PR-D8.4: clear 时清空 pendingBatch, 否则 flush 线程晚于
+        // onLogCleared 触发的 onLogAppended 会被 listener 看成"已清空
+        // 后又新增",破坏"先 clear 再 append"的语义。
+        synchronized (pendingBatch) { pendingBatch.clear(); }
+        // PR-D7: clear 同样在后台派发。
+        dispatchHandler.post(() -> {
+            for (Listener l : listeners) {
+                try { l.onLogCleared(); } catch (Throwable ignored) {}
+            }
+        });
+    }
+
+    /**
+     * PR-D8.4 测试钩子 (package-private): 把 coalesce 间隔设为 0,
+     * 让测试中的 listener 立即派发(不走 50ms 延迟)。生产代码不应调用。
+     */
+    void setCoalesceMsForTest(long ms) {
+        synchronized (pendingBatch) {
+            coalesceMs = ms;
+            coalesceNs = ms * 1_000_000L;
         }
     }
 
@@ -91,5 +186,52 @@ public final class LogStore {
 
     public int size() {
         synchronized (entries) { return entries.size(); }
+    }
+
+    /**
+     * PR-D9.1 (#41): 把当前快照以纯文本格式导出到指定文件。
+     * <p>
+     * 调用方负责选目标 (例如 {@code Environment.DIRECTORY_DOWNLOADS}) 和
+     * 异常处理。导出期间不清空 LogStore;若 {@code snapshot} 期间有新条目
+     * append,会写到内存里但不会进入本次导出 (snapshot 是原子读)。
+     * <p>
+     * 行格式: {@code HH:mm:ss.SSS  [sourceFile:line]  text}
+     *
+     * @param file 目标文件;若父目录不存在则创建
+     * @return 实际写入的条目数
+     * @throws IOException 写盘失败
+     */
+    public int exportToFile(@NonNull java.io.File file) throws java.io.IOException {
+        final List<Entry> snap = snapshot();
+        if (file.getParentFile() != null && !file.getParentFile().exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            file.getParentFile().mkdirs();
+        }
+        final java.text.SimpleDateFormat fmt =
+                new java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault());
+        try (java.io.BufferedWriter w =
+                     new java.io.BufferedWriter(new java.io.OutputStreamWriter(
+                             new java.io.FileOutputStream(file, false),
+                             java.nio.charset.StandardCharsets.UTF_8))) {
+            for (Entry e : snap) {
+                final String ts = fmt.format(new java.util.Date(e.timestamp));
+                if (e.sourceFile.isEmpty()) {
+                    w.write(ts);
+                    w.write("  ");
+                    w.write(e.text);
+                } else {
+                    w.write(ts);
+                    w.write("  [");
+                    w.write(e.sourceFile);
+                    w.write(":");
+                    w.write(Integer.toString(e.line));
+                    w.write("]  ");
+                    w.write(e.text);
+                }
+                w.newLine();
+            }
+            w.flush();
+        }
+        return snap.size();
     }
 }

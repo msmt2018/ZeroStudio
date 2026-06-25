@@ -113,6 +113,57 @@ public final class BreakpointManager {
         fireChanged();
     }
 
+    /**
+     * PR-D4: 取得指定 file+line 处的断点 id（UUID 字符串）。
+     * 用于在条件断点弹窗之前先确认 id,再调
+     * {@code BreakpointConditionDialog.showDialog(fm, id)} 让用户编辑 condition。
+     *
+     * @return 断点的稳定 id;若该行没有断点则返回 {@code null}。
+     */
+    @Nullable
+    public String idAt(@NonNull String file, int line) {
+        synchronized (byFile) {
+            final Map<Integer, IdeBreakpoint> map = byFile.get(file);
+            if (map == null) return null;
+            final IdeBreakpoint bp = map.get(line);
+            return bp == null ? null : bp.id;
+        }
+    }
+
+    /**
+     * PR-D4: 便捷的"日志点"添加方法 —— 创建断点并预设 logMessage
+     * (调用 {@link IdeBreakpoint#setLogMessage(String)} 会自动把状态切到
+     * {@link IdeBreakpoint.State#LOG})。命中时调试器只打印日志而不暂停。
+     *
+     * <p>与 {@link #add(IdeBreakpoint)} 的区别在于本方法会覆盖已存在的同位置
+     * 断点为 LOG 状态,适用于"先取消再以 logpoint 形式重新建立"的交互。
+     *
+     * @return 新建的 logpoint (始终非 null)
+     */
+    @MainThread
+    @NonNull
+    public IdeBreakpoint addLogpoint(@NonNull String file, int line, @Nullable String logMessage) {
+        synchronized (byFile) {
+            Map<Integer, IdeBreakpoint> map = byFile.get(file);
+            if (map == null) {
+                map = new LinkedHashMap<>();
+                byFile.put(file, map);
+            }
+            // 如果已经存在同位置断点,先卸载旧的再覆盖,避免与 installOnDebugger
+            // 形成悬挂引用。
+            final IdeBreakpoint existing = map.get(line);
+            if (existing != null) {
+                uninstallFromDebugger(existing);
+            }
+            final IdeBreakpoint bp = new IdeBreakpoint(file, line);
+            bp.setLogMessage(logMessage);
+            map.put(line, bp);
+            installOnDebugger(bp);
+            fireChanged();
+            return bp;
+        }
+    }
+
     @MainThread
     public void remove(@NonNull String id) {
         IdeBreakpoint target = findById(id);
@@ -331,7 +382,7 @@ public final class BreakpointManager {
                     bp.hitCountMode, bp.hitCount);
             bp.debuggerBpId = id;
         } catch (Throwable t) {
-            ILogger.debug(TAG, "installOnDebugger failed: " + t.getMessage());
+            ILogger.ROOT.debug(TAG + ": installOnDebugger failed: " + t.getMessage());
         }
     }
 
@@ -350,7 +401,7 @@ public final class BreakpointManager {
         try {
             debugger.removeBreakpoint(bp.debuggerBpId);
         } catch (Throwable t) {
-            ILogger.debug(TAG, "uninstallFromDebugger failed: " + t.getMessage());
+            ILogger.ROOT.debug(TAG + ": uninstallFromDebugger failed: " + t.getMessage());
         }
         bp.debuggerBpId = -1L;
     }
@@ -360,14 +411,51 @@ public final class BreakpointManager {
         for (Listener l : listeners) {
             try { l.onBreakpointsChanged(snap); } catch (Throwable ignored) {}
         }
-        if (autoPersist) BreakpointStore.getInstance().save();
+        // PR-D4: 持久化走后台线程 + 防抖 300ms,避免在 setBreakpoints
+        // 频繁触发时把每次都同步写 JSON。
+        if (autoPersist) schedulePersist();
     }
 
     private void fireStateChanged(@NonNull IdeBreakpoint bp) {
         for (Listener l : listeners) {
             try { l.onBreakpointStateChanged(bp); } catch (Throwable ignored) {}
         }
-        if (autoPersist) BreakpointStore.getInstance().save();
+        if (autoPersist) schedulePersist();
+    }
+
+    /**
+     * PR-D4: 防抖 + 异步持久化。300ms 内的多次 fireChanged 只会触发
+     * 一次实际 save(),落盘操作在单线程 executor 里执行,不会阻塞 UI。
+     * 防止 BreakpointStore.save() 在主线程上做 JSON 序列化 + 文件 IO。
+     */
+    private final java.util.concurrent.ExecutorService persistExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "BreakpointPersist");
+                t.setDaemon(true);
+                return t;
+            });
+    private final java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ScheduledFuture<?>> pendingPersist =
+            new java.util.concurrent.atomic.AtomicReference<>();
+    private static final long PERSIST_DEBOUNCE_MS = 300L;
+    private final java.util.concurrent.ScheduledExecutorService scheduler =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "BreakpointPersist-scheduler");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private void schedulePersist() {
+        java.util.concurrent.ScheduledFuture<?> prev = pendingPersist.getAndSet(
+                scheduler.schedule(() -> {
+                    persistExecutor.submit(() -> {
+                        try { BreakpointStore.getInstance().save(); }
+                        catch (Throwable t) {
+                            com.itsaky.androidide.utils.ILogger.ROOT.warn(
+                                    "BreakpointStore.save failed: " + t.getMessage());
+                        }
+                    });
+                }, PERSIST_DEBOUNCE_MS, java.util.concurrent.TimeUnit.MILLISECONDS));
+        if (prev != null) prev.cancel(false);
     }
 
     /** 标准化文件路径（用于 byFile 键） */

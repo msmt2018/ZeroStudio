@@ -29,7 +29,8 @@
             android:layout_height="match_parent"
             android:scrollbars="vertical"
             android:clipToPadding="false"
-            android:paddingBottom="48dp"/>
+            android:paddingBottom="48dp"
+            android:contentDescription="@string/debugger_callstack_list_desc"/>
 
         <TextView
             android:id="@+id/cs_empty"

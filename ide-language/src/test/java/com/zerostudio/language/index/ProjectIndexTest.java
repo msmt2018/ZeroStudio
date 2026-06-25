@@ -12,7 +12,7 @@ import static org.junit.Assert.*;
 public class ProjectIndexTest {
     @Test
     public void indexesImportsAndClasses() {
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         ParsedFile f = new ParsedFile("F.java", LanguageId.JAVA, "com.x",
                 Arrays.asList(
                         new Reference("com.x.Imported",
@@ -31,7 +31,7 @@ public class ProjectIndexTest {
 
     @Test
     public void fuzzySearch() {
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         ParsedFile f = new ParsedFile("F.java", LanguageId.JAVA, "com.x",
                 Arrays.asList(
                         new Reference("com.x.MyHelper",
@@ -45,7 +45,7 @@ public class ProjectIndexTest {
 
     @Test
     public void wildcardMatch() {
-        ProjectIndex idx = new ProjectIndex();
+        ProjectIndex idx = new DefaultProjectIndex();
         ParsedFile f = new ParsedFile("F.java", LanguageId.JAVA, "androidx.appcompat",
                 Arrays.asList(
                         new Reference("androidx.appcompat.AppCompatActivity",

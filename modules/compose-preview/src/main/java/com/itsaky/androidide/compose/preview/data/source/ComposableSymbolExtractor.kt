@@ -57,7 +57,7 @@ class ComposableSymbolExtractor {
         return try {
             val lexer = KotlinLexer(CharStreams.fromString(source))
             val tokens = CommonTokenStream(lexer)
-            val parser = KotlinParser(tokens).also { it.removeErrorListeners() }
+            val parser = KotlinParser(tokens).withoutErrorListeners()
             val collector = ComposableFunctionCollector(source)
             ParseTreeWalker.DEFAULT.walk(collector, parser.kotlinFile())
             collector.functions.sortedBy { it.line }
@@ -65,6 +65,15 @@ class ComposableSymbolExtractor {
             LOG.warn("Failed to extract @Composable functions: {}", e.message)
             emptyList()
         }
+    }
+
+    /**
+     * 关闭 ANTLR Parser 默认的 console error listener, 避免把解析警告
+     * 打印到 stderr. 与 TreeSitterSymbolResolver 行为一致.
+     */
+    private fun <T : Parser> T.withoutErrorListeners(): T {
+        removeErrorListeners()
+        return this
     }
 
     private class ComposableFunctionCollector(
@@ -122,12 +131,8 @@ class ComposableSymbolExtractor {
         private fun ParserRuleContext.cleanedText(): String {
             val start = this.start.startIndex
             val stop = this.stop.stopIndex
-            return this@ComposableFunctionCollector.source.substring(start, stop + 1)
-        }
-
-        private fun <T : Parser> T.withoutErrorListeners(): T {
-            removeErrorListeners()
-            return this
+            // 直接访问外层 ComposableFunctionCollector 的 source 字段.
+            return source.substring(start, stop + 1)
         }
     }
 }

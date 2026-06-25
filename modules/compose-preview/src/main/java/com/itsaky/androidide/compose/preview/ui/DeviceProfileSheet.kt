@@ -207,9 +207,9 @@ private fun DeviceProfileRow(
             )
             val cutoutText = when (profile.cutout) {
                 is CutoutGeometry.Notch -> "Notch"
-                is CutoutGeometry.DynamicIsland -> "Dynamic Island"
                 is CutoutGeometry.PunchHole -> "Punch-hole"
                 is CutoutGeometry.WaterfallCurve -> "Waterfall"
+                is CutoutGeometry.DynamicIsland -> "Dynamic Island"
                 null -> "No cutout"
             }
             Text(

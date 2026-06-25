@@ -30,6 +30,16 @@
             android:fontFamily="monospace"
             tools:text="MainActivity.kt : 27"/>
 
+        <!-- Phase E2: 启用 / 禁用 断点 -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/bcd_enabled"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:contentDescription="@string/debugger_bcd_enabled_desc"
+            android:text="@string/debugger_bcd_enabled"
+            tools:checked="true"/>
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

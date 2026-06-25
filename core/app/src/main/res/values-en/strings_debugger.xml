@@ -41,6 +41,7 @@
 
     <!-- View actions -->
     <string name="debugger_action_goto_current_bp">Go to current breakpoint</string>
+    <string name="debugger_action_goto_exception">Go to exception source</string>
     <string name="debugger_action_show_current_frame">Show current frame</string>
 
     <!-- Side panels -->
@@ -98,6 +99,16 @@
     <string name="debugger_msg_launched">Launched %1$s</string>
     <string name="debugger_msg_failed">Debug launch failed @%1$s : %2$s</string>
 
+    <!-- PR-D4: BreakpointTypePicker confirmation when a logpoint is added -->
+    <string name="debugger_msg_logpoint_added">Logpoint added at this line</string>
+
+    <!-- PR-D4: Variable set-value dialog and messages -->
+    <string name="debugger_set_value_title">Set new value for %1$s (%2$s)</string>
+    <string name="debugger_set_value_ok">Variable updated</string>
+    <string name="debugger_set_value_error">Set value failed: %1$s</string>
+    <string name="debugger_set_value_not_suspended">Program is not paused; cannot set value</string>
+    <string name="debugger_set_value_not_connected">Debugger is not connected; cannot set value</string>
+
     <!-- Breakpoint condition / logpoint dialog -->
     <string name="debugger_bcd_title">Breakpoint properties</string>
     <string name="debugger_bcd_type">Breakpoint type</string>
@@ -152,4 +163,48 @@
     <string name="debugger_a11y_disconnected">Disconnected from debugger</string>
     <string name="debugger_a11y_paused">Program paused at %1$s line %2$d</string>
     <string name="debugger_a11y_resumed">Program resumed</string>
+    <string name="debugger_a11y_exception_prefix">Exception: %1$s</string>
+
+    <!-- PR-D5: Haptic feedback / error toasts -->
+    <string name="debugger_msg_stop_force_stop_failed">force-stop failed: %1$s. Please end the process manually.</string>
+    <string name="debugger_msg_stop_no_target">Debugging stopped (target package not recorded)</string>
+    <string name="debugger_msg_step_reject">No thread is paused, cannot step</string>
+    <string name="debugger_msg_resume_reject">Debugger not connected, cannot resume</string>
+    <string name="debugger_msg_pause_reject">Debugger not connected, cannot pause</string>
+
+    <!-- PR-D5: Variable long-click menu -->
+    <string name="debugger_var_action_copy_name">Copy name</string>
+    <string name="debugger_var_action_copy_value">Copy value</string>
+    <string name="debugger_var_action_add_watch">Add as watch</string>
+    <string name="debugger_var_action_open_declaration">Go to declaration</string>
+    <string name="debugger_var_copied">Copied %1$s</string>
+    <string name="debugger_var_watch_added">Watch added: %1$s</string>
+    <string name="debugger_var_no_value_to_copy">This variable has no value to copy</string>
+    <string name="debugger_var_ref_obj">obj</string>
+
+    <!-- PR-D6: Breakpoint type picker (gutter long-click) -->
+    <string name="debugger_bp_picker_title">Select breakpoint type</string>
+    <string name="debugger_bp_picker_normal">Normal breakpoint</string>
+    <string name="debugger_bp_picker_condition">Conditional breakpoint</string>
+    <string name="debugger_bp_picker_logpoint">Logpoint</string>
+
+    <!-- PR-D6: Variable set-value dialog -->
+    <string name="debugger_var_set_value_title">Set value of %1$s</string>
+    <string name="debugger_var_set_value_hint">Enter new value</string>
+    <string name="debugger_var_set_value_btn_set">Set</string>
+    <string name="debugger_var_set_value_btn_cancel">Cancel</string>
+    <string name="debugger_var_set_value_error">Set value failed: %1$s</string>
+    <string name="debugger_var_set_value_ok">Set %1$s = %2$s</string>
+
+    <!-- PR-D6: Stop debugging -->
+    <string name="debugger_stop_no_target">No target package set; cannot stop</string>
+    <string name="debugger_stop_ok">Stopped target process %1$s</string>
+    <string name="debugger_stop_failed">Stop failed: %1$s</string>
+
+    <!-- PR-D6: JDWP port resolution -->
+    <string name="debugger_resolve_port_failed">Failed to resolve JDWP port: %1$s</string>
+    <string name="debugger_install_wait_failed">Failed to wait for install result: %1$s</string>
+
+    <!-- PR-D6: Target package record -->
+    <string name="debugger_target_pkg">Target package: %1$s</string>
 </resources>

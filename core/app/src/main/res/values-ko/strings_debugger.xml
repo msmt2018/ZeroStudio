@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 디버거 문자열 (한국어)
+
+  Phase E4: 주요 사용자 노출 문자열 번역. 누락 시 기본값(중국어) 대신
+  values-en/strings_debugger.xml (영어)로 폴백됨.
+-->
+<resources>
+
+    <!-- 브레이크포인트 탭 / 목록 -->
+    <string name="debugger_breakpoints_tab">브레이크포인트</string>
+    <string name="debugger_breakpoints_title">브레이크포인트</string>
+    <string name="debugger_breakpoints_empty">브레이크포인트 없음\n편집기 왼쪽 여백을 클릭하여 추가</string>
+    <string name="debugger_breakpoint_glyph_desc">브레이크포인트 아이콘</string>
+
+    <!-- 브레이크포인트 항목 메뉴 -->
+    <string name="debugger_action_toggle_bp">활성 / 비활성</string>
+    <string name="debugger_action_edit_condition">조건 편집</string>
+    <string name="debugger_action_remove_bp">삭제</string>
+
+    <!-- 브레이크포인트 조건 / 로그포인트 설정 대화상자 (Phase E2) -->
+    <string name="debugger_bcd_title">브레이크포인트 설정</string>
+    <string name="debugger_bcd_btn_save">저장</string>
+    <string name="debugger_bcd_btn_cancel">취소</string>
+    <string name="debugger_bcd_btn_remove">삭제</string>
+    <string name="debugger_bcd_enabled">이 브레이크포인트 활성화</string>
+    <string name="debugger_bcd_enabled_desc">브레이크포인트 활성화/비활성화, 비활성화 시 트리거되지 않음</string>
+    <string name="debugger_bcd_disabled_hint">(비활성화됨 — 트리거되지 않음)</string>
+
+    <!-- PR-D9.1: 로그포인트 내보내기 -->
+    <string name="debugger_logpoint_tab">로그포인트</string>
+    <string name="debugger_log_title">로그포인트 출력</string>
+    <string name="debugger_log_empty">로그포인트 출력 없음\n브레이크포인트에 로그 메시지 식을 설정하세요</string>
+    <string name="debugger_log_clear">지우기</string>
+    <string name="debugger_log_autoscroll">자동 스크롤</string>
+    <string name="debugger_log_export">내보내기</string>
+    <string name="debugger_log_export_ok">%1$d개의 로그를 %2$s로 내보냈습니다</string>
+    <string name="debugger_log_export_empty">내보낼 로그가 없습니다</string>
+    <string name="debugger_log_export_failed">내보내기 실패: %1$s</string>
+
+    <!-- PR-D9.2: 로그 추가 일시정지 / 재개 -->
+    <string name="debugger_log_pause">일시정지</string>
+    <string name="debugger_log_pause_desc">로그 추가 일시정지 / 재개</string>
+
+    <!-- 디버거 시작/연결 상태 -->
+    <string name="debugger_action_start_debug">🪲 디버그 시작</string>
+    <string name="debugger_action_start_debug_desc">JDWP 디버거 연결</string>
+    <string name="debugger_msg_connecting">디버거 %1$s:%2$d에 연결 중 …</string>
+    <string name="debugger_msg_connected">디버거 %1$s:%2$d에 연결됨</string>
+    <string name="debugger_msg_disconnected">디버거 연결 끊김</string>
+    <string name="debugger_msg_failed">디버그 시작 실패 @%1$s : %2$s</string>
+</resources>

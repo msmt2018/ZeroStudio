@@ -4,13 +4,24 @@ import com.github.javaparser.*;
 import com.github.javaparser.ast.*;
 import com.github.javaparser.ast.body.*;
 import com.zerostudio.language.model.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
 
-public final class JavaParserFacade {
+public final class JavaParserFacade implements Parser {
     private final SourcePosition pos = new SourcePosition("", 0, 0);
     private String path;
     private String packageName;
     private List<Reference> refs = new ArrayList<>();
+
+    @Override
+    public LanguageId language() { return LanguageId.JAVA; }
+
+    @Override
+    public ParsedFile parse(File file) throws IOException {
+        return parse(file.getPath(), new String(Files.readAllBytes(file.toPath())));
+    }
 
     public ParsedFile parse(String path, String text) {
         this.path = path;

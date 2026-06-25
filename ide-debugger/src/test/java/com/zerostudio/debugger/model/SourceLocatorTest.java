@@ -28,6 +28,7 @@ import com.zerostudio.debugger.api.Breakpoint;
 import com.zerostudio.debugger.api.Debugger;
 import com.zerostudio.debugger.jdwp.CommandCodes;
 import com.zerostudio.debugger.jdwp.CommandSet;
+import com.zerostudio.debugger.jdwp.JdwpEvents;
 import com.zerostudio.debugger.jdwp.FakeJdwpClient;
 import com.zerostudio.debugger.jdwp.JdwpPayloads;
 import com.zerostudio.debugger.jdwp.JdwpPayloads.Method;
@@ -272,7 +273,7 @@ public class SourceLocatorTest {
         assertEquals(CommandCodes.EventRequestCmd.Set, sent.command);
         ByteBuf in = new ByteBuf(sent.data);
         assertEquals((byte) 0x44, in.readByte()); // CLASS_PREPARE
-        assertEquals((byte) 0, in.readByte());    // SuspendPolicy.NONE
+        assertEquals((byte) 0, in.readByte());    // JdwpEvents.SuspendPolicy.NONE
         assertEquals(0, in.readInt());            // no modifiers
     }
 
@@ -296,7 +297,7 @@ public class SourceLocatorTest {
         FakeJdwpClient.SentCommand sent = fake.sentCommands().get(0);
         ByteBuf in = new ByteBuf(sent.data);
         assertEquals((byte) 0x46, in.readByte()); // BREAKPOINT
-        assertEquals((byte) 2, in.readByte());     // SuspendPolicy.ALL
+        assertEquals((byte) 2, in.readByte());     // JdwpEvents.SuspendPolicy.ALL
     }
 
     @Test
@@ -307,7 +308,7 @@ public class SourceLocatorTest {
         FakeJdwpClient.SentCommand sent = fake.sentCommands().get(0);
         ByteBuf in = new ByteBuf(sent.data);
         assertEquals((byte) 0x4A, in.readByte()); // SINGLE_STEP
-        assertEquals((byte) 2, in.readByte());    // SuspendPolicy.ALL
+        assertEquals((byte) 2, in.readByte());    // JdwpEvents.SuspendPolicy.ALL
     }
 
     @Test
@@ -318,7 +319,7 @@ public class SourceLocatorTest {
         FakeJdwpClient.SentCommand sent = fake.sentCommands().get(0);
         ByteBuf in = new ByteBuf(sent.data);
         assertEquals((byte) 0x47, in.readByte()); // EXCEPTION
-        assertEquals((byte) 2, in.readByte());    // SuspendPolicy.ALL
+        assertEquals((byte) 2, in.readByte());    // JdwpEvents.SuspendPolicy.ALL
     }
 
     // ----------------------------------------------------------------
@@ -534,10 +535,10 @@ public class SourceLocatorTest {
         assertEquals(CommandCodes.EventRequestCmd.Set, sent.command);
         ByteBuf in = new ByteBuf(sent.data);
         assertEquals((byte) 0x4A, in.readByte()); // SINGLE_STEP
-        assertEquals((byte) 2, in.readByte());    // SuspendPolicy.ALL
+        assertEquals((byte) 2, in.readByte());    // JdwpEvents.SuspendPolicy.ALL
         int modCount = in.readInt();
         assertEquals(1, modCount);
-        assertEquals(10 /* ModKind.STEP */, in.readByte());
+        assertEquals(10 /* JdwpEvents.ModKind.STEP */, in.readByte());
     }
 
     // ----------------------------------------------------------------

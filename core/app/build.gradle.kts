@@ -251,6 +251,7 @@ dependencies {
   implementation(projects.event.eventbus)
   implementation(projects.event.eventbusAndroid)
   implementation(projects.event.eventbusEvents)
+  implementation(projects.ideDebugger)
   implementation(projects.modules.mtDataFilesProvider)
   implementation(projects.modules.deviceCompat)
   implementation(projects.modules.zeroSymbolInputView)

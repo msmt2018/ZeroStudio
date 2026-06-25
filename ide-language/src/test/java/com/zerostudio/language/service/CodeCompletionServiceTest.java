@@ -1,5 +1,6 @@
 package com.zerostudio.language.service;
 
+import com.zerostudio.language.index.DefaultProjectIndex;
 import com.zerostudio.language.index.ProjectIndex;
 import com.zerostudio.language.model.LanguageId;
 import com.zerostudio.language.model.ParsedFile;
@@ -19,7 +20,7 @@ public class CodeCompletionServiceTest {
 
     @Before
     public void setUp() {
-        idx = new ProjectIndex();
+        idx = new DefaultProjectIndex();
         ParsedFile a = new ParsedFile("A.java", LanguageId.JAVA, "com.x",
                 Arrays.asList(
                         new Reference("Foo", new SourceRange(new SourcePosition("A.java", 1, 1), new SourcePosition("A.java", 1, 4)),

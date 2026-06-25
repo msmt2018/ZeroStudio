@@ -16,9 +16,11 @@
 
 package com.itsaky.androidide.debugger;
 
+import android.app.Activity;
 import android.content.Context;
 import android.view.View;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.adapter.BreakpointListAdapter;
@@ -110,6 +112,57 @@ public final class DebuggerAccessibility {
                                              @NonNull String file, int line) {
         announce(anchor, ctx, R.string.debugger_a11y_bp_hit,
                 shortenPath(file) + ":" + line);
+    }
+
+    // ------- PR-D4: Activity 上下文重载 -------
+    // 大多数情况下 DebuggerController / Fragment 拿到的是 Activity 而
+    // 不是某个具体 View,这些重载把 Activity 的 decorView 当作 announce
+    // anchor,简化调用方代码;若 Activity 为 null 则 no-op。
+
+    public static void announcePaused(@Nullable Activity activity,
+                                      @NonNull String file, int line) {
+        View v = anchorOf(activity); if (v == null) return;
+        announcePaused(v, activity, file, line);
+    }
+
+    public static void announceResumed(@Nullable Activity activity) {
+        View v = anchorOf(activity); if (v == null) return;
+        announceResumed(v, activity);
+    }
+
+    public static void announceConnected(@Nullable Activity activity) {
+        View v = anchorOf(activity); if (v == null) return;
+        announceConnected(v, activity);
+    }
+
+    public static void announceDisconnected(@Nullable Activity activity) {
+        View v = anchorOf(activity); if (v == null) return;
+        announceDisconnected(v, activity);
+    }
+
+    public static void announceBreakpointHit(@Nullable Activity activity,
+                                             @NonNull String bpId,
+                                             @NonNull String file, int line) {
+        View v = anchorOf(activity); if (v == null) return;
+        announce(v, activity, R.string.debugger_a11y_bp_hit, bpId);
+    }
+
+    public static void announceException(@Nullable Activity activity,
+                                         @NonNull String exceptionName,
+                                         @NonNull String file, int line) {
+        View v = anchorOf(activity); if (v == null) return;
+        // 没有专门的 exception 字符串,组合"异常: <name>, 暂停于 file:line"
+        String msg = activity.getString(R.string.debugger_a11y_exception_prefix,
+                exceptionName) + ", "
+                + activity.getString(R.string.debugger_a11y_paused,
+                        shortenPath(file), line);
+        announce(v, msg);
+    }
+
+    @Nullable
+    private static View anchorOf(@Nullable Activity activity) {
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return null;
+        return activity.getWindow() != null ? activity.getWindow().getDecorView() : null;
     }
 
     // ------- helpers -------

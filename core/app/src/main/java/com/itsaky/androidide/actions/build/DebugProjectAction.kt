@@ -26,11 +26,14 @@ import androidx.core.content.ContextCompat
 import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.BaseBuildAction
+import com.itsaky.androidide.actions.getContext
 import com.itsaky.androidide.actions.markInvisible
 import com.itsaky.androidide.debugger.DebugSessionLauncher
 import com.itsaky.androidide.debugger.DebuggerController
 import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.projects.android.androidAppProjects
+import com.itsaky.androidide.projects.android.AndroidModule
+import com.itsaky.androidide.tooling.api.models.BasicAndroidVariantMetadata
 import com.itsaky.androidide.utils.flashError
 import com.itsaky.androidide.utils.flashInfo
 import com.itsaky.androidide.utils.resolveAttr
@@ -140,7 +143,7 @@ class DebugProjectAction(context: Context, override val order: Int) : BaseBuildA
         // 期间通过 Listener 把每个 step 推回 UI 线程,这里只需要把 Listener
         // 接到 activity 的 flashInfo 即可。
         launcher.setListener(object : DebugSessionLauncher.Listener {
-            override fun onBuildStarting(module, variant) {
+            override fun onBuildStarting(module: AndroidModule, variant: BasicAndroidVariantMetadata) {
                 activity.flashInfo(
                         activity.getString(R.string.debugger_msg_build_starting, module.name))
             }

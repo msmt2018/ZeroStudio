@@ -15,6 +15,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.AttributeSet;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import androidx.annotation.NonNull;
@@ -50,6 +51,7 @@ public class BreakpointSidebar extends View {
     @Nullable private CodeEditor editor;
     @Nullable private String currentFile;
     @Nullable private OnBreakpointClickListener clickListener;
+    @Nullable private GestureDetector gestureDetector;
 
     public BreakpointSidebar(Context context) {
         this(context, null);
@@ -110,6 +112,58 @@ public class BreakpointSidebar extends View {
 
     public void setOnBreakpointClickListener(@Nullable OnBreakpointClickListener l) {
         this.clickListener = l;
+        // PR-D6: 每次设置 listener 时重建 GestureDetector,以确保
+        // 闭包引用最新的 clickListener;在没 listener 的状态下 GestureDetector
+        // 也保留(便于 a11y 事件)但 dispatch 内部判空。
+        initGestureDetector();
+    }
+
+    private void initGestureDetector() {
+        gestureDetector = new GestureDetector(getContext(),
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onDown(@NonNull MotionEvent e) {
+                        // 必须返回 true 才能接收后续 onSingleTapUp/onLongPress
+                        return true;
+                    }
+                    @Override
+                    public boolean onSingleTapUp(@NonNull MotionEvent e) {
+                        if (clickListener == null || currentFile == null || editor == null) {
+                            return false;
+                        }
+                        int row = rowAtY(e.getY());
+                        if (row < 0) return false;
+                        clickListener.onBreakpointClick(currentFile, row);
+                        performClick();
+                        return true;
+                    }
+                    @Override
+                    public void onLongPress(@NonNull MotionEvent e) {
+                        if (clickListener == null || currentFile == null || editor == null) {
+                            return;
+                        }
+                        int row = rowAtY(e.getY());
+                        if (row < 0) return;
+                        IdeBreakpoint nearest = findNearest(currentFile, row);
+                        if (nearest != null) {
+                            clickListener.onBreakpointLongClick(nearest);
+                        } else {
+                            // 无最近断点时,长按也走"切换"路径(与单击一致)
+                            clickListener.onBreakpointClick(currentFile, row);
+                        }
+                        performLongClick();
+                    }
+                });
+        // 不需要长按超时二次触发 (我们已在 onLongPress 中处理)
+        gestureDetector.setIsLongpressEnabled(true);
+    }
+
+    private int rowAtY(float y) {
+        if (editor == null) return -1;
+        int firstRow = editor.getFirstVisibleRow();
+        float rowHeight = editor.getRowHeight();
+        if (rowHeight <= 0f) return -1;
+        return firstRow + (int) (y / rowHeight);
     }
 
     public void refresh() {
@@ -185,27 +239,15 @@ public class BreakpointSidebar extends View {
     public boolean onTouchEvent(MotionEvent event) {
         if (editor == null || currentFile == null) return super.onTouchEvent(event);
         if (clickListener == null) return super.onTouchEvent(event);
-        if (event.getAction() != MotionEvent.ACTION_UP) {
-            return true;
+        // PR-D6: 委托给 GestureDetector,正确处理 DOWN/MOVE/UP/CANCEL
+        // 以及单按时长按区分。原实现用 `event.getEventTime() - event.getDownTime() > 500L`
+        // 仅在 ACTION_UP 时判定,既容易误触又没考虑用户在长按期间移动手指。
+        if (gestureDetector == null) initGestureDetector();
+        boolean handled = gestureDetector.onTouchEvent(event);
+        // 让 View 自身的 clickable/longClickable 状态可以保持 a11y 行为
+        if (event.getAction() == MotionEvent.ACTION_UP && !handled) {
+            performClick();
         }
-        float y = event.getY();
-        float rowHeight = editor.getRowHeight();
-        int firstRow = editor.getFirstVisibleRow();
-        int row = firstRow + (int) (y / rowHeight);
-        if (row < 0) return true;
-
-        // 命中：在该行 ±2 行内查找最近断点
-        IdeBreakpoint nearest = findNearest(currentFile, row);
-        if (event.getEventTime() - event.getDownTime() > 500L && nearest != null) {
-            clickListener.onBreakpointLongClick(nearest);
-        } else if (nearest != null) {
-            // 短按：切换该断点
-            clickListener.onBreakpointClick(currentFile, row);
-        } else {
-            // 在新行添加断点
-            clickListener.onBreakpointClick(currentFile, row);
-        }
-        performClick();
         return true;
     }
 

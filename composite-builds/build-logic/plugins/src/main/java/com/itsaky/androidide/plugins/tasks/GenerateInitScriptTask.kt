@@ -52,11 +52,15 @@ abstract class GenerateInitScriptTask : DefaultTask() {
               }
 
               dependencies {
-                  classpath  name: "zerostudio-gradle-plugin-1.0.0"
+                  // PR-1: 旧的 zerostudio-gradle-plugin-1.0.0.jar 已被
+                  // :ide-log-plugin AAR 替代 (logging/{logger,logsender} +
+                  // tooling/{plugin,plugin-config} 整合),Asset 路径也改为
+                  // `ide-log-plugin-1.0.0.aar`。
+                  classpath  name: "ide-log-plugin-1.0.0"
               }
           }
-                
-                apply plugin: com.itsaky.androidide.gradle.AndroidIDEInitScriptPlugin
+
+                apply plugin: com.zerostudio.logplugin.IdeLogInitScriptPlugin
           """
               .trimIndent()
       )

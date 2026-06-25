@@ -174,6 +174,7 @@ include(
     ":event:eventbus-events",
 
     ":ide-decompiler",
+    ":ide-debugger",
     ":ide-language",
 
     ":java:javac-services",
@@ -210,6 +211,7 @@ include(
     ":utilities:build-info",
     ":utilities:flashbar",
     ":utilities:framework-stubs",
+    ":utilities:logwire",
     ":utilities:lookup",
     ":utilities:preferences",
     ":utilities:shared",

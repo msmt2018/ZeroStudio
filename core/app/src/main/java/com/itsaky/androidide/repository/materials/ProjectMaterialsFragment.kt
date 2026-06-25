@@ -460,12 +460,12 @@ private fun extractMaterial(node: Node<FileObject>): ProjectMaterialItem? =
       is MaterialTreeFileObject -> value.material
       is ArchiveEntryFileObject ->
           ProjectMaterialItem(
-              id = "archive:${value.absolutePath}",
+              id = "archive:${value.getAbsolutePath()}",
               title = value.getName(),
               sourceType = MaterialSourceType.PROJECT_FILE,
               apiName = "archive-entry",
               description = "Entry inside ${value.archive.name}",
-              path = value.absolutePath,
+              path = value.getAbsolutePath(),
           )
       else -> null
     }

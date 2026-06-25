@@ -97,6 +97,7 @@ import com.itsaky.androidide.utils.InstallationResultHandler.onResult
 import com.itsaky.androidide.utils.IntentUtils
 import com.itsaky.androidide.utils.MemoryUsageWatcher
 import com.itsaky.androidide.utils.flashError
+import com.itsaky.androidide.utils.flashInfo
 import com.itsaky.androidide.utils.resolveAttr
 import com.itsaky.androidide.viewmodel.EditorViewModel
 import com.itsaky.androidide.xml.resources.ResourceTableRegistry
@@ -266,6 +267,48 @@ abstract class BaseEditorActivity :
   protected abstract fun doDismissSearchProgress()
   protected abstract fun getOpenedFiles(): List<OpenedFile>
   internal abstract fun doConfirmProjectClose()
+
+  /**
+   * Java-friendly accessor that delegates to the (protected) abstract
+   * [provideCurrentEditor]. The debugger uses this from Java where it
+   * cannot reach the protected method directly.
+   */
+  open fun getCurrentEditor(): CodeEditorView? = provideCurrentEditor()
+
+  /**
+   * Java-friendly wrapper around [doOpenFile] so the debugger can open a
+   * file and select a range without knowing about the concrete subclass.
+   * Concrete editor activities are free to override this to also apply the
+   * selection to the underlying [io.github.rosemoe.sora.widget.CodeEditor].
+   */
+  open fun openFileAndSelect(file: File, selection: Range?) {
+    doOpenFile(file, selection)
+  }
+
+  /**
+   * Java-friendly proxy for the
+   * [com.itsaky.androidide.utils.flashInfo][com.itsaky.androidide.utils.ActivityKt.flashInfo]
+   * extension function. The debugger code that lives in Java cannot import
+   * Kotlin top-level functions, so this is a thin wrapper that just calls
+   * the [Activity] extension variant.
+   *
+   * We deliberately name this method `showFlashInfo` (not `flashInfo`)
+   * so that, inside the body, the unqualified call resolves to the
+   * `flashInfo` top-level extension on `Activity` rather than recursing
+   * into a same-named member. The Kotlin compiler binds member function
+   * calls on `this` before extension functions, so reusing the name
+   * `flashInfo` here would cause infinite recursion.
+   */
+  open fun showFlashInfo(msg: String?) {
+    // `this` is an `Activity` (BaseEditorActivity → … → AppCompatActivity),
+    // so the top-level `Activity.flashInfo` extension declared in
+    // `com.itsaky.androidide.utils.FlashbarActivityUtils` is in scope.
+    // The unqualified call resolves to that extension function — using
+    // a different method name here avoids the obvious self-recursion
+    // trap that would occur if we tried to name this `flashInfo` too.
+    flashInfo(msg)
+  }
+
 
   protected open fun preDestroy() {
     _binding = null
@@ -644,6 +687,17 @@ abstract class BaseEditorActivity :
     if (index >= 0 && index < content.bottomSheet.binding.tabs.tabCount) {
       content.bottomSheet.binding.tabs.getTabAt(index)?.select()
     }
+  }
+
+  /**
+   * PR-D4: 调试器在 suspend / logpoint 事件里要自动切到某个 fragment tab
+   * 时调用。先把抽屉展开,再选中目标 Fragment 对应的 tab。
+   * 这个方法会在所有派生 Activity(例如 EditorHandlerActivity)里也可见。
+   */
+  open fun openDebuggerTab(fragmentClass: Class<out androidx.fragment.app.Fragment>) {
+    if (isDestroying || _binding == null) return
+    content.bottomSheet.tryExpandSheetFromControl()
+    content.bottomSheet.selectTabByFragmentClass(fragmentClass)
   }
 
   open fun handleDiagnosticsResultVisibility(errorVisible: Boolean) {

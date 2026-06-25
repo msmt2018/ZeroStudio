@@ -31,7 +31,7 @@ import java.util.function.Consumer;
  *
  * 用法示例：
  * <pre>{@code
- *   ProjectIndex index = new ProjectIndex();
+ *   ProjectIndex index = new DefaultProjectIndex();
  *   LanguageServiceCoordinator ui = new LanguageServiceCoordinator(index);
  *   ui.setOnOpenFile(req -> openInEditor(req.file, req.range));
  *

@@ -18,10 +18,9 @@ import com.zerostudio.debugger.api.Debugger;
 import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.SuspendInfo;
 import com.zerostudio.debugger.jdwp.CommandSet;
-import com.zerostudio.debugger.jdwp.EventKind;
+import com.zerostudio.debugger.jdwp.JdwpEvents;
 import com.zerostudio.debugger.jdwp.JdwpClient;
 import com.zerostudio.debugger.jdwp.JdwpPacket;
-import com.zerostudio.debugger.jdwp.SuspendPolicy;
 import com.zerostudio.debugger.util.ByteBuf;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -71,8 +70,8 @@ public final class DebugEventBus {
         if (c == null) return;
         try {
             ByteBuf buf = new ByteBuf();
-            buf.writeByte(EventKind.CLASS_PREPARE);
-            buf.writeByte(SuspendPolicy.NONE);
+            buf.writeByte(JdwpEvents.EventKind.CLASS_PREPARE);
+            buf.writeByte(JdwpEvents.SuspendPolicy.NONE);
             buf.writeInt(1);     // one modifier: sourceFileMatch
             // SourceFileMatch modifier (kind=5)
             buf.writeByte(5);
@@ -98,29 +97,29 @@ public final class DebugEventBus {
             return;
         }
         ByteBuf in = new ByteBuf(packet.data);
-        byte suspendPolicy = in.readByte();
+        byte suspendPolicy = (byte) in.readByte();
         int eventCount = in.readInt();
         for (int i = 0; i < eventCount; i++) {
-            byte eventKind = in.readByte();
+            byte eventKind = (byte) in.readByte();
             int requestId = in.readInt();
             long threadId = in.readLong();
             switch (eventKind) {
-                case EventKind.VM_START: {
+                case JdwpEvents.EventKind.VM_START: {
                     debugger.onVmStart();
                     publish(DebugEvents.vmStart());
                     break;
                 }
-                case EventKind.BREAKPOINT: {
+                case JdwpEvents.EventKind.BREAKPOINT: {
                     SuspendInfo info = buildSuspend(debugger, threadId, SuspendInfo.Reason.BREAKPOINT, "");
                     debugger.onSuspend(info);
                     break;
                 }
-                case EventKind.SINGLE_STEP: {
+                case JdwpEvents.EventKind.SINGLE_STEP: {
                     SuspendInfo info = buildSuspend(debugger, threadId, SuspendInfo.Reason.STEP, "");
                     debugger.onSuspend(info);
                     break;
                 }
-                case EventKind.EXCEPTION: {
+                case JdwpEvents.EventKind.EXCEPTION: {
                     // Phase B2: parse the per-event payload and
                     // carry the exception class + object through to
                     // the suspend info. The JDWP Composite Event
@@ -133,7 +132,7 @@ public final class DebugEventBus {
                     // The last three are all-zero when the exception
                     // is uncaught.
                     long exClassId = in.readLong();
-                    byte exTag = in.readByte();
+                    byte exTag = (byte) in.readByte();
                     long exObjectId = in.readLong();
                     long catchClassId = in.readLong();
                     long catchMethodId = in.readLong();
@@ -149,24 +148,24 @@ public final class DebugEventBus {
                     debugger.onSuspend(info);
                     break;
                 }
-                case EventKind.VM_DEATH: {
+                case JdwpEvents.EventKind.VM_DEATH: {
                     publish(DebugEvents.of(DebugEvents.Type.VM_DEATH, "VM death"));
                     break;
                 }
-                case EventKind.THREAD_START: {
+                case JdwpEvents.EventKind.THREAD_START: {
                     publish(DebugEvents.of(DebugEvents.Type.THREAD_START, "Thread start"));
                     break;
                 }
-                case EventKind.THREAD_DEATH: {
+                case JdwpEvents.EventKind.THREAD_DEATH: {
                     publish(DebugEvents.of(DebugEvents.Type.THREAD_DEATH, "Thread death"));
                     break;
                 }
-                case EventKind.CLASS_PREPARE: {
+                case JdwpEvents.EventKind.CLASS_PREPARE: {
                     // Phase B1: parse the per-event payload and
                     // hand the new class off to the Debugger so it
                     // can retry any pending breakpoints.
                     //   typeTag (1) + refTypeId (8) + sig (utf) + sourceFile (utf)
-                    byte typeTag = in.readByte();
+                    byte typeTag = (byte) in.readByte();
                     long classId = in.readLong();
                     String classSig = in.readString();
                     String sourceFile = in.readString();
@@ -179,7 +178,7 @@ public final class DebugEventBus {
                 }
             }
         }
-        if (suspendPolicy == SuspendPolicy.ALL) {
+        if (suspendPolicy == JdwpEvents.SuspendPolicy.ALL) {
             // No-op: the per-event handlers already invoked onSuspend.
         }
     }

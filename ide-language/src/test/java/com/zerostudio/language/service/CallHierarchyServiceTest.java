@@ -1,5 +1,6 @@
 package com.zerostudio.language.service;
 
+import com.zerostudio.language.index.DefaultProjectIndex;
 import com.zerostudio.language.index.ProjectIndex;
 import com.zerostudio.language.model.LanguageId;
 import com.zerostudio.language.model.ParsedFile;
@@ -27,7 +28,7 @@ public class CallHierarchyServiceTest {
 
     @Before
     public void setUp() {
-        idx = new ProjectIndex();
+        idx = new DefaultProjectIndex();
         // A.java
         String aText = "package com.x;\n" +
                 "public class A {\n" +

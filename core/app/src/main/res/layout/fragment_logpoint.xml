@@ -34,7 +34,17 @@
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
       android:textSize="12sp"
+      android:contentDescription="@string/debugger_log_clear_desc"
       android:text="@string/debugger_log_clear"/>
+
+    <Button
+      android:id="@+id/log_export"
+      style="?attr/borderlessButtonStyle"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:textSize="12sp"
+      android:contentDescription="@string/debugger_log_export"
+      android:text="@string/debugger_log_export"/>
 
     <CheckBox
       android:id="@+id/log_autoscroll"
@@ -43,6 +53,15 @@
       android:textSize="12sp"
       android:checked="true"
       android:text="@string/debugger_log_autoscroll"/>
+
+    <CheckBox
+      android:id="@+id/log_pause"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:textSize="12sp"
+      android:checked="false"
+      android:contentDescription="@string/debugger_log_pause_desc"
+      android:text="@string/debugger_log_pause"/>
   </LinearLayout>
 
   <FrameLayout
