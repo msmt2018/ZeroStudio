@@ -14,6 +14,7 @@
     <string name="debugger_action_toggle_bp">启用 / 禁用</string>
     <string name="debugger_action_edit_condition">编辑条件</string>
     <string name="debugger_action_edit_log">编辑日志点</string>
+    <string name="debugger_action_remove_bp">移除断点</string>
     <string name="debugger_action_bp_delete">删除</string>
     <string name="debugger_action_bp_enable_all">全部启用</string>
     <string name="debugger_action_bp_disable_all">全部禁用</string>
@@ -48,11 +49,13 @@
     <string name="debugger_callstack_title">调用栈</string>
     <string name="debugger_callstack_empty">程序未暂停，没有可显示的栈帧</string>
     <string name="debugger_callstack_frame_at">@ %1$s:%2$d</string>
+    <string name="debugger_callstack_list_desc">调用栈帧列表</string>
 
     <string name="debugger_variables_title">变量</string>
     <string name="debugger_variables_empty">无可显示的变量</string>
     <string name="debugger_variables_loading">加载变量中…</string>
     <string name="debugger_variables_error">变量加载失败：%1$s</string>
+    <string name="debugger_variables_list_desc">变量列表</string>
 
     <string name="debugger_watches_title">监视</string>
     <string name="debugger_watches_empty">没有监视表达式\n点击 + 添加表达式</string>
@@ -61,6 +64,9 @@
     <string name="debugger_watches_dialog_hint">表达式 (例如 i, list.size())</string>
     <string name="debugger_watches_action_delete">删除</string>
     <string name="debugger_watches_action_clear">清空</string>
+    <string name="debugger_watches_action_clear_desc">清空所有监视表达式</string>
+    <string name="debugger_watches_add_desc">添加监视表达式</string>
+    <string name="debugger_watches_list_desc">监视表达式列表</string>
     <string name="debugger_watches_error">求值失败：%1$s</string>
     <string name="debugger_watches_value_pending">…</string>
 
@@ -79,7 +85,14 @@
     <string name="debugger_log_title">日志点输出</string>
     <string name="debugger_log_empty">没有日志点输出\n在断点上设置日志消息表达式</string>
     <string name="debugger_log_clear">清空</string>
+    <string name="debugger_log_clear_desc">清空日志点输出</string>
     <string name="debugger_log_autoscroll">自动滚动</string>
+    <string name="debugger_log_export">导出</string>
+    <string name="debugger_log_export_ok">已将 %1$d 条日志导出到 %2$s</string>
+    <string name="debugger_log_export_empty">没有可导出的日志</string>
+    <string name="debugger_log_export_failed">导出失败：%1$s</string>
+    <string name="debugger_log_pause">暂停</string>
+    <string name="debugger_log_pause_desc">暂停 / 恢复追加日志</string>
 
     <!-- PR-D1: 顶层 "调试" 工具栏按钮 -->
     <string name="debugger_action_start_debug">🪲 开始调试</string>
@@ -96,6 +109,16 @@
     <string name="debugger_msg_install_committed">安装已提交，等待安装完成 …</string>
     <string name="debugger_msg_launched">已启动 %1$s</string>
     <string name="debugger_msg_failed">调试启动失败 @%1$s : %2$s</string>
+
+    <!-- PR-D4: 添加日志点后的确认消息 -->
+    <string name="debugger_msg_logpoint_added">已在此行添加日志点</string>
+
+    <!-- PR-D4: 变量设置值对话框和消息 -->
+    <string name="debugger_set_value_title">为 %1$s (%2$s) 设置新值</string>
+    <string name="debugger_set_value_ok">变量已更新</string>
+    <string name="debugger_set_value_error">设置值失败：%1$s</string>
+    <string name="debugger_set_value_not_suspended">程序未暂停，无法设置值</string>
+    <string name="debugger_set_value_not_connected">调试器未连接，无法设置值</string>
 
     <!-- PR-E2: 断点条件/日志点配置对话框 -->
     <string name="debugger_bcd_title">断点属性</string>
@@ -120,6 +143,9 @@
     <string name="debugger_bcd_btn_save">保存</string>
     <string name="debugger_bcd_btn_cancel">取消</string>
     <string name="debugger_bcd_btn_remove">移除</string>
+    <string name="debugger_bcd_enabled">启用此断点</string>
+    <string name="debugger_bcd_enabled_desc">切换此断点启用或禁用；禁用后不会触发</string>
+    <string name="debugger_bcd_disabled_hint">（已禁用 — 不会触发）</string>
 
     <!-- PR-E2: 列表项命中次数显示 -->
     <string name="debugger_bp_hit_equal">命中 = %1$d</string>
@@ -151,6 +177,24 @@
     <string name="debugger_a11y_disconnected">已断开调试器</string>
     <string name="debugger_a11y_paused">程序已暂停于 %1$s 第 %2$d 行</string>
     <string name="debugger_a11y_resumed">程序已恢复运行</string>
+    <string name="debugger_a11y_exception_prefix">异常：%1$s</string>
+
+    <!-- PR-D5: 触觉反馈 / 错误提示 -->
+    <string name="debugger_msg_stop_force_stop_failed">强制停止失败：%1$s。请手动结束进程。</string>
+    <string name="debugger_msg_stop_no_target">调试已停止（未记录目标包）</string>
+    <string name="debugger_msg_step_reject">没有暂停的线程，无法单步执行</string>
+    <string name="debugger_msg_resume_reject">调试器未连接，无法恢复</string>
+    <string name="debugger_msg_pause_reject">调试器未连接，无法暂停</string>
+
+    <!-- PR-D5: 变量长按菜单 -->
+    <string name="debugger_var_action_copy_name">复制名称</string>
+    <string name="debugger_var_action_copy_value">复制值</string>
+    <string name="debugger_var_action_add_watch">添加为监视</string>
+    <string name="debugger_var_action_open_declaration">转到声明</string>
+    <string name="debugger_var_copied">已复制 %1$s</string>
+    <string name="debugger_var_watch_added">已添加监视：%1$s</string>
+    <string name="debugger_var_no_value_to_copy">此变量没有可复制的值</string>
+    <string name="debugger_var_ref_obj">对象</string>
 
     <!-- PR-D6: 断点类型选择菜单 (gutter long-click) -->
     <string name="debugger_bp_picker_title">选择断点类型</string>

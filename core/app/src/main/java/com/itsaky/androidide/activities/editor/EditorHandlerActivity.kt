@@ -97,7 +97,8 @@ import org.greenrobot.eventbus.ThreadMode
  * @author Akash Yadav
  * @author android_zero
  */
-open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
+open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
+  com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider.Host {
 
   protected val isOpenedFilesSaved = AtomicBoolean(false)
   private var kotlinLspInstallDialog: androidx.appcompat.app.AlertDialog? = null
@@ -496,7 +497,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
    * 调试器菜单中的 `flashInfo(...)` 等调用会把它转成 `Activity` 用作
    * 扩展函数 receiver。
    */
-  fun requireContext(): Context = this
+  override fun requireContext(): Context = this
 
   override fun getEditorAtIndex(index: Int): CodeEditorView? {
     return _binding?.content?.editorContainer?.getChildAt(index) as CodeEditorView?
@@ -987,9 +988,8 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
       // PR-D6: 关闭前先取 CodeEditor,detach 断点侧边栏(并取消 Sora 事件订阅),
       // 避免侧边栏继续占用已销毁 view + NPE。
       val closingEditor = getEditorAtIndex(index)
-      if (closingEditor != null) {
-        com.itsaky.androidide.debugger.view.BreakpointGutterManager
-            .detach(closingEditor.editor)
+      closingEditor?.editor?.let { codeEditor ->
+        com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(codeEditor)
       }
       editorContainer.removeViewAt(index)
     }
@@ -1110,8 +1110,8 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler {
       // + 取消它们的 Sora 事件订阅,避免 NPE / 内存泄漏。
       for (i in 0 until editorContainer.childCount) {
         val ed = editorContainer.getChildAt(i) as? CodeEditorView
-        if (ed != null) {
-          com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(ed.editor)
+        ed?.editor?.let { codeEditor ->
+          com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(codeEditor)
         }
       }
       tabs.removeAllTabs()

@@ -324,7 +324,10 @@ public final class DebuggerController
         }
     }
 
-    /** 跳过 java.*/android.*/kotlin.*/dalvik.* 等系统栈,找第一帧用户代码。 */
+    /**
+     * Skips system stack frames (for example, {@code java.*}, {@code android.*},
+     * {@code kotlin.*}, and {@code dalvik.*}) and returns the first user-code frame.
+     */
     @Nullable
     private static StackFrameInfo findUserCodeFrame(@NonNull List<StackFrameInfo> frames) {
         String userPkg = DebuggerController.getInstance().getTargetPackage();
@@ -371,12 +374,7 @@ public final class DebuggerController
     }
 
     @Nullable
-    public com.zerostudio.debugger.api.Debugger debugger() {
-        return debugger;
-    }
-
-    @Nullable
-    public DebugSession.State sessionState() {
+    public DebugSession.State currentDebuggerState() {
         return debugger == null ? null : debugger.session().getState();
     }
 
