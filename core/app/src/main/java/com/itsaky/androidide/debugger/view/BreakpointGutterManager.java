@@ -170,12 +170,10 @@ public final class BreakpointGutterManager {
         SubscriptionReceipt<?> r1 = editor.subscribeEvent(ScrollEvent.class, (event, subscriber) -> {
             layoutSidebar();
             refreshSidebar();
-            return null;
         });
         if (r1 != null) subscriptions.add(r1);
         SubscriptionReceipt<?> r2 = editor.subscribeEvent(ContentChangeEvent.class, (event, subscriber) -> {
             refreshSidebar();
-            return null;
         });
         if (r2 != null) subscriptions.add(r2);
         editor.post(() -> {
@@ -213,7 +211,7 @@ public final class BreakpointGutterManager {
         sidebar.setLayoutParams(flp);
     }
 
-    private float dp(float v) {
-        return v * editor.getResources().getDisplayMetrics().density;
+    private int dp(float v) {
+        return Math.round(v * editor.getResources().getDisplayMetrics().density);
     }
 }

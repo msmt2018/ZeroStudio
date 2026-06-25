@@ -113,7 +113,7 @@ public final class BreakpointTypePicker {
             Type t = Type.values()[position];
             if (currentCb != null) {
                 try { currentCb.onTypePicked(t); } catch (Throwable th) {
-                    ILogger.warn(TAG, "onTypePicked threw: " + th.getMessage());
+                    ILogger.ROOT.warn(TAG + ": " + "onTypePicked threw: " + th.getMessage());
                 }
             }
             dismiss();
@@ -166,14 +166,14 @@ public final class BreakpointTypePicker {
                     }
                 }
             } catch (Throwable t) {
-                ILogger.warn(TAG, "Could not add ghost anchor: " + t.getMessage());
+                ILogger.ROOT.warn(TAG + ": " + "Could not add ghost anchor: " + t.getMessage());
             }
         }
         currentCb = cb;
         try {
             popup.show();
         } catch (Throwable t) {
-            ILogger.warn(TAG, "popup.show failed: " + t.getMessage());
+            ILogger.ROOT.warn(TAG + ": " + "popup.show failed: " + t.getMessage());
         }
     }
 

@@ -182,7 +182,7 @@ public class BreakpointSidebar extends View {
         final float rowHeight = editor.getRowHeight();
         final float textOffset = editor.getOffsetX();
         final float firstVisibleRow = editor.getFirstVisibleRow();
-        final int lastVisibleRow = firstVisibleRow + editor.getRowCountOnScreen() + 1;
+        final int lastVisibleRow = (int) (firstVisibleRow + (getHeight() / Math.max(1f, rowHeight)) + 1);
 
         final float cx = getWidth() / 2f;
         final float r = dp(GLYPH_RADIUS_DP);

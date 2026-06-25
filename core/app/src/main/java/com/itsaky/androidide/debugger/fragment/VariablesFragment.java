@@ -33,7 +33,7 @@ import com.itsaky.androidide.debugger.DebugSessionState;
 import com.itsaky.androidide.debugger.DebuggerController;
 import com.itsaky.androidide.debugger.adapter.VariablesAdapter;
 import com.itsaky.androidide.utils.ILogger;
-import com.itsaky.androidide.utils.flashInfo;
+import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
 import com.zerostudio.debugger.api.StackFrameInfo;
 import com.zerostudio.debugger.api.VariableInfo;
 import java.util.Collections;
@@ -116,7 +116,7 @@ public class VariablesFragment extends Fragment
      */
     private void showSetValueDialog(@NonNull VariableInfo v) {
         if (!v.isPrimitive && !v.typeSignature.equals("Ljava/lang/String;")) {
-            requireActivity().flashInfo(
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
                     getString(R.string.debugger_var_set_value_error,
                             "暂仅支持 primitive 与 String"));
             return;
@@ -148,20 +148,20 @@ public class VariablesFragment extends Fragment
         com.zerostudio.debugger.api.Debugger dbg =
                 DebuggerController.getInstance().debugger();
         if (dbg == null) {
-            requireActivity().flashInfo(
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
                     getString(R.string.debugger_var_set_value_error, "未连接调试器"));
             return;
         }
         DebugSessionState st = DebuggerController.getInstance().sessionState();
         if (!st.isSuspended()) {
-            requireActivity().flashInfo(
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
                     getString(R.string.debugger_var_set_value_error, "程序未暂停"));
             return;
         }
         long threadId = st.pausedThreadId();
         StackFrameInfo frame = st.currentFrame();
         if (frame == null) {
-            requireActivity().flashInfo(
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
                     getString(R.string.debugger_var_set_value_error, "无可用栈帧"));
             return;
         }
@@ -171,7 +171,7 @@ public class VariablesFragment extends Fragment
         // 所以这里对 String 不支持 (新值没法作为 object id 传入)。
         // 真正写 String 应该是先 CreateString 再 SetValues;留给 PR-D7。
         if (v.typeSignature.equals("Ljava/lang/String;")) {
-            requireActivity().flashInfo(
+            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
                     getString(R.string.debugger_var_set_value_error,
                             "String set value 待 PR-D7 (需先 CreateString)"));
             return;
@@ -184,13 +184,13 @@ public class VariablesFragment extends Fragment
                             android.os.Looper.getMainLooper());
                     h.post(() -> {
                         if (result.isError()) {
-                            ILogger.warn(TAG, "setLocal failed: " + result.error);
-                            requireActivity().flashInfo(
+                            ILogger.ROOT.warn(TAG + ": " + "setLocal failed: " + result.error);
+                            FlashbarActivityUtilsKt.flashInfo(requireActivity(),
                                     getString(R.string.debugger_var_set_value_error,
                                             result.error));
                             return;
                         }
-                        requireActivity().flashInfo(
+                        FlashbarActivityUtilsKt.flashInfo(requireActivity(),
                                 getString(R.string.debugger_var_set_value_ok,
                                         v.name, newValue));
                         // 刷新当前帧的变量
