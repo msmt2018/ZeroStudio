@@ -28,6 +28,9 @@ package com.zerostudio.debugger.model;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import com.zerostudio.debugger.model.JavaSourceParser.ParsedSource;
+import com.zerostudio.debugger.model.JavaSourceParser.SourceClass;
+import com.zerostudio.debugger.model.JavaSourceParser.SourceMethod;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;

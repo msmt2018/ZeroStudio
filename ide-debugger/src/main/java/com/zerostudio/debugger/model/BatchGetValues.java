@@ -82,7 +82,7 @@ public final class BatchGetValues {
         int count = in.readInt();
         List<String> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            byte tag = in.readByte();
+            byte tag = (byte) in.readByte();
             out.add(readTagValue(in, tag));
         }
         return out;
@@ -108,7 +108,7 @@ public final class BatchGetValues {
         for (int i = 0; i < frameLocalCount; i++) {
             slots[i] = slotIndex.get(i);
             String sig = slotSig.get(i);
-            tags[i] = sig == null || sig.isEmpty() ? 'L' : (byte) sig.charAt(0);
+            tags[i] = sig == null || sig.isEmpty() ? (byte) 'L' : (byte) sig.charAt(0);
             if (tags[i] == '[' || tags[i] == 'L') tags[i] = 'L';
         }
         List<String> values = readValues(threadId, frameId, slots, tags);
