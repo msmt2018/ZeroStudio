@@ -688,7 +688,7 @@ public final class Debugger
         }
     }
 
-    void onResume() {
+    public void onResume() {
         session.setState(DebugSession.State.RUNNING);
         lastSuspend = null;
         eventBus.publish(DebugEvents.resume());
@@ -697,7 +697,7 @@ public final class Debugger
         }
     }
 
-    void notifyBreakpointChanged(@NonNull Breakpoint bp) {
+    public void notifyBreakpointChanged(@NonNull Breakpoint bp) {
         for (Listener l : listeners) {
             try { l.onBreakpointChanged(bp); } catch (Throwable ignored) { }
         }
