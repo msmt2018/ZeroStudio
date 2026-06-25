@@ -51,6 +51,12 @@ public final class DebuggerHaptics {
         }
     }
 
+    /** 强反馈。 */
+    @RequiresPermission(android.Manifest.permission.VIBRATE)
+    public static void strong(@Nullable Context ctx) {
+        vibrate(ctx, 45L, 220);
+    }
+
     /** 强制停止目标进程。50ms 长震。 */
     @RequiresPermission(android.Manifest.permission.VIBRATE)
     public static void onStop(@Nullable Context ctx) {

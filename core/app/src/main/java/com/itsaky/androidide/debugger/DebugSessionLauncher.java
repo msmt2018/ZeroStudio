@@ -44,6 +44,7 @@ import com.itsaky.androidide.utils.ApkInstaller;
 import com.itsaky.androidide.utils.InstallationResultHandler;
 import com.itsaky.androidide.utils.IntentUtils;
 import java.io.File;
+import java.util.Iterator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -140,11 +141,13 @@ public final class DebugSessionLauncher {
         // PR-D2 简化: 多 module 时本工具类无法弹 chooser dialog (那是
         // Kotlin 扩展函数). 退化为只跑工作区中第一个 app module;若需要
         // chooser,PR-D3 可以补一个 Activity-based 的 chooser.
-        Iterable<AndroidModule> projects = IProjectManager.getInstance()
+        Iterator<AndroidModule> projects = IProjectManager.getInstance()
                 .getWorkspace()
-                .androidProjects();
+                .androidProjects()
+                .iterator();
         AndroidModule module = null;
-        for (AndroidModule p : projects) {
+        while (projects.hasNext()) {
+            AndroidModule p = projects.next();
             if (p.isApplication()) {
                 module = p;
                 break;
@@ -211,13 +214,12 @@ public final class DebugSessionLauncher {
             return;
         }
 
-        ApkMetadata apkMeta = ApkMetadata.findApkFile(
+        File apk = ApkMetadata.Companion.findApkFile(
                 variant.getMainArtifact().getAssembleTaskOutputListingFile());
-        if (apkMeta == null || !apkMeta.exists()) {
+        if (apk == null || !apk.exists()) {
             fail(Step.BUILD, "APK file not found for variant " + variant.getName());
             return;
         }
-        File apk = apkMeta;
         fireInstallStarting(apk);
         runInstall(data, module, variant, apk);
     }
@@ -256,7 +258,7 @@ public final class DebugSessionLauncher {
         final CountDownLatch installLatch = new CountDownLatch(1);
         final AtomicReference<String> installError = new AtomicReference<>();
         final InstallResultSubscriber listener = new InstallResultSubscriber(
-                new InstallResultSubscriber.Callback() {
+                new InstallResultCallback() {
                     @Override
                     public void onResult(@Nullable String pkg, @Nullable String error) {
                         installError.set(error);
@@ -348,7 +350,7 @@ public final class DebugSessionLauncher {
             android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
             h.post(() -> {
                 try {
-                    ok[0] = IntentUtils.launchApp(appContext, packageName, false);
+                    ok[0] = IntentUtils.INSTANCE.launchApp(appContext, packageName, false);
                 } finally {
                     latch.countDown();
                 }
@@ -481,7 +483,7 @@ public final class DebugSessionLauncher {
             // 与 BaseEditorActivity 一致:用 InstallationResultHandler.onResult 解析包名。
             // 但是这里我们没法拿到 Activity context (只是 EventBus event);
             // 退而求其次:从 intent.getStringExtra(PACKAGE_NAME) 读。
-            android.content.Intent intent = ev.intent;
+            android.content.Intent intent = ev.getIntent();
             String pkg = null;
             String err = null;
             if (intent != null) {

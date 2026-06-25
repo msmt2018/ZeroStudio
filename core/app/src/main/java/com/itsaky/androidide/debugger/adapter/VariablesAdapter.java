@@ -91,8 +91,7 @@ public class VariablesAdapter extends ListAdapter<VariableInfo, VariablesAdapter
         if (v.isError) {
             h.value.setTextColor(
                     androidx.core.content.ContextCompat.getColor(
-                            h.itemView.getContext(),
-                            com.google.android.material.R.color.material_error));
+                            h.itemView.getContext(), R.color.debugger_bp_invalid));
         } else {
             h.value.setTextColor(
                     com.google.android.material.color.MaterialColors.getColor(

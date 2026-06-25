@@ -199,9 +199,11 @@ public final class RemoteDeviceScanner {
         try {
             DebuggerController.getInstance().connect(host, port);
             // Make auto-attach kick in next time:
-            AutoAttachManager mgr = new AutoAttachManager(
-                    android.app.ActivityThread.currentApplication());
-            mgr.rememberTarget(host, port, packageName);
+            android.content.Context app = com.itsaky.androidide.app.BaseApplication.getBaseInstance();
+            if (app != null) {
+                AutoAttachManager mgr = new AutoAttachManager(app);
+                mgr.rememberTarget(host, port, packageName);
+            }
             return true;
         } catch (Throwable t) {
             Log.w(TAG, "connect failed: " + t.getMessage());
