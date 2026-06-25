@@ -362,6 +362,18 @@ public final class SourceLocator {
                 CommandSet.EventRequest, CommandCodes.EventRequestCmd.Set, buf.toByteArray());
     }
 
+    /**
+     * Type-safe enum-based step API. Preferred over the raw byte
+     * overload. Sets a SINGLE_STEP EventRequest modifier with the
+     * given depth/size and suspends the thread.
+     */
+    public void step(long threadId,
+                     @NonNull com.zerostudio.debugger.jdwp.StepDepth depth,
+                     @NonNull com.zerostudio.debugger.jdwp.StepSize size)
+            throws IOException {
+        step(threadId, depth.value, size.value);
+    }
+
     @NonNull
     public List<StackFrameInfo> getStackFrames(long threadId, int start, int length)
             throws IOException {
