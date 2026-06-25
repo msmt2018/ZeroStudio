@@ -576,7 +576,7 @@ public final class Debugger
 
     // -- internal hooks for the event bus --
 
-    void onVmStart() {
+    public void onVmStart() {
         synchronized (vmStartReceived) {
             vmStartReceived.set(true);
             vmStartReceived.notifyAll();
@@ -585,7 +585,7 @@ public final class Debugger
         eventBus.publish(DebugEvents.vmStart());
     }
 
-    void onSuspend(@NonNull SuspendInfo info) {
+    public void onSuspend(@NonNull SuspendInfo info) {
         // PR-6: handle conditional breakpoints and logpoints BEFORE
         // notifying the UI. A logpoint never pauses the program; a
         // conditional breakpoint only pauses if the condition evaluates
