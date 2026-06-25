@@ -97,6 +97,25 @@ public final class WatchStore {
         saveAsync();
     }
 
+    /**
+     * PR-D6: 替换 {@code index} 处的表达式。新值需 trim + 非空,去重
+     * (若新值已存在于其他位置则先移除旧位置);超出范围时不做任何操作。
+     */
+    public synchronized void set(int index, @NonNull String expr) {
+        if (index < 0 || index >= watches.size()) return;
+        String t = expr.trim();
+        if (t.isEmpty()) return;
+        if (watches.get(index).equals(t)) return;
+        int dup = watches.indexOf(t);
+        if (dup >= 0 && dup != index) {
+            // 去重:删除原位置,index 调整
+            watches.remove(dup);
+            if (index > dup) index--;
+        }
+        watches.set(index, t);
+        save();
+    }
+
     public synchronized void load() {
         watches.clear();
         File f = file();

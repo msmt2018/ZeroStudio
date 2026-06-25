@@ -31,8 +31,6 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -128,9 +126,6 @@ public final class RemoteDeviceScanner {
     @WorkerThread
     private void doScan(long timeoutMs) {
         long deadline = System.currentTimeMillis() + timeoutMs;
-        // PR-D7: 使用类成员 probePool(16 路并发)而不是每次新建,减少
-        // 线程池反复创建/销毁的开销。同时加 empty 优化,没有候选 host
-        // 时直接返回,不做无意义的 latch.await。
         List<String> hosts = candidateHosts();
         if (hosts.isEmpty()) {
             lastResult.set(Collections.emptyList());
@@ -205,7 +200,7 @@ public final class RemoteDeviceScanner {
             DebuggerController.getInstance().connect(host, port);
             // Make auto-attach kick in next time:
             AutoAttachManager mgr = new AutoAttachManager(
-                    com.itsaky.androidide.app.BaseApplication.getBaseInstance());
+                    android.app.ActivityThread.currentApplication());
             mgr.rememberTarget(host, port, packageName);
             return true;
         } catch (Throwable t) {

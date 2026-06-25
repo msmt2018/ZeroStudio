@@ -93,6 +93,9 @@ public class DebuggerActionMenuProvider implements MenuProvider {
         // PR-D7: 跳转到异常源。当目标线程在异常处暂停时,会显示该位置。
         view.add(0, R.id.dbg_action_goto_exception, 4, R.string.debugger_action_goto_exception)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        // PR-D7: 跳转到异常源。当目标线程在异常处暂停时,会显示该位置。
+        view.add(0, R.id.dbg_action_goto_exception, 4, R.string.debugger_action_goto_exception)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
     }
 
     @Override

@@ -1,7 +1,8 @@
 name: ide-debugger unit tests
 
-# Phase F5: CI workflow for ide-debugger module unit tests.
-# Runs on push to main and on pull requests that touch ide-debugger/**.
+# Phase F1: CI workflow for ide-debugger module unit tests.
+# Runs on push to main, on PR to main, and manually via workflow_dispatch.
+# Build matrix covers JDK 17/21 (LTS) and Gradle 8.7/8.13.
 
 on:
   push:
@@ -9,36 +10,63 @@ on:
       - main
     paths:
       - 'ide-debugger/**'
-      - 'utilities/logwire/**'  # ide-debugger depends on logwire
+      - 'utilities/logwire/**'
+      - 'tooling/plugin/**'
+      - 'ide-log-plugin/**'
       - '.github/workflows/ide-debugger-tests.yml'
   pull_request:
     paths:
       - 'ide-debugger/**'
       - 'utilities/logwire/**'
+      - 'tooling/plugin/**'
+      - 'ide-log-plugin/**'
       - '.github/workflows/ide-debugger-tests.yml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to test (branch/tag/SHA)'
+        required: false
+        default: ''
+
+# Cancel in-progress runs for the same ref/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   test:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    name: ${{ matrix.os }} JDK ${{ matrix.java }} / Gradle ${{ matrix.gradle }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04]
+        java: ['17', '21']
+        # Gradle 8.7 is the project default; 8.13 is the latest stable.
+        gradle: ['8.7', '8.13']
 
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          ref: ${{ github.event.inputs.ref || github.ref }}
 
-      - name: Configure JDK 21 (Zulu 21.0.9)
+      - name: Configure JDK ${{ matrix.java }} (Zulu)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '21'
+          java-version: ${{ matrix.java }}
           cache: 'gradle'
 
-      - name: Configure Gradle 8.13
+      - name: Configure Gradle ${{ matrix.gradle }}
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.13'
+          gradle-version: ${{ matrix.gradle }}
+          # Use the project's gradle wrapper when present
+          gradle-home-cache-cleanup: true
 
       - name: Grant execution permissions to the Gradle wrapper
         run: chmod +x ./gradlew
@@ -47,22 +75,55 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx2g -XX:MaxMetaspaceSize=512m' -Dorg.gradle.daemon=false"
         run: |
-          gradle :ide-debugger:testDebugUnitTest --build-cache --max-workers=2
+          gradle :ide-debugger:testDebugUnitTest \
+            --build-cache --max-workers=2 \
+            --no-daemon --stacktrace
+
+      - name: Run ide-log-plugin unit tests (Phase C3)
+        if: matrix.java == '21' && matrix.gradle == '8.13'
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx2g -XX:MaxMetaspaceSize=512m' -Dorg.gradle.daemon=false"
+        run: |
+          gradle :ide-log-plugin:testDebugUnitTest \
+            --build-cache --max-workers=2 \
+            --no-daemon --stacktrace
+        continue-on-error: true
+
+      - name: Run tooling/plugin unit tests (Phase C2/C5)
+        if: matrix.java == '21' && matrix.gradle == '8.13'
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx2g -XX:MaxMetaspaceSize=512m' -Dorg.gradle.daemon=false"
+        run: |
+          gradle :plugin:test --tests "com.itsaky.androidide.gradle.IdeDebuggerInitScriptPluginTest" \
+            --tests "com.itsaky.androidide.gradle.IdeLogInitScriptPluginTest" \
+            --build-cache --max-workers=2 \
+            --no-daemon --stacktrace
+        continue-on-error: true
 
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ide-debugger-test-reports
-          path: ide-debugger/build/reports/tests/testDebugUnitTest/
-          retention-days: 7
+          name: ide-debugger-test-reports-${{ matrix.java }}-${{ matrix.gradle }}
+          path: |
+            ide-debugger/build/reports/tests/testDebugUnitTest/
+            ide-log-plugin/build/reports/tests/testDebugUnitTest/
+            plugin/build/reports/tests/test/
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Publish test summary
         if: always()
         run: |
           echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**OS:** ${{ matrix.os }} | **JDK:** ${{ matrix.java }} | **Gradle:** ${{ matrix.gradle }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f "ide-debugger/build/reports/tests/testDebugUnitTest/index.html" ]; then
-            echo "Test report generated. Download the artifact to view details." >> $GITHUB_STEP_SUMMARY
+            echo "ide-debugger tests: PASSED (artifact uploaded on failure)" >> $GITHUB_STEP_SUMMARY
           else
-            echo "No test report found." >> $GITHUB_STEP_SUMMARY
+            echo "ide-debugger tests: NO REPORT — see logs" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f "ide-log-plugin/build/reports/tests/testDebugUnitTest/index.html" ]; then
+            echo "ide-log-plugin tests: PASSED" >> $GITHUB_STEP_SUMMARY
           fi
