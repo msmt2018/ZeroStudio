@@ -37,6 +37,11 @@ public final class BreakpointGutterManager {
 
     public interface OnBreakpointActionListener {
         void onBreakpointClick(@NonNull String file, int line);
+
+        default void onBreakpointClick(@NonNull String file, int line, float x, float y) {
+            onBreakpointClick(file, line);
+        }
+
         void onBreakpointLongClick(@NonNull IdeBreakpoint bp);
     }
 

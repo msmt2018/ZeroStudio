@@ -374,12 +374,7 @@ public final class DebuggerController
     }
 
     @Nullable
-    public com.zerostudio.debugger.api.Debugger debugger() {
-        return debugger;
-    }
-
-    @Nullable
-    public DebugSession.State sessionState() {
+    public DebugSession.State currentDebuggerState() {
         return debugger == null ? null : debugger.session().getState();
     }
 
