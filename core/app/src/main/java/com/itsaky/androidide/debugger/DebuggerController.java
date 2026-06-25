@@ -324,7 +324,7 @@ public final class DebuggerController
         }
     }
 
-    /** 跳过 java.*/android.*/kotlin.*/dalvik.* 等系统栈,找第一帧用户代码。 */
+    /** 跳过 java、android、kotlin、dalvik 等系统栈,找第一帧用户代码。 */
     @Nullable
     private static StackFrameInfo findUserCodeFrame(@NonNull List<StackFrameInfo> frames) {
         String userPkg = DebuggerController.getInstance().getTargetPackage();
