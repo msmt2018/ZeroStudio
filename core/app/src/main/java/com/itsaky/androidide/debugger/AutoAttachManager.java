@@ -46,6 +46,11 @@ public final class AutoAttachManager {
     private static final String KEY_LAST_DISCONNECT_MS = "jdwp_last_disconnect_ms";
     private static final long DEFAULT_DISCONNECT_BACKOFF_MS = 60_000L;
     private static final long DEFAULT_INITIAL_DELAY_MS = 1_500L;
+    /** PR-D7: 防抖窗口 — 上次调用距今 < DEBOUNCE_MS 视为同一次"打开 App",
+     *  仅刷新 pendingAttach 不再叠加 1.5s 延迟。 */
+    private static final long DEBOUNCE_MS = 800L;
+    /** 上一次 maybeAutoAttach 的时间戳 (SystemClock.uptimeMillis)。 */
+    private long lastScheduleMs = 0L;
     private static final long DEFAULT_PROBE_TIMEOUT_MS = 1_000L;
 
     private final Context appContext;
@@ -129,9 +134,19 @@ public final class AutoAttachManager {
             return false;
         }
         if (mainHandler == null) mainHandler = new Handler(Looper.getMainLooper());
+        // PR-D7: 防抖。若距上次调用 < DEBOUNCE_MS, 视为同一次"打开 App"
+        // 触发的连续 onCreate, 不重新叠加 1.5s 延迟, 但要把 pendingAttach
+        // 切到新的 lambda (currentPackage 可能变了)。
+        final long now = android.os.SystemClock.uptimeMillis();
+        final boolean inDebounce = (now - lastScheduleMs) < DEBOUNCE_MS;
+        lastScheduleMs = now;
+        if (pendingAttach != null && mainHandler != null) {
+            mainHandler.removeCallbacks(pendingAttach);
+        }
         Runnable r = () -> doAutoAttach(host, port, pkg);
         pendingAttach = r;
-        mainHandler.postDelayed(r, DEFAULT_INITIAL_DELAY_MS);
+        // 防抖窗口内不重新延迟, 立即派发; 首次或冷启动后仍是 1.5s。
+        mainHandler.postDelayed(r, inDebounce ? 0L : DEFAULT_INITIAL_DELAY_MS);
         return true;
     }
 
