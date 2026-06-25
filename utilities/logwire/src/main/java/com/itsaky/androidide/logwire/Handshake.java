@@ -31,9 +31,50 @@ public final class Handshake {
     }
 
     public static Handshake defaultFor(@NonNull String packageName) {
-        int pid = (int) android.os.Process.myPid();
+        int pid = currentProcessPid();
         long session = System.nanoTime();
         return new Handshake(WireConstants.PROTOCOL_VERSION, pid, packageName, session);
+    }
+
+    /**
+     * Best-effort: get the current process id without depending on
+     * android.os.Process (this module is a pure java-library and is
+     * not compiled against the Android SDK).
+     *
+     * <p>Order:
+     * <ol>
+     *   <li>{@link ProcessHandle#current()} — JDK 9+ (works on plain JVM
+     *       and on Android with desugaring at API 26+).</li>
+     *   <li>Parse {@code pid@host} from the JVM's runtime name.</li>
+     *   <li>Fall back to 0 (caller can still proceed with pid=0, the
+     *       protocol is tolerant — pid is informational only).</li>
+     * </ol>
+     */
+    private static int currentProcessPid() {
+        try {
+            // Java 9+: ProcessHandle.current().pid() returns long.
+            long pid = ProcessHandle.current().pid();
+            if (pid > 0 && pid <= Integer.MAX_VALUE) {
+                return (int) pid;
+            }
+        } catch (Throwable ignored) {
+            // ProcessHandle not supported on this runtime — fall through
+        }
+        try {
+            // Fallback: "pid@host" format from RuntimeMXBean.getName()
+            String name = java.lang.management.ManagementFactory
+                    .getRuntimeMXBean().getName();
+            int at = name.indexOf('@');
+            if (at > 0) {
+                long pid = Long.parseLong(name.substring(0, at));
+                if (pid > 0 && pid <= Integer.MAX_VALUE) {
+                    return (int) pid;
+                }
+            }
+        } catch (Throwable ignored) {
+            // best-effort
+        }
+        return 0;
     }
 
     @NonNull
