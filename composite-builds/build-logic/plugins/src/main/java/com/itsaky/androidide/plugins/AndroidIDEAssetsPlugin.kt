@@ -29,6 +29,7 @@ import com.itsaky.androidide.plugins.util.SdkUtils.getAndroidJar
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.configurationcache.extensions.capitalized
+import org.gradle.jvm.tasks.Jar
 
 /**
  * Handles asset copying and generation.
@@ -150,8 +151,19 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
                     checkNotNull(rootProject.findProject(artifact.projectPath)) {
                       "Cannot find required host runtime module: '${artifact.projectPath}'"
                     }
-                dependsOn(artifactProject.tasks.getByName(artifact.producerTaskName))
-                inputFile.set(artifactProject.layout.buildDirectory.file(artifact.buildOutput))
+                if (artifact.producerTaskName == "jar") {
+                  val jarTask = artifactProject.tasks.named("jar", Jar::class.java)
+                  dependsOn(jarTask)
+                  inputFile.set(jarTask.flatMap { it.archiveFile })
+                } else {
+                  val producerTask = artifactProject.tasks.named(artifact.producerTaskName)
+                  dependsOn(producerTask)
+                  inputFile.set(
+                      producerTask.flatMap {
+                        artifactProject.layout.buildDirectory.file(artifact.buildOutput)
+                      }
+                  )
+                }
                 fileName.set(artifact.assetName)
                 baseAssetsPath.set("data/common")
               }
