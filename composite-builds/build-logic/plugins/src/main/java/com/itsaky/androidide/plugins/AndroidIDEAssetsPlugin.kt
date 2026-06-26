@@ -113,6 +113,60 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             AddFileToAssetsTask::outputDirectory,
         )
 
+        data class RuntimeArtifact(
+            val taskName: String,
+            val projectPath: String,
+            val buildOutput: String,
+            val assetName: String,
+        )
+
+        listOf(
+            RuntimeArtifact(
+                "LoggerJar",
+                ":logging:logger",
+                "libs/logger.jar",
+                "logger.jar",
+            ),
+            RuntimeArtifact(
+                "LogsenderAar",
+                ":logging:logsender",
+                "outputs/aar/logsender-release.aar",
+                "logsender.aar",
+            ),
+            RuntimeArtifact(
+                "ToolingPluginJar",
+                ":tooling:plugin",
+                "libs/androidide-plugin.jar",
+                "androidide-plugin.jar",
+            ),
+            RuntimeArtifact(
+                "PluginConfigJar",
+                ":tooling:plugin-config",
+                "libs/plugin-config.jar",
+                "plugin-config.jar",
+            ),
+        ).forEach { artifact ->
+          val copyRuntimeArtifact =
+              tasks.register(
+                  "copy${variantNameCapitalized}${artifact.taskName}ToAssets",
+                  AddFileToAssetsTask::class.java,
+              ) {
+                val artifactProject =
+                    checkNotNull(rootProject.findProject(artifact.projectPath)) {
+                      "Cannot find required log plugin runtime module: '${artifact.projectPath}'"
+                    }
+                dependsOn(artifactProject.tasks.getByName("assemble"))
+                inputFile.set(artifactProject.layout.buildDirectory.file(artifact.buildOutput))
+                fileName.set(artifact.assetName)
+                baseAssetsPath.set("data/common")
+              }
+
+          variant.sources.assets?.addGeneratedSourceDirectory(
+              copyRuntimeArtifact,
+              AddFileToAssetsTask::outputDirectory,
+          )
+        }
+
         // Tooling API JAR copier
         val copyToolingApiJar =
             tasks.register(

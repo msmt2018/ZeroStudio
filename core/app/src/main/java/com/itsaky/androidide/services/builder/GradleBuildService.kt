@@ -322,22 +322,33 @@ class GradleBuildService :
 
   /** Extracts and returns the logger runtime AAR file. */
   private fun getLoggerRuntimeAar(): File {
-    val aar = File(getLoggerPluginDir(), "ide-log-plugin-1.0.0.aar")
-    if (!aar.exists()) {
-      try {
-        BaseApplication.getBaseInstance().assets.open("data/common/ide-log-plugin-1.0.0.aar").use { input ->
-          aar.outputStream().buffered().use { output -> input.copyTo(output) }
-        }
-        log.info("Extracted ide-log-plugin AAR to {}", aar.absolutePath)
-      } catch (e: Throwable) {
-        log.warn(
-          "ide-log-plugin-1.0.0.aar not found in assets or {} — debugger/log injection may fail",
-          aar.absolutePath,
-          e
+    ensureLoggerPluginArtifacts()
+    return File(getLoggerPluginDir(), "ide-log-plugin-1.0.0.aar")
+  }
+
+  /** Copies the logger/debugger plugin artifacts from APK assets into the local flatDir. */
+  private fun ensureLoggerPluginArtifacts() {
+    val artifacts =
+        arrayOf(
+            "ide-log-plugin-1.0.0.aar",
+            "logger.jar",
+            "logsender.aar",
+            "androidide-plugin.jar",
+            "plugin-config.jar",
         )
+    val pluginDir = getLoggerPluginDir()
+    artifacts.forEach { name ->
+      val out = File(pluginDir, name)
+      if (out.exists()) return@forEach
+      try {
+        BaseApplication.getBaseInstance().assets.open("data/common/$name").use { input ->
+          out.outputStream().buffered().use { output -> input.copyTo(output) }
+        }
+        log.info("Extracted logger plugin artifact to {}", out.absolutePath)
+      } catch (e: Throwable) {
+        log.warn("Logger plugin artifact {} is missing from assets", name, e)
       }
     }
-    return aar
   }
 
   /** Check if tasks include debug builds (not release-only). */
