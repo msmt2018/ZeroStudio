@@ -141,8 +141,8 @@ public class LogpointFragment extends Fragment implements LogStore.Listener {
             File outDir = Environment.getExternalStoragePublicDirectory(
                     Environment.DIRECTORY_DOWNLOADS);
             File outFile = new File(outDir, "zerostudio-logpoint-" + stamp + ".txt");
-            final int count;
-            final String err;
+            int count;
+            String err;
             try {
                 count = store.exportToFile(outFile);
                 err = null;
