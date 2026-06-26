@@ -199,12 +199,11 @@ public final class BreakpointGutterManager {
         if (!(lp instanceof FrameLayout.LayoutParams)) return;
         FrameLayout.LayoutParams flp = (FrameLayout.LayoutParams) lp;
 
-        int targetWidth = dp(20f);
-        // 起点：编辑器自带 lineNumberMarginLeft + 一段填充
+        int targetWidth = dp(24f);
+        // 单独占用行号左侧断点栏,避免图标覆盖行号；图标按行高垂直居中绘制。
         float lineNumberStart = editor.getLineNumberMarginLeft();
-        if (lineNumberStart <= 0) lineNumberStart = dp(2f);
-        // 在 line number 之前 ~10dp 留白
-        float sidebarX = Math.max(0, lineNumberStart - targetWidth);
+        if (lineNumberStart <= 0) lineNumberStart = dp(24f);
+        float sidebarX = Math.max(0, lineNumberStart - targetWidth - dp(2f));
         flp.leftMargin = (int) sidebarX;
         flp.width = targetWidth;
         flp.height = ViewGroup.LayoutParams.MATCH_PARENT;

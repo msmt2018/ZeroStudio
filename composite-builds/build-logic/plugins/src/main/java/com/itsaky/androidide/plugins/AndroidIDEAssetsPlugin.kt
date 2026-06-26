@@ -85,6 +85,88 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             GenerateInitScriptTask::outputDir,
         )
 
+        // Debugger/log host plugin AAR copier. The init script resolves this
+        // file from ~/.androidide/init via flatDir, and GradleBuildService
+        // extracts it from assets into that directory before launching builds.
+        val copyIdeLogPluginAar =
+            tasks.register(
+                "copy${variantNameCapitalized}IdeLogPluginAar",
+                AddFileToAssetsTask::class.java,
+            ) {
+              val pluginPath = ":ide-log-plugin"
+              val pluginProject =
+                  checkNotNull(rootProject.findProject(pluginPath)) {
+                    "Cannot find the IDE log plugin module with project path: '$pluginPath'"
+                  }
+              dependsOn(pluginProject.tasks.getByName("assembleRelease"))
+              inputFile.set(
+                  pluginProject.layout.buildDirectory.file(
+                      "outputs/aar/ide-log-plugin-release.aar"
+                  )
+              )
+              fileName.set("ide-log-plugin-1.0.0.aar")
+              baseAssetsPath.set("data/common")
+            }
+
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            copyIdeLogPluginAar,
+            AddFileToAssetsTask::outputDirectory,
+        )
+
+        data class RuntimeArtifact(
+            val taskName: String,
+            val projectPath: String,
+            val buildOutput: String,
+            val assetName: String,
+        )
+
+        listOf(
+            RuntimeArtifact(
+                "LoggerJar",
+                ":logging:logger",
+                "libs/logger.jar",
+                "logger.jar",
+            ),
+            RuntimeArtifact(
+                "LogsenderAar",
+                ":logging:logsender",
+                "outputs/aar/logsender-release.aar",
+                "logsender.aar",
+            ),
+            RuntimeArtifact(
+                "ToolingPluginJar",
+                ":tooling:plugin",
+                "libs/androidide-plugin.jar",
+                "androidide-plugin.jar",
+            ),
+            RuntimeArtifact(
+                "PluginConfigJar",
+                ":tooling:plugin-config",
+                "libs/plugin-config.jar",
+                "plugin-config.jar",
+            ),
+        ).forEach { artifact ->
+          val copyRuntimeArtifact =
+              tasks.register(
+                  "copy${variantNameCapitalized}${artifact.taskName}ToAssets",
+                  AddFileToAssetsTask::class.java,
+              ) {
+                val artifactProject =
+                    checkNotNull(rootProject.findProject(artifact.projectPath)) {
+                      "Cannot find required log plugin runtime module: '${artifact.projectPath}'"
+                    }
+                dependsOn(artifactProject.tasks.getByName("assemble"))
+                inputFile.set(artifactProject.layout.buildDirectory.file(artifact.buildOutput))
+                fileName.set(artifact.assetName)
+                baseAssetsPath.set("data/common")
+              }
+
+          variant.sources.assets?.addGeneratedSourceDirectory(
+              copyRuntimeArtifact,
+              AddFileToAssetsTask::outputDirectory,
+          )
+        }
+
         // Tooling API JAR copier
         val copyToolingApiJar =
             tasks.register(

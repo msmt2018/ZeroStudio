@@ -31,7 +31,7 @@ import java.util.UUID;
 public final class IdeBreakpoint {
 
     public enum State {
-        /** 普通 */
+        /** 普通行断点 */
         NORMAL,
         /** 无效 - JDWP 服务无法解析到字节码位置 */
         INVALID,
@@ -44,15 +44,52 @@ public final class IdeBreakpoint {
         /** 禁用 - 用户禁用 */
         DISABLED,
         /** 命中 - 调试会话中已被命中 */
-        HIT
+        HIT,
+        /** 异常断点 - 全局捕获指定异常 */
+        EXCEPTION,
+        /** 字段/变量监视断点 - 读取或写入时暂停 */
+        FIELD_WATCHPOINT,
+        /** 方法/函数断点 - 进入或退出方法时暂停 */
+        METHOD,
+        /** 依赖/触发性断点 - 由另一个断点激活 */
+        DEPENDENT,
+        /** 一次性断点 - 命中后自动移除 */
+        TEMPORARY
+    }
+
+    public enum Kind {
+        LINE,
+        EXCEPTION,
+        FIELD_WATCHPOINT,
+        METHOD
     }
 
     /** 稳定 ID,用于跨编辑会话标识断点。 */
     @NonNull public final String id;
     /** 源文件绝对路径。 */
     @NonNull public final String file;
-    /** 1-based 行号。 */
+    /** 1-based 行号。全局异常断点可为 0。 */
     public final int line;
+    /** 断点绑定维度:行/异常/字段/方法。 */
+    @NonNull public Kind kind = Kind.LINE;
+    /** 一次性断点:命中后自动移除。 */
+    public boolean temporary;
+    /** 字段监视点:读取时触发。 */
+    public boolean watchAccess;
+    /** 字段监视点:修改时触发。 */
+    public boolean watchModification = true;
+    /** 方法断点:进入方法时触发。 */
+    public boolean methodEntry = true;
+    /** 方法断点:退出方法时触发。 */
+    public boolean methodExit;
+    /** 异常断点:捕获已处理异常。 */
+    public boolean catchCaught = true;
+    /** 异常断点:捕获未处理异常。 */
+    public boolean catchUncaught = true;
+    /** 依赖断点 ID;非空时需等待该断点先命中。 */
+    @Nullable public String dependsOnBreakpointId;
+    /** 代码元素名称,如异常类名、字段名或方法名。 */
+    @Nullable public String elementName;
     /** 命中条件表达式;为空时表示无条件。 */
     @Nullable public String condition;
     /** 命中日志消息表达式(如 "x=" + x)。非空时本断点作为
@@ -160,6 +197,24 @@ public final class IdeBreakpoint {
         return state != State.DISABLED;
     }
 
+    /** 是否是仍然绑定到行号的行断点扩展。 */
+    public boolean isLineBased() {
+        return kind == Kind.LINE;
+    }
+
+    /** 按配置刷新可视状态。 */
+    public void refreshStateFromOptions() {
+        if (state == State.DISABLED || state == State.HIT || state == State.INVALID) return;
+        if (kind == Kind.EXCEPTION) state = State.EXCEPTION;
+        else if (kind == Kind.FIELD_WATCHPOINT) state = State.FIELD_WATCHPOINT;
+        else if (kind == Kind.METHOD) state = State.METHOD;
+        else if (temporary) state = State.TEMPORARY;
+        else if (dependsOnBreakpointId != null && !dependsOnBreakpointId.isEmpty()) state = State.DEPENDENT;
+        else if (logMessage != null && !logMessage.isEmpty()) state = State.LOG;
+        else if (condition != null && !condition.isEmpty()) state = State.CONDITION;
+        else state = State.NORMAL;
+    }
+
     /** 切换禁用状态。 */
     public void toggleDisabled() {
         state = (state == State.DISABLED) ? State.NORMAL : State.DISABLED;
@@ -168,21 +223,13 @@ public final class IdeBreakpoint {
     /** 设置条件;附带条件会自动把状态切为 CONDITION。 */
     public void setCondition(@Nullable String expr) {
         this.condition = expr;
-        if (state != State.DISABLED
-                && state != State.HIT
-                && state != State.LOG) {
-            state = State.CONDITION;
-        }
+        refreshStateFromOptions();
     }
 
     /** 设置日志消息;附带日志消息会自动把状态切为 LOG。 */
     public void setLogMessage(@Nullable String expr) {
         this.logMessage = expr;
-        if (state != State.DISABLED
-                && state != State.HIT
-                && state != State.CONDITION) {
-            state = State.LOG;
-        }
+        refreshStateFromOptions();
     }
 
     /**
@@ -196,20 +243,7 @@ public final class IdeBreakpoint {
                 ? com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS
                 : mode;
         this.hitCount = Math.max(0, count);
-        if (state == State.DISABLED
-                || state == State.HIT
-                || state == State.LOG) {
-            return;
-        }
-        if (this.hitCountMode != com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS) {
-            // 命中次数过滤本身不算"条件断点",用 NORMAL 展示即可
-            return;
-        }
-        if (this.condition != null && !this.condition.isEmpty()) {
-            state = State.CONDITION;
-        } else {
-            state = State.NORMAL;
-        }
+        refreshStateFromOptions();
     }
 
     @Override

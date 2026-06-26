@@ -32,6 +32,11 @@ public final class BreakpointStateColors {
             case LOG:       return R.color.debugger_bp_logpoint;
             case DISABLED:  return R.color.debugger_bp_disabled;
             case HIT:       return R.color.debugger_bp_hit;
+            case EXCEPTION: return R.color.debugger_bp_invalid;
+            case FIELD_WATCHPOINT: return R.color.debugger_bp_verified;
+            case METHOD: return R.color.debugger_bp_condition;
+            case DEPENDENT: return R.color.debugger_bp_hit_count_label;
+            case TEMPORARY: return R.color.debugger_bp_hit;
             default:        return R.color.debugger_bp_normal;
         }
     }

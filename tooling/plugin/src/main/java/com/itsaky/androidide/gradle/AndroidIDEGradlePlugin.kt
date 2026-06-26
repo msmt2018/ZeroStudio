@@ -52,6 +52,8 @@ class AndroidIDEGradlePlugin : Plugin<Project> {
         if (isLogSenderEnabled) {
           logger.info("Trying to apply LogSender plugin to project '${project.path}'")
           pluginManager.apply(LogSenderPlugin::class.java)
+          pluginManager.apply(IdeLogInitScriptPlugin::class.java)
+          pluginManager.apply(IdeDebuggerInitScriptPlugin::class.java)
         } else {
           logger.warn(
               "LogSender is disabled. Dependency will not be added to project '${project.path}'."

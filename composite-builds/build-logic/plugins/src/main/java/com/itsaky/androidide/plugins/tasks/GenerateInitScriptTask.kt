@@ -46,21 +46,27 @@ abstract class GenerateInitScriptTask : DefaultTask() {
           """
                 initscript {
                     repositories {
-                       flatDir {
-                        dirs "/data/data/com.itsaky.androidide/files/home/.androidide/init", "init"
-                  }
-              }
+                        flatDir {
+                            dirs "/data/data/com.itsaky.androidide/files/home/.androidide/init",
+                                 "/data/data/com.itsaky.androidide/files/home/.androidide/plugin/logger",
+                                 "init"
+                        }
+                        google()
+                        mavenCentral()
+                        gradlePluginPortal()
+                    }
 
-              dependencies {
-                  // PR-1: 旧的 zerostudio-gradle-plugin-1.0.0.jar 已被
-                  // :ide-log-plugin AAR 替代 (logging/{logger,logsender} +
-                  // tooling/{plugin,plugin-config} 整合),Asset 路径也改为
-                  // `ide-log-plugin-1.0.0.aar`。
-                  classpath  name: "ide-log-plugin-1.0.0"
-              }
-          }
+                    dependencies {
+                        // The Gradle init plugins live in tooling/plugin. Keep the
+                        // host app AAR and support libraries as flatDir files so
+                        // IdeLogInitScriptPlugin can inject them into debuggable variants.
+                        classpath name: "androidide-plugin"
+                        classpath name: "plugin-config"
+                        classpath name: "logger"
+                    }
+                }
 
-                apply plugin: com.zerostudio.logplugin.IdeLogInitScriptPlugin
+                apply plugin: com.itsaky.androidide.gradle.AndroidIDEInitScriptPlugin
           """
               .trimIndent()
       )

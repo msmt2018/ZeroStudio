@@ -175,6 +175,7 @@ include(
 
     ":ide-decompiler",
     ":ide-debugger",
+    ":ide-log-plugin",
     ":ide-language",
 
     ":java:javac-services",

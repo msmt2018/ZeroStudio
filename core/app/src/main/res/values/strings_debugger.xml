@@ -146,6 +146,22 @@
     <string name="debugger_bcd_enabled">启用此断点</string>
     <string name="debugger_bcd_enabled_desc">切换此断点启用或禁用；禁用后不会触发</string>
     <string name="debugger_bcd_disabled_hint">（已禁用 — 不会触发）</string>
+    <string name="debugger_bcd_advanced">高级断点</string>
+    <string name="debugger_bcd_element_hint">异常类 / 字段 / 方法名称</string>
+    <string name="debugger_bcd_temporary">仅触发一次（Temporary / Run to cursor）</string>
+    <string name="debugger_bcd_watch_access">监视读取（Access）</string>
+    <string name="debugger_bcd_watch_modification">监视写入（Modification）</string>
+    <string name="debugger_bcd_method_entry">进入方法时暂停</string>
+    <string name="debugger_bcd_method_exit">离开方法时暂停</string>
+    <string name="debugger_bcd_exception_caught">捕获已处理异常（Caught）</string>
+    <string name="debugger_bcd_exception_uncaught">捕获未处理异常（Uncaught）</string>
+    <string-array name="debugger_bcd_advanced_kinds">
+        <item>行断点</item>
+        <item>异常断点</item>
+        <item>字段/变量监视断点</item>
+        <item>方法/函数断点</item>
+    </string-array>
+
 
     <!-- PR-E2: 列表项命中次数显示 -->
     <string name="debugger_bp_hit_equal">命中 = %1$d</string>

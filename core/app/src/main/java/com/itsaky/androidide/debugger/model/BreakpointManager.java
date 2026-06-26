@@ -183,17 +183,47 @@ public final class BreakpointManager {
         fireStateChanged(bp);
     }
 
+
+    @MainThread
+    public void applyAdvancedOptions(
+            @NonNull String id,
+            @NonNull IdeBreakpoint.Kind kind,
+            boolean temporary,
+            boolean watchAccess,
+            boolean watchModification,
+            boolean methodEntry,
+            boolean methodExit,
+            boolean catchCaught,
+            boolean catchUncaught,
+            @Nullable String dependsOnBreakpointId,
+            @Nullable String elementName) {
+        IdeBreakpoint bp = findById(id);
+        if (bp == null) return;
+        bp.kind = kind == null ? IdeBreakpoint.Kind.LINE : kind;
+        bp.temporary = temporary;
+        bp.watchAccess = watchAccess;
+        bp.watchModification = watchModification;
+        bp.methodEntry = methodEntry;
+        bp.methodExit = methodExit;
+        bp.catchCaught = catchCaught;
+        bp.catchUncaught = catchUncaught;
+        bp.dependsOnBreakpointId = (dependsOnBreakpointId == null || dependsOnBreakpointId.isEmpty())
+                ? null : dependsOnBreakpointId;
+        bp.elementName = (elementName == null || elementName.trim().isEmpty())
+                ? null : elementName.trim();
+        bp.refreshStateFromOptions();
+        reinstallOnDebugger(bp);
+        fireStateChanged(bp);
+    }
+
     @MainThread
     public void setEnabled(@NonNull String id, boolean enabled) {
         IdeBreakpoint bp = findById(id);
         if (bp == null) return;
         bp.state = enabled
-                ? (bp.logMessage != null && !bp.logMessage.isEmpty()
-                        ? IdeBreakpoint.State.LOG
-                        : (bp.condition != null && !bp.condition.isEmpty()
-                                ? IdeBreakpoint.State.CONDITION
-                                : IdeBreakpoint.State.NORMAL))
+                ? IdeBreakpoint.State.NORMAL
                 : IdeBreakpoint.State.DISABLED;
+        if (enabled) bp.refreshStateFromOptions();
         if (enabled) {
             installOnDebugger(bp);
         } else {
@@ -220,6 +250,7 @@ public final class BreakpointManager {
         for (IdeBreakpoint bp : all) {
             if (bp.state == IdeBreakpoint.State.DISABLED) {
                 bp.state = IdeBreakpoint.State.NORMAL;
+                bp.refreshStateFromOptions();
                 installOnDebugger(bp);
             }
         }
