@@ -29,7 +29,6 @@ import com.itsaky.androidide.plugins.util.SdkUtils.getAndroidJar
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.configurationcache.extensions.capitalized
-import org.gradle.jvm.tasks.Jar
 
 /**
  * Handles asset copying and generation.
@@ -86,57 +85,58 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             GenerateInitScriptTask::outputDir,
         )
 
-        // Debugger/log host plugin AAR copier. The init script resolves this
-        // file from ~/.androidide/init via flatDir, and GradleBuildService
-        // extracts it from assets into that directory before launching builds.
-        val copyIdeLogPluginAar =
-            tasks.register(
-                "copy${variantNameCapitalized}IdeLogPluginAar",
-                AddFileToAssetsTask::class.java,
-            ) {
-              val pluginPath = ":ide-log-plugin"
-              val pluginProject =
-                  checkNotNull(rootProject.findProject(pluginPath)) {
-                    "Cannot find the IDE log plugin module with project path: '$pluginPath'"
-                  }
-              dependsOn(pluginProject.tasks.getByName("assembleRelease"))
-              inputFile.set(
-                  pluginProject.layout.buildDirectory.file(
-                      "outputs/aar/ide-log-plugin-release.aar"
-                  )
-              )
-              fileName.set("ide-log-plugin-1.0.0.aar")
-              baseAssetsPath.set("data/common")
-            }
-
-        variant.sources.assets?.addGeneratedSourceDirectory(
-            copyIdeLogPluginAar,
-            AddFileToAssetsTask::outputDirectory,
-        )
-
         data class RuntimeArtifact(
             val taskName: String,
             val projectPath: String,
+            val producerTaskName: String,
             val buildOutput: String,
             val assetName: String,
         )
 
+        // Keep every Gradle/host-debug runtime artifact that must be shipped in
+        // the IDE APK in one table. The output kind follows each module's Gradle
+        // script: Android library modules use release AARs; Java/Gradle plugin
+        // modules use their JAR task outputs.
         listOf(
+            RuntimeArtifact(
+                "IdeLogPluginAar",
+                ":ide-log-plugin",
+                "assembleRelease",
+                "outputs/aar/ide-log-plugin-release.aar",
+                "ide-log-plugin-1.0.0.aar",
+            ),
+            RuntimeArtifact(
+                "IdeDebuggerAar",
+                ":ide-debugger",
+                "assembleRelease",
+                "outputs/aar/ide-debugger-release.aar",
+                "ide-debugger.aar",
+            ),
+            RuntimeArtifact(
+                "LoggerJar",
+                ":logging:logger",
+                "jar",
+                "libs/logger.jar",
+                "logger.jar",
+            ),
             RuntimeArtifact(
                 "LogsenderAar",
                 ":logging:logsender",
+                "assembleRelease",
                 "outputs/aar/logsender-release.aar",
                 "logsender.aar",
             ),
             RuntimeArtifact(
                 "ToolingPluginJar",
                 ":tooling:plugin",
+                "jar",
                 "libs/androidide-plugin.jar",
                 "androidide-plugin.jar",
             ),
             RuntimeArtifact(
                 "PluginConfigJar",
                 ":tooling:plugin-config",
+                "jar",
                 "libs/plugin-config.jar",
                 "plugin-config.jar",
             ),
@@ -148,9 +148,9 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
               ) {
                 val artifactProject =
                     checkNotNull(rootProject.findProject(artifact.projectPath)) {
-                      "Cannot find required log plugin runtime module: '${artifact.projectPath}'"
+                      "Cannot find required host runtime module: '${artifact.projectPath}'"
                     }
-                dependsOn(artifactProject.tasks.getByName("assemble"))
+                dependsOn(artifactProject.tasks.getByName(artifact.producerTaskName))
                 inputFile.set(artifactProject.layout.buildDirectory.file(artifact.buildOutput))
                 fileName.set(artifact.assetName)
                 baseAssetsPath.set("data/common")
@@ -161,32 +161,6 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
               AddFileToAssetsTask::outputDirectory,
           )
         }
-
-        // Logger runtime JAR copier. Keep this separate from the generic runtime
-        // artifacts so it can use the actual Jar task output and avoid hardcoded
-        // archive paths while still writing logger.jar to assets/data/common.
-        val copyLoggerJar =
-            tasks.register(
-                "copy${variantNameCapitalized}LoggerRuntimeJarToAssets",
-                AddFileToAssetsTask::class.java,
-            ) {
-              val loggerPath = ":logging:logger"
-              val loggerProject =
-                  checkNotNull(rootProject.findProject(loggerPath)) {
-                    "Cannot find the Logger module with project path: '$loggerPath'"
-                  }
-              val loggerJar = loggerProject.tasks.named("jar", Jar::class.java)
-              dependsOn(loggerJar)
-
-              inputFile.set(loggerJar.flatMap { it.archiveFile })
-              fileName.set("logger.jar")
-              baseAssetsPath.set("data/common")
-            }
-
-        variant.sources.assets?.addGeneratedSourceDirectory(
-            copyLoggerJar,
-            AddFileToAssetsTask::outputDirectory,
-        )
 
         // Tooling API JAR copier
         val copyToolingApiJar =

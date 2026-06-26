@@ -49,6 +49,9 @@ class IdeLogInitScriptPlugin : Plugin<Project> {
     /** Artifact id of the ide-log-plugin module. */
     const val IDE_LOG_PLUGIN_ARTIFACT = "ide-log-plugin"
 
+    /** Artifact id of the IDE debugger runtime required by ide-log-plugin. */
+    const val IDE_DEBUGGER_ARTIFACT = "ide-debugger"
+
     private val logger = Logging.getLogger(IdeLogInitScriptPlugin::class.java)
   }
 
@@ -100,18 +103,20 @@ class IdeLogInitScriptPlugin : Plugin<Project> {
 
       try {
         variant.withRuntimeConfiguration {
-          val dep = project.dependencies.ideDependency(
-              LIB_GROUP_TOOLING, IDE_LOG_PLUGIN_ARTIFACT, project.isTestEnv
-          )
-          if (dep is ExternalModuleDependency) {
-            dep.isChanging = false
-            dep.version { it.strictly(BuildInfo.VERSION_NAME) }
+          listOf(IDE_LOG_PLUGIN_ARTIFACT, IDE_DEBUGGER_ARTIFACT).forEach { artifact ->
+            val dep = project.dependencies.ideDependency(
+                LIB_GROUP_TOOLING, artifact, project.isTestEnv
+            )
+            if (dep is ExternalModuleDependency) {
+              dep.isChanging = false
+              dep.version { it.strictly(BuildInfo.VERSION_NAME) }
+            }
+            logger.lifecycle(
+                "Injecting ${dep.group}:${dep.name} (${dep.version}) into " +
+                    "variant '${variant.name}' of ${project.path}"
+            )
+            dependencies.add(dep)
           }
-          logger.lifecycle(
-              "Injecting ${dep.group}:${dep.name} (${dep.version}) into " +
-                  "variant '${variant.name}' of ${project.path}"
-          )
-          dependencies.add(dep)
         }
       } catch (e: Throwable) {
         logger.warn(
