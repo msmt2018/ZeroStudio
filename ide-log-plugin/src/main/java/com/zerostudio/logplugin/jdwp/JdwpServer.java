@@ -25,7 +25,6 @@ package com.zerostudio.logplugin.jdwp;
 
 import android.os.Looper;
 import android.util.Log;
-import com.zerostudio.logwire.WireConstants;
 import com.zerostudio.logplugin.capture.LogCaptureService;
 import com.zerostudio.logplugin.transport.LogSocketServer;
 import com.zerostudio.logplugin.util.LogBuffer;
