@@ -11,7 +11,6 @@ package com.zerostudio.logplugin.api;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.itsaky.androidide.logwire.LogPayload;
 
 public final class LogPayload {
     public final byte level;
@@ -37,13 +36,14 @@ public final class LogPayload {
 
     /** Convert to the wire-protocol representation. */
     @NonNull
-    public LogPayload toWire() {
-        return new LogPayload(level, timestampMs, threadId, tag, message, throwable);
+    public com.itsaky.androidide.logwire.LogPayload toWire() {
+        return new com.itsaky.androidide.logwire.LogPayload(
+                level, timestampMs, threadId, tag, message, throwable);
     }
 
     /** Read from the wire format. */
     @NonNull
-    public static LogPayload fromWire(@NonNull LogPayload wire) {
+    public static LogPayload fromWire(@NonNull com.itsaky.androidide.logwire.LogPayload wire) {
         return new LogPayload(
                 wire.level, wire.timestampMs,
                 wire.threadId, wire.tag, wire.message, wire.throwable);
