@@ -85,6 +85,34 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             GenerateInitScriptTask::outputDir,
         )
 
+        // Debugger/log host plugin AAR copier. The init script resolves this
+        // file from ~/.androidide/init via flatDir, and GradleBuildService
+        // extracts it from assets into that directory before launching builds.
+        val copyIdeLogPluginAar =
+            tasks.register(
+                "copy${variantNameCapitalized}IdeLogPluginAar",
+                AddFileToAssetsTask::class.java,
+            ) {
+              val pluginPath = ":ide-log-plugin"
+              val pluginProject =
+                  checkNotNull(rootProject.findProject(pluginPath)) {
+                    "Cannot find the IDE log plugin module with project path: '$pluginPath'"
+                  }
+              dependsOn(pluginProject.tasks.getByName("assembleRelease"))
+              inputFile.set(
+                  pluginProject.layout.buildDirectory.file(
+                      "outputs/aar/ide-log-plugin-release.aar"
+                  )
+              )
+              fileName.set("ide-log-plugin-1.0.0.aar")
+              baseAssetsPath.set("data/common")
+            }
+
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            copyIdeLogPluginAar,
+            AddFileToAssetsTask::outputDirectory,
+        )
+
         // Tooling API JAR copier
         val copyToolingApiJar =
             tasks.register(

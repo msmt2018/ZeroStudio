@@ -24,6 +24,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
+import android.widget.CheckBox;
 import android.widget.ArrayAdapter;
 import android.widget.RadioGroup;
 import android.widget.Spinner;
@@ -82,6 +83,18 @@ public class BreakpointConditionDialog extends DialogFragment {
     private TextInputEditText hitCountInput;
     private TextView hitCountHelper;
     private TextView validation;
+    private Spinner advancedKindSpinner;
+    private TextInputLayout elementLayout;
+    private TextInputEditText elementInput;
+    private CheckBox temporaryCheck;
+    private CheckBox watchAccessCheck;
+    private CheckBox watchModificationCheck;
+    private CheckBox methodEntryCheck;
+    private CheckBox methodExitCheck;
+    private CheckBox exceptionCaughtCheck;
+    private CheckBox exceptionUncaughtCheck;
+    private Spinner dependentSpinner;
+    private java.util.List<IdeBreakpoint> dependentChoices = java.util.Collections.emptyList();
 
     @NonNull
     @Override
@@ -157,6 +170,17 @@ public class BreakpointConditionDialog extends DialogFragment {
         hitCountInput = root.findViewById(R.id.bcd_hit_count_input);
         hitCountHelper = root.findViewById(R.id.bcd_hit_count_helper);
         validation = root.findViewById(R.id.bcd_validation);
+        advancedKindSpinner = root.findViewById(R.id.bcd_advanced_kind);
+        elementLayout = root.findViewById(R.id.bcd_element_layout);
+        elementInput = root.findViewById(R.id.bcd_element_input);
+        temporaryCheck = root.findViewById(R.id.bcd_temporary);
+        watchAccessCheck = root.findViewById(R.id.bcd_watch_access);
+        watchModificationCheck = root.findViewById(R.id.bcd_watch_modification);
+        methodEntryCheck = root.findViewById(R.id.bcd_method_entry);
+        methodExitCheck = root.findViewById(R.id.bcd_method_exit);
+        exceptionCaughtCheck = root.findViewById(R.id.bcd_exception_caught);
+        exceptionUncaughtCheck = root.findViewById(R.id.bcd_exception_uncaught);
+        dependentSpinner = root.findViewById(R.id.bcd_dependent_on);
 
         // spinner entries
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
@@ -165,6 +189,12 @@ public class BreakpointConditionDialog extends DialogFragment {
                 android.R.layout.simple_spinner_item);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         hitCountModeSpinner.setAdapter(adapter);
+
+        ArrayAdapter<CharSequence> advancedAdapter = ArrayAdapter.createFromResource(
+                requireContext(), R.array.debugger_bcd_advanced_kinds, android.R.layout.simple_spinner_item);
+        advancedAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        advancedKindSpinner.setAdapter(advancedAdapter);
+        rebuildDependentChoices();
 
         // log templates
         String[] templates = getResources().getStringArray(
@@ -209,6 +239,25 @@ public class BreakpointConditionDialog extends DialogFragment {
         if (bp.condition != null) conditionInput.setText(bp.condition);
         if (bp.logMessage != null) logInput.setText(bp.logMessage);
 
+        // 高级断点
+        int kindPos = 0;
+        switch (bp.kind) {
+            case EXCEPTION: kindPos = 1; break;
+            case FIELD_WATCHPOINT: kindPos = 2; break;
+            case METHOD: kindPos = 3; break;
+            default: kindPos = 0; break;
+        }
+        advancedKindSpinner.setSelection(kindPos);
+        temporaryCheck.setChecked(bp.temporary);
+        watchAccessCheck.setChecked(bp.watchAccess);
+        watchModificationCheck.setChecked(bp.watchModification);
+        methodEntryCheck.setChecked(bp.methodEntry);
+        methodExitCheck.setChecked(bp.methodExit);
+        exceptionCaughtCheck.setChecked(bp.catchCaught);
+        exceptionUncaughtCheck.setChecked(bp.catchUncaught);
+        if (bp.elementName != null) elementInput.setText(bp.elementName);
+        selectDependent(bp.dependsOnBreakpointId);
+
         // 命中次数
         int spinnerPos = 0; // ALWAYS
         switch (bp.hitCountMode) {
@@ -230,6 +279,10 @@ public class BreakpointConditionDialog extends DialogFragment {
             updateVisibility();
             validate();
         });
+        advancedKindSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) { updateAdvancedVisibility(); validate(); }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
         hitCountModeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
@@ -241,6 +294,7 @@ public class BreakpointConditionDialog extends DialogFragment {
         conditionInput.addTextChangedListener(new SimpleTextWatcher(() -> validate()));
         logInput.addTextChangedListener(new SimpleTextWatcher(() -> validate()));
         hitCountInput.addTextChangedListener(new SimpleTextWatcher(() -> validate()));
+        elementInput.addTextChangedListener(new SimpleTextWatcher(() -> validate()));
     }
 
     private void updateVisibility() {
@@ -249,6 +303,7 @@ public class BreakpointConditionDialog extends DialogFragment {
                 ? View.VISIBLE : View.GONE);
         logpointBox.setVisibility(checked == R.id.bcd_type_logpoint
                 ? View.VISIBLE : View.GONE);
+        updateAdvancedVisibility();
     }
 
     private void updateHitCountHelper() {
@@ -280,6 +335,14 @@ public class BreakpointConditionDialog extends DialogFragment {
             if (s == null || s.trim().isEmpty()) {
                 showError(getString(R.string.debugger_bcd_validation_log_empty));
                 return "log_empty";
+            }
+        }
+        int kindPos = advancedKindSpinner.getSelectedItemPosition();
+        if (kindPos != 0) {
+            String e = textOf(elementInput);
+            if (e == null || e.trim().isEmpty()) {
+                showError(getString(R.string.debugger_bcd_element_hint));
+                return "element_empty";
             }
         }
         int modePos = hitCountModeSpinner.getSelectedItemPosition();
@@ -339,7 +402,23 @@ public class BreakpointConditionDialog extends DialogFragment {
             mgr.setCondition(bp.id, null);
             mgr.setLogMessage(bp.id, null);
         }
-        // 2. 命中次数
+        // 2. 高级断点配置
+        IdeBreakpoint.Kind kind;
+        switch (advancedKindSpinner.getSelectedItemPosition()) {
+            case 1: kind = IdeBreakpoint.Kind.EXCEPTION; break;
+            case 2: kind = IdeBreakpoint.Kind.FIELD_WATCHPOINT; break;
+            case 3: kind = IdeBreakpoint.Kind.METHOD; break;
+            default: kind = IdeBreakpoint.Kind.LINE; break;
+        }
+        String dep = dependentSpinner.getSelectedItemPosition() <= 0 ? null
+                : dependentChoices.get(dependentSpinner.getSelectedItemPosition() - 1).id;
+        mgr.applyAdvancedOptions(bp.id, kind, temporaryCheck.isChecked(),
+                watchAccessCheck.isChecked(), watchModificationCheck.isChecked(),
+                methodEntryCheck.isChecked(), methodExitCheck.isChecked(),
+                exceptionCaughtCheck.isChecked(), exceptionUncaughtCheck.isChecked(),
+                dep, textOf(elementInput));
+
+        // 3. 命中次数
         int pos = hitCountModeSpinner.getSelectedItemPosition();
         Breakpoint.HitCountMode mode;
         int count;
@@ -353,6 +432,43 @@ public class BreakpointConditionDialog extends DialogFragment {
         // PR-D5: 触觉反馈告知"配置已保存"
         DebuggerHaptics.strong(requireActivity());
         return true;
+    }
+
+    private void updateAdvancedVisibility() {
+        int pos = advancedKindSpinner == null ? 0 : advancedKindSpinner.getSelectedItemPosition();
+        boolean element = pos != 0;
+        elementLayout.setVisibility(element ? View.VISIBLE : View.GONE);
+        watchAccessCheck.setVisibility(pos == 2 ? View.VISIBLE : View.GONE);
+        watchModificationCheck.setVisibility(pos == 2 ? View.VISIBLE : View.GONE);
+        methodEntryCheck.setVisibility(pos == 3 ? View.VISIBLE : View.GONE);
+        methodExitCheck.setVisibility(pos == 3 ? View.VISIBLE : View.GONE);
+        exceptionCaughtCheck.setVisibility(pos == 1 ? View.VISIBLE : View.GONE);
+        exceptionUncaughtCheck.setVisibility(pos == 1 ? View.VISIBLE : View.GONE);
+        temporaryCheck.setVisibility(pos == 0 ? View.VISIBLE : View.GONE);
+        dependentSpinner.setVisibility(pos == 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void rebuildDependentChoices() {
+        dependentChoices = BreakpointManager.getInstance().snapshot();
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        labels.add("无依赖断点");
+        for (IdeBreakpoint other : dependentChoices) {
+            labels.add(new File(other.file).getName() + ":" + other.line);
+        }
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
+                android.R.layout.simple_spinner_item, labels);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        dependentSpinner.setAdapter(adapter);
+    }
+
+    private void selectDependent(@Nullable String id) {
+        if (id == null || dependentSpinner == null) return;
+        for (int i = 0; i < dependentChoices.size(); i++) {
+            if (id.equals(dependentChoices.get(i).id)) {
+                dependentSpinner.setSelection(i + 1);
+                return;
+            }
+        }
     }
 
     private static int parseInt(@Nullable TextInputEditText e) {

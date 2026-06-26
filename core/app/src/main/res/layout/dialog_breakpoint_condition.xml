@@ -171,6 +171,94 @@
                 xmlns:app="http://schemas.android.com/apk/res-auto"/>
         </LinearLayout>
 
+
+        <!-- ========== 高级断点类型区 ========== -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="14dp"
+            android:background="?attr/colorOutlineVariant"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_advanced"
+            android:textAppearance="?attr/textAppearanceLabelMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"/>
+
+        <Spinner
+            android:id="@+id/bcd_advanced_kind"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:minHeight="48dp"/>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/bcd_element_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/debugger_bcd_element_hint"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/bcd_element_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:singleLine="true"
+                android:inputType="text"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <CheckBox
+            android:id="@+id/bcd_temporary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_temporary"/>
+
+        <CheckBox
+            android:id="@+id/bcd_watch_access"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_watch_access"/>
+
+        <CheckBox
+            android:id="@+id/bcd_watch_modification"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_watch_modification"/>
+
+        <CheckBox
+            android:id="@+id/bcd_method_entry"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_method_entry"/>
+
+        <CheckBox
+            android:id="@+id/bcd_method_exit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_method_exit"/>
+
+        <CheckBox
+            android:id="@+id/bcd_exception_caught"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_exception_caught"/>
+
+        <CheckBox
+            android:id="@+id/bcd_exception_uncaught"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bcd_exception_uncaught"/>
+
+        <Spinner
+            android:id="@+id/bcd_dependent_on"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:minHeight="48dp"/>
+
         <!-- ========== 命中次数区 ========== -->
         <View
             android:layout_width="match_parent"

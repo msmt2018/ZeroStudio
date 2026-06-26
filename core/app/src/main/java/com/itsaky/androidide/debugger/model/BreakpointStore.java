@@ -93,6 +93,7 @@ public final class BreakpointStore {
                     IdeBreakpoint bp = new IdeBreakpoint(
                             UUID.randomUUID().toString(), f, line, cond, log,
                             mode, hitCount, state, -1L, 0);
+                    applyExtendedFields(o, bp);
                     mgr.add(bp);
                 }
                 Log.i(TAG, "Loaded " + arr.length() + " breakpoints from " + file);
@@ -123,11 +124,7 @@ public final class BreakpointStore {
                     if (bp.condition != null) o.put("condition", bp.condition);
                     if (bp.logMessage != null) o.put("logMessage", bp.logMessage);
                     o.put("state", bp.state.name());
-                    if (bp.hitCountMode
-                            != com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS) {
-                        o.put("hitCountMode", bp.hitCountMode.name());
-                        o.put("hitCount", bp.hitCount);
-                    }
+                    writeExtendedFields(o, bp);
                     arr.put(o);
                 }
                 try (FileWriter w = new FileWriter(file)) {
@@ -211,6 +208,37 @@ public final class BreakpointStore {
         } catch (Throwable t) {
             Log.w(TAG, "writeToFile failed: " + t.getMessage());
         }
+    }
+
+    private static void applyExtendedFields(@NonNull JSONObject o, @NonNull IdeBreakpoint bp) {
+        try { bp.kind = IdeBreakpoint.Kind.valueOf(o.optString("kind", "LINE")); }
+        catch (IllegalArgumentException ignored) { bp.kind = IdeBreakpoint.Kind.LINE; }
+        bp.temporary = o.optBoolean("temporary", false);
+        bp.watchAccess = o.optBoolean("watchAccess", false);
+        bp.watchModification = o.optBoolean("watchModification", true);
+        bp.methodEntry = o.optBoolean("methodEntry", true);
+        bp.methodExit = o.optBoolean("methodExit", false);
+        bp.catchCaught = o.optBoolean("catchCaught", true);
+        bp.catchUncaught = o.optBoolean("catchUncaught", true);
+        bp.dependsOnBreakpointId = o.optString("dependsOnBreakpointId", null);
+        bp.elementName = o.optString("elementName", null);
+    }
+
+    private static void writeExtendedFields(@NonNull JSONObject o, @NonNull IdeBreakpoint bp) throws Exception {
+        if (bp.hitCountMode != com.zerostudio.debugger.api.Breakpoint.HitCountMode.ALWAYS) {
+            o.put("hitCountMode", bp.hitCountMode.name());
+            o.put("hitCount", bp.hitCount);
+        }
+        o.put("kind", bp.kind.name());
+        if (bp.temporary) o.put("temporary", true);
+        if (bp.watchAccess) o.put("watchAccess", true);
+        if (!bp.watchModification) o.put("watchModification", false);
+        if (!bp.methodEntry) o.put("methodEntry", false);
+        if (bp.methodExit) o.put("methodExit", true);
+        if (!bp.catchCaught) o.put("catchCaught", false);
+        if (!bp.catchUncaught) o.put("catchUncaught", false);
+        if (bp.dependsOnBreakpointId != null) o.put("dependsOnBreakpointId", bp.dependsOnBreakpointId);
+        if (bp.elementName != null) o.put("elementName", bp.elementName);
     }
 
     @Nullable

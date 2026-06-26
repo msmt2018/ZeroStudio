@@ -180,7 +180,6 @@ public class BreakpointSidebar extends View {
         if (bps.isEmpty()) return;
 
         final float rowHeight = editor.getRowHeight();
-        final float textOffset = editor.getOffsetX();
         final float firstVisibleRow = editor.getFirstVisibleRow();
         final int lastVisibleRow = (int) (firstVisibleRow + (getHeight() / Math.max(1f, rowHeight)) + 1);
 
@@ -189,6 +188,7 @@ public class BreakpointSidebar extends View {
 
         for (IdeBreakpoint bp : bps) {
             if (bp.line < firstVisibleRow || bp.line > lastVisibleRow) continue;
+            if (bp.line <= 0) continue;
             float topY = (bp.line - firstVisibleRow) * rowHeight;
             float cy = topY + rowHeight / 2f;
             if (cy < r || cy > getHeight() - r) continue;
@@ -222,6 +222,38 @@ public class BreakpointSidebar extends View {
             canvas.drawLine(cx + r * 0.5f, cy, cx, cy + r * 0.5f, outlinePaint);
             canvas.drawLine(cx, cy + r * 0.5f, cx - r * 0.5f, cy, outlinePaint);
             canvas.drawLine(cx - r * 0.5f, cy, cx, cy - r * 0.5f, outlinePaint);
+        }
+        if (bp.state == IdeBreakpoint.State.DEPENDENT) {
+            outlinePaint.setColor(Color.WHITE);
+            outlinePaint.setStrokeWidth(dp(1.2f));
+            canvas.drawLine(cx - r * 0.55f, cy, cx + r * 0.55f, cy, outlinePaint);
+            canvas.drawCircle(cx - r * 0.55f, cy, dp(1.4f), outlinePaint);
+            canvas.drawCircle(cx + r * 0.55f, cy, dp(1.4f), outlinePaint);
+        }
+        if (bp.state == IdeBreakpoint.State.TEMPORARY) {
+            outlinePaint.setColor(Color.WHITE);
+            outlinePaint.setStrokeWidth(dp(1.3f));
+            canvas.drawLine(cx, cy - r * 0.65f, cx, cy + r * 0.65f, outlinePaint);
+            canvas.drawLine(cx - r * 0.65f, cy, cx + r * 0.65f, cy, outlinePaint);
+        }
+        if (bp.state == IdeBreakpoint.State.EXCEPTION) {
+            outlinePaint.setColor(Color.WHITE);
+            outlinePaint.setStrokeWidth(dp(1.2f));
+            canvas.drawLine(cx, cy - r * 0.7f, cx, cy + r * 0.15f, outlinePaint);
+            canvas.drawCircle(cx, cy + r * 0.55f, dp(0.9f), outlinePaint);
+        }
+        if (bp.state == IdeBreakpoint.State.FIELD_WATCHPOINT) {
+            outlinePaint.setColor(Color.WHITE);
+            outlinePaint.setStrokeWidth(dp(1.2f));
+            canvas.drawRect(cx - r * 0.55f, cy - r * 0.45f, cx + r * 0.55f, cy + r * 0.45f, outlinePaint);
+        }
+        if (bp.state == IdeBreakpoint.State.METHOD) {
+            outlinePaint.setColor(Color.WHITE);
+            outlinePaint.setStrokeWidth(dp(1.2f));
+            canvas.drawLine(cx - r * 0.55f, cy - r * 0.45f, cx - r * 0.1f, cy, outlinePaint);
+            canvas.drawLine(cx - r * 0.1f, cy, cx - r * 0.55f, cy + r * 0.45f, outlinePaint);
+            canvas.drawLine(cx + r * 0.55f, cy - r * 0.45f, cx + r * 0.1f, cy, outlinePaint);
+            canvas.drawLine(cx + r * 0.1f, cy, cx + r * 0.55f, cy + r * 0.45f, outlinePaint);
         }
         if (bp.state == IdeBreakpoint.State.LOG) {
             // 内部"文"字形简化：两条横线 + 一条竖线 - 表示日志点
