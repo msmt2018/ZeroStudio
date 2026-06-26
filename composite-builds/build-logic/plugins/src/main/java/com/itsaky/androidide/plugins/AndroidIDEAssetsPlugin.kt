@@ -28,8 +28,8 @@ import com.itsaky.androidide.plugins.tasks.SetupAapt2Task
 import com.itsaky.androidide.plugins.util.SdkUtils.getAndroidJar
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.jvm.tasks.Jar
 import org.gradle.configurationcache.extensions.capitalized
+import org.gradle.jvm.tasks.Jar
 
 /**
  * Handles asset copying and generation.
@@ -123,12 +123,6 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
 
         listOf(
             RuntimeArtifact(
-                "LoggerJar",
-                ":logging:logger",
-                "libs/logger.jar",
-                "logger.jar",
-            ),
-            RuntimeArtifact(
                 "LogsenderAar",
                 ":logging:logsender",
                 "outputs/aar/logsender-release.aar",
@@ -168,6 +162,32 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
           )
         }
 
+        // Logger runtime JAR copier. Keep this separate from the generic runtime
+        // artifacts so it can use the actual Jar task output and avoid hardcoded
+        // archive paths while still writing logger.jar to assets/data/common.
+        val copyLoggerJar =
+            tasks.register(
+                "copy${variantNameCapitalized}LoggerRuntimeJarToAssets",
+                AddFileToAssetsTask::class.java,
+            ) {
+              val loggerPath = ":logging:logger"
+              val loggerProject =
+                  checkNotNull(rootProject.findProject(loggerPath)) {
+                    "Cannot find the Logger module with project path: '$loggerPath'"
+                  }
+              val loggerJar = loggerProject.tasks.named("jar", Jar::class.java)
+              dependsOn(loggerJar)
+
+              inputFile.set(loggerJar.flatMap { it.archiveFile })
+              fileName.set("logger.jar")
+              baseAssetsPath.set("data/common")
+            }
+
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            copyLoggerJar,
+            AddFileToAssetsTask::outputDirectory,
+        )
+
         // Tooling API JAR copier
         val copyToolingApiJar =
             tasks.register(
@@ -192,28 +212,6 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             AddFileToAssetsTask::outputDirectory,
         )
 
-        // Logger runtime JAR copier
-        val copyLoggerJar =
-            tasks.register(
-                "copy${variantNameCapitalized}LoggerJarToAssets",
-                AddFileToAssetsTask::class.java,
-            ) {
-              val loggerPath = ":logging:logger"
-              val loggerProject =
-                  checkNotNull(rootProject.findProject(loggerPath)) {
-                    "Cannot find the Logger module with project path: '$loggerPath'"
-                  }
-              val loggerJar = loggerProject.tasks.named("jar", Jar::class.java)
-              dependsOn(loggerJar)
-
-              inputFile.set(loggerJar.flatMap { it.archiveFile })
-              baseAssetsPath.set("data/common")
-            }
-
-        variant.sources.assets?.addGeneratedSourceDirectory(
-            copyLoggerJar,
-            AddFileToAssetsTask::outputDirectory,
-        )
       }
     }
   }
