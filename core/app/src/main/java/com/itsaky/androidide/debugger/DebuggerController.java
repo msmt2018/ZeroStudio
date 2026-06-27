@@ -17,6 +17,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.debugger.model.LogStore;
+import com.itsaky.androidide.logwire.LogPayload;
+import com.itsaky.androidide.logwire.LogWireClient;
+import com.itsaky.androidide.models.LogLine;
 import com.itsaky.androidide.ui.CodeEditorView;
 import com.itsaky.androidide.utils.ILogger;
 import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
@@ -28,6 +31,7 @@ import com.zerostudio.debugger.event.DebugEvents;
 import com.zerostudio.debugger.model.DebugSession.State;
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -49,6 +53,13 @@ public final class DebuggerController
 
     /** PR-D6: 被调试的应用包名,由 DebugSessionLauncher 写入。stop() 据此 force-stop。 */
     @Nullable private volatile String targetPackage;
+    public interface AppLogConsumer {
+        void accept(@NonNull LogLine line);
+    }
+
+    @Nullable private volatile LogWireClient logWireClient;
+    private final CopyOnWriteArrayList<AppLogConsumer> appLogConsumers =
+            new CopyOnWriteArrayList<>();
 
     /**
      * PR-D6: 异步执行器,用于把 stop() / wait-for-install / JDWP port probe
@@ -99,6 +110,69 @@ public final class DebuggerController
         this.attachedActivity = activity;
     }
 
+    public void addAppLogConsumer(@NonNull AppLogConsumer consumer) {
+        appLogConsumers.addIfAbsent(consumer);
+    }
+
+    public void removeAppLogConsumer(@NonNull AppLogConsumer consumer) {
+        appLogConsumers.remove(consumer);
+    }
+
+    public void connectLogcat(@NonNull String host, int port, @NonNull String packageName) {
+        if (port <= 0) return;
+        bgExecutor().execute(() -> {
+            try {
+                LogWireClient old = logWireClient;
+                if (old != null) old.close();
+                LogWireClient client = new LogWireClient(host, port);
+                client.setListener(new LogWireClient.Listener() {
+                    @Override
+                    public void onPayload(@NonNull LogPayload payload) {
+                        dispatchAppLog(payload);
+                    }
+
+                    @Override
+                    public void onDisconnected(@Nullable java.io.IOException cause) {
+                        ILogger.ROOT.warn(TAG + ": app log stream disconnected: "
+                                + (cause == null ? "unknown" : cause.getMessage()));
+                    }
+                });
+                client.connect(packageName);
+                logWireClient = client;
+                ILogger.ROOT.info(TAG + ": Connected app log stream to " + host + ":" + port);
+            } catch (Throwable t) {
+                ILogger.ROOT.warn(TAG + ": Failed to connect app log stream: " + t.getMessage());
+            }
+        });
+    }
+
+    private void dispatchAppLog(@NonNull LogPayload payload) {
+        ILogger.Level level = levelFromWire(payload.level);
+        String message = payload.throwable == null
+                ? payload.message
+                : payload.message + "\n" + payload.throwable;
+        for (AppLogConsumer consumer : appLogConsumers) {
+            consumer.accept(LogLine.obtain(level, payload.tag, message, true));
+        }
+    }
+
+    private static ILogger.Level levelFromWire(byte level) {
+        switch (level) {
+            case com.itsaky.androidide.logwire.LogLevel.VERBOSE:
+                return ILogger.Level.VERBOSE;
+            case com.itsaky.androidide.logwire.LogLevel.INFO:
+                return ILogger.Level.INFO;
+            case com.itsaky.androidide.logwire.LogLevel.WARN:
+                return ILogger.Level.WARNING;
+            case com.itsaky.androidide.logwire.LogLevel.ERROR:
+            case com.itsaky.androidide.logwire.LogLevel.ASSERT:
+                return ILogger.Level.ERROR;
+            case com.itsaky.androidide.logwire.LogLevel.DEBUG:
+            default:
+                return ILogger.Level.DEBUG;
+        }
+    }
+
     /** PR-D6: 写入目标包。DebugSessionLauncher 在 launch 成功后调用。 */
     public void setTargetPackage(@Nullable String pkg) {
         this.targetPackage = pkg;
@@ -139,6 +213,9 @@ public final class DebuggerController
     public void disconnect() {
         if (debugger == null) return;
         try { debugger.disconnect(); } catch (Throwable ignored) {}
+        LogWireClient client = logWireClient;
+        if (client != null) client.close();
+        logWireClient = null;
         BreakpointManager.getInstance().bindDebugger(null);
         sessionState.onDisconnected();
         pausedAtThreadId = -1L;

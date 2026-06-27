@@ -1,7 +1,7 @@
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.tasks.bundling.Zip
 
-plugins { base }
+plugins { `java-library` }
 
 description = "Packages ZeroStudio debugger/logger runtime artifacts into a single distributable archive."
 

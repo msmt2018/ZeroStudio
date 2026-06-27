@@ -214,6 +214,7 @@ dependencies {
   implementation(projects.core.lspApi)
   implementation(projects.core.projects)
   implementation(projects.core.resources)
+  implementation(projects.debugger.library)
   implementation(projects.modules.zeroMcpServer)
   implementation(projects.modules.zeroOnboardingGuide)
   implementation(projects.editor.impl)

@@ -348,8 +348,7 @@ class GradleBuildService :
     }
 
     try {
-      BaseApplication.getBaseInstance().assets.open("data/common/debugger-library.zip").use {
-          input ->
+      BaseApplication.getBaseInstance().assets.open("data/common/debugger-library.zip").use { input ->
         extractDebuggerLibrary(input, pluginDir)
       }
       log.info("Extracted debugger runtime library into {}", pluginDir.absolutePath)
