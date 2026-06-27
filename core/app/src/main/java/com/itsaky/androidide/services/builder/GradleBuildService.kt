@@ -295,7 +295,7 @@ class GradleBuildService :
                         }
                         
                         dependencies {
-                            implementation files('${getLoggerRuntimeAar().absolutePath}')
+                            implementation files(${getLoggerRuntimeAars().joinToString(", ") { "'${it.absolutePath}'" }})
                             coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
                         }
                     }
@@ -320,10 +320,14 @@ class GradleBuildService :
     return dir
   }
 
-  /** Extracts and returns the logger runtime AAR file. */
-  private fun getLoggerRuntimeAar(): File {
+  /** Extracts and returns the logger/debugger runtime AAR files. */
+  private fun getLoggerRuntimeAars(): List<File> {
     ensureLoggerPluginArtifacts()
-    return File(getLoggerPluginDir(), "ide-log-plugin-1.0.0.aar")
+    val pluginDir = getLoggerPluginDir()
+    return listOf(
+        File(pluginDir, "ide-log-plugin-1.0.0.aar"),
+        File(pluginDir, "ide-debugger.aar"),
+    )
   }
 
   /** Copies the logger/debugger plugin artifacts from APK assets into the local flatDir. */
@@ -331,6 +335,7 @@ class GradleBuildService :
     val artifacts =
         arrayOf(
             "ide-log-plugin-1.0.0.aar",
+            "ide-debugger.aar",
             "logger.jar",
             "logsender.aar",
             "androidide-plugin.jar",

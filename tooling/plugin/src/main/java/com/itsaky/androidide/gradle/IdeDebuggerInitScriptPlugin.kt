@@ -110,15 +110,19 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
       //    the dep is the same artifact).
       try {
         variant.withRuntimeConfiguration {
-          val dep = project.dependencies.ideDependency(
-              LIB_GROUP_TOOLING, IdeLogInitScriptPlugin.IDE_LOG_PLUGIN_ARTIFACT,
-              project.isTestEnv
-          )
-          if (dep is ExternalModuleDependency) {
-            dep.isChanging = false
-            dep.version { it.strictly(BuildInfo.VERSION_NAME) }
+          listOf(
+              IdeLogInitScriptPlugin.IDE_LOG_PLUGIN_ARTIFACT,
+              IdeLogInitScriptPlugin.IDE_DEBUGGER_ARTIFACT,
+          ).forEach { artifact ->
+            val dep = project.dependencies.ideDependency(
+                LIB_GROUP_TOOLING, artifact, project.isTestEnv
+            )
+            if (dep is ExternalModuleDependency) {
+              dep.isChanging = false
+              dep.version { it.strictly(BuildInfo.VERSION_NAME) }
+            }
+            dependencies.add(dep)
           }
-          dependencies.add(dep)
         }
       } catch (e: Throwable) {
         logger.warn("runtime classpath injection failed: ${e.message}")

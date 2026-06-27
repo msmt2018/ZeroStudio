@@ -60,6 +60,7 @@ private fun localIdeArtifact(artifact: String): File? {
         "logger" -> "logger.jar"
         "logsender" -> "logsender.aar"
         "ide-log-plugin" -> "ide-log-plugin-1.0.0.aar"
+        "ide-debugger" -> "ide-debugger.aar"
         else -> return null
       }
   return listOf(
