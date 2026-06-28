@@ -145,6 +145,8 @@ object AndroidModulePropertyCopier {
       resourcesDirectories = provider.resourcesDirectories
       shadersDirectories = provider.shadersDirectories
       baselineProfileDirectories = provider.baselineProfileDirectories
+      keepRulesDirectories = provider.keepRulesDirectories
+      aarKeepRulesDirectories = provider.aarKeepRulesDirectories
     }
   }
 

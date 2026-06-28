@@ -118,9 +118,7 @@ class AndroidProjectModelBuilder(initializationParams: InitializeProjectParams) 
           it.dontBuildHostTestRuntimeClasspath = emptyMap()
         }
 
-    controller.getModel(module, ProjectSyncIssues::class.java)?.also { syncIssues ->
-      syncIssueReporter.reportAll(syncIssues)
-    }
+    reportProjectSyncIssues(controller, module, syncIssueReporter)
 
     return AndroidProjectImpl(
         module.gradleProject,
@@ -132,6 +130,32 @@ class AndroidProjectModelBuilder(initializationParams: InitializeProjectParams) 
         androidDsl,
         detectedAgpVersion
     )
+  }
+
+  /**
+   * Fetch and report sync issues without failing the whole model build.
+   *
+   * AGP builds the ProjectSyncIssues model after the selected variant dependency model has run.
+   * In some projects, especially after switching to a release variant, AGP can cancel this optional
+   * model while the rest of the Android models are already available. Treat that as a best-effort
+   * diagnostics step so variant initialization can continue.
+   */
+  private fun reportProjectSyncIssues(
+      controller: BuildController,
+      module: IdeaModule,
+      syncIssueReporter: ISyncIssueReporter,
+  ) {
+    try {
+      controller.findModel(module, ProjectSyncIssues::class.java)?.also { syncIssues ->
+        syncIssueReporter.reportAll(syncIssues)
+      }
+    } catch (err: Exception) {
+      log.warn(
+          "Failed to fetch ProjectSyncIssues model for Android module '{}'; continuing without AGP sync issues.",
+          module.gradleProject.path,
+          err,
+      )
+    }
   }
 
   /**
