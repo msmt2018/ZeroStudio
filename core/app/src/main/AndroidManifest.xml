@@ -6,6 +6,11 @@
 
      <!-- PR-D7: 调试器触觉反馈 (DebuggerHaptics) -->
      <uses-permission android:name="android.permission.VIBRATE" />
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+     <permission
+          android:name="com.itsaky.androidide.permission.BIND_LOG_SERVICE"
+          android:protectionLevel="normal" />
 
      <application
           android:allowBackup="false"

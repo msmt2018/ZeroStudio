@@ -39,6 +39,7 @@ public class LogReader extends Thread {
   private final int port;
   private final ProcessBuilder processBuilder;
   private final AtomicBoolean isInterrupted = new AtomicBoolean(false);
+  private volatile Process process;
 
   public LogReader(String senderId, String packageName, int port) {
     this(senderId, packageName, port, defaultCmd());
@@ -61,8 +62,8 @@ public class LogReader extends Thread {
   @Override
   public void run() {
     Logger.info("Starting to read logs...");
-    try (final Socket socket = new Socket(InetAddress.getLocalHost(), port)) {
-      final Process process = processBuilder.start();
+    try (final Socket socket = new Socket(InetAddress.getLoopbackAddress(), port)) {
+      process = processBuilder.start();
 
       try (final BufferedReader reader = new BufferedReader(
           new InputStreamReader(process.getInputStream()))) {
@@ -81,6 +82,10 @@ public class LogReader extends Thread {
       } catch (IOException ioError) {
         Logger.error("Error reading from the logcat process or writing to the socket", ioError);
       } finally {
+        if (process != null) {
+          process.destroy();
+          process = null;
+        }
         socket.close();
       }
     } catch (IOException ioError) {
@@ -94,6 +99,10 @@ public class LogReader extends Thread {
 
   public void cancel() {
     this.isInterrupted.set(true);
+    Process runningProcess = this.process;
+    if (runningProcess != null) {
+      runningProcess.destroy();
+    }
     this.interrupt();
   }
 }

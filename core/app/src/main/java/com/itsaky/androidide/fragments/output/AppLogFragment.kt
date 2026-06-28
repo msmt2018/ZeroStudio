@@ -103,6 +103,7 @@ class AppLogFragment : LogViewFragment() {
         }
 
     registerLogConnectionObserver()
+    bindToLogReceiver()
     DebuggerController.getInstance().addAppLogConsumer(debuggerLogConsumer)
   }
 
@@ -158,10 +159,10 @@ class AppLogFragment : LogViewFragment() {
                   }
                   .also { serviceConnection -> logServiceConnection = serviceConnection }
 
-      // do not auto create the service with BIND_AUTO_CREATE
-      check(context.bindService(intent, serviceConnection, Context.BIND_IMPORTANT))
+      val flags = Context.BIND_IMPORTANT or Context.BIND_AUTO_CREATE
+      check(context.bindService(intent, serviceConnection, flags))
       this.isBoundToLogReceiver.set(true)
-      log.info("LogReceiver service is being started")
+      log.info("LogReceiver service is being started and bound to the app-log consumer")
     } catch (err: Throwable) {
       log.error("Failed to start LogReceiver service", err)
     }
