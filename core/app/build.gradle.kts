@@ -238,6 +238,7 @@ dependencies {
   implementation(projects.tooling.api)
  
   implementation(projects.tooling.pluginConfig)
+  implementation(projects.utilities.logwire)
   implementation(projects.utilities.buildInfo)
   implementation(projects.utilities.lookup)
   implementation(projects.utilities.flashbar)
