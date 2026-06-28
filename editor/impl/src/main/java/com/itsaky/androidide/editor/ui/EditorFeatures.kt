@@ -46,11 +46,14 @@ class EditorFeatures(var editor: IDEEditor? = null) : IEditor {
   /** pending 队列 flush 间隔. */
   private val PENDING_FLUSH_DELAY_MS = 100L
 
+  /** pending 队列每条内容最多 flush 次数, 防止坏布局状态导致无限重试刷日志. */
+  private val MAX_PENDING_FLUSH_ATTEMPTS = 8
+
   /**
    * 所有重试都失败时被丢弃的 append, 暂存到 pending 队列, 等下一次
    * [append] 成功或定时器触发时再 flush. 避免 build output 静默丢失.
    */
-  private val pendingAppends = ConcurrentLinkedQueue<CharSequence>()
+  private val pendingAppends = ConcurrentLinkedQueue<PendingAppend>()
 
   /** 防止 scheduleFlush 重复排队. */
   @Volatile private var flushScheduled = false
@@ -188,7 +191,7 @@ class EditorFeatures(var editor: IDEEditor? = null) : IEditor {
                 "queued (pending size: {})",
             RETRY_DELAYS_MS.size,
             pendingAppends.size + 1)
-        pendingAppends.add(text)
+        pendingAppends.add(PendingAppend(text))
         scheduleFlush()
         return
       }
@@ -216,31 +219,42 @@ class EditorFeatures(var editor: IDEEditor? = null) : IEditor {
   }
 
   /**
-   * 把 [pendingAppends] 队列里的内容依次 append 到末尾. 任何一次失败
-   * 都会把该项放回队首并重新调度 [scheduleFlush].
+   * 把 [pendingAppends] 队列里的内容依次 append 到末尾. 失败项会按次数重试,
+   * 达到上限后丢弃,避免坏布局状态导致无限循环刷日志和消耗 CPU.
    */
   private fun flushPending() {
     val target = editor ?: return
     if (target.isReleased) return
     if (pendingAppends.isEmpty()) return
-    val currentLine = (target.lineCount - 1).coerceAtLeast(0)
     while (true) {
-      val text = pendingAppends.poll() ?: return
+      val pending = pendingAppends.poll() ?: return
       try {
+        val currentLine = (target.lineCount - 1).coerceAtLeast(0)
         val currentCol = target.getText().getColumnCount(currentLine).coerceAtLeast(0)
-        target.getText().insert(currentLine, currentCol, text)
+        target.getText().insert(currentLine, currentCol, pending.text)
         // 成功, 继续 flush 下一项
       } catch (e: ArrayIndexOutOfBoundsException) {
-        // 还是失败, 放回队首, 重新调度
-        pendingAppends.add(text)
-        log.warn(
-            "EditorFeatures.append pending flush failed, will retry (pending size: {})",
-            pendingAppends.size)
-        scheduleFlush()
+        val nextAttempts = pending.flushAttempts + 1
+        if (nextAttempts >= MAX_PENDING_FLUSH_ATTEMPTS) {
+          log.error(
+              "EditorFeatures.append pending flush failed {} times; dropping pending append to stop retry loop",
+              nextAttempts,
+              e)
+        } else {
+          pendingAppends.add(pending.copy(flushAttempts = nextAttempts))
+          log.debug(
+              "EditorFeatures.append pending flush failed, will retry (attempt {}/{}, pending size: {})",
+              nextAttempts,
+              MAX_PENDING_FLUSH_ATTEMPTS,
+              pendingAppends.size)
+          scheduleFlush()
+        }
         return
       }
     }
   }
+
+  private data class PendingAppend(val text: CharSequence, val flushAttempts: Int = 0)
 
   override fun replaceContent(newContent: CharSequence?) {
     withEditor {
