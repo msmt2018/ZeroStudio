@@ -69,6 +69,7 @@ import java.util.Objects
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.Collections
+import java.util.zip.ZipInputStream
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -330,7 +331,7 @@ class GradleBuildService :
     )
   }
 
-  /** Copies the logger/debugger plugin artifacts from APK assets into the local flatDir. */
+  /** Copies and expands the bundled logger/debugger runtime archive from APK assets. */
   private fun ensureLoggerPluginArtifacts() {
     val artifacts =
         arrayOf(
@@ -342,16 +343,38 @@ class GradleBuildService :
             "plugin-config.jar",
         )
     val pluginDir = getLoggerPluginDir()
-    artifacts.forEach { name ->
-      val out = File(pluginDir, name)
-      if (out.exists()) return@forEach
-      try {
-        BaseApplication.getBaseInstance().assets.open("data/common/$name").use { input ->
-          out.outputStream().buffered().use { output -> input.copyTo(output) }
+    if (artifacts.all { File(pluginDir, it).isFile }) {
+      return
+    }
+
+    try {
+      BaseApplication.getBaseInstance().assets.open("data/common/debugger-library.zip").use { input ->
+        extractDebuggerLibrary(input, pluginDir)
+      }
+      log.info("Extracted debugger runtime library into {}", pluginDir.absolutePath)
+    } catch (e: Throwable) {
+      log.warn("Debugger runtime library archive is missing from assets", e)
+    }
+  }
+
+  private fun extractDebuggerLibrary(input: InputStream, pluginDir: File) {
+    ZipInputStream(input.buffered()).use { zip ->
+      while (true) {
+        val entry = zip.nextEntry ?: break
+        try {
+          if (entry.isDirectory) continue
+          val out = File(pluginDir, entry.name).canonicalFile
+          val canonicalPluginDir = pluginDir.canonicalFile
+          if (!out.path.startsWith(canonicalPluginDir.path + File.separator)) {
+            log.warn("Skipping unsafe debugger runtime archive entry {}", entry.name)
+            continue
+          }
+          out.parentFile?.mkdirs()
+          out.outputStream().buffered().use { output -> zip.copyTo(output) }
+          log.info("Extracted logger plugin artifact to {}", out.absolutePath)
+        } finally {
+          zip.closeEntry()
         }
-        log.info("Extracted logger plugin artifact to {}", out.absolutePath)
-      } catch (e: Throwable) {
-        log.warn("Logger plugin artifact {} is missing from assets", name, e)
       }
     }
   }

@@ -392,6 +392,7 @@ public final class DebugSessionLauncher {
                             5_000L,
                             JdwpPortResolver.DEFAULT_POLL_INTERVAL_MS);
                     if (retryPort > 0) {
+                        connectLogStream(resolver, packageName);
                         runConnect("127.0.0.1", retryPort);
                         return;
                     }
@@ -401,9 +402,19 @@ public final class DebugSessionLauncher {
                                 + " (uid=" + probed + ")");
                 return;
             }
+            connectLogStream(resolver, packageName);
             runConnect("127.0.0.1", port);
         } finally {
             resolver.shutdown();
+        }
+    }
+
+    private void connectLogStream(@NonNull JdwpPortResolver resolver, @NonNull String packageName) {
+        int logcatPort = resolver.callOnce(JdwpPortResolver.METHOD_GET_LOGCAT_PORT, packageName);
+        if (logcatPort > 0) {
+            DebuggerController.getInstance().connectLogcat("127.0.0.1", logcatPort, packageName);
+        } else {
+            log.warn("No app log stream port reported for {}", packageName);
         }
     }
 

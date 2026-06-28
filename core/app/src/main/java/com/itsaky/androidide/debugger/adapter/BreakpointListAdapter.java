@@ -141,7 +141,7 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
     private static String buildContentDescription(@NonNull Context ctx,
                                                   @NonNull IdeBreakpoint bp) {
         StringBuilder sb = new StringBuilder();
-        sb.append(ctx.getString(stateLabelResId(bp.state)));
+        sb.append(stateLabel(ctx, bp.state));
         sb.append(' ');
         sb.append(shortenPath(bp.file));
         sb.append(' ');
@@ -190,18 +190,8 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
 
     private static String stateLabel(@NonNull Context ctx, IdeBreakpoint.State state) {
         // Phase E4: 状态标签通过 R.string 资源加载,支持多语言。
-        int resId;
-        switch (state) {
-            case NORMAL:    resId = R.string.debugger_bp_state_normal; break;
-            case INVALID:   resId = R.string.debugger_bp_state_invalid; break;
-            case VERIFIED:  resId = R.string.debugger_bp_state_verified; break;
-            case CONDITION: resId = R.string.debugger_bp_state_condition; break;
-            case LOG:       resId = R.string.debugger_bp_state_logpoint; break;
-            case DISABLED:  resId = R.string.debugger_bp_state_disabled; break;
-            case HIT:       resId = R.string.debugger_bp_state_hit; break;
-            default:        return state.name();
-        }
-        return ctx.getString(resId);
+        int resId = stateLabelResId(state);
+        return resId != 0 ? ctx.getString(resId) : String.valueOf(state);
     }
 
     /**
@@ -209,6 +199,7 @@ public class BreakpointListAdapter extends RecyclerView.Adapter<BreakpointListAd
      * 供单测断言映射关系,无需 Context。
      */
     public static int stateLabelResId(IdeBreakpoint.State state) {
+        if (state == null) return 0;
         switch (state) {
             case NORMAL:    return R.string.debugger_bp_state_normal;
             case INVALID:   return R.string.debugger_bp_state_invalid;

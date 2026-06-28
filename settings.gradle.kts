@@ -155,6 +155,8 @@ include(
     ":core:chatai:workspace",
     ":core:chatai:material3",
 
+    ":debugger:library",
+
     ":editor:api",
     ":editor:impl",
     ":editor:lexers",

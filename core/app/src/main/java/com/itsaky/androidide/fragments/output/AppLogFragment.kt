@@ -25,6 +25,7 @@ import android.os.Bundle
 import android.view.View
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.itsaky.androidide.R
+import com.itsaky.androidide.debugger.DebuggerController
 import com.itsaky.androidide.preferences.internal.DevOpsPreferences
 import com.itsaky.androidide.services.log.ConnectionObserverParams
 import com.itsaky.androidide.services.log.LogReceiverImpl
@@ -45,6 +46,7 @@ class AppLogFragment : LogViewFragment() {
 
   private var logServiceConnection: LogReceiverServiceConnection? = null
   private var logReceiverImpl: LogReceiverImpl? = null
+  private val debuggerLogConsumer = DebuggerController.AppLogConsumer { appendLog(it) }
 
   private val logServiceConnectionObserver =
       object : BroadcastReceiver() {
@@ -101,11 +103,13 @@ class AppLogFragment : LogViewFragment() {
         }
 
     registerLogConnectionObserver()
+    DebuggerController.getInstance().addAppLogConsumer(debuggerLogConsumer)
   }
 
   override fun onDestroyView() {
     super.onDestroyView()
     unregisterLogConnectionObserver()
+    DebuggerController.getInstance().removeAppLogConsumer(debuggerLogConsumer)
 
     if (isBoundToLogReceiver.get()) {
       unbindFromLogReceiver()

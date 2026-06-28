@@ -29,7 +29,7 @@ import com.itsaky.androidide.plugins.util.SdkUtils.getAndroidJar
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.configurationcache.extensions.capitalized
-import org.gradle.jvm.tasks.Jar
+import org.gradle.api.tasks.bundling.Zip
 
 /**
  * Handles asset copying and generation.
@@ -86,93 +86,28 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             GenerateInitScriptTask::outputDir,
         )
 
-        data class RuntimeArtifact(
-            val taskName: String,
-            val projectPath: String,
-            val producerTaskName: String,
-            val buildOutput: String,
-            val assetName: String,
+        val copyDebuggerLibrary =
+            tasks.register(
+                "copy${variantNameCapitalized}DebuggerLibraryToAssets",
+                AddFileToAssetsTask::class.java,
+            ) {
+              val debuggerLibraryPath = ":debugger:library"
+              val debuggerLibrary =
+                  checkNotNull(rootProject.findProject(debuggerLibraryPath)) {
+                    "Cannot find required debugger runtime library module: '$debuggerLibraryPath'"
+                  }
+              val packageTask =
+                  debuggerLibrary.tasks.named("packageDebuggerLibrary", Zip::class.java)
+              dependsOn(packageTask)
+              inputFile.set(packageTask.flatMap { it.archiveFile })
+              fileName.set("debugger-library.zip")
+              baseAssetsPath.set("data/common")
+            }
+
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            copyDebuggerLibrary,
+            AddFileToAssetsTask::outputDirectory,
         )
-
-        // Keep every Gradle/host-debug runtime artifact that must be shipped in
-        // the IDE APK in one table. The output kind follows each module's Gradle
-        // script: Android library modules use release AARs; Java/Gradle plugin
-        // modules use their JAR task outputs.
-        listOf(
-            RuntimeArtifact(
-                "IdeLogPluginAar",
-                ":ide-log-plugin",
-                "assembleRelease",
-                "outputs/aar/ide-log-plugin-release.aar",
-                "ide-log-plugin-1.0.0.aar",
-            ),
-            RuntimeArtifact(
-                "IdeDebuggerAar",
-                ":ide-debugger",
-                "assembleRelease",
-                "outputs/aar/ide-debugger-release.aar",
-                "ide-debugger.aar",
-            ),
-            RuntimeArtifact(
-                "LoggerJar",
-                ":logging:logger",
-                "jar",
-                "libs/logger.jar",
-                "logger.jar",
-            ),
-            RuntimeArtifact(
-                "LogsenderAar",
-                ":logging:logsender",
-                "assembleRelease",
-                "outputs/aar/logsender-release.aar",
-                "logsender.aar",
-            ),
-            RuntimeArtifact(
-                "ToolingPluginJar",
-                ":tooling:plugin",
-                "jar",
-                "libs/androidide-plugin.jar",
-                "androidide-plugin.jar",
-            ),
-            RuntimeArtifact(
-                "PluginConfigJar",
-                ":tooling:plugin-config",
-                "jar",
-                "libs/plugin-config.jar",
-                "plugin-config.jar",
-            ),
-        ).forEach { artifact ->
-          val copyRuntimeArtifact =
-              tasks.register(
-                  "copy${variantNameCapitalized}${artifact.taskName}ToAssets",
-                  AddFileToAssetsTask::class.java,
-              ) {
-                val artifactProject =
-                    checkNotNull(rootProject.findProject(artifact.projectPath)) {
-                      "Cannot find required host runtime module: '${artifact.projectPath}'"
-                    }
-                if (artifact.producerTaskName == "jar") {
-                  val jarTask = artifactProject.tasks.named("jar", Jar::class.java)
-                  dependsOn(jarTask)
-                  inputFile.set(jarTask.flatMap { it.archiveFile })
-                } else {
-                  val producerTask = artifactProject.tasks.named(artifact.producerTaskName)
-                  dependsOn(producerTask)
-                  inputFile.set(
-                      producerTask.flatMap {
-                        artifactProject.layout.buildDirectory.file(artifact.buildOutput)
-                      }
-                  )
-                }
-                fileName.set(artifact.assetName)
-                baseAssetsPath.set("data/common")
-              }
-
-          variant.sources.assets?.addGeneratedSourceDirectory(
-              copyRuntimeArtifact,
-              AddFileToAssetsTask::outputDirectory,
-          )
-        }
 
         // Tooling API JAR copier
         val copyToolingApiJar =

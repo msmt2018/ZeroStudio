@@ -23,11 +23,9 @@
 
 package com.itsaky.androidide.gradle
 
-import com.android.build.api.artifact.MultipleArtifact
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.ApplicationVariant
 import com.android.build.api.variant.impl.ApplicationVariantImpl
-import com.android.build.gradle.tasks.MergeSourceSetFoldersMap
 import com.itsaky.androidide.buildinfo.BuildInfo
 import java.io.File
 import org.gradle.api.GradleException
@@ -134,6 +132,7 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
       //    fully-qualified provider class.
       try {
         variant.withManifestPlaceholders(
+            project,
             mapOf(
                 "${BOOTSTRAP_PROVIDER_CLASS}.AUTHORITY" to BOOTSTRAP_AUTHORITY,
                 "${BOOTSTRAP_PROVIDER_CLASS}.META_PORT" to "0",
@@ -168,7 +167,10 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     }
   }
 
-  private fun ApplicationVariant.withManifestPlaceholders(values: Map<String, String>) {
+  private fun ApplicationVariant.withManifestPlaceholders(
+      project: Project,
+      values: Map<String, String>
+  ) {
     // AGP 8+: variants expose manifestPlaceholders via the
     // ManifestArtifact. The simplest path is to write a small
     // XML file under the variant's manifest and let AGP merge
@@ -176,7 +178,6 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     // output dir.
     val manifestDir = when (this) {
       is ApplicationVariantImpl -> {
-        val cfg = variantDependencies
         // The merged-manifest is generated under
         // build/intermediates/merged_manifest/{variant}/AndroidManifest.xml
         File(project.layout.buildDirectory.asFile.get(),
@@ -191,7 +192,8 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     if (manifestDir == null) return
     logger.lifecycle(
         "Registering debugger bootstrap provider authority=$BOOTSTRAP_AUTHORITY " +
-            "in variant '${name}' of ${project.path} (manifestDir=$manifestDir)"
+            "in variant '${name}' of ${project.path} (manifestDir=$manifestDir, " +
+            "placeholders=${values.keys.joinToString()})"
     )
   }
 }
