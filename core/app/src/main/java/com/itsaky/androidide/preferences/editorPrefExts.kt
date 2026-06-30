@@ -34,7 +34,14 @@ import com.itsaky.androidide.preferences.internal.EditorPreferences.AUTO_SAVE_EN
 import com.itsaky.androidide.preferences.internal.EditorPreferences.AUTO_SAVE_ON_FOCUS_LOSS
 import com.itsaky.androidide.preferences.internal.EditorPreferences.COLOR_SCHEME
 import com.itsaky.androidide.preferences.internal.EditorPreferences.COMPLETIONS_MATCH_LOWER
+import com.itsaky.androidide.preferences.internal.EditorPreferences.CURSOR_IME_SCROLL_POSITION
+import com.itsaky.androidide.preferences.internal.EditorPreferences.CURSOR_IME_VISIBLE_SCROLL
+import com.itsaky.androidide.preferences.internal.EditorPreferences.CURSOR_SCROLL_POSITION_BOTTOM
+import com.itsaky.androidide.preferences.internal.EditorPreferences.CURSOR_SCROLL_POSITION_CENTER
+import com.itsaky.androidide.preferences.internal.EditorPreferences.CURSOR_SCROLL_POSITION_TOP
 import com.itsaky.androidide.preferences.internal.EditorPreferences.CURSOR_STYLE
+import com.itsaky.androidide.preferences.internal.EditorPreferences.CURSOR_VISIBLE_AREA_SCROLL
+import com.itsaky.androidide.preferences.internal.EditorPreferences.CURSOR_VISIBLE_AREA_SCROLL_POSITION
 import com.itsaky.androidide.preferences.internal.EditorPreferences.DEFAULT_COLOR_SCHEME
 import com.itsaky.androidide.preferences.internal.EditorPreferences.DELETE_EMPTY_LINES
 import com.itsaky.androidide.preferences.internal.EditorPreferences.DELETE_TABS_ON_BACKSPACE
@@ -173,6 +180,10 @@ private class CursorAndSelectionPreferences(
   init {
     addPreference(SmoothCursorMovement())
     addPreference(CursorStylePreference())
+    addPreference(CursorImeVisibleScrollPreference())
+    addPreference(CursorImeScrollPositionPreference())
+    addPreference(CursorVisibleAreaScrollPreference())
+    addPreference(CursorVisibleAreaScrollPositionPreference())
   }
 }
 
@@ -223,6 +234,137 @@ private class SmoothCursorMovement(
         setValue = EditorPreferences::smoothCursorMovement::set,
         getValue = EditorPreferences::smoothCursorMovement::get,
     )
+
+@Parcelize
+private class CursorImeVisibleScrollPreference(
+    override val key: String = CURSOR_IME_VISIBLE_SCROLL,
+    override val title: Int = R.string.pref_cursor_ime_visible_scroll_title,
+    override val summary: Int? = R.string.pref_cursor_ime_visible_scroll_summary,
+    override val icon: Int? = R.drawable.ic_cursor_move,
+) :
+    SwitchPreference(
+        setValue = EditorPreferences::cursorImeVisibleScroll::set,
+        getValue = EditorPreferences::cursorImeVisibleScroll::get,
+    )
+
+@Parcelize
+private class CursorVisibleAreaScrollPreference(
+    override val key: String = CURSOR_VISIBLE_AREA_SCROLL,
+    override val title: Int = R.string.pref_cursor_visible_area_scroll_title,
+    override val summary: Int? = R.string.pref_cursor_visible_area_scroll_summary,
+    override val icon: Int? = R.drawable.ic_cursor_move,
+) :
+    SwitchPreference(
+        setValue = EditorPreferences::cursorVisibleAreaScroll::set,
+        getValue = EditorPreferences::cursorVisibleAreaScroll::get,
+    )
+
+private data class CursorScrollPosition(val labelRes: Int, val value: String)
+
+private val cursorScrollPositions =
+    arrayOf(
+        CursorScrollPosition(R.string.pref_cursor_scroll_position_top, CURSOR_SCROLL_POSITION_TOP),
+        CursorScrollPosition(
+            R.string.pref_cursor_scroll_position_center,
+            CURSOR_SCROLL_POSITION_CENTER,
+        ),
+        CursorScrollPosition(
+            R.string.pref_cursor_scroll_position_bottom,
+            CURSOR_SCROLL_POSITION_BOTTOM,
+        ),
+    )
+
+@Parcelize
+private class CursorImeScrollPositionPreference(
+    override val key: String = CURSOR_IME_SCROLL_POSITION,
+    override val title: Int = R.string.pref_cursor_ime_scroll_position_title,
+    override val summary: Int? = R.string.pref_cursor_ime_scroll_position_summary,
+    override val icon: Int? = R.drawable.ic_cursor_move,
+) : SingleChoicePreference() {
+
+  @IgnoredOnParcel override val dialogCancellable = true
+
+  override fun getEntries(preference: Preference): Array<PreferenceChoices.Entry> {
+    val currentPosition = EditorPreferences.cursorImeScrollPosition
+    return Array(cursorScrollPositions.size) { index ->
+      val position = cursorScrollPositions[index]
+      PreferenceChoices.Entry(
+          preference.context.getString(position.labelRes),
+          currentPosition == position.value,
+          position.value,
+      )
+    }
+  }
+
+  override fun onChoiceConfirmed(
+      preference: Preference,
+      entry: PreferenceChoices.Entry?,
+      position: Int,
+  ) {
+    EditorPreferences.cursorImeScrollPosition =
+        (entry?.data as? String) ?: CURSOR_SCROLL_POSITION_BOTTOM
+    updateSummary(preference)
+  }
+
+  override fun onCreatePreference(context: Context): Preference {
+    return super.onCreatePreference(context).also { updateSummary(it) }
+  }
+
+  private fun updateSummary(preference: Preference) {
+    preference.summary =
+        preference.context.getString(
+            cursorScrollPositions
+                .firstOrNull { it.value == EditorPreferences.cursorImeScrollPosition }
+                ?.labelRes ?: R.string.pref_cursor_scroll_position_bottom
+        )
+  }
+}
+
+@Parcelize
+private class CursorVisibleAreaScrollPositionPreference(
+    override val key: String = CURSOR_VISIBLE_AREA_SCROLL_POSITION,
+    override val title: Int = R.string.pref_cursor_visible_area_scroll_position_title,
+    override val summary: Int? = R.string.pref_cursor_visible_area_scroll_position_summary,
+    override val icon: Int? = R.drawable.ic_cursor_move,
+) : SingleChoicePreference() {
+
+  @IgnoredOnParcel override val dialogCancellable = true
+
+  override fun getEntries(preference: Preference): Array<PreferenceChoices.Entry> {
+    val currentPosition = EditorPreferences.cursorVisibleAreaScrollPosition
+    return Array(cursorScrollPositions.size) { index ->
+      val position = cursorScrollPositions[index]
+      PreferenceChoices.Entry(
+          preference.context.getString(position.labelRes),
+          currentPosition == position.value,
+          position.value,
+      )
+    }
+  }
+
+  override fun onChoiceConfirmed(
+      preference: Preference,
+      entry: PreferenceChoices.Entry?,
+      position: Int,
+  ) {
+    EditorPreferences.cursorVisibleAreaScrollPosition =
+        (entry?.data as? String) ?: CURSOR_SCROLL_POSITION_CENTER
+    updateSummary(preference)
+  }
+
+  override fun onCreatePreference(context: Context): Preference {
+    return super.onCreatePreference(context).also { updateSummary(it) }
+  }
+
+  private fun updateSummary(preference: Preference) {
+    preference.summary =
+        preference.context.getString(
+            cursorScrollPositions
+                .firstOrNull { it.value == EditorPreferences.cursorVisibleAreaScrollPosition }
+                ?.labelRes ?: R.string.pref_cursor_scroll_position_center
+        )
+  }
+}
 
 @Parcelize
 private class AutoSavePreferences(

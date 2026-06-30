@@ -139,6 +139,17 @@
      <string name="pref_smooth_cursor_movement_title">Enable smooth cursor movement</string>
      <string name="pref_smooth_cursor_movement_summary">The cursor moves with a smooth animation effect</string>
      <string name="pref_cursor_style_title">Cursor Style</string>
+     <string name="pref_cursor_ime_visible_scroll_title">Keep cursor line above IME</string>
+     <string name="pref_cursor_ime_visible_scroll_summary">When the soft keyboard or an input toolbar covers the editor, automatically scroll the cursor line into the visible area. Enabled by default.</string>
+     <string name="pref_cursor_visible_area_scroll_title">Auto-scroll cursor line without IME</string>
+     <string name="pref_cursor_visible_area_scroll_summary">When the soft keyboard is hidden, automatically align the cursor line in the visible editor area. Disabled by default.</string>
+     <string name="pref_cursor_ime_scroll_position_title">IME cursor line position</string>
+     <string name="pref_cursor_ime_scroll_position_summary">Choose where to place the cursor line when IME protection scrolls.</string>
+     <string name="pref_cursor_visible_area_scroll_position_title">Cursor line visible-area position</string>
+     <string name="pref_cursor_visible_area_scroll_position_summary">Choose where to place the cursor line when non-IME auto-scroll is enabled.</string>
+     <string name="pref_cursor_scroll_position_top">Top</string>
+     <string name="pref_cursor_scroll_position_center">Center</string>
+     <string name="pref_cursor_scroll_position_bottom">Bottom</string>
      <string name="pref_group_code_intelligence">Code Intelligence</string>
      <string name="pref_auto_complete_on_type_title">Automatic code completion popup</string>
      <string name="pref_auto_complete_on_type_summary">Automatically show code completion suggestions while typing</string>
