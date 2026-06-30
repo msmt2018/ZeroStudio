@@ -24,6 +24,7 @@ fun AndroidModuleTemplateBuilder.composeActivitySrc() =
 package ${data.packageName}
 
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -66,7 +67,7 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "Hello $name!"
+            text = "Hello Android ${Build.VERSION.SDK_INT}"
         )
     }
 }
