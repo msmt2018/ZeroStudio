@@ -195,6 +195,7 @@ include(
     ":termux:shared",
     ":termux:view",
     ":termux:shell",
+    ":termux:proot",
     ":testing:androidTest",
     ":testing:benchmarks",
     ":testing:commonTest",

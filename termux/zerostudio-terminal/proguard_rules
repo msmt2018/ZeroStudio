@@ -1,0 +1,65 @@
+# Terminal Session Tabs ProGuard Rules
+
+# Keep tab-related classes
+-keep class android.zero.studio.terminal.view.** { *; }
+-keepclassmembers class android.zero.studio.terminal.view.** { *; }
+
+# Keep data classes
+-keep class android.zero.studio.terminal.view.TerminalSessionTab { *; }
+
+# Keep listener interfaces
+-keep interface android.zero.studio.terminal.view.TerminalTabEventListener { *; }
+
+# Keep view holders
+-keep class android.zero.studio.terminal.view.TerminalSessionTabAdapter$** { *; }
+
+# Material Design
+-keep class com.google.android.material.** { *; }
+-dontwarn com.google.android.material.**
+
+# RecyclerView
+-keep class androidx.recyclerview.widget.** { *; }
+-keepclassmembers class androidx.recyclerview.widget.** { *; }
+
+# CardView
+-keep class androidx.cardview.widget.** { *; }
+
+# ConstraintLayout
+-keep class androidx.constraintlayout.** { *; }
+-dontwarn androidx.constraintlayout.**
+
+# Kotlin
+-keep class kotlin.** { *; }
+-keep class kotlin.Metadata { *; }
+-dontwarn kotlin.**
+-keepclassmembers class **$WhenMappings {
+    <fields>;
+}
+-keepclassmembers class kotlin.Metadata {
+    public <methods>;
+}
+-assumenosideeffects class kotlin.jvm.internal.Intrinsics {
+    static void checkParameterIsNotNull(java.lang.Object, java.lang.String);
+}
+
+# Coroutines
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-keepclassmembernames class kotlinx.** {
+    volatile <fields>;
+}
+
+# Animation
+-keep class android.animation.** { *; }
+-keep class android.view.animation.** { *; }
+
+# RenderEffect (Android S+)
+-keep class android.graphics.RenderEffect { *; }
+-keep class android.graphics.Shader { *; }
+
+# ViewBinding
+-keep class **.databinding.** { *; }
+
+# Preserve line numbers for debugging
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

@@ -136,6 +136,7 @@ object GradleFileParser {
             Regex("""compileSdkVersion\s+(\d+)"""),
             Regex("""compileSdk\s+(\d+)"""),
             Regex("""compileSdk\s*\{[\s\S]*?version\s*=\s*release\((\d+)\)"""),
+            Regex("""compileSdk\s*\{[\s\S]*?version\s*=\s*release\((\d+)\)"""),
         )
 
     for (pattern in patterns) {
