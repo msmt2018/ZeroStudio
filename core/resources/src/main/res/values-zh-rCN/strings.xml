@@ -138,6 +138,17 @@
      <string name="pref_smooth_cursor_movement_title">启用平滑光标移动</string>
      <string name="pref_smooth_cursor_movement_summary">光标移动时带有平滑动画效果</string>
      <string name="pref_cursor_style_title">光标样式</string>
+     <string name="pref_cursor_ime_visible_scroll_title">防止 IME 遮挡光标行</string>
+     <string name="pref_cursor_ime_visible_scroll_summary">软键盘或输入工具栏遮挡编辑器时，自动滚动光标所在行到可见区域。默认开启。</string>
+     <string name="pref_cursor_visible_area_scroll_title">无 IME 时自动滚动光标行</string>
+     <string name="pref_cursor_visible_area_scroll_summary">软键盘隐藏时，自动将光标所在行对齐到编辑器可见区域。默认关闭。</string>
+     <string name="pref_cursor_ime_scroll_position_title">IME 弹出时光标行位置</string>
+     <string name="pref_cursor_ime_scroll_position_summary">选择防 IME 遮挡滚动时光标所在行显示的位置。</string>
+     <string name="pref_cursor_visible_area_scroll_position_title">可见区域光标行位置</string>
+     <string name="pref_cursor_visible_area_scroll_position_summary">选择无 IME 自动滚动开启时光标所在行显示的位置。</string>
+     <string name="pref_cursor_scroll_position_top">上</string>
+     <string name="pref_cursor_scroll_position_center">中</string>
+     <string name="pref_cursor_scroll_position_bottom">下</string>
      <string name="pref_group_code_intelligence">代码智能</string>
      <string name="pref_auto_complete_on_type_title">自动弹出代码补全</string>
      <string name="pref_auto_complete_on_type_summary">在输入时自动显示代码补全建议</string>

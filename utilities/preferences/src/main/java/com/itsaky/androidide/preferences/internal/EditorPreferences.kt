@@ -54,6 +54,13 @@ object EditorPreferences {
 
   // 光标与选择
   const val SMOOTH_CURSOR_MOVEMENT = "idepref_editor_smoothCursorMovement"
+  const val CURSOR_IME_VISIBLE_SCROLL = "idepref_editor_cursorImeVisibleScroll"
+  const val CURSOR_VISIBLE_AREA_SCROLL = "idepref_editor_cursorVisibleAreaScroll"
+  const val CURSOR_IME_SCROLL_POSITION = "idepref_editor_cursorImeScrollPosition"
+  const val CURSOR_VISIBLE_AREA_SCROLL_POSITION = "idepref_editor_cursorVisibleAreaScrollPosition"
+  const val CURSOR_SCROLL_POSITION_TOP = "top"
+  const val CURSOR_SCROLL_POSITION_CENTER = "center"
+  const val CURSOR_SCROLL_POSITION_BOTTOM = "bottom"
 
   const val CURSOR_STYLE = "idepref_editor_cursorStyle"
   const val CLEAR_LOGCAT_BEFORE_RUN = "idepref_run_clearLogcatBeforeRun"
@@ -188,6 +195,31 @@ object EditorPreferences {
     get() = prefManager.getBoolean(SMOOTH_CURSOR_MOVEMENT, false)
     set(value) {
       prefManager.putBoolean(SMOOTH_CURSOR_MOVEMENT, value)
+    }
+
+  var cursorImeVisibleScroll: Boolean
+    get() = prefManager.getBoolean(CURSOR_IME_VISIBLE_SCROLL, true)
+    set(value) {
+      prefManager.putBoolean(CURSOR_IME_VISIBLE_SCROLL, value)
+    }
+
+  var cursorVisibleAreaScroll: Boolean
+    get() = prefManager.getBoolean(CURSOR_VISIBLE_AREA_SCROLL, false)
+    set(value) {
+      prefManager.putBoolean(CURSOR_VISIBLE_AREA_SCROLL, value)
+    }
+
+  var cursorImeScrollPosition: String
+    get() = prefManager.getString(CURSOR_IME_SCROLL_POSITION, CURSOR_SCROLL_POSITION_BOTTOM)
+    set(value) {
+      prefManager.putString(CURSOR_IME_SCROLL_POSITION, value)
+    }
+
+  var cursorVisibleAreaScrollPosition: String
+    get() =
+        prefManager.getString(CURSOR_VISIBLE_AREA_SCROLL_POSITION, CURSOR_SCROLL_POSITION_CENTER)
+    set(value) {
+      prefManager.putString(CURSOR_VISIBLE_AREA_SCROLL_POSITION, value)
     }
 
   // Properties for Auto-Save feature

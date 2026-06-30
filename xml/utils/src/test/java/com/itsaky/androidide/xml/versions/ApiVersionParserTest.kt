@@ -117,6 +117,30 @@ class ApiVersionParserTest {
   }
 
   @Test
+  fun testMinorApiLevelParsing() {
+    val xml =
+        """
+        <api version="36.1">
+            <class name="com.example.ClassA" since="36.1" deprecated="0" removed="0">
+                <method name="methodA" since="36.1" deprecated="0" removed="0"/>
+            </class>
+        </api>
+        """
+            .trimIndent()
+    val inputStream = ByteArrayInputStream(xml.toByteArray())
+
+    parser.parse(inputStream)
+
+    val classInfo = parser.getClassInfo("com.example.ClassA")
+    assertThat(classInfo).isNotNull()
+    assertThat(classInfo!!.since).isEqualTo(36)
+
+    val methodInfo = parser.getMemberInfo("com.example.ClassA", "methodA")
+    assertThat(methodInfo).isNotNull()
+    assertThat(methodInfo!!.since).isEqualTo(36)
+  }
+
+  @Test
   fun testMultipleClassesParsing() {
     val xml =
         """

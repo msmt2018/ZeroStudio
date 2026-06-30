@@ -147,11 +147,53 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
     }
 
     if (transitionedToVisible) {
-      editorView.post {
-        val cursor = editorView.cursor ?: return@post
-        editorView.ensurePositionVisible(cursor.rightLine, cursor.rightColumn)
-      }
+      editorView.post { adjustCursorLineForObscuredArea(editorView, forceImeMode = true) }
     }
+  }
+
+  private fun adjustCursorLineForObscuredArea(
+      editorView: IDEEditor,
+      forceImeMode: Boolean = false,
+  ) {
+    val cursor = editorView.cursor ?: return
+    val useImeMode = forceImeMode || isKeyboardVisible
+    val position =
+        if (useImeMode) {
+          if (!EditorPreferences.cursorImeVisibleScroll) return
+          EditorPreferences.cursorImeScrollPosition
+        } else {
+          if (!EditorPreferences.cursorVisibleAreaScroll) return
+          EditorPreferences.cursorVisibleAreaScrollPosition
+        }
+    val obscuredBottom = if (useImeMode) imeBottomInset else 0
+    editorView.scrollCursorLineToVisiblePosition(cursor.rightLine, position, obscuredBottom)
+  }
+
+  private fun IDEEditor.scrollCursorLineToVisiblePosition(
+      line: Int,
+      position: String,
+      obscuredBottom: Int,
+  ) {
+    val rowHeight = getRowHeight().coerceAtLeast(1)
+    val visibleHeight = (height - obscuredBottom).coerceAtLeast(rowHeight)
+    val rowTop = getRowTop(line)
+    val rowBottom = getRowBottom(line)
+    val rowCenter = (rowTop + rowBottom) / 2f
+    val targetY =
+        when (position) {
+          EditorPreferences.CURSOR_SCROLL_POSITION_TOP -> rowTop - rowHeight
+          EditorPreferences.CURSOR_SCROLL_POSITION_CENTER -> rowCenter - visibleHeight / 2f
+          else -> rowBottom - visibleHeight + rowHeight * CURSOR_BOTTOM_VISIBLE_MARGIN_ROWS
+        }
+            .coerceIn(0f, getScrollMaxY().toFloat())
+    val deltaY = targetY - getOffsetY()
+    if (deltaY > -1f && deltaY < 1f) {
+      invalidate()
+      return
+    }
+    getScroller().forceFinished(true)
+    getScroller().startScroll(getOffsetX(), getOffsetY(), 0, deltaY.toInt(), 0)
+    invalidate()
   }
 
   /** Get the file of this editor. */
@@ -173,6 +215,7 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
   companion object {
 
     private val log = LoggerFactory.getLogger(CodeEditorView::class.java)
+    private const val CURSOR_BOTTOM_VISIBLE_MARGIN_ROWS = 3
 
     @Volatile private var isTreeSitterLoaded = false
 
@@ -218,10 +261,7 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
       // Keep action enabled/disabled states in sync with cursor/selection changes.
       subscribeEvent(SelectionChangeEvent::class.java) { _, _ ->
         (context as? Activity?)?.invalidateOptionsMenu()
-        if (isKeyboardVisible) {
-          val cursor = this.cursor ?: return@subscribeEvent
-          this.post { ensurePositionVisible(cursor.rightLine, cursor.rightColumn) }
-        }
+        this.post { adjustCursorLineForObscuredArea(this) }
       }
     }
 
