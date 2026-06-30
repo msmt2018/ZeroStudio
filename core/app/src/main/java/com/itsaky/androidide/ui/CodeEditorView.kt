@@ -216,12 +216,10 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
       }
 
       // Keep action enabled/disabled states in sync with cursor/selection changes.
+      // Do not auto-scroll on every cursor move: Sora already keeps the caret readable, and
+      // forcing ensurePositionVisible() here can push the active line to the IME toolbar area.
       subscribeEvent(SelectionChangeEvent::class.java) { _, _ ->
         (context as? Activity?)?.invalidateOptionsMenu()
-        if (isKeyboardVisible) {
-          val cursor = this.cursor ?: return@subscribeEvent
-          this.post { ensurePositionVisible(cursor.rightLine, cursor.rightColumn) }
-        }
       }
     }
 
