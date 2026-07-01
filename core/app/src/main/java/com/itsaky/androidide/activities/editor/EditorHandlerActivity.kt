@@ -35,6 +35,7 @@ import com.google.android.material.tabs.TabLayout.Tab
 import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
 import com.itsaky.androidide.fragments.editor.FragmentTabEntry
 import com.itsaky.androidide.fragments.editor.FragmentTabRegistry
+import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
 import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
 import com.itsaky.androidide.resources.R
 import com.blankj.utilcode.util.ImageUtils
@@ -149,6 +150,26 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
         fileExtensions = MarkdownPreviewFragment.SUPPORTED_EXTENSIONS,
         order = 100,
         fragmentFactory = { MarkdownPreviewFragment() }
+      )
+    )
+
+    // 图片预览 —— Android XML vector / SVG / 常见位图 (PNG / JPG / WebP /
+    // GIF / HEIC / BMP / AVIF / ICO / TIFF). 通过 FragmentTabRegistry 注册,
+    // 文件后缀命中 ImagePreviewFragment.SUPPORTED_FORMATS 时 editor 在 tab 栏
+    // 给出 "Image Preview" 入口.
+    FragmentTabRegistry.register(
+      FragmentTabEntry(
+        id = "image_preview",
+        title = ImagePreviewFragment.TAB_TITLE,
+        iconRes = R.drawable.ic_file_type_image,
+        fragmentClass = ImagePreviewFragment::class.java,
+        fileExtensions = ImagePreviewFragment.SUPPORTED_FORMATS,
+        order = 110,
+        // factory 不传 filePath: 真正的路径在 EditorFragmentTabManager
+        // 打开 tab 时通过 ImagePreviewFragment.newInstance(filePath) 注入到
+        // arguments. 这里仅供 tab 创建时 fallback 预览, 真实打开后会用
+        // newInstance(filePath) 覆盖.
+        fragmentFactory = { ImagePreviewFragment() },
       )
     )
   }

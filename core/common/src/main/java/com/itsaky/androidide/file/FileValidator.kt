@@ -21,6 +21,60 @@ object FileValidator {
   //                                  图片 (Image) 判断
   // ============================================================================================
 
+  /**
+   * 图片格式扩展名集合 (小写, 不含 `.`). 同时支持位图 (PNG/JPG/...) / SVG /
+   * Android XML vector (`xml` 因为不是"通用"xml, 需要 content sniff).
+   */
+  val IMAGE_EXTENSION_SET: Set<String> = setOf(
+    "png", "jpg", "jpeg", "jpe", "jfif",
+    "webp", "gif", "bmp", "heic", "heif", "avif",
+    "ico", "cur", "tiff", "tif",
+    "svg", "svgz",
+    "xml",  // 仅"内容是 vector"时算图, 见 [isLikelyAndroidVector]
+  )
+
+  /**
+   * 判给定路径后缀是否在图片扩展名集合里 —— 仅做扩展名级别的快速判断.
+   *
+   * 注意: `.xml` 在 [IMAGE_EXTENSION_SET] 中, 但 layout / manifest /
+   * values 等 .xml 文件会在这里返回 true. 想要精确判断, 调用方需用
+   * [isLikelyAndroidVector] 再做 content sniff.
+   *
+   * @param path 任意形式的路径 (绝对 / 相对 / 仅文件名)
+   * @return 后缀名在 [IMAGE_EXTENSION_SET] 中.
+   */
+  fun isImageExtension(path: String?): Boolean {
+    if (path.isNullOrBlank()) return false
+    val ext = path.substringAfterLast('.', "")
+      .lowercase()
+    if (ext.isEmpty()) return false
+    return ext in IMAGE_EXTENSION_SET
+  }
+
+  /**
+   * 简易 content sniff: 文件前 1KB 中含 `<vector` 字符串即视为 Android
+   * vector drawable. 真实 vector drawable 一定含此标签, layout XML /
+   * manifest / values 等不会.
+   *
+   * 用途: 路由 .xml 文件到 ImagePreviewFragment 时避免误判.
+   */
+  fun isLikelyAndroidVector(file: File?): Boolean {
+    if (file == null || !file.exists() || !file.isFile || file.length() == 0L) {
+      return false
+    }
+    return try {
+      FileInputStream(file).use { fis ->
+        val buf = ByteArray(1024)
+        val n = fis.read(buf)
+        if (n <= 0) return false
+        val head = String(buf, 0, n, Charsets.UTF_8)
+        head.contains("<vector")
+      }
+    } catch (e: Exception) {
+      false
+    }
+  }
+
   /** 判断是否为图片 原理：请求系统解码器读取图片尺寸。如果能读出宽/高，说明是合法的图片。 */
   fun isImage(file: File?): Boolean {
     if (file == null || !file.exists() || file.length() == 0L) return false
