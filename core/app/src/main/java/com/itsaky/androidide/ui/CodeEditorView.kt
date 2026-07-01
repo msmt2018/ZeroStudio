@@ -181,9 +181,11 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
     val rowCenter = (rowTop + rowBottom) / 2f
     val targetY =
         when (position) {
-          EditorPreferences.CURSOR_SCROLL_POSITION_TOP -> rowTop - rowHeight
+          EditorPreferences.CURSOR_SCROLL_POSITION_TOP -> (rowTop - rowHeight).toFloat()
           EditorPreferences.CURSOR_SCROLL_POSITION_CENTER -> rowCenter - visibleHeight / 2f
-          else -> rowBottom - visibleHeight + rowHeight * CURSOR_BOTTOM_VISIBLE_MARGIN_ROWS
+          else ->
+              (rowBottom - visibleHeight + rowHeight * CURSOR_BOTTOM_VISIBLE_MARGIN_ROWS)
+                  .toFloat()
         }
             .coerceIn(0f, getScrollMaxY().toFloat())
     val deltaY = targetY - getOffsetY()
