@@ -91,24 +91,19 @@ class PreviewRenderEngine(
     private var composeView: ComposeView? = null
 
     /**
-     * 上一次 render 调用保存的参数. 当 [attach] 重建 ComposeView (fragment 重建 /
-     * deviceSim 切换导致 AndroidView 重建容器) 时, 用来在新 view 上重新 setContent.
-     * 不保存 dexFile / projectDex — 重新加载会浪费 IO, 但 [render] 本身就是重新加载.
+     * 上次成功 [render] 调用的参数快照。
      *
-     * 设为 internal 让 [ComposePreviewActivity.attachPreviewContainer] 能在
-     * 切 container 重建 engine 时把旧 engine 的 lastRender 复制到新 engine,
-     * 避免新 ComposeView 空白.
+     * 当引擎 [attach] 到一个新的 [ComposeView] (典型场景：Activity 重建后重新
+     * 进入 preview、或者切 deviceSim / profile 触发 [ComposePreviewActivity]
+     * 重建引擎)，自动用这份参数重新调用一次 [render]，让用户看到 "重新进入
+     * preview 也能立刻显示上次渲染的内容"，而不是黑屏。
+     *
+     * 由 [detach] 显式清空。
+     *
+     * @author android_zero
      */
     @Volatile
     internal var lastRender: LastRender? = null
-
-    private data class LastRender(
-        val className: String,
-        val functionName: String,
-        val args: Array<out Any?>,
-        val previewConfig: PreviewConfig?,
-        val orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation,
-    )
 
     /**
      * 把 [ComposeView] 安装到 [container] 中, 后续 [render] 的内容都会写到这个 view.
@@ -120,20 +115,21 @@ class PreviewRenderEngine(
      * 一起被释放, 新 view 必须重新 setContent 才会有内容.
      */
     fun attach() {
-        if (composeView != null) {
-            // 同一 container 重复 attach: 不重建, 让 [render] 自己 setContent.
-            LOG.debug("attach() skipped - composeView already set (id={})", container.id)
-            return
-        }
-
-        // 【v3.2 修复】清掉 container 里残留的 ComposeView (其它 engine / 上一
-        // 次 fragment 留下来的). 注意: removeAllViews 会立刻让被移除 view 的
-        // composition 失效, 不能复用 — 必须新建一个.
+        if (composeView != null) return
+        // 【v3.2】如果 container 已经有别的 engine 添加的 ComposeView, 先清理.
+        // 切 deviceSim / profile 时旧 engine 已经被 Activity.detach() 释放, 但
+        // 旧 ComposeView 可能仍残留 (Activity 是 main thread, GC 还没跑).
+        // 【v3.6】使用 downTo 0 反向迭代, 避免 removeViewAt(i) 后索引位移导致跳过
+        // 下一个 view. 之前用 repeat() { i -> removeViewAt(i) } 在多次残留时会
+        // 只删掉一个, 剩下的 ComposeView 在新 engine attach 时被 addView 覆盖
+        // (FrameLayout 只保留一个), 表面看起来 OK, 但容器中残留的 orphan view
+        // 持有旧 activeRuntime 的 ComposeView 引用, 阻碍 GC, 内存里也容易出现
+        // 旧 composition + 新 composition 共存的怪现象.
         for (i in container.childCount - 1 downTo 0) {
             val child = container.getChildAt(i)
             if (child is ComposeView) {
                 container.removeViewAt(i)
-                LOG.debug("Removed orphan ComposeView (was at index {}) before attach", i)
+                LOG.debug("Removed orphan ComposeView from container before attach")
             }
         }
 
@@ -151,15 +147,31 @@ class PreviewRenderEngine(
         composeView = view
         LOG.info("PreviewRenderEngine attached to container (id={})", container.id)
 
-        // 关键: 如果 attach 之前已经 render 过一次 (fragment 重建 / 切 deviceSim
-        // 都会触发), 用 lastRender 在新 view 上重放 setContent. 不这样做的话新
-        // ComposeView 永远是空白的, 用户看到 "黑屏 / 空白 compose UI" bug.
+        // 【v3.6】新 ComposeView 就位后, 如果之前已经渲染过 (lastRender != null),
+        // 立刻按上次参数重放一次, 修复 "再次进入 compose preview 显示黑屏" 的 bug.
+        // 之前要等 viewModel.previewState 重新发射 Ready 才会触发 render, 但
+        // collect 不会对"已经 Ready 的状态"重新发射, 第一次发射时 engine 还是 null
+        // (因为 attach 比 previewState 发射晚到), 等到 attach 完 collect 已经
+        // 错过了, 用户看到的就是空白. 用 lastRender 主动 replay 后, 即便 viewModel
+        // 没有再次发射, 新 ComposeView 上也会显示上次渲染.
         lastRender?.let { saved ->
             LOG.info(
                 "Replaying last render on freshly attached ComposeView: {}#{}",
-                saved.className, saved.functionName,
+                saved.className,
+                saved.functionName,
             )
-            applyContent(view, saved)
+            // 用 saved 的参数重新走一遍 render 流程, 但 render 自己会在 composeView
+            // 为 null 时提前返回 — 此时 composeView 已经被设为 view, 所以会成功.
+            render(
+                previewDex = saved.previewDex,
+                projectDex = saved.projectDex,
+                className = saved.className,
+                functionName = saved.functionName,
+                args = saved.args,
+                previewConfig = saved.previewConfig,
+                orientation = saved.orientation,
+                fromReplay = true,
+            )
         }
     }
 
@@ -171,8 +183,12 @@ class PreviewRenderEngine(
         activeRuntime.getAndSet(null)?.release()
         composeView?.let { container.removeView(it) }
         composeView = null
-        lastRender = null
-        LOG.info("PreviewRenderEngine detached")
+        // 【v3.6】detach 时不清空 lastRender, 让 Activity 重建新 engine 后能从旧
+        // engine 把 lastRender 拷贝过去再 attach, 即可看到上次渲染. detach 在
+        // Activity.onDestroy 调用, 此时 new engine 可能还在准备, 提前清空会让
+        // 新 engine attach 时拿不到 lastRender, 又变成黑屏. 真正的 lastRender
+        // 清理在 [render] 之前用新的覆盖, 以及当 Activity 真正不再使用 preview
+        // (用户从导航退到其它页面) 时由 [ComposePreviewActivity] 显式清.
     }
 
     /**
@@ -205,6 +221,12 @@ class PreviewRenderEngine(
         previewConfig: PreviewConfig? = null,
         orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation =
             com.itsaky.androidide.compose.preview.ui.DeviceOrientation.PORTRAIT,
+        /**
+         * 【v3.6】内部标志 — 当 [attach] 在 [lastRender] 存在时自动调用本方法
+         * 重放上一次渲染. 这种情况下不要再保存 [lastRender] (会覆盖为相同值)
+         * 也不要再写 LOG.info(已 attach 时打的). 默认 false, 由外部调用者忽略.
+         */
+        fromReplay: Boolean = false,
     ) {
         val view = composeView ?: run {
             LOG.error("render() called before attach()")
@@ -331,6 +353,29 @@ class PreviewRenderEngine(
                 }
             }
         }
+        // 【v3.6】保存渲染参数, 供 [attach] 在新 ComposeView 上重放. 必须在
+        // setContent 成功 (走到这里说明 clazz / instance 都 OK) 之后才保存,
+        // 失败 (return 在 loadClass/instantiate 处) 时保留旧 lastRender, 不会
+        // 把错误的 (Class not found) 状态缓存下来.
+        if (!fromReplay) {
+            lastRender = LastRender(
+                previewDex = previewDex,
+                projectDex = projectDex,
+                className = className,
+                functionName = functionName,
+                args = args,
+                previewConfig = previewConfig,
+                orientation = orientation,
+            )
+        }
+        if (!fromReplay) {
+            LOG.info(
+                "Rendered composable: {}#{} (orientation={})",
+                className,
+                functionName,
+                orientation,
+            )
+        }
     }
 
     /**
@@ -394,6 +439,31 @@ class PreviewRenderEngine(
         }
     }
 }
+
+/**
+ * v3.6 新增：上一次成功 [PreviewRenderEngine.render] 的参数快照。
+ *
+ * 仅由 [PreviewRenderEngine] 内部读写；外部仅当引擎重建（container 变化）时
+ * 由 [com.itsaky.androidide.compose.preview.ComposePreviewActivity.attachPreviewContainer]
+ * 拷贝到新引擎的 [PreviewRenderEngine.lastRender]，再触发 [PreviewRenderEngine.attach]
+ * 自动 replay。
+ *
+ * 故意不用 data class：包含 `Array<out Any?>` 时 data class 自动生成的 equals
+ * 会调用 `Arrays.equals` 对 Kotlin 数组做 identity 判定，每次 render 都得重建
+ * Array，equals 始终 false；用普通 class 即可——这里只做"快照 / 重放"，不做
+ * 集合去重 / 比较。
+ *
+ * @author android_zero
+ */
+internal class LastRender(
+    val previewDex: File?,
+    val projectDex: List<File>,
+    val className: String,
+    val functionName: String,
+    val args: Array<out Any?>,
+    val previewConfig: PreviewConfig?,
+    val orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation,
+)
 
 /**
  * v3.4 新增: 应用 [PreviewConfig] 的 uiMode (浅色/深色) + showBackground 背景.

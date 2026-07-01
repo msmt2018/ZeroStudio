@@ -268,6 +268,14 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
      * 【v3.2】如果上次 attach 的 container 与当前不同 (切 deviceSim / 切 profile
      * 触发 AndroidView 重建时), 强制 detach 旧引擎 + 新建引擎. 否则旧 ComposeView
      * 仍然 addView 在旧 FrameLayout 上, 用户看到的是"切回后黑屏".
+     *
+     * 【v3.6】在新建引擎时拷贝 [com.itsaky.androidide.compose.preview.runtime.LastRender]
+     * 到新引擎, 让 [PreviewRenderEngine.attach] 自动重放上一次的渲染, 避免"切
+     * 设备模式 / 切 profile 后预览区黑屏". 之前 v3.2 把旧引擎 detach 后, 新引擎
+     * 的 [PreviewRenderEngine.lastRender] 默认是 null, attach 时不会自动重放,
+     * 只能等 [viewModel.previewState] 重新发射 Ready 才会触发 render. 但
+     * collect 不会对"当前值"重新发射, 第一次发射时 new engine 还没创建好,
+     * 后续的 Ready 发射要么不会发生, 要么时序与 attach 错位, 表现为黑屏.
      */
     fun attachPreviewContainer(container: android.widget.FrameLayout) {
         val existing = renderEngine
@@ -281,14 +289,12 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                 System.identityHashCode(existing.container),
                 System.identityHashCode(container),
             )
-            // 关键: 把旧 engine 的 lastRender 复制到新 engine, 否则新 ComposeView
-            // 会因为没人调 setContent 而空白 (黑屏 bug). 这是 fix v3.2 "切 deviceSim
-            // / 切 profile 黑屏" 的根因.
+            // 拷贝 lastRender — 新 engine 的 attach 会用它自动 replay, 避免黑屏.
             val savedLastRender = existing.lastRender
             existing.detach()
-            val newEngine = PreviewRenderEngine(this, container)
-            newEngine.lastRender = savedLastRender
-            newEngine.attach()
+            val newEngine = PreviewRenderEngine(this, container).apply {
+                lastRender = savedLastRender
+            }.also { it.attach() }
             renderEngine = newEngine
         }
     }

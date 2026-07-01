@@ -156,6 +156,14 @@ dependencies {
   // compose-markdown 内部使用 coil 2.x(与 core/app 自己的 coil 3.x 是分开的版本,
   // 只为 MarkdownImageSources 暴露的 coil.request.ImageRequest / Disposable 类型存在)
   implementation("io.coil-kt:coil:2.7.0")
+  // 【图片预览】Coil 3.x —— 用于 SVG / 位图 / GIF 解码 (ImagePreviewFragment).
+  // 跟上面 coil 2.x 互不干扰, 各自走自己的 ImageLoader.
+  implementation(libs.io.coil.core)
+  implementation(libs.io.coil.svg)
+  implementation(libs.io.coil.gif)
+  // 【图片预览】xml/vectormaster —— Android XML vector drawable 解析器,
+  // 让我们从 raw .xml 文件 (在 drawable/ 或 res/ 之外) 也能渲染 vector.
+  implementation(projects.xml.vectormaster)
 
   // === Image Preview Fragment: Coil 3.x ===
   // - coil-core: 核心解码器
