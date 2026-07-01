@@ -1,13 +1,14 @@
 package com.itsaky.androidide.templates.impl.template.library.baselineProfile
 
 import com.itsaky.androidide.templates.Language
-import com.itsaky.androidide.templates.ModuleTemplate
 import com.itsaky.androidide.templates.ModuleTemplateData
 import com.itsaky.androidide.templates.ModuleType
 import com.itsaky.androidide.templates.Sdk
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 import com.itsaky.androidide.templates.base.ProjectTemplateBuilder
 import com.itsaky.androidide.templates.base.models.parseDependency
+import com.itsaky.androidide.templates.base.modules.android.androidLibraryModule
+import com.itsaky.androidide.templates.base.util.moduleNameToDir
 
 /**
  * Version catalog values used by the baseline profile module. Centralised so the
@@ -26,7 +27,6 @@ private const val PROFILEINSTALLER_VERSION = "1.3.1"
  * Adds a `:baselineprofile` library module to the project.
  *
  * Behaviour:
- *  - Creates an [AndroidModuleTemplateBuilder] that targets `:baselineprofile`.
  *  - Marks the project as having a baseline profile module, which causes
  *    [com.itsaky.androidide.templates.base.ProjectTemplateBuilder.generateToml]
  *    to also emit the `android-test` and `baselineprofile` plugin aliases.
@@ -41,16 +41,14 @@ internal inline fun ProjectTemplateBuilder.addBaselineProfileModule(
     name: String = ":baselineprofile",
     crossinline block: AndroidModuleTemplateBuilder.() -> Unit = {},
 ) {
-  // 通知项目模板需要 baselineprofile 相关插件
-  enableBaselineProfileSupport()
-
   // 提前收集项目级参数，用于模块数据
   val projectData = data
   val moduleData =
       ModuleTemplateData(
           name = name,
           appName = null,
-          packageName = projectData.packageName,
+          // baselineprofile 模块的 namespace 与 app 共享一个 packageName（保持一致，便于生成器中引用）
+          packageName = "androidx.baselineprofile.generated.reserved",
           projectDir = projectData.moduleNameToDir(name),
           type = ModuleType.AndroidLibrary,
           language = Language.Kotlin,
@@ -60,92 +58,86 @@ internal inline fun ProjectTemplateBuilder.addBaselineProfileModule(
           cmakeVersion = projectData.cmakeVersion,
       )
 
-  val module =
-      AndroidModuleTemplateBuilder()
-          .apply {
-            projectBuilder = this@addBaselineProfileModule
-            this@addBaselineProfileModule.moduleBuilders.add(this)
-            _name = name
-            templateName = 0
-            thumb = 0
+  androidLibraryModule(
+      name = name,
+      moduleData = moduleData,
+  ) {
+    // 标记此模块为 baseline profile 模块 -> 自动通知项目模板需要 baselineprofile 相关插件
+    isBaselineProfileModule = true
 
-            preRecipe = commonPreRecipe { moduleData }
+    // 自定义 postRecipe：写入空 manifest、build.gradle[.kts] 以及源代码
+    postRecipe = {
+      // .gitignore
+      gitignore()
 
-            postRecipe = {
-              // .gitignore
-              gitignore()
-
-              // 1) 写入空 AndroidManifest.xml（只有 <manifest />）
-              executor.save(
-                  """<?xml version="1.0" encoding="utf-8"?>
+      // 1) 写入空 AndroidManifest.xml（只有 <manifest />）
+      executor.save(
+          """<?xml version="1.0" encoding="utf-8"?>
 <manifest />
 """,
-                  manifestFile(),
-              )
+          manifestFile(),
+      )
 
-              // 2) 写入模块级 build.gradle[.kts]
-              executor.save(
-                  if (data.useKts) baselineProfileKtDsl() else baselineProfileGroovyDsl(),
-                  buildGradleFile(),
-              )
+      // 2) 写入模块级 build.gradle[.kts]
+      executor.save(
+          if (data.useKts) baselineProfileKtDsl() else baselineProfileGroovyDsl(),
+          buildGradleFile(),
+      )
 
-              // 3) 生成源代码：BaselineProfileGenerator / StartupBenchmarks
-              sources {
-                writeKtSrc(
-                    data.packageName,
-                    "BaselineProfileGenerator",
-                    source = { baselineProfileGeneratorSrc() },
-                )
-                writeKtSrc(
-                    data.packageName,
-                    "StartupBenchmarks",
-                    source = { startupBenchmarksSrc() },
-                )
-              }
-            }
+      // 3) 生成源代码：BaselineProfileGenerator / StartupBenchmarks
+      sources {
+        writeKtSrc(
+            "androidx.baselineprofile.generated.reserved",
+            "BaselineProfileGenerator",
+            source = { baselineProfileGeneratorSrc() },
+        )
+        writeKtSrc(
+            "androidx.baselineprofile.generated.reserved",
+            "StartupBenchmarks",
+            source = { startupBenchmarksSrc() },
+        )
+      }
+    }
 
-            // —— 依赖注册 ——
-            // 使用 parseDependency 让 DSL/toml 自动按别名写入 libs.versions.toml
-            // versionRefName 与已有 toml 的 [versions] 段命名保持一致，避免生成新的别名
-            addDependency(
-                parseDependency(
-                    "androidx.benchmark:benchmark-macro-junit4:$BENCHMARK_MACRO_JUNIT4_VERSION",
-                    tomlAlias = "androidx-benchmark-macro-junit4",
-                    versionRefName = "benchmarkMacroJunit4",
-                ),
-            )
-            addDependency(
-                parseDependency(
-                    "androidx.test.ext:junit:$ANDROIDX_JUNIT_VERSION",
-                    tomlAlias = "androidx-junit",
-                    versionRefName = "junitVersion",
-                ),
-            )
-            addDependency(
-                parseDependency(
-                    "androidx.test.espresso:espresso-core:$ESPRESSO_CORE_VERSION",
-                    tomlAlias = "androidx-espresso-core",
-                    versionRefName = "espressoCore",
-                ),
-            )
-            addDependency(
-                parseDependency(
-                    "androidx.test.uiautomator:uiautomator:$UIAUTOMATOR_VERSION",
-                    tomlAlias = "androidx-uiautomator",
-                    versionRefName = "uiautomator",
-                ),
-            )
-            addDependency(
-                parseDependency(
-                    "androidx.profileinstaller:profileinstaller:$PROFILEINSTALLER_VERSION",
-                    tomlAlias = "androidx-profileinstaller",
-                    versionRefName = "profileinstaller",
-                ),
-            )
+    // —— 依赖注册 ——
+    // 使用 parseDependency 让 DSL/toml 自动按别名写入 libs.versions.toml
+    // versionRefName 与已有 toml 的 [versions] 段命名保持一致，避免生成新的别名
+    addDependency(
+        parseDependency(
+            "androidx.benchmark:benchmark-macro-junit4:$BENCHMARK_MACRO_JUNIT4_VERSION",
+            tomlAlias = "androidx-benchmark-macro-junit4",
+            versionRefName = "benchmarkMacroJunit4",
+        ),
+    )
+    addDependency(
+        parseDependency(
+            "androidx.test.ext:junit:$ANDROIDX_JUNIT_VERSION",
+            tomlAlias = "androidx-junit",
+            versionRefName = "junitVersion",
+        ),
+    )
+    addDependency(
+        parseDependency(
+            "androidx.test.espresso:espresso-core:$ESPRESSO_CORE_VERSION",
+            tomlAlias = "androidx-espresso-core",
+            versionRefName = "espressoCore",
+        ),
+    )
+    addDependency(
+        parseDependency(
+            "androidx.test.uiautomator:uiautomator:$UIAUTOMATOR_VERSION",
+            tomlAlias = "androidx-uiautomator",
+            versionRefName = "uiautomator",
+        ),
+    )
+    addDependency(
+        parseDependency(
+            "androidx.profileinstaller:profileinstaller:$PROFILEINSTALLER_VERSION",
+            tomlAlias = "androidx-profileinstaller",
+            versionRefName = "profileinstaller",
+        ),
+    )
 
-            block()
-          }
-          .build() as ModuleTemplate
-
-  modules.add(module)
+    block()
+  }
 }
