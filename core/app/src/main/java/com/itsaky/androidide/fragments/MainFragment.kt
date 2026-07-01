@@ -26,6 +26,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -57,13 +58,20 @@ import com.itsaky.androidide.activities.MainActivity
 import com.itsaky.androidide.activities.PreferencesActivity
 import com.itsaky.androidide.activities.TerminalActivity
 import com.itsaky.androidide.fragments.git.function.ZeroCloneDialogBottomSheetFragment
+import com.itsaky.androidide.fragments.main.DeleteDialogState
+import com.itsaky.androidide.fragments.main.DeleteProjectConfirmDialog
+import com.itsaky.androidide.fragments.main.DeleteProjectProgressDialog
+import com.itsaky.androidide.fragments.main.DeleteProjectResultDialog
 import com.itsaky.androidide.fragments.main.ProjectManagerPage
+import com.itsaky.androidide.fragments.main.SwipeableProjectItem
 import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.utils.ProjectHistory
 import com.itsaky.androidide.utils.RecentProjectsManager
 import com.itsaky.androidide.viewmodel.MainViewModel
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainFragment : BaseFragment() {
 
@@ -99,6 +107,30 @@ class MainFragment : BaseFragment() {
   private fun ZeroStudioMainLayout() {
     val scrollState = rememberScrollState()
     var selectedNav by rememberSaveable { mutableIntStateOf(0) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Three-stage delete state machine driving the confirm / progress / result
+    // dialogs. See `DeleteDialogState` for the transitions.
+    var deleteState by remember { mutableStateOf<DeleteDialogState>(DeleteDialogState.Idle) }
+
+    suspend fun refreshHistory() {
+      val list = RecentProjectsManager.getHistoryAsync(requireContext())
+      historyState.clear()
+      historyState.addAll(list)
+    }
+
+    fun performPinToggle(project: ProjectHistory) {
+      coroutineScope.launch {
+        RecentProjectsManager.togglePinAsync(requireContext(), project.path)
+        refreshHistory()
+      }
+    }
+
+    fun performDelete(project: ProjectHistory) {
+      // Stage 1: confirm. The actual destructive work happens once the user
+      // confirms; see the `onConfirm` branch of [DeleteProjectConfirmDialog].
+      deleteState = DeleteDialogState.Confirming(project)
+    }
 
     Scaffold(
         topBar = {
@@ -189,10 +221,28 @@ class MainFragment : BaseFragment() {
                     modifier = Modifier.padding(8.dp),
                 )
               } else {
-                historyState
-                    .sortedByDescending { it.timestamp }
-                    .take(0xff)
-                    .forEach { project -> RecentProjectItem(project) }
+                // Pinned items always float to the top, then the most recent
+                // first. The list is rendered with a LazyColumn so the swipe
+                // gestures on each row do not fight the outer vertical
+                // scroll state.
+                val recentSorted =
+                    historyState.sortedWith(
+                        compareByDescending<ProjectHistory> { it.isPinned }
+                            .thenByDescending { it.timestamp }
+                    )
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                  items(recentSorted, key = { it.path }) { project ->
+                    SwipeableProjectItem(
+                        project = project,
+                        onClick = { openProject(File(project.path)) },
+                        onPin = { performPinToggle(project) },
+                        onDelete = { performDelete(project) },
+                    )
+                  }
+                }
               }
             }
 
@@ -201,10 +251,24 @@ class MainFragment : BaseFragment() {
             Column(modifier = Modifier.weight(0.9f)) {
               SectionTitle(stringResource(R.string.main_frequent_projects))
               if (historyState.isNotEmpty()) {
-                historyState
-                    .sortedByDescending { it.openCount }
-                    .take(0xff)
-                    .forEach { project -> FrequentProjectItem(project) }
+                val frequentSorted =
+                    historyState.sortedWith(
+                        compareByDescending<ProjectHistory> { it.isPinned }
+                            .thenByDescending { it.openCount }
+                    )
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                  items(frequentSorted, key = { it.path }) { project ->
+                    SwipeableProjectItem(
+                        project = project,
+                        onClick = { openProject(File(project.path)) },
+                        onPin = { performPinToggle(project) },
+                        onDelete = { performDelete(project) },
+                    )
+                  }
+                }
               } else {
                 Text(
                     stringResource(R.string.main_empty_history),
@@ -234,6 +298,60 @@ class MainFragment : BaseFragment() {
             }
           }
         }
+      }
+    }
+
+    // ---- Delete flow: confirm -> in-progress -> result dialogs ----
+    when (val state = deleteState) {
+      DeleteDialogState.Idle -> { /* no dialog */ }
+      is DeleteDialogState.Confirming -> {
+        DeleteProjectConfirmDialog(
+            project = state.project,
+            onConfirm = {
+              val project = state.project
+              deleteState = DeleteDialogState.InProgress(project.path)
+              coroutineScope.launch {
+                val deleteError =
+                    withContext(Dispatchers.IO) {
+                      try {
+                        val file = File(project.path)
+                        // First, drop the history entry. We do this even if
+                        // the directory delete later fails so the user is not
+                        // stuck with a stale entry in the recent list.
+                        RecentProjectsManager.removeProjectAsync(requireContext(), project.path)
+                        if (file.exists()) {
+                          file.deleteRecursively()
+                        }
+                        null
+                      } catch (e: Exception) {
+                        e.message ?: e::class.java.simpleName
+                      }
+                    }
+                // Refresh the in-memory list so the swipe row collapses out
+                // of the LazyColumn regardless of delete success/failure.
+                refreshHistory()
+                deleteState =
+                    DeleteDialogState.Done(
+                        success = deleteError == null,
+                        projectName = project.name,
+                    )
+              }
+            },
+            onDismiss = { deleteState = DeleteDialogState.Idle },
+        )
+      }
+      is DeleteDialogState.InProgress -> {
+        DeleteProjectProgressDialog(
+            projectPath = state.projectPath,
+            error = state.error,
+        )
+      }
+      is DeleteDialogState.Done -> {
+        DeleteProjectResultDialog(
+            success = state.success,
+            projectName = state.projectName,
+            onDismiss = { deleteState = DeleteDialogState.Idle },
+        )
       }
     }
   }
@@ -331,85 +449,7 @@ class MainFragment : BaseFragment() {
     }
   }
 
-  /** 高度与文字减小的高对比度 UI */
-  @Composable
-  private fun RecentProjectItem(project: ProjectHistory) {
-    Surface(
-        onClick = { openProject(File(project.path)) },
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).height(40.dp),
-        color = Color(0xFFEBEFF5), // 深色对比底
-        shape = RoundedCornerShape(10.dp),
-    ) {
-      Row(
-          modifier = Modifier.padding(horizontal = 8.dp),
-          verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Box(
-            modifier = Modifier.size(26.dp).clip(CircleShape).background(project.color),
-            contentAlignment = Alignment.Center,
-        ) {
-          Text(project.letter, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-          Text(
-              project.name,
-              fontWeight = FontWeight.Bold,
-              fontSize = 12.sp,
-              color = Color(0xFF1E1E1E),
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-          )
-          Text(
-              project.path,
-              fontSize = 8.sp,
-              color = Color.Gray,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-          )
-        }
-        Text(
-            stringResource(R.string.main_action_open),
-            color = Color(0xFF00897B),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-        )
-      }
-    }
-  }
-
-  @Composable
-  private fun FrequentProjectItem(project: ProjectHistory) {
-    Surface(
-        onClick = { openProject(File(project.path)) },
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).height(34.dp),
-        color = Color(0xFFEBEFF5),
-        shape = RoundedCornerShape(8.dp),
-    ) {
-      Row(
-          modifier = Modifier.padding(horizontal = 6.dp),
-          verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Box(
-            modifier = Modifier.size(18.dp).clip(CircleShape).background(project.color),
-            contentAlignment = Alignment.Center,
-        ) {
-          Text(project.letter, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            project.name,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Text("🔥${project.openCount}", fontSize = 9.sp, color = Color(0xFFFF5252))
-      }
-    }
-  }
-
+  /** 工具与服务区使用 `SwipeableProjectItem` 渲染带侧滑操作的列表项；见 [com.itsaky.androidide.fragments.main.SwipeableProjectItem]。 */
   @Composable
   private fun ToolsServiceGrid() {
     val context = LocalContext.current

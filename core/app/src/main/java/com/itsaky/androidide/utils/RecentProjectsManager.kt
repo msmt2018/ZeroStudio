@@ -33,6 +33,7 @@ data class ProjectHistory(
     val path: String,
     val timestamp: Long = System.currentTimeMillis(),
     val openCount: Int = 1, // 打开次数记录
+    val isPinned: Boolean = false, // 是否置顶
 ) {
   val letter: String
     get() = name.take(1).uppercase()
@@ -95,6 +96,9 @@ object RecentProjectsManager {
         val newEntry =
             if (existingIndex != -1) {
               val old = history.removeAt(existingIndex)
+              // Preserve the `isPinned` flag of an existing entry. The new
+              // timestamp / openCount reflect the latest open, but the user
+              // should not have to re-pin the project after every open.
               old.copy(timestamp = System.currentTimeMillis(), openCount = old.openCount + 1)
             } else {
               ProjectHistory(name = file.name, path = path)
@@ -103,14 +107,60 @@ object RecentProjectsManager {
         history.add(0, newEntry)
         if (history.size > 20) history.removeAt(history.lastIndex)
         cachedHistory = history
-
-        withContext(writeDispatcher) {
-          val json = gson.toJson(history)
-          context
-              .getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-              .edit()
-              .putString(KEY_HISTORY, json)
-              .commit()
-        }
+        persistAsync(context, history)
       }
+
+  /**
+   * Permanently remove the project at [path] from the history and from the
+   * shared-preferences backing file. Returns the file the project pointed at,
+   * so the caller can also delete the project directory from disk if the
+   * user requested a full cleanup.
+   */
+  suspend fun removeProjectAsync(context: Context, path: String): File? =
+      withContext(Dispatchers.Default) {
+        val history = cachedHistory ?: getHistoryAsync(context).toMutableList()
+        val idx = history.indexOfFirst { it.path == path }
+        if (idx == -1) {
+          return@withContext null
+        }
+        val removed = history.removeAt(idx)
+        cachedHistory = history
+        persistAsync(context, history)
+        return@withContext File(removed.path)
+      }
+
+  /**
+   * Toggle the pinned state of the project at [path]. Pinned projects are
+   * always shown at the top of any sorted list and survive a reopen.
+   */
+  suspend fun togglePinAsync(context: Context, path: String): Boolean? =
+      withContext(Dispatchers.Default) {
+        val history = cachedHistory ?: getHistoryAsync(context).toMutableList()
+        val idx = history.indexOfFirst { it.path == path }
+        if (idx == -1) {
+          return@withContext null
+        }
+        val old = history[idx]
+        val newEntry = old.copy(isPinned = !old.isPinned, timestamp = System.currentTimeMillis())
+        history[idx] = newEntry
+        cachedHistory = history
+        persistAsync(context, history)
+        return@withContext newEntry.isPinned
+      }
+
+  /**
+   * Persist the supplied [history] to the shared-preferences file. All public
+   * mutators should funnel through this so the on-disk JSON stays in sync
+   * with the in-memory cache.
+   */
+  private suspend fun persistAsync(context: Context, history: List<ProjectHistory>) {
+    withContext(writeDispatcher) {
+      val json = gson.toJson(history)
+      context
+          .getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+          .edit()
+          .putString(KEY_HISTORY, json)
+          .commit()
+    }
+  }
 }

@@ -600,7 +600,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         }
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "STEP  •  ENVIRONMENT",
+            text = stringResource(R.string.od_sdk_step_environment),
             style = MaterialTheme.typography.labelSmall,
             color = colors.onSurfaceMuted,
             fontWeight = FontWeight.Medium,
@@ -611,7 +611,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
 
       // 主标题
       Text(
-          text = "SDK 安装与配置",
+          text = stringResource(R.string.od_sdk_title),
           style = MaterialTheme.typography.headlineSmall,
           fontWeight = FontWeight.Bold,
           color = colors.onSurface,
@@ -622,7 +622,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
       // 副标题 + ABI 徽章 (单行, 比例合理)
       Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = "为 IDE 安装开发工具以保证其正常运行",
+            text = stringResource(R.string.od_sdk_subtitle),
             style = MaterialTheme.typography.bodySmall,
             color = colors.onSurfaceVariant,
             modifier = Modifier.weight(1f),
@@ -648,7 +648,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         shape = RoundedCornerShape(8.dp),
     ) {
       Text(
-          text = "ABI  $abiName",
+          text = stringResource(R.string.od_sdk_abi_badge, abiName),
           fontSize = 10.sp,
           fontWeight = FontWeight.Medium,
           modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -670,7 +670,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
           netState.isMeteredConnection ->
               stringResource(R.string.msg_connected_to_metered_connection) to
                   OdNetSeverity.WARN
-          else -> "网络已连接" to OdNetSeverity.OK
+          else -> stringResource(R.string.od_sdk_network_ok) to OdNetSeverity.OK
         }
     val bg: Color
     val fg: Color
@@ -823,7 +823,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         }
         Spacer(Modifier.height(14.dp))
         Text(
-            "正在获取 SDK 列表...",
+            stringResource(R.string.od_sdk_loading),
             color = colors.onSurfaceVariant,
             style = MaterialTheme.typography.labelMedium,
         )
@@ -844,7 +844,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "暂无可用组件",
+            stringResource(R.string.od_sdk_empty),
             color = colors.onSurfaceMuted,
             style = MaterialTheme.typography.labelMedium,
         )
@@ -1016,8 +1016,10 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
     val groupState = checkedNodeStates[group.id] ?: group.checkedState
     val (text, show) =
         when (groupState) {
-          ToggleableState.On -> "已选 $selectedCount" to true
-          ToggleableState.Indeterminate -> "$selectedCount / $total" to true
+          ToggleableState.On ->
+              stringResource(R.string.od_sdk_selected_count, selectedCount) to true
+          ToggleableState.Indeterminate ->
+              stringResource(R.string.od_sdk_selected_of_total, selectedCount, total) to true
           ToggleableState.Off -> "" to false
         }
     if (!show) return
@@ -1247,12 +1249,12 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         shape = RoundedCornerShape(50),
     ) {
       Text(
-          "REQUIRED",
-          fontSize = 9.sp,
-          fontWeight = FontWeight.Bold,
-          letterSpacing = 0.5.sp,
-          modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-      )
+            stringResource(R.string.od_sdk_required),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+        )
     }
   }
 
@@ -1339,7 +1341,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
           verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(
-            "附加配置",
+            stringResource(R.string.od_sdk_additional_configs),
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             color = colors.onSurfaceVariant,
@@ -1360,28 +1362,28 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
           horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
         OdConfigChip(
-            label = "Install Git",
+            label = stringResource(R.string.od_sdk_install_git),
             icon = Icons.Filled.Code,
             checked = installGit,
             onCheckedChange = onInstallGitChange,
             modifier = Modifier.weight(1f),
         )
         OdConfigChip(
-            label = "Install SSH",
+            label = stringResource(R.string.od_sdk_install_ssh),
             icon = Icons.Filled.Key,
             checked = installSsh,
             onCheckedChange = onInstallSshChange,
             modifier = Modifier.weight(1f),
         )
         OdConfigChip(
-            label = "Fix NDK",
+            label = stringResource(R.string.od_sdk_fix_ndk),
             icon = Icons.Filled.Build,
             checked = applyNdkFix,
             onCheckedChange = onApplyNdkFixChange,
             modifier = Modifier.weight(1f),
         )
         OdConfigChip(
-            label = "Fix CMake",
+            label = stringResource(R.string.od_sdk_fix_cmake),
             icon = Icons.Filled.Code,
             checked = applyCmakePatch,
             onCheckedChange = onApplyCmakePatchChange,
@@ -1394,14 +1396,14 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
           horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
         OdConfigChip(
-            label = "GitHub 镜像",
+            label = stringResource(R.string.od_sdk_github_mirror),
             icon = Icons.Outlined.Wifi,
             checked = useGithubMirror,
             onCheckedChange = onUseGithubMirrorChange,
             modifier = Modifier.weight(1.4f),
         )
         OdConfigChip(
-            label = "离线安装",
+            label = stringResource(R.string.od_sdk_offline_install),
             icon = Icons.Filled.Lock,
             checked = installOffline,
             onCheckedChange = onInstallOfflineChange,
@@ -1424,7 +1426,11 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                   LocalTextStyle.current.copy(fontSize = 12.sp, color = colors.onSurface),
               singleLine = true,
               placeholder = {
-                Text("https://gh.llkk.cc/", fontSize = 12.sp, color = colors.onSurfaceMuted)
+                Text(
+                    stringResource(R.string.od_sdk_mirror_placeholder),
+                    fontSize = 12.sp,
+                    color = colors.onSurfaceMuted,
+                )
               },
               shape = RoundedCornerShape(10.dp),
           )
@@ -1441,7 +1447,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
           ) {
             Icon(
                 Icons.Filled.Refresh,
-                contentDescription = "Reload",
+                contentDescription = stringResource(R.string.od_sdk_reload),
                 tint = colors.onPrimary,
                 modifier = Modifier.size(18.dp),
             )
@@ -1478,7 +1484,11 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
               modifier = Modifier.size(13.dp),
           )
           Spacer(Modifier.width(4.dp))
-          Text("JDK $selectedJdk", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+          Text(
+              stringResource(R.string.od_sdk_jdk_label, selectedJdk),
+              fontSize = 11.sp,
+              fontWeight = FontWeight.SemiBold,
+          )
           Spacer(Modifier.width(2.dp))
           Icon(
               Icons.Filled.ChevronRight,
@@ -1490,14 +1500,18 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
       }
       DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
         DropdownMenuItem(
-            text = { Text("OpenJDK 17 (Recommended)", fontSize = 13.sp) },
+            text = {
+              Text(stringResource(R.string.od_sdk_openjdk_17_recommended), fontSize = 13.sp)
+            },
             onClick = {
               onJdkChange("17")
               onExpandedChange(false)
             },
         )
         DropdownMenuItem(
-            text = { Text("OpenJDK 21 (Experimental)", fontSize = 13.sp) },
+            text = {
+              Text(stringResource(R.string.od_sdk_openjdk_21_experimental), fontSize = 13.sp)
+            },
             onClick = {
               onJdkChange("21")
               onExpandedChange(false)
@@ -1627,7 +1641,8 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
             label = "cta-pulse-alpha",
         )
     val label =
-        if (installOffline) "Start Offline Installation" else "Start Environment Setup"
+        if (installOffline) stringResource(R.string.od_sdk_start_offline)
+        else stringResource(R.string.od_sdk_start_setup)
     Box(
         modifier =
             Modifier.fillMaxWidth()
@@ -1727,16 +1742,29 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
         properties =
             DialogProperties(dismissOnBackPress = !isRunning, dismissOnClickOutside = !isRunning),
         title = {
-          Text(if (isFinished) "Setup Completed" else "Confirm Installation", fontSize = 16.sp)
+          Text(
+              if (isFinished) stringResource(R.string.od_sdk_setup_completed)
+              else stringResource(R.string.od_sdk_confirm_installation),
+              fontSize = 16.sp,
+          )
         },
         text = {
           Column(modifier = Modifier.fillMaxWidth()) {
             if (!isRunning && !isFinished) {
-              Text("Components to install/update:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+              Text(
+                  stringResource(R.string.od_sdk_components_to_install),
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 13.sp,
+              )
               toInstall.forEach { Text("- ${it.name}", fontSize = 12.sp) }
-              Text("- OpenJDK $jdkVersion", fontSize = 12.sp)
-              if (installGit) Text("- Git Version Control", fontSize = 12.sp)
-              if (installSsh) Text("- OpenSSH Remote Auth", fontSize = 12.sp)
+              Text(
+                  stringResource(R.string.od_sdk_openjdk_version, jdkVersion),
+                  fontSize = 12.sp,
+              )
+              if (installGit)
+                  Text(stringResource(R.string.od_sdk_git_version_control), fontSize = 12.sp)
+              if (installSsh)
+                  Text(stringResource(R.string.od_sdk_openssh_remote_auth), fontSize = 12.sp)
 
               val installingNdk = toInstall.any { it.componentType == "ndk" }
               val installingCmake = toInstall.any { it.componentType == "cmake" }
@@ -1745,17 +1773,21 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                 Spacer(modifier = Modifier.height(12.dp))
                 Divider()
                 Spacer(modifier = Modifier.height(6.dp))
-                Text("Additional Configurations:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(
+                    stringResource(R.string.od_sdk_additional_configurations),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                )
                 if (installingNdk) {
                   Text(
-                      "• Apply NDK Fixes (symlinks & patches)",
+                      stringResource(R.string.od_sdk_apply_ndk_fixes),
                       fontSize = 11.sp,
                       color = if (applyNdkFix) MaterialTheme.colorScheme.onSurface else Color.Gray,
                   )
                 }
                 if (installingCmake) {
                   Text(
-                      "• Apply CMake Patches",
+                      stringResource(R.string.od_sdk_apply_cmake_patches),
                       fontSize = 11.sp,
                       color =
                           if (applyCmakePatch) MaterialTheme.colorScheme.onSurface else Color.Gray,
@@ -1765,7 +1797,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
               if (githubMirror.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    "• Active Github Mirror: $githubMirror",
+                    stringResource(R.string.od_sdk_active_github_mirror, githubMirror),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -1773,7 +1805,10 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
             }
 
             if (isRunning || isFinished) {
-              Text(text = "Current: $currentTaskName", style = MaterialTheme.typography.labelSmall)
+              Text(
+                  text = stringResource(R.string.od_sdk_current_task, currentTaskName),
+                  style = MaterialTheme.typography.labelSmall,
+              )
               LinearProgressIndicator(
                   progress = { currentProgress },
                   modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -1819,9 +1854,9 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                   coroutineScope.launch(Dispatchers.IO) {
 
                     // 系统依赖与包管理器更新
-                    currentTaskName = "Configuring package environment..."
+                    currentTaskName = context.getString(R.string.od_sdk_log_configuring_package)
                     currentProgress = -1f
-                    addLog(">> Updating pkg repositories...")
+                    addLog(context.getString(R.string.od_sdk_log_updating_pkg))
                     TermuxCommand.run(context) {
                           executable("sh")
                           args("-c", "pkg update -y && pkg upgrade -y")
@@ -1829,7 +1864,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                         .also { if (it.stdout.isNotBlank()) addLog(it.stdout) }
 
                     // 安装基础包和解压工具
-                    addLog(">> Installing required base packages...")
+                    addLog(context.getString(R.string.od_sdk_log_installing_base))
                     TermuxCommand.run(context) {
                           executable("sh")
                           args(
@@ -1839,8 +1874,8 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                         }
                         .also { if (it.stdout.isNotBlank()) addLog(it.stdout) }
 
-                    currentTaskName = "Checking extraction tools..."
-                    addLog(">> Verifying unzip/7z/tar availability...")
+                    currentTaskName = context.getString(R.string.od_sdk_log_checking_tools)
+                    addLog(context.getString(R.string.od_sdk_log_verifying_tools))
                     TermuxCommand.run(context) {
                           executable("sh")
                           args(
@@ -1851,21 +1886,28 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                         .also {
                           if (it.stdout.isNotBlank()) addLog(it.stdout)
                           if (!it.isSuccess && it.stderr.isNotBlank())
-                              addLog("WARN/ERR tools check: ${it.stderr}")
+                              addLog(
+                                  context.getString(
+                                      R.string.od_sdk_log_warn_err_tools,
+                                      it.stderr,
+                                  )
+                              )
                         }
 
                     // Git 和 OpenSSH
                     if (installGit) {
-                      currentTaskName = "Installing Git..."
-                      addLog(">> Installing Git...")
+                      currentTaskName =
+                          context.getString(R.string.od_sdk_log_installing_git).removePrefix("» ")
+                      addLog(context.getString(R.string.od_sdk_log_installing_git))
                       TermuxCommand.run(context) {
                         executable("sh")
                         args("-c", "pkg install -y git")
                       }
                     }
                     if (installSsh) {
-                      currentTaskName = "Installing OpenSSH..."
-                      addLog(">> Installing OpenSSH...")
+                      currentTaskName =
+                          context.getString(R.string.od_sdk_log_installing_openssh).removePrefix("» ")
+                      addLog(context.getString(R.string.od_sdk_log_installing_openssh))
                       TermuxCommand.run(context) {
                         executable("sh")
                         args("-c", "pkg install -y openssh")
@@ -1873,30 +1915,54 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                     }
 
                     // 安装 JDK
-                    currentTaskName = "Installing OpenJDK $jdkVersion..."
-                    addLog(">> Installing package: 'openjdk-$jdkVersion'")
+                    currentTaskName =
+                        context.getString(
+                            R.string.od_sdk_log_installing_openjdk_task,
+                            jdkVersion,
+                        )
+                    addLog(
+                        context.getString(
+                            R.string.od_sdk_log_installing_pkg_openjdk,
+                            jdkVersion,
+                        )
+                    )
                     TermuxCommand.run(context) {
                           executable("sh")
                           args("-c", "pkg install -y openjdk-$jdkVersion")
                         }
-                        .also { addLog(">> JDK $jdkVersion has been installed.") }
+                        .also {
+                          addLog(
+                              context.getString(
+                                  R.string.od_sdk_log_jdk_installed,
+                                  jdkVersion,
+                              )
+                          )
+                        }
 
-                    addLog(">> Updating ide-environment.properties...")
+                    addLog(context.getString(R.string.od_sdk_log_updating_properties))
                     val jdkDir = "${Environment.PREFIX.absolutePath}/opt/openjdk"
                     val propsDir = File(Environment.PREFIX, "etc")
                     if (!propsDir.exists()) propsDir.mkdirs()
                     val propsFile = File(propsDir, "ide-environment.properties")
                     try {
                       propsFile.writeText("JAVA_HOME=$jdkDir\n")
-                      addLog(">> JAVA_HOME=$jdkDir")
-                      addLog(">> Properties file updated successfully!")
+                      addLog(
+                          context.getString(R.string.od_sdk_log_java_home, jdkDir)
+                      )
+                      addLog(context.getString(R.string.od_sdk_log_properties_updated))
                     } catch (e: Exception) {
-                      addLog("WARN: Failed to write ide-environment.properties: ${e.message}")
+                      addLog(
+                          context.getString(
+                              R.string.od_sdk_log_properties_failed,
+                              e.message ?: "",
+                          )
+                      )
                     }
 
                     // 执行 SDK/NDK/CMake 安装
                     for (node in toInstall) {
-                      currentTaskName = "Installing ${node.name}"
+                      currentTaskName =
+                          context.getString(R.string.od_sdk_log_installing_node, node.name)
                       currentProgress = 0f
                       val success =
                           SdkInstallerManager.downloadAndInstall(
@@ -1908,27 +1974,36 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                               onLog = ::addLog,
                           )
                       if (!success) {
-                        addLog("ERROR: Failed to install ${node.name}. Continuing next task.")
+                        addLog(
+                            context.getString(
+                                R.string.od_sdk_log_install_node_failed,
+                                node.name,
+                            )
+                        )
                       }
                     }
 
                     isFinished = true
                     isRunning = false
-                    currentTaskName = "All tasks completed. Environment is ready!"
+                    currentTaskName = context.getString(R.string.od_sdk_log_all_tasks_completed)
                     currentProgress = 1f
                   }
                 },
                 enabled = !isRunning,
             ) {
-              Text("Execute", fontSize = 13.sp)
+              Text(stringResource(R.string.od_sdk_execute), fontSize = 13.sp)
             }
           } else {
-            Button(onClick = onSuccess) { Text("Finish & Launch", fontSize = 13.sp) }
+            Button(onClick = onSuccess) {
+              Text(stringResource(R.string.od_sdk_finish_launch), fontSize = 13.sp)
+            }
           }
         },
         dismissButton = {
           if (!isRunning && !isFinished) {
-            TextButton(onClick = onDismiss) { Text("Cancel", fontSize = 13.sp) }
+            TextButton(onClick = onDismiss) {
+              Text(stringResource(R.string.cancel_button), fontSize = 13.sp)
+            }
           }
         },
     )
@@ -1963,7 +2038,8 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
             DialogProperties(dismissOnBackPress = !isRunning, dismissOnClickOutside = !isRunning),
         title = {
           Text(
-              if (isFinished) "Offline Setup Completed" else "Offline Installation",
+              if (isFinished) stringResource(R.string.od_sdk_offline_setup_completed)
+              else stringResource(R.string.od_sdk_offline_installation),
               fontSize = 16.sp,
           )
         },
@@ -1971,7 +2047,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
           Column(modifier = Modifier.fillMaxWidth()) {
             if (!isRunning && !isFinished) {
               Text(
-                  "Please select the offline resources package (sdkresources.tar.gz):",
+                  stringResource(R.string.od_sdk_select_offline_package),
                   fontSize = 13.sp,
               )
               Spacer(modifier = Modifier.height(8.dp))
@@ -1983,15 +2059,22 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                     modifier = Modifier.weight(1f).height(50.dp),
                     textStyle = LocalTextStyle.current.copy(fontSize = 11.sp),
                     singleLine = true,
-                    placeholder = { Text("content://...", fontSize = 11.sp) },
+                    placeholder = {
+                      Text(stringResource(R.string.od_sdk_content_placeholder), fontSize = 11.sp)
+                    },
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = { launcher.launch("application/*") }) { Text("Select") }
+                Button(onClick = { launcher.launch("application/*") }) {
+                  Text(stringResource(R.string.od_sdk_select))
+                }
               }
             }
 
             if (isRunning || isFinished) {
-              Text(text = "Current: $currentTaskName", style = MaterialTheme.typography.labelSmall)
+              Text(
+                  text = stringResource(R.string.od_sdk_current_task, currentTaskName),
+                  style = MaterialTheme.typography.labelSmall,
+              )
               LinearProgressIndicator(
                   progress = { currentProgress },
                   modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -2034,24 +2117,24 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
             Button(
                 onClick = {
                   if (offlineUriStr.isBlank()) {
-                    addLog("ERR: No file selected!")
+                    addLog(context.getString(R.string.od_sdk_log_no_file_selected))
                     return@Button
                   }
                   isRunning = true
                   coroutineScope.launch(Dispatchers.IO) {
-                    currentTaskName = "Preparing offline package..."
+                    currentTaskName = context.getString(R.string.od_sdk_log_preparing_offline)
                     currentProgress = -1f
                     try {
                       val homeDir = Environment.HOME
                       val targetArchive = File(homeDir, "sdkresources.tar.gz")
 
-                      addLog(">> Copying selected file to HOME...")
+                      addLog(context.getString(R.string.od_sdk_log_copying_file))
                       val uri = Uri.parse(offlineUriStr)
                       context.contentResolver.openInputStream(uri)?.use { input ->
                         targetArchive.outputStream().use { output -> input.copyTo(output) }
                       }
 
-                      addLog(">> File copied. Installing tar & dpkg...")
+                      addLog(context.getString(R.string.od_sdk_log_file_copied))
                       TermuxCommand.run(context) {
                         executable("sh")
                         args("-c", "pkg install tar dpkg -y")
@@ -2126,7 +2209,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                       scriptFile.writeText(script)
                       scriptFile.setExecutable(true)
 
-                      currentTaskName = "Executing offline installation..."
+                      currentTaskName = context.getString(R.string.od_sdk_log_executing_offline)
                       val cmdResult =
                           TermuxCommand.run(context) {
                             label("Offline_Installer")
@@ -2135,30 +2218,45 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
                           }
 
                       if (cmdResult.stdout.isNotBlank()) addLog(cmdResult.stdout)
-                      if (cmdResult.stderr.isNotBlank()) addLog("ERR: ${cmdResult.stderr}")
+                      if (cmdResult.stderr.isNotBlank())
+                          addLog(
+                              context.getString(
+                                  R.string.od_sdk_log_error_with_msg,
+                                  cmdResult.stderr,
+                              )
+                          )
 
                       scriptFile.delete()
                     } catch (e: Exception) {
-                      addLog("ERR: ${e.message}")
+                      addLog(
+                          context.getString(
+                              R.string.od_sdk_log_error_with_msg,
+                              e.message ?: "",
+                          )
+                      )
                     }
 
                     isFinished = true
                     isRunning = false
-                    currentTaskName = "All tasks completed. Environment is ready!"
+                    currentTaskName = context.getString(R.string.od_sdk_log_all_tasks_completed)
                     currentProgress = 1f
                   }
                 },
                 enabled = !isRunning,
             ) {
-              Text("Execute", fontSize = 13.sp)
+              Text(stringResource(R.string.od_sdk_execute), fontSize = 13.sp)
             }
           } else {
-            Button(onClick = onSuccess) { Text("Finish & Launch", fontSize = 13.sp) }
+            Button(onClick = onSuccess) {
+              Text(stringResource(R.string.od_sdk_finish_launch), fontSize = 13.sp)
+            }
           }
         },
         dismissButton = {
           if (!isRunning && !isFinished) {
-            TextButton(onClick = onDismiss) { Text("Cancel", fontSize = 13.sp) }
+            TextButton(onClick = onDismiss) {
+              Text(stringResource(R.string.cancel_button), fontSize = 13.sp)
+            }
           }
         },
     )
