@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Image preview fragment layout.
+
+  整个 fragment 的内容是单个 FrameLayout 容器, 由 [ImagePreviewFragment] 在运行时
+  用 ComposeView 填充, 这样可以复用项目里的 Compose 工具栈 (image() / vector() / 缩放 /
+  旋转 / 像素信息 / 错误显示), 跟 MarkdownPreviewFragment / ComposePreviewFragment 保持
+  一致. 老写法是写死一个 ImageView, 但那样 SVG / GIF / XML 矢量图都要单独切, 不优雅.
+
+  不在这里放任何控件, 避免 fragment 视图重建时被 layout 残留占用层级. 真正渲染在
+  ImagePreviewFragment.onCreateView() 里用 ComposeView.setContent { ImagePreviewScreen() }.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/image_preview_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface" />

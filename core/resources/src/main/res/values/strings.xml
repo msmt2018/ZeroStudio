@@ -827,6 +827,9 @@
     <string name="title_template_description_chaquopy_xml">Chaquopy XML template with Python console bridge, manifest, and resources.</string>
     <string name="title_template_description_chaquopy_compose">Chaquopy Compose template with Python runtime bridge and Compose host activity.</string>
     <string name="title_template_description_chaquopy_litho">Chaquopy Litho template with Python runtime bridge and Litho-ready dependencies.</string>
+
+    <string name="template_baseline_profile" translatable="false">Baseline Profile</string>
+    <string name="title_template_description_baseline_profile">Baseline Profile project: includes :app and :baselineprofile modules for generating and verifying startup profiles.</string>
   <string name="git_token_credential_title">Token Credentials</string>
   <string name="git_token_credential_subtitle">Manage HTTPS token/secret</string>
   <string name="git_operations_section">Git Operations</string>
@@ -860,4 +863,96 @@
   <string name="onboarding_step2_subtitle">This area shows the build progress and the current cursor position (line:column) in the code editor.</string>
   <string name="onboarding_step3_title">Symbol input toolbar</string>
   <string name="onboarding_step3_subtitle">Swipe up/down here to open/close the symbol input drawer.</string>
+
+  <!--
+    Project list swipe action menu (MainFragment) — see
+    SwipeableProjectItem.kt / ProjectActionDialogs.kt.
+  -->
+  <string name="swipe_action_pin">Pin</string>
+  <string name="swipe_action_unpin">Unpin</string>
+  <string name="swipe_action_delete">Delete</string>
+  <string name="swipe_action_open_hint">Open</string>
+  <string name="delete_warning_disk">The project files on disk will be permanently removed. This cannot be undone.</string>
+  <string name="delete_in_progress">Deleting project…</string>
+  <string name="delete_project_failed">Delete failed</string>
+  <string name="delete_in_progress_hint">Removing project directory and clearing history entry.</string>
+  <string name="delete_failed_hint">The project entry will still be cleared from history; you can retry the disk delete later.</string>
+  <string name="delete_success">Project deleted</string>
+  <string name="delete_incomplete">Delete incomplete</string>
+  <string name="delete_success_detail">“%1$s” has been removed from the recent list and deleted from disk.</string>
+  <string name="delete_incomplete_detail">Some files could not be removed. Please close the project in the editor first, then try again.</string>
+  <string name="action_close">Close</string>
+  <string name="ok">OK</string>
+
+  <!--
+    OdSdkToolInstallFragment onboarding screen — see
+    core/app/src/main/java/com/itsaky/androidide/fragments/onboarding/OdSdkToolInstallFragment.kt.
+    All Chinese / English hardcoded strings in that file are migrated here.
+  -->
+  <string name="od_sdk_step_environment">STEP  •  ENVIRONMENT</string>
+  <string name="od_sdk_title">SDK Installation &amp; Configuration</string>
+  <string name="od_sdk_subtitle">Install development tools for the IDE to ensure proper operation</string>
+  <string name="od_sdk_abi_badge">ABI  %1$s</string>
+  <string name="od_sdk_network_ok">Network connected</string>
+  <string name="od_sdk_loading">Fetching SDK list…</string>
+  <string name="od_sdk_empty">No components available</string>
+  <string name="od_sdk_required">REQUIRED</string>
+  <string name="od_sdk_selected_count">%1$d selected</string>
+  <string name="od_sdk_selected_of_total">%1$d / %2$d</string>
+  <string name="od_sdk_additional_configs">Additional Configurations</string>
+  <string name="od_sdk_install_git">Install Git</string>
+  <string name="od_sdk_install_ssh">Install SSH</string>
+  <string name="od_sdk_fix_ndk">Fix NDK</string>
+  <string name="od_sdk_fix_cmake">Fix CMake</string>
+  <string name="od_sdk_github_mirror">GitHub Mirror</string>
+  <string name="od_sdk_offline_install">Offline Install</string>
+  <string name="od_sdk_reload">Reload</string>
+  <string name="od_sdk_mirror_placeholder">https://gh.llkk.cc/</string>
+  <string name="od_sdk_jdk_label">JDK %1$s</string>
+  <string name="od_sdk_openjdk_17_recommended">OpenJDK 17 (Recommended)</string>
+  <string name="od_sdk_openjdk_21_experimental">OpenJDK 21 (Experimental)</string>
+  <string name="od_sdk_start_offline">Start Offline Installation</string>
+  <string name="od_sdk_start_setup">Start Environment Setup</string>
+  <string name="od_sdk_confirm_installation">Confirm Installation</string>
+  <string name="od_sdk_setup_completed">Setup Completed</string>
+  <string name="od_sdk_components_to_install">Components to install/update:</string>
+  <string name="od_sdk_openjdk_version">- OpenJDK %1$s</string>
+  <string name="od_sdk_git_version_control">- Git Version Control</string>
+  <string name="od_sdk_openssh_remote_auth">- OpenSSH Remote Auth</string>
+  <string name="od_sdk_additional_configurations">Additional Configurations:</string>
+  <string name="od_sdk_apply_ndk_fixes">• Apply NDK Fixes (symlinks &amp; patches)</string>
+  <string name="od_sdk_apply_cmake_patches">• Apply CMake Patches</string>
+  <string name="od_sdk_active_github_mirror">• Active Github Mirror: %1$s</string>
+  <string name="od_sdk_current_task">Current: %1$s</string>
+  <string name="od_sdk_execute">Execute</string>
+  <string name="od_sdk_finish_launch">Finish &amp; Launch</string>
+  <string name="od_sdk_offline_installation">Offline Installation</string>
+  <string name="od_sdk_offline_setup_completed">Offline Setup Completed</string>
+  <string name="od_sdk_select_offline_package">Please select the offline resources package (sdkresources.tar.gz):</string>
+  <string name="od_sdk_content_placeholder">content://…</string>
+  <string name="od_sdk_select">Select</string>
+  <string name="od_sdk_log_configuring_package">Configuring package environment…</string>
+  <string name="od_sdk_log_updating_pkg">» Updating pkg repositories…</string>
+  <string name="od_sdk_log_installing_base">» Installing required base packages…</string>
+  <string name="od_sdk_log_checking_tools">Checking extraction tools…</string>
+  <string name="od_sdk_log_verifying_tools">» Verifying unzip/7z/tar availability…</string>
+  <string name="od_sdk_log_warn_err_tools">WARN/ERR tools check: %1$s</string>
+  <string name="od_sdk_log_installing_git">» Installing Git…</string>
+  <string name="od_sdk_log_installing_openssh">» Installing OpenSSH…</string>
+  <string name="od_sdk_log_installing_openjdk_task">Installing OpenJDK %1$s…</string>
+  <string name="od_sdk_log_installing_pkg_openjdk">» Installing package: \'openjdk-%1$s\'</string>
+  <string name="od_sdk_log_jdk_installed">» JDK %1$s has been installed.</string>
+  <string name="od_sdk_log_updating_properties">» Updating ide-environment.properties…</string>
+  <string name="od_sdk_log_java_home">» JAVA_HOME=%1$s</string>
+  <string name="od_sdk_log_properties_updated">» Properties file updated successfully!</string>
+  <string name="od_sdk_log_properties_failed">WARN: Failed to write ide-environment.properties: %1$s</string>
+  <string name="od_sdk_log_installing_node">Installing %1$s</string>
+  <string name="od_sdk_log_install_node_failed">ERROR: Failed to install %1$s. Continuing next task.</string>
+  <string name="od_sdk_log_all_tasks_completed">All tasks completed. Environment is ready!</string>
+  <string name="od_sdk_log_no_file_selected">ERR: No file selected!</string>
+  <string name="od_sdk_log_preparing_offline">Preparing offline package…</string>
+  <string name="od_sdk_log_copying_file">» Copying selected file to HOME…</string>
+  <string name="od_sdk_log_file_copied">» File copied. Installing tar &amp; dpkg…</string>
+  <string name="od_sdk_log_executing_offline">Executing offline installation…</string>
+  <string name="od_sdk_log_error_with_msg">ERR: %1$s</string>
 </resources>

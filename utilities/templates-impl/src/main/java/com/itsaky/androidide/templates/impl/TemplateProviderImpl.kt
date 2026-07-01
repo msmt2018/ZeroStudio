@@ -174,6 +174,9 @@ class TemplateProviderImpl : ITemplateProvider {
         chaquopyLithoDemoProject(),
     )
 
+    // Performance templates (Baseline Profile) — currently not registered in the
+    // template picker; kept available for future activation.
+
     // Native build（C/C++/Cmake） template category
     registerTemplate(TemplateCategory.Native, imguiActivityProject())
   }

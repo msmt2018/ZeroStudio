@@ -6,6 +6,7 @@ import android.media.MediaFormat
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.util.Locale
 import java.util.zip.ZipInputStream
 
 /**
@@ -20,6 +21,62 @@ object FileValidator {
   // ============================================================================================
   //                                  图片 (Image) 判断
   // ============================================================================================
+
+  /**
+   * 已知可被 Android `BitmapFactory` 解码的静态图片后缀 (PNG / JPEG / WebP / GIF / BMP / …).
+   * 完整列表见 [isImage].  这里抽出来供 [isImageExtension] 使用, 避免与 [isImage] 重复
+   * 维护两套静态列表.  注意 [isImage] (走 BitmapFactory) 会做"实际解码"测试, 更严格,
+   * 但不支持 SVG / XML 矢量图, 所以 [ImagePreviewFragment] 走 [isImageExtension] 流程.
+   */
+  private val IMAGE_EXTENSION_SET: Set<String> = setOf(
+    // Raster
+    "png", "jpg", "jpeg", "jpe", "jfif",
+    "webp", "gif", "bmp", "dib",
+    "heif", "heic", "hif",
+    "tiff", "tif", "ico", "cur",
+    "apng", "avif", "jp2", "j2k", "jpf", "jpx",
+    "wbmp",
+    // Vector — extension-only check, no decoding here
+    "svg", "svgz",
+    // Android vector drawable: extension is .xml, but the file is XML, so the consumer
+    // (ImagePreviewFragment) must additionally sniff the content for a `<vector>` root
+    // to avoid catching AndroidManifest.xml / layout XMLs.  We accept .xml here as a
+    // hint; the caller decides what to do with the result.
+    "xml",
+  )
+
+  /**
+   * Cheap, extension-only image check.  Returns true for any path whose extension matches
+   * the [IMAGE_EXTENSION_SET] (case-insensitive).  Unlike [isImage], does NOT touch the
+   * file content — safe to call from the main thread / on every keystroke.
+   *
+   * Note: For `.xml` this only returns true if you pass an XML file that *might* be a
+   * vector drawable.  Use [isLikelyAndroidVector] to confirm via content sniff.
+   */
+  @JvmStatic
+  fun isImageExtension(path: String?): Boolean {
+    if (path.isNullOrEmpty()) return false
+    val ext = path.substringAfterLast('.', missingDelimiterValue = "").lowercase(Locale.ROOT)
+    return ext in IMAGE_EXTENSION_SET
+  }
+
+  /**
+   * Content sniff: returns true if [file] looks like an Android vector drawable XML
+   * (starts with `<vector` or `<animated-vector`).  Reads up to 8 lines from the head
+   * of the file.  Callers should use this AFTER [isImageExtension] to filter `.xml`
+   * files that aren't actually vector drawables (AndroidManifest.xml, layouts, etc.).
+   */
+  @JvmStatic
+  fun isLikelyAndroidVector(file: File?): Boolean {
+    if (file == null || !file.exists() || !file.isFile || file.length() == 0L) return false
+    return runCatching {
+      file.useLines { seq ->
+        seq.take(8).joinToString("\n").let { head ->
+          head.contains("<vector") || head.contains("<animated-vector")
+        }
+      }
+    }.getOrDefault(false)
+  }
 
   /** 判断是否为图片 原理：请求系统解码器读取图片尺寸。如果能读出宽/高，说明是合法的图片。 */
   fun isImage(file: File?): Boolean {

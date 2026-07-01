@@ -18,6 +18,7 @@
 package com.itsaky.androidide.templates.base.modules.android
 
 import com.itsaky.androidide.templates.ModuleTemplate
+import com.itsaky.androidide.templates.ModuleTemplateData
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateConfigurator
 import com.itsaky.androidide.templates.base.ProjectTemplateBuilder
@@ -74,6 +75,72 @@ inline fun ProjectTemplateBuilder.defaultAppModule(
             if (addAndroidX) {
               baseAndroidXDependencies()
             }
+
+            block()
+          }
+          .build() as ModuleTemplate
+
+  modules.add(module)
+}
+
+/**
+ * Adds an Android Library module to the project.
+ *
+ * Unlike [defaultAppModule] (which is tied to the project-level `defModule` data), this helper
+ * is intended for **additional** library modules such as a `:baselineprofile` module. It
+ * registers a fresh [AndroidModuleTemplateBuilder] in the project's internal module lists so its
+ * dependencies and metadata participate in `libs.versions.toml` generation.
+ *
+ * The caller is expected to provide a fully constructed [ModuleTemplateData] describing the
+ * module (name, package, SDK, NDK, language, etc.) and a [block] to further configure the builder
+ * (e.g. dependencies, custom `postRecipe`).
+ *
+ * Example:
+ * ```
+ * androidLibraryModule(
+ *     name = ":baselineprofile",
+ *     moduleData = ModuleTemplateData(
+ *         name = ":baselineprofile",
+ *         appName = null,
+ *         packageName = data.packageName,
+ *         projectDir = data.moduleNameToDir(":baselineprofile"),
+ *         type = ModuleType.AndroidLibrary,
+ *         language = Language.Kotlin,
+ *         minSdk = Sdk.Lollipop,
+ *         ndkVersion = data.ndkVersion,
+ *         cmakeVersion = data.cmakeVersion,
+ *     ),
+ * ) {
+ *   isBaselineProfileModule = true
+ *   postRecipe = { /* custom file writes */ }
+ *   addDependency(/* ... */)
+ * }
+ * ```
+ *
+ * @param name The Gradle name of the module (e.g. `":baselineprofile"`).
+ * @param moduleData The template data used to render the module directory and source files.
+ * @param block Optional configuration block applied to the underlying
+ *   [AndroidModuleTemplateBuilder] (dependencies, flags, custom recipes, ...).
+ *
+ * @author android_zero
+ */
+inline fun ProjectTemplateBuilder.androidLibraryModule(
+    name: String,
+    moduleData: ModuleTemplateData,
+    crossinline block: AndroidModuleTemplateConfigurator = {},
+) {
+  val module =
+      AndroidModuleTemplateBuilder()
+          .apply {
+            projectBuilder = this@androidLibraryModule
+
+            this@androidLibraryModule.moduleBuilders.add(this)
+
+            _name = name
+            templateName = 0
+            thumb = 0
+
+            preRecipe = commonPreRecipe { moduleData }
 
             block()
           }

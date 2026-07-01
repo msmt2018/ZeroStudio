@@ -139,6 +139,17 @@ abstract class BaseEditorActivity :
   // 改成"懒属性 + 实时从 view 读"是唯一稳的写法.
   protected val editorBottomSheet: BottomSheetBehavior<out View?>?
     get() = _binding?.let { BottomSheetBehavior.from(it.content.bottomSheet) }
+
+  /**
+   * The symbol input view (AdvancedSymbolInputView) at the bottom of the editor.
+   * It is overlaid on top of the bottom of the editor view when the IME is shown
+   * (i.e. when the IDE bottom sheet is collapsed to its peek height). The view
+   * is exposed so that other components (e.g. [com.itsaky.androidide.ui.CodeEditorView])
+   * can track its height and use it to position the cursor line correctly when
+   * honoring the "上 / 中 / 下" cursor scroll preferences.
+   */
+  val symbolInputView: View?
+    get() = _binding?.content?.bottomSheet?.binding?.externalSymbolInputView
   protected val memoryUsageWatcher = MemoryUsageWatcher()
   protected val pidToDatasetIdxMap = MutableIntIntMap(initialCapacity = 3)
   

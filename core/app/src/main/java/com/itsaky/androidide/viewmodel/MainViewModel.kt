@@ -148,12 +148,12 @@ class MainViewModel : ViewModel() {
         return@launch
       }
 
-      if (GeneralPreferences.confirmProjectOpen) {
-        _mainEvents.emit(MainEvent.RequestConfirmOpen(project))
-      } else {
-        withContext(Dispatchers.IO) { IProjectManager.getInstance().openProject(project) }
-        _mainEvents.emit(MainEvent.OpenProjectSuccess(project))
-      }
+      // Always ask the user before auto-opening the last project. The previous
+      // behavior (open directly) could cause noticeable UI/thread hitches while
+      // the project was being loaded in the background, and during that window
+      // the user could still tap into Settings or another project, amplifying
+      // the perceived lag. Showing a confirm dialog up front avoids that race.
+      _mainEvents.emit(MainEvent.RequestConfirmOpen(project))
     }
   }
 }

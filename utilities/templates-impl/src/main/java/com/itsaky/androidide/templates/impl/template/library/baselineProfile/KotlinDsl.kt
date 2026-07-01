@@ -1,69 +1,66 @@
-/*
- *  This file is part of AndroidIDE.
- *
- *  AndroidIDE is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  AndroidIDE is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-package com.itsaky.androidide.templates.impl.noAndroidXActivity
+package com.itsaky.androidide.templates.impl.template.library.baselineProfile
 
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
-internal fun baselineProfileKtDsl(packageName: String, activityClass: String): String =
-    """
+/**
+ * 生成 `:baselineprofile` 模块的 `build.gradle.kts`。
+ *
+ * 关键点：
+ *  - 使用 `com.android.test` 而非 `com.android.library` 插件（android.test 模块专属）。
+ *  - 应用 `androidx.baselineprofile` 插件以自动生成 baseline-prof.txt。
+ *  - 依赖全部走 `libs.xxx.xxx` 引用（要求项目启用 toml）。
+ *  - `targetProjectPath` 指向待测的 `:app` 模块。
+ *
+ * 注意：Groovy 版本见 [baselineProfileGroovyDsl]（在 GroovyDsl.kt 中）。
+ * 两侧字段必须保持同步；如果修改本文件，请同步修改 GroovyDsl.kt。
+ */
+internal fun AndroidModuleTemplateBuilder.baselineProfileKtDsl(): String {
+  val namespace = data.packageName
+  val compileSdk = data.versions.compileSdk.api
+  val target = ":app"
+  return """
 plugins {
-  alias(libs.plugins.android.test)
-  alias(libs.plugins.baselineprofile)
+    alias(libs.plugins.android.test)
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
-  namespace = "${data.packageName}"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+    namespace = "$namespace"
+    compileSdk = $compileSdk
 
-  compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-  }
+    targetProjectPath = "$target"
 
-  defaultConfig {
-    minSdk = ${data.versions.minSdk.api}
-    targetSdk = ${data.versions.targetSdk.api}
+    defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
-    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-  }
-
-  targetProjectPath = ":app"
+    testOptions {
+        managedDevices {
+            // 在此列出要在 CI 上运行的设备
+            // localDevices {
+            //     create("pixel6") {
+            //         device = "Pixel 6"
+            //         apiLevel = 31
+            //     }
+            // }
+        }
+    }
 }
 
-// This is the configuration block for the Baseline Profile plugin.
-// You can specify to run the generators on a managed devices or connected devices.
-baselineProfile { useConnectedDevices = true }
+// 为 baselineprofile 插件指定入口生成器
+baselineProfile {
+    managedBenchmarkRules = listOf(
+        "$namespace.BaselineProfileGenerator",
+        "$namespace.StartupBenchmarks",
+    )
+}
 
 dependencies {
-  implementation(libs.androidx.benchmark.macro.junit4)
-  implementation(libs.androidx.espresso.core)
-  implementation(libs.androidx.junit)
-  implementation(libs.androidx.uiautomator)
+    implementation(libs.androidx.benchmark.macro.junit4)
+    implementation(libs.androidx.junit)
+    implementation(libs.androidx.espresso.core)
+    implementation(libs.androidx.uiautomator)
+    implementation(libs.androidx.profileinstaller)
 }
-
-androidComponents {
-  onVariants { v ->
-    val artifactsLoader = v.artifacts.getBuiltArtifactsLoader()
-    v.instrumentationRunnerArguments.put(
-        "targetAppId",
-        v.testedApks.map { artifactsLoader.load(it)?.applicationId },
-    )
-  }
+""".trimIndent()
 }
-"""
-        .trim()

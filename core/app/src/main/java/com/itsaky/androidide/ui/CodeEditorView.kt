@@ -22,7 +22,9 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Rect
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewTreeObserver
 import androidx.appcompat.widget.LinearLayoutCompat
 import androidx.core.view.isVisible
@@ -125,6 +127,9 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
   private var analysisJob: Job? = null
   private var isKeyboardVisible = false
   private var imeBottomInset = 0
+  private var bottomBarHeight = 0
+  private var bottomBarListener: View.OnLayoutChangeListener? = null
+  private var bottomBarListenerView: View? = null
   private val keyboardLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
     val editorView = _binding?.editor ?: return@OnGlobalLayoutListener
     val root = rootView ?: return@OnGlobalLayoutListener
@@ -136,19 +141,43 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
     isKeyboardVisible = keyboardNowVisible
     imeBottomInset = if (keyboardNowVisible) heightDiff.coerceAtLeast(0) else 0
 
-    if (editorView.paddingBottom != imeBottomInset) {
-      editorView.setPadding(
-          editorView.paddingLeft,
-          editorView.paddingTop,
-          editorView.paddingRight,
-          imeBottomInset,
-      )
-      editorView.invalidate()
-    }
+    // The editor view is already resized by the activity (contentCard.height =
+    // contentCardRealHeight - imeBottom), so applying an extra bottom padding here
+    // would double-count the IME and break the cursor scroll calculation
+    // (the visible height would be too small and the cursor would always snap to
+    // the very top regardless of the 上/中/下 preference). Skip the padding.
+    editorView.invalidate()
 
     if (transitionedToVisible) {
       editorView.post { adjustCursorLineForObscuredArea(editorView, forceImeMode = true) }
     }
+  }
+
+  /**
+   * Attach a layout listener to the symbol input view so that we can know how much
+   * of the editor's bottom area is overlapped by the symbol input toolbar when the
+   * IME is shown. The cursor scroll calculation needs this value to honor the
+   * "上 / 中 / 下" preferences: e.g. the "下" option should leave the cursor line
+   * 1-2 rows above the symbol input toolbar, not 3 rows above the IDE drawer's
+   * bottom edge.
+   */
+  @SuppressLint("ClickableViewAccessibility")
+  private fun bindBottomBarHeightListener() {
+    val activity = context as? BaseEditorActivity ?: return
+    val symbolInputView = activity.symbolInputView
+    if (symbolInputView == null || symbolInputView === bottomBarListenerView) return
+    // Remove any previous listener to avoid leaks.
+    bottomBarListenerView?.removeOnLayoutChangeListener(bottomBarListener)
+    bottomBarHeight = symbolInputView.height
+    val listener = View.OnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
+      val newHeight = bottom - top
+      if (newHeight != bottomBarHeight) {
+        bottomBarHeight = newHeight
+      }
+    }
+    symbolInputView.addOnLayoutChangeListener(listener)
+    bottomBarListenerView = symbolInputView
+    bottomBarListener = listener
   }
 
   private fun adjustCursorLineForObscuredArea(
@@ -165,7 +194,12 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
           if (!EditorPreferences.cursorVisibleAreaScroll) return
           EditorPreferences.cursorVisibleAreaScrollPosition
         }
-    val obscuredBottom = if (useImeMode) imeBottomInset else 0
+    // The editor view has already been resized by the activity (contentCard.height
+    // was set to contentCardRealHeight - imeBottom when the IME came up), so the
+    // editor's `height` itself no longer contains the IME area. The only thing we
+    // still need to subtract is the symbol input toolbar which is overlaid on top
+    // of the bottom of the editor view.
+    val obscuredBottom = if (useImeMode) bottomBarHeight else 0
     editorView.scrollCursorLineToVisiblePosition(cursor.rightLine, position, obscuredBottom)
   }
 
@@ -186,7 +220,8 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
           else ->
               (rowBottom - visibleHeight + rowHeight * CURSOR_BOTTOM_VISIBLE_MARGIN_ROWS)
                   .toFloat()
-        }.coerceIn(0f, getScrollMaxY().toFloat())
+        }
+            .coerceIn(0f, getScrollMaxY().toFloat())
     val deltaY = targetY - getOffsetY()
     if (deltaY > -1f && deltaY < 1f) {
       invalidate()
@@ -216,7 +251,7 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
   companion object {
 
     private val log = LoggerFactory.getLogger(CodeEditorView::class.java)
-    private const val CURSOR_BOTTOM_VISIBLE_MARGIN_ROWS = 3
+    private const val CURSOR_BOTTOM_VISIBLE_MARGIN_ROWS = 2
 
     @Volatile private var isTreeSitterLoaded = false
 
@@ -273,9 +308,31 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
 
     orientation = VERTICAL
 
+    // The editor takes the full available area; the search layout is then
+    // overlaid at the bottom of the editor so that the cursor line stays
+    // visible behind the search box. The search layout uses a FrameLayout
+    // (EditorSearchLayout itself is one) so we can position it with gravity.
     removeAllViews()
-    addView(binding.root, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
-    addView(searchLayout, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    val editorContainer = android.widget.FrameLayout(context)
+    editorContainer.addView(
+        binding.root,
+        android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+        ),
+    )
+    editorContainer.addView(
+        searchLayout,
+        android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            android.view.Gravity.BOTTOM,
+        ),
+    )
+    addView(
+        editorContainer,
+        LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f),
+    )
 
     readFileAndApplySelection(file, selection)
 
@@ -723,6 +780,7 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     viewTreeObserver.addOnGlobalLayoutListener(keyboardLayoutListener)
+    bindBottomBarHeightListener()
     if (!EventBus.getDefault().isRegistered(this)) {
       EventBus.getDefault().register(this)
     }
@@ -731,6 +789,9 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
   override fun onDetachedFromWindow() {
     super.onDetachedFromWindow()
     viewTreeObserver.removeOnGlobalLayoutListener(keyboardLayoutListener)
+    bottomBarListenerView?.removeOnLayoutChangeListener(bottomBarListener)
+    bottomBarListener = null
+    bottomBarListenerView = null
     EventBus.getDefault().unregister(this)
     autoSaveJob?.cancel()
   }

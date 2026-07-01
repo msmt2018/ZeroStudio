@@ -17,6 +17,7 @@
 
 package com.itsaky.androidide.templates.impl.composeActivity
 
+import android.os.Build
 import com.itsaky.androidide.templates.base.AndroidModuleTemplateBuilder
 
 fun AndroidModuleTemplateBuilder.composeActivitySrc() =

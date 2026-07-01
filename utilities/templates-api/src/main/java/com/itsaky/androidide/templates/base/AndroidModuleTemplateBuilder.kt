@@ -52,6 +52,20 @@ open class AndroidModuleTemplateBuilder : ModuleTemplateBuilder() {
       }
     }
 
+  /**
+   * Set whether this module is a baseline profile module or not. When set, the project builder
+   * will be notified so that the `android-test` and `baselineprofile` plugins are added to the
+   * generated `libs.versions.toml`.
+   */
+  var isBaselineProfileModule = false
+    set(value) {
+      field = value
+      // Automatically enable baseline profile support in the project builder if available
+      if (value && projectBuilder != null) {
+        projectBuilder?.enableBaselineProfileSupport()
+      }
+    }
+
   var context: Context? = null
   var projectBuilder: ProjectTemplateBuilder? = null
 

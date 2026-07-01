@@ -51,6 +51,10 @@ class ProjectTemplateBuilder :
   var hasComposeModules = false
     private set
 
+  // Flag to track if any modules use the baseline profile plugin
+  var hasBaselineProfileModules = false
+    private set
+
   @PublishedApi internal val defModuleTemplate: ModuleTemplate? = null
 
   @PublishedApi internal val modules = mutableListOf<ModuleTemplate>()
@@ -77,6 +81,15 @@ class ProjectTemplateBuilder :
    */
   fun enableComposeSupport() {
     hasComposeModules = true
+  }
+
+  /**
+   * Enable baseline profile support for the project. This will add the
+   * `androidx.baselineprofile` and `com.android.test` plugins to the generated
+   * `libs.versions.toml` so that modules can use them.
+   */
+  fun enableBaselineProfileSupport() {
+    hasBaselineProfileModules = true
   }
 
   /**
@@ -216,6 +229,17 @@ class ProjectTemplateBuilder :
           "{ id = \"org.jetbrains.kotlin.plugin.compose\", version.ref = \"kotlin\" }"
     }
 
+    if (hasBaselineProfileModules) {
+      // android-test 插件沿用 agp 版本
+      plugins["android-test"] = "{ id = \"com.android.test\", version.ref = \"agp\" }"
+      plugins["baselineprofile"] =
+          "{ id = \"androidx.baselineprofile\", version.ref = \"baselineprofile\" }"
+      // 若版本尚未注入（避免覆盖已有版本号），写入一个默认版本
+      if (!versions.containsKey("baselineprofile")) {
+        versions["baselineprofile"] = "1.2.4"
+      }
+    }
+
     // 收集子模块注册的所有依赖项并去重
     val allDeps = mutableSetOf<Dependency>()
     moduleBuilders.forEach { builder ->
@@ -248,15 +272,20 @@ class ProjectTemplateBuilder :
                 append(dep.artifact.replace(".", "-"))
               }
 
+      // 跳过已经存在的别名（目标 sdk/库已写入 -> 跳过到下一个）
+      if (libraries.containsKey(alias)) return@forEach
+
       if (dep.version != null) {
         // 生成 VersionRef 引用名称
-        // 转为小驼峰命名，如：androidxCore, googleAndroidMaterial, jetbrainsKotlinxCoroutines
+        // 优先使用依赖自带的 versionRefName（与已有 toml 命名一致）；
+        // 否则转为小驼峰命名，如：androidxCore, googleAndroidMaterial, jetbrainsKotlinxCoroutines
         var versionRef =
-            sigGroupParts
-                .mapIndexed { index, s ->
-                  if (index == 0) s else s.replaceFirstChar { it.uppercase() }
-                }
-                .joinToString("")
+            dep.versionRefName
+                ?: sigGroupParts
+                    .mapIndexed { index, s ->
+                      if (index == 0) s else s.replaceFirstChar { it.uppercase() }
+                    }
+                    .joinToString("")
 
         // 冲突处理 (Collision Resolution)：
         // 如果生成的 versionRef 已经存在，并且记录的版本号与当前依赖版本不同，则附加 artifact 的名称以作区分

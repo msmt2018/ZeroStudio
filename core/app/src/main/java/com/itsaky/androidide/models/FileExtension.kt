@@ -263,6 +263,42 @@ enum class FileExtension(
   ODEX_FILE("odex", R.drawable.ic_file_type_compressed_android),
   VDEX_FILE("vdex", R.drawable.ic_file_type_compressed_android),
 
+  // === Images (raster + animated + vector) ===
+  // Raster
+  PNG_IMAGE("png", R.drawable.ic_file_type_image),
+  JPG_IMAGE("jpg", R.drawable.ic_file_type_image),
+  JPEG_IMAGE("jpeg", R.drawable.ic_file_type_image),
+  JPE_IMAGE("jpe", R.drawable.ic_file_type_image),
+  JFIF_IMAGE("jfif", R.drawable.ic_file_type_image),
+  WEBP_IMAGE("webp", R.drawable.ic_file_type_image),
+  BMP_IMAGE("bmp", R.drawable.ic_file_type_image),
+  DIB_IMAGE("dib", R.drawable.ic_file_type_image),
+  HEIF_IMAGE("heif", R.drawable.ic_file_type_image),
+  HEIC_IMAGE("heic", R.drawable.ic_file_type_image),
+  HIF_IMAGE("hif", R.drawable.ic_file_type_image),
+  TIFF_IMAGE("tiff", R.drawable.ic_file_type_image),
+  TIF_IMAGE("tif", R.drawable.ic_file_type_image),
+  ICO_IMAGE("ico", R.drawable.ic_file_type_image),
+  CUR_IMAGE("cur", R.drawable.ic_file_type_image),
+  APNG_IMAGE("apng", R.drawable.ic_file_type_image),
+  AVIF_IMAGE("avif", R.drawable.ic_file_type_image),
+  JP2_IMAGE("jp2", R.drawable.ic_file_type_image),
+  J2K_IMAGE("j2k", R.drawable.ic_file_type_image),
+  JPF_IMAGE("jpf", R.drawable.ic_file_type_image),
+  JPX_IMAGE("jpx", R.drawable.ic_file_type_image),
+  WBMP_IMAGE("wbmp", R.drawable.ic_file_type_image),
+  // Animated
+  GIF_IMAGE("gif", R.drawable.ic_file_type_image),
+  // Vector
+  SVG_IMAGE("svg", R.drawable.ic_file_type_image),
+  SVGZ_IMAGE("svgz", R.drawable.ic_file_type_image),
+  // Android vector drawable — also matches generic .xml files.  The image preview
+  // fragment distinguishes by looking at file content (`<vector>` root).  We do NOT
+  // add a separate enum entry for .xml because FileExtension uses extension as the
+  // key (case-insensitive) and AndroidManifest.xml and friends already map to
+  // FileExtension.XML — adding another would silently override the icon for
+  // every XML file in the project tree.  See ImagePreviewFragment.supports().
+
   // 各操作系统的各类压缩包，二进制压缩包，软件包，程序包
   ZIP_FILE("zip", R.drawable.ic_file_type_compressed_archive),
   RAR_FILE("rar", R.drawable.ic_file_type_compressed_archive),
