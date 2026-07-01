@@ -271,19 +271,27 @@ class PreviewRenderEngine(
             null
         }
 
-        // 保存 lastRender 让 [attach] 在新 view 上重放. 用 trySetSize 0 防止在
-        // args 是空数组时大小异常 (虽然没影响, 但跟 args 实际大小对齐).
-        lastRender = LastRender(
-            className = className,
-            functionName = functionName,
-            args = args.copyOf(),
-            previewConfig = previewConfig,
-            orientation = orientation,
-        )
+        // 保存 lastRender 让 [attach] 在新 view 上重放. args 用 copyOf() 防止外部
+        // Array 被原地修改; [LastRender] 持有独立副本. replay 时不再覆盖, 由 [fromReplay]
+        // 标志守卫 (attach 主动 replay 时 fromReplay=true, 保留 activity 上次 setContent
+        // 时记录的 lastRender, 避免在 applyContent 之前的覆盖时序差导致 view 抖动).
+        if (!fromReplay) {
+            lastRender = LastRender(
+                previewDex = previewDex,
+                projectDex = projectDex,
+                className = className,
+                functionName = functionName,
+                args = args.copyOf(),
+                previewConfig = previewConfig,
+                orientation = orientation,
+            )
+        }
 
         // 4) setContent + 通过 currentComposer 注入 (v3.4: 应用 PreviewConfig; v3.5: 应用 orientation)
         applyContent(view, lastRender!!, clazz, instance)
-        LOG.info("Rendered composable: {}#{} (orientation={})", className, functionName, orientation)
+        if (!fromReplay) {
+            LOG.info("Rendered composable: {}#{} (orientation={})", className, functionName, orientation)
+        }
     }
 
     /**
@@ -349,32 +357,8 @@ class PreviewRenderEngine(
                         color = MaterialTheme.colorScheme.background,
                     ) {
                         RenderComposable(invoker, effectiveClass, effectiveInstance, saved.functionName, saved.args)
-                    }
                 }
             }
-        }
-        // 【v3.6】保存渲染参数, 供 [attach] 在新 ComposeView 上重放. 必须在
-        // setContent 成功 (走到这里说明 clazz / instance 都 OK) 之后才保存,
-        // 失败 (return 在 loadClass/instantiate 处) 时保留旧 lastRender, 不会
-        // 把错误的 (Class not found) 状态缓存下来.
-        if (!fromReplay) {
-            lastRender = LastRender(
-                previewDex = previewDex,
-                projectDex = projectDex,
-                className = className,
-                functionName = functionName,
-                args = args,
-                previewConfig = previewConfig,
-                orientation = orientation,
-            )
-        }
-        if (!fromReplay) {
-            LOG.info(
-                "Rendered composable: {}#{} (orientation={})",
-                className,
-                functionName,
-                orientation,
-            )
         }
     }
 
