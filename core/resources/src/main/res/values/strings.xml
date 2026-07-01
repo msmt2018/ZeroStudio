@@ -827,6 +827,9 @@
     <string name="title_template_description_chaquopy_xml">Chaquopy XML template with Python console bridge, manifest, and resources.</string>
     <string name="title_template_description_chaquopy_compose">Chaquopy Compose template with Python runtime bridge and Compose host activity.</string>
     <string name="title_template_description_chaquopy_litho">Chaquopy Litho template with Python runtime bridge and Litho-ready dependencies.</string>
+
+    <string name="template_baseline_profile" translatable="false">Baseline Profile</string>
+    <string name="title_template_description_baseline_profile">Baseline Profile project: includes :app and :baselineprofile modules for generating and verifying startup profiles.</string>
   <string name="git_token_credential_title">Token Credentials</string>
   <string name="git_token_credential_subtitle">Manage HTTPS token/secret</string>
   <string name="git_operations_section">Git Operations</string>

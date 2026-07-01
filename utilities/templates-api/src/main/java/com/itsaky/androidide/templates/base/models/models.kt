@@ -43,6 +43,7 @@ fun parseDependency(
     configuration: DependencyConfiguration = Implementation,
     isPlatform: Boolean = false,
     tomlAlias: String? = null,
+    versionRefName: String? = null,
 ): Dependency {
   val split = coordinates.split(':')
   if (isPlatform) {
@@ -54,5 +55,5 @@ fun parseDependency(
   }
 
   val version = if (split.size == 3) split[2] else null
-  return Dependency(configuration, split[0], split[1], version, tomlAlias)
+  return Dependency(configuration, split[0], split[1], version, tomlAlias, versionRefName)
 }

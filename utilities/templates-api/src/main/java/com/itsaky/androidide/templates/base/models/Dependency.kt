@@ -25,6 +25,7 @@ data class Dependency(
     val artifact: String,
     val version: String?,
     val tomlAlias: String? = null,
+    val versionRefName: String? = null,
 ) {
   fun value(useToml: Boolean, useKts: Boolean): String {
     if (useToml && tomlAlias != null) {
