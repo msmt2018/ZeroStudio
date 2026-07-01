@@ -357,6 +357,7 @@ class PreviewRenderEngine(
                         color = MaterialTheme.colorScheme.background,
                     ) {
                         RenderComposable(invoker, effectiveClass, effectiveInstance, saved.functionName, saved.args)
+                    }
                 }
             }
         }
