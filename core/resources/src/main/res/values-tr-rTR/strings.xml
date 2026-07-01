@@ -810,7 +810,7 @@
   <!-- SDK installation / configuration onboarding -->
   <string name="od_sdk_step_environment">ADIM  •  ORTAM</string>
   <string name="od_sdk_title">SDK Kurulumu ve Yapılandırması</string>
-  <string name="od_sdk_subtitle">IDE'nin düzgün çalışması için geliştirme araçlarını yükleyin</string>
+  <string name="od_sdk_subtitle">"IDE'nin düzgün çalışması için geliştirme araçlarını yükleyin"</string>
   <string name="od_sdk_abi_badge">ABI  %1$s</string>
   <string name="od_sdk_network_ok">Ağ bağlı</string>
   <string name="od_sdk_loading">SDK listesi alınıyor…</string>
@@ -821,8 +821,8 @@
   <string name="od_sdk_additional_configs">Ek Yapılandırmalar</string>
   <string name="od_sdk_install_git">Git Yükle</string>
   <string name="od_sdk_install_ssh">SSH Yükle</string>
-  <string name="od_sdk_fix_ndk">NDK'yı Onar</string>
-  <string name="od_sdk_fix_cmake">CMake'i Onar</string>
+  <string name="od_sdk_fix_ndk">"NDK'yı Onar"</string>
+  <string name="od_sdk_fix_cmake">"CMake'i Onar"</string>
   <string name="od_sdk_github_mirror">GitHub Yansısı</string>
   <string name="od_sdk_offline_install">Çevrimdışı Yükleme</string>
   <string name="od_sdk_reload">Yeniden Yükle</string>
