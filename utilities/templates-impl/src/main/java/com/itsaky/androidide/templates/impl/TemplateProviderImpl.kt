@@ -36,7 +36,6 @@ import com.itsaky.androidide.templates.impl.navDrawerActivity.navDrawerActivityP
 import com.itsaky.androidide.templates.impl.noActivity.*
 import com.itsaky.androidide.templates.impl.noAndroidXActivity.noAndroidXActivityProject
 import com.itsaky.androidide.templates.impl.tabbedActivity.tabbedActivityProject
-import com.itsaky.androidide.templates.impl.template.library.baselineProfile.baselineProfileLibraryProject
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
@@ -175,8 +174,8 @@ class TemplateProviderImpl : ITemplateProvider {
         chaquopyLithoDemoProject(),
     )
 
-    // Performance templates (Baseline Profile)
-    registerTemplate(TemplateCategory.Performance, baselineProfileLibraryProject())
+    // Performance templates (Baseline Profile) — currently not registered in the
+    // template picker; kept available for future activation.
 
     // Native build（C/C++/Cmake） template category
     registerTemplate(TemplateCategory.Native, imguiActivityProject())

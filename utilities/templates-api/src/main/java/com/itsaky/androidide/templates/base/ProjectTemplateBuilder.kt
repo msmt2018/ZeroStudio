@@ -273,7 +273,7 @@ class ProjectTemplateBuilder :
               }
 
       // 跳过已经存在的别名（目标 sdk/库已写入 -> 跳过到下一个）
-      if (libraries.containsKey(alias)) continue
+      if (libraries.containsKey(alias)) return@forEach
 
       if (dep.version != null) {
         // 生成 VersionRef 引用名称

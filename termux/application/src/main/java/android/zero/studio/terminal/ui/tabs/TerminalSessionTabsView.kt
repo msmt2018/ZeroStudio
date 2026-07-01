@@ -137,7 +137,13 @@ constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
           showWorkingDirectoryDialog()
           true
         }
-        else -> fragment?.onOptionsItemSelected(item) ?: false
+        else -> {
+          // Fragment.onOptionsItemSelected is deprecated in AndroidX, but
+          // no stable MenuHost replacement exists in this code path yet.
+          @Suppress("DEPRECATION")
+          val handled = fragment?.onOptionsItemSelected(item) ?: false
+          handled
+        }
       }
     }
     popup.show()
