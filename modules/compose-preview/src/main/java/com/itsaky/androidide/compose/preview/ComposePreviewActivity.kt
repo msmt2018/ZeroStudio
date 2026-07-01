@@ -281,8 +281,15 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                 System.identityHashCode(existing.container),
                 System.identityHashCode(container),
             )
+            // 关键: 把旧 engine 的 lastRender 复制到新 engine, 否则新 ComposeView
+            // 会因为没人调 setContent 而空白 (黑屏 bug). 这是 fix v3.2 "切 deviceSim
+            // / 切 profile 黑屏" 的根因.
+            val savedLastRender = existing.lastRender
             existing.detach()
-            renderEngine = PreviewRenderEngine(this, container).also { it.attach() }
+            val newEngine = PreviewRenderEngine(this, container)
+            newEngine.lastRender = savedLastRender
+            newEngine.attach()
+            renderEngine = newEngine
         }
     }
 

@@ -140,6 +140,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
       return
     }
 
+    // Markdown 预览
     FragmentTabRegistry.register(
       FragmentTabEntry(
         id = "markdown_preview",
@@ -149,6 +150,28 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
         fileExtensions = MarkdownPreviewFragment.SUPPORTED_EXTENSIONS,
         order = 100,
         fragmentFactory = { MarkdownPreviewFragment() }
+      )
+    )
+
+    // 图像 / 矢量图 / SVG / GIF / Android 矢量图 预览 fragment
+    // 走 ImagePreviewFragment.supports() 判断 (扩展名 + XML 内容嗅探 <vector>),
+    // 不像 markdown 那样用 fileExtensions 静态列表, 因为 .xml 既可能是矢量图也
+    // 可能是 AndroidManifest / layout.  ImagePreviewFragment 自己处理这个判断.
+    // FragmentTabManager.openTab(fragmentId, filePath) 在创建 fragment 时会
+    // 把 filePath 放到 arguments["file_path"], 跟 markdown 流程一致.
+    FragmentTabRegistry.register(
+      FragmentTabEntry(
+        id = com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment.TAG,
+        title = com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment.TAB_TITLE,
+        iconRes = com.itsaky.androidide.resources.R.drawable.ic_file_type_image,
+        fragmentClass = com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment::class.java,
+        // 静态后缀列表 (raster + svg). .xml 走 content 嗅探, 在 fragmentFactory 里做.
+        fileExtensions = com.itsaky.androidide.fragments.editor.image.ImageFormat.RASTER_DECODER_FORMATS +
+          com.itsaky.androidide.fragments.editor.image.ImageFormat.SVG_FORMATS,
+        order = 110,
+        // factory 不接 filePath, EditorFragmentTabManager.openTab() 之后会自己
+        // 用 ARG_FILE_PATH = "file_path" 把 filePath 塞到 fragment.arguments.
+        fragmentFactory = { com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment() },
       )
     )
   }

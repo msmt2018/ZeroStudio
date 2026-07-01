@@ -91,24 +91,52 @@ class PreviewRenderEngine(
     private var composeView: ComposeView? = null
 
     /**
+     * 上一次 render 调用保存的参数. 当 [attach] 重建 ComposeView (fragment 重建 /
+     * deviceSim 切换导致 AndroidView 重建容器) 时, 用来在新 view 上重新 setContent.
+     * 不保存 dexFile / projectDex — 重新加载会浪费 IO, 但 [render] 本身就是重新加载.
+     *
+     * 设为 internal 让 [ComposePreviewActivity.attachPreviewContainer] 能在
+     * 切 container 重建 engine 时把旧 engine 的 lastRender 复制到新 engine,
+     * 避免新 ComposeView 空白.
+     */
+    @Volatile
+    internal var lastRender: LastRender? = null
+
+    private data class LastRender(
+        val className: String,
+        val functionName: String,
+        val args: Array<out Any?>,
+        val previewConfig: PreviewConfig?,
+        val orientation: com.itsaky.androidide.compose.preview.ui.DeviceOrientation,
+    )
+
+    /**
      * 把 [ComposeView] 安装到 [container] 中, 后续 [render] 的内容都会写到这个 view.
      * 必须在 Activity.onCreate 之后 (主线程) 调用一次.
      *
-     * 重复调用安全, 内部会先 detach 旧的.
+     * 重复调用安全 — 内部会先 detach 旧的 composeView, 然后 [lastRender] 非空时
+     * 立即把内容 setContent 到新 view. 这是修复 v3.2 之后 "切 deviceSim / 切 profile /
+     * fragment 重建后只剩空白 ComposeView" bug 的关键: 旧 view 已经随旧 container
+     * 一起被释放, 新 view 必须重新 setContent 才会有内容.
      */
     fun attach() {
-        if (composeView != null) return
-        // 【v3.2】如果 container 已经有别的 engine 添加的 ComposeView, 先清理.
-        // 切 deviceSim / profile 时旧 engine 已经被 Activity.detach() 释放, 但
-        // 旧 ComposeView 可能仍残留 (Activity 是 main thread, GC 还没跑).
-        repeat(container.childCount) { i ->
+        if (composeView != null) {
+            // 同一 container 重复 attach: 不重建, 让 [render] 自己 setContent.
+            LOG.debug("attach() skipped - composeView already set (id={})", container.id)
+            return
+        }
+
+        // 【v3.2 修复】清掉 container 里残留的 ComposeView (其它 engine / 上一
+        // 次 fragment 留下来的). 注意: removeAllViews 会立刻让被移除 view 的
+        // composition 失效, 不能复用 — 必须新建一个.
+        for (i in container.childCount - 1 downTo 0) {
             val child = container.getChildAt(i)
             if (child is ComposeView) {
                 container.removeViewAt(i)
-                LOG.debug("Removed orphan ComposeView from container before attach")
-                return@repeat
+                LOG.debug("Removed orphan ComposeView (was at index {}) before attach", i)
             }
         }
+
         val view = ComposeView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -122,16 +150,28 @@ class PreviewRenderEngine(
         container.addView(view)
         composeView = view
         LOG.info("PreviewRenderEngine attached to container (id={})", container.id)
+
+        // 关键: 如果 attach 之前已经 render 过一次 (fragment 重建 / 切 deviceSim
+        // 都会触发), 用 lastRender 在新 view 上重放 setContent. 不这样做的话新
+        // ComposeView 永远是空白的, 用户看到 "黑屏 / 空白 compose UI" bug.
+        lastRender?.let { saved ->
+            LOG.info(
+                "Replaying last render on freshly attached ComposeView: {}#{}",
+                saved.className, saved.functionName,
+            )
+            applyContent(view, saved)
+        }
     }
 
     /**
-     * 释放所有资源: 清空 DexRuntime, 把 ComposeView 从 container 移除.
+     * 释放所有资源: 清空 DexRuntime, 把 ComposeView 从 container 移除, 清掉 lastRender.
      * Activity.onDestroy 时调用.
      */
     fun detach() {
         activeRuntime.getAndSet(null)?.release()
         composeView?.let { container.removeView(it) }
         composeView = null
+        lastRender = null
         LOG.info("PreviewRenderEngine detached")
     }
 
@@ -209,15 +249,69 @@ class PreviewRenderEngine(
             null
         }
 
+        // 保存 lastRender 让 [attach] 在新 view 上重放. 用 trySetSize 0 防止在
+        // args 是空数组时大小异常 (虽然没影响, 但跟 args 实际大小对齐).
+        lastRender = LastRender(
+            className = className,
+            functionName = functionName,
+            args = args.copyOf(),
+            previewConfig = previewConfig,
+            orientation = orientation,
+        )
+
         // 4) setContent + 通过 currentComposer 注入 (v3.4: 应用 PreviewConfig; v3.5: 应用 orientation)
+        applyContent(view, lastRender!!, clazz, instance)
+        LOG.info("Rendered composable: {}#{} (orientation={})", className, functionName, orientation)
+    }
+
+    /**
+     * 真正在 [view] 上 setContent 的 helper. 拆出来是为了让 [attach] 重建
+     * ComposeView 后能用 [LastRender] 重放, 修复 "fragment 重建后空白" bug.
+     */
+    private fun applyContent(
+        view: ComposeView,
+        saved: LastRender,
+        clazz: Class<*>? = null,
+        instance: Any? = null,
+    ) {
+        // 当 attach 重放时 clazz / instance 没法从 saved 还原 — 用反射再 loadClass.
+        // 走 saved.dex 走不通 (我们没存 dexFile), 只能依赖 activeRuntime.
+        val effectiveClass: Class<*>?
+        val effectiveInstance: Any?
+        if (clazz != null) {
+            effectiveClass = clazz
+            effectiveInstance = instance
+        } else {
+            val runtime = activeRuntime.get() ?: run {
+                showError(view, "Replay failed: no active DexRuntime (was the engine detached?)")
+                return
+            }
+            effectiveClass = runtime.loadClass(saved.className)
+            if (effectiveClass == null) {
+                showError(view, "Replay failed: class not found ${saved.className}")
+                return
+            }
+            effectiveInstance = if (effectiveClass.declaredMethods
+                .any { !java.lang.reflect.Modifier.isStatic(it.modifiers) && it.name == saved.functionName }
+            ) {
+                try {
+                    effectiveClass.getDeclaredConstructor().newInstance()
+                } catch (e: Throwable) {
+                    null
+                }
+            } else {
+                null
+            }
+        }
+
         view.setContent {
             // 【v3.5】用 LocalConfiguration 注入 orientation. Compose 在
             // BoxWithConstraints / Modifier.aspectRatio / LocalConfiguration.current.orientation
             // 处能正确响应, preview 内容按 orientation 重新布局.
             val configuration = LocalConfiguration.current
-            val orientedConfiguration = remember(configuration, orientation) {
+            val orientedConfiguration = remember(configuration, saved.orientation) {
                 val updated = android.content.res.Configuration(configuration)
-                updated.orientation = if (orientation.isLandscape) {
+                updated.orientation = if (saved.orientation.isLandscape) {
                     android.content.res.Configuration.ORIENTATION_LANDSCAPE
                 } else {
                     android.content.res.Configuration.ORIENTATION_PORTRAIT
@@ -227,17 +321,16 @@ class PreviewRenderEngine(
             CompositionLocalProvider(
                 LocalConfiguration provides orientedConfiguration,
             ) {
-                PreviewConfigTheme(previewConfig) {
+                PreviewConfigTheme(saved.previewConfig) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background,
                     ) {
-                        RenderComposable(invoker, clazz, instance, functionName, args)
+                        RenderComposable(invoker, effectiveClass, effectiveInstance, saved.functionName, saved.args)
                     }
                 }
             }
         }
-        LOG.info("Rendered composable: {}#{} (orientation={})", className, functionName, orientation)
     }
 
     /**
