@@ -802,7 +802,7 @@
   <string name="od_sdk_network_ok">Мережа підключена</string>
   <string name="od_sdk_loading">Отримання списку SDK…</string>
   <string name="od_sdk_empty">Немає доступних компонентів</string>
-  <string name="od_sdk_required">ОБОВ'ЯЗКОВО</string>
+  <string name="od_sdk_required">"ОБОВ'ЯЗКОВО"</string>
   <string name="od_sdk_selected_count">Вибрано: %1$d</string>
   <string name="od_sdk_selected_of_total">%1$d / %2$d</string>
   <string name="od_sdk_additional_configs">Додаткові конфігурації</string>
