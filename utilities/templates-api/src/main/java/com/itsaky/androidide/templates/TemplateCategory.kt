@@ -85,6 +85,10 @@ data class TemplateCategory(
     val HybridFrameworks =
         TemplateCategory("HybridFrameworks", "Hybrid Frameworks", R.drawable.ic_template_generic)
 
+    /** "Performance" category for baseline profiles, startup benchmarks, etc. */
+    val Performance =
+        TemplateCategory("performance", "Performance", R.drawable.ic_bolt_boost)
+
     private val subCategoriesByParent = linkedMapOf<TemplateCategory, MutableList<SubCategory>>()
     // A container used for comprehensively managing all objectives within a subcategory
     val All = SubCategory(parent = Generic, key = "all", title = "All")
@@ -125,7 +129,18 @@ data class TemplateCategory(
      * @return A list of [TemplateCategory].
      */
     fun defaultCategories(): List<TemplateCategory> {
-      return listOf(BasicZeroStudio, Mobile, Wear, Tv, Car, XR, Generic, Native, HybridFrameworks)
+      return listOf(
+          BasicZeroStudio,
+          Performance,
+          Mobile,
+          Wear,
+          Tv,
+          Car,
+          XR,
+          Generic,
+          Native,
+          HybridFrameworks,
+      )
     }
   }
 }

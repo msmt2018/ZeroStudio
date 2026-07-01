@@ -104,8 +104,22 @@ EN = {
 
 # Quoting helper: wrap value in double quotes, escape backslashes and
 # double-quotes. Apostrophes and angle brackets are kept verbatim.
+#
+# IMPORTANT: Android string resources require an apostrophe (') to be either
+# escaped as \' OR the entire string wrapped in double quotes.  Without this,
+# AAPT2 will treat the apostrophe as the start of a literal string and emit
+# a confusing "Invalid unicode escape sequence in string" error pointing at
+# unrelated surrounding strings (e.g. values-uk/strings.xml od_sdk_required
+# was failing because ОБОВ'ЯЗКОВО had an unescaped apostrophe).
 def xml_escape(s: str) -> str:
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # If the value contains an unescaped apostrophe, wrap the whole value in
+    # double quotes so AAPT2 treats the apostrophe as a literal character.
+    # Backslashes and double quotes inside the value are also escaped so the
+    # outer double-quote wrapping stays valid.
+    if "'" in s:
+        s = '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return s
 
 # Build the XML block to insert before </resources>.
 def build_block(mapping):

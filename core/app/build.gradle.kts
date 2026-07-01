@@ -165,6 +165,16 @@ dependencies {
   // 让我们从 raw .xml 文件 (在 drawable/ 或 res/ 之外) 也能渲染 vector.
   implementation(projects.xml.vectormaster)
 
+  // === Image Preview Fragment: Coil 3.x ===
+  // - coil-core: 核心解码器
+  // - coil-svg: SVG 矢量图解码 (AndroidSVG decoder)
+  // - coil-gif: GIF 动图解码
+  // 三个加起来约 400KB, 比 Glide 小, 支持本地文件 + 多种矢量 / 动图格式.
+  // XML 矢量图走 xml/vectormaster (VectorMasterDrawable) 解析, 不经 Coil.
+  implementation(libs.io.coil.core)
+  implementation(libs.io.coil.svg)
+  implementation(libs.io.coil.gif)
+
   implementation(libs.google.auto.service.annotations)
   implementation(libs.google.gson)
   implementation(libs.google.guava)
@@ -243,6 +253,7 @@ dependencies {
   implementation(projects.xml.aaptcompiler)
   implementation(projects.xml.lsp)
   implementation(projects.xml.utils)
+  implementation(projects.xml.vectormaster)
   implementation(projects.tooling.api)
  
   implementation(projects.tooling.pluginConfig)

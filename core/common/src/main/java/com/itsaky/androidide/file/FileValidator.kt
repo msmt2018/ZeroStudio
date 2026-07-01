@@ -6,6 +6,7 @@ import android.media.MediaFormat
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.util.Locale
 import java.util.zip.ZipInputStream
 
 /**

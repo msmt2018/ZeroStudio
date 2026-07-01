@@ -141,6 +141,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
       return
     }
 
+    // Markdown 预览
     FragmentTabRegistry.register(
       FragmentTabEntry(
         id = "markdown_preview",
