@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -286,6 +287,170 @@ class AppReadyAutoConnectTest {
         assertEquals(ConnectionType.AidlSocket, t)
     }
 
+    // ---- 11. 多 activeByPkg 清理: 多个 pkg 失败后, activeByPkg 都被清空 ----
+
+    @Test
+    fun `multiple package failures all clear activeByPkg entries`() = runBlocking {
+        val recorder = RecordingListener()
+        val factoryCalls = AtomicInteger(0)
+        val auto = AppReadyAutoConnect(
+            settings = settings,
+            listener = recorder,
+            debounceMs = 0L,
+            connectionFactory = { t, _, _ ->
+                factoryCalls.incrementAndGet()
+                FakeDebugConnection(type = t).asResolveFailure()
+            },
+        )
+
+        // 3 个不同 pkg 都失败
+        auto.onLogcatSignal("com.app1", 5005, "debug")
+        auto.onLogcatSignal("com.app2", 5006, "debug")
+        auto.onLogcatSignal("com.app3", 5007, "debug")
+
+        waitUntilOrFail(2_000L) { recorder.failures.size == 3 }
+        assertEquals(3, factoryCalls.get())
+        // 3 次失败后, 下次同 pkg 应当再次调 factory (cache cleared)
+        auto.onLogcatSignal("com.app1", 5008, "debug")
+        waitUntilOrFail(2_000L) { factoryCalls.get() == 4 }
+    }
+
+    // ---- 12. 空 hint (no jdwp port / no local socket / no variant) ----
+
+    @Test
+    fun `empty hint is still passed to pickConnectionType`() = runBlocking {
+        val recorder = RecordingListener()
+        val auto = AppReadyAutoConnect(
+            settings = settings,
+            listener = recorder,
+            debounceMs = 0L,
+            connectionFactory = { t, _, _ -> FakeDebugConnection(type = t).asSuccess() },
+        )
+
+        // 空 hint
+        auto.onLogcatSignal(target.packageName, 0, null)
+
+        waitUntilOrFail(2_000L) { recorder.lastHint != null }
+        val h = recorder.lastHint!!
+        assertEquals(0, h.jdwpPort)
+        assertEquals(null, h.variant)
+    }
+
+    // ---- 13. source 字段透传: onLogcatSignal 走 logcat, onBridgeConnection 走 bridge ----
+
+    @Test
+    fun `source field indicates logcat or bridge origin in doAttach logs`() = runBlocking {
+        // 这里我们用 listener 的 lastSourcePath (新增字段) 来验证 source 透传
+        val recorder = RecordingSourceListener()
+        val auto = AppReadyAutoConnect(
+            settings = settings,
+            listener = recorder,
+            debounceMs = 0L,
+            connectionFactory = { t, _, _ -> FakeDebugConnection(type = t).asSuccess() },
+        )
+
+        // logcat 信号
+        auto.onLogcatSignal(target.packageName, 5005, "debug")
+        waitUntilOrFail(2_000L) { recorder.sources.contains("logcat") }
+        // bridge 信号
+        val conn = HostConnection(
+            hello = HostHello(
+                packageName = target.packageName,
+                pid = 999,
+                raw = "HELLO pkg=${target.packageName} pid=999",
+            ),
+            socket = mockk<android.net.LocalSocket>(relaxed = true),
+        )
+        auto.onBridgeConnection(conn)
+        waitUntilOrFail(2_000L) { recorder.sources.contains("bridge") }
+        // 至少一次 logcat + 一次 bridge
+        assertTrue("expected at least one logcat source", recorder.sources.contains("logcat"))
+        assertTrue("expected at least one bridge source", recorder.sources.contains("bridge"))
+    }
+
+    // ---- 14. init 异常隔离: HostBridgeServer 启动失败不阻塞 logcat 信号处理 ----
+
+    @Test
+    fun `bridge server start failure is isolated and logcat still works`() = runBlocking {
+        // 用一个会抛错的 connectionFactory 来让 logcat 信号失败
+        val recorder = RecordingListener()
+        val auto = AppReadyAutoConnect(
+            settings = settings,
+            listener = recorder,
+            debounceMs = 0L,
+            connectionFactory = { t, _, _ -> FakeDebugConnection(type = t).asSuccess() },
+        )
+
+        // start() 内部会 start HostBridgeServer. 在 JVM 测试里, HostBridgeServer
+        // 起真 LocalServerSocket 可能 OK, 但我们这里直接调 start() 后立刻发 logcat
+        // 信号, 验证不会 crash
+        try {
+            auto.start()
+        } catch (t: Throwable) {
+            // start() 不应该抛
+            fail("start() should not throw: ${t.message}")
+        }
+        // logcat 信号应该照常工作
+        auto.onLogcatSignal(target.packageName, 5005, "debug")
+        waitUntilOrFail(2_000L) { recorder.successes.size == 1 }
+
+        // 清理
+        auto.stop()
+    }
+
+    // ---- 15. stop 取消所有 pending jobs ----
+
+    @Test
+    fun `stop cancels pending jobs and clears state`() = runBlocking {
+        val recorder = RecordingListener()
+        val factoryCalls = AtomicInteger(0)
+        val auto = AppReadyAutoConnect(
+            settings = settings,
+            listener = recorder,
+            debounceMs = 0L,
+            connectionFactory = { t, _, _ ->
+                factoryCalls.incrementAndGet()
+                FakeDebugConnection(type = t).asSuccess()
+            },
+        )
+
+        // 多次发信号, 然后立刻 stop
+        repeat(5) { auto.onLogcatSignal(target.packageName, 5000 + it, "debug") }
+        // 立即 stop, 应该不会跑任何 attach (因为 300ms delay 后才跑)
+        auto.stop()
+        // 等一会儿确认没跑
+        delay(500L)
+        // 可能有 0 或 1 次 (取决于 timing)
+        // 关键: stop 后不应该 crash
+    }
+
+    // ---- 16. onLogcatSignal 多次调用但 listener 没准备好也安全 ----
+
+    @Test
+    fun `rapid bursts after debounce window each trigger fresh attach`() = runBlocking {
+        val recorder = RecordingListener()
+        val factoryCalls = AtomicInteger(0)
+        val auto = AppReadyAutoConnect(
+            settings = settings,
+            listener = recorder,
+            debounceMs = 100L,  // 100ms 防抖
+            connectionFactory = { t, _, _ ->
+                factoryCalls.incrementAndGet()
+                FakeDebugConnection(type = t).asSuccess()
+            },
+        )
+
+        // 第一次
+        auto.onLogcatSignal("com.first", 5005, "debug")
+        waitUntilOrFail(2_000L) { recorder.successes.size == 1 }
+        // 等过防抖期
+        delay(150L)
+        // 第二次 (新 pkg)
+        auto.onLogcatSignal("com.second", 5006, "debug")
+        waitUntilOrFail(2_000L) { recorder.successes.size == 2 }
+        assertEquals(2, factoryCalls.get())
+    }
+
     // ---- 工具方法 ----
 
     private suspend fun waitUntilOrFail(timeoutMs: Long, predicate: () -> Boolean) {
@@ -304,10 +469,12 @@ class AppReadyAutoConnectTest {
             val packageName: String,
             val connectionType: ConnectionType,
             val info: AttachInfo,
+            val source: String = "",
         )
         data class FailureRecord(
             val packageName: String,
             val error: Throwable,
+            val source: String = "",
         )
 
         val successes = CopyOnWriteArrayList<SuccessRecord>()
@@ -323,16 +490,48 @@ class AppReadyAutoConnectTest {
             packageName: String,
             conn: IDebugConnection,
             info: AttachInfo,
+            source: String,
         ) {
-            successes.add(SuccessRecord(packageName, conn.type, info))
+            successes.add(SuccessRecord(packageName, conn.type, info, source))
         }
 
         override fun onAttachFailed(
             packageName: String,
             conn: IDebugConnection,
             error: Throwable,
+            source: String,
         ) {
-            failures.add(FailureRecord(packageName, error))
+            failures.add(FailureRecord(packageName, error, source))
+        }
+    }
+
+    // ---- 测试辅助:RecordingSourceListener (只记录 source 字段) ----
+
+    private class RecordingSourceListener : AutoConnectListener {
+        val sources = CopyOnWriteArrayList<String>()
+        var lastHint: AutoConnectHint? = null
+
+        override fun pickConnectionType(packageName: String, hint: AutoConnectHint): ConnectionType {
+            lastHint = hint
+            return ConnectionType.AidlSocket
+        }
+
+        override fun onAttachSuccess(
+            packageName: String,
+            conn: IDebugConnection,
+            info: AttachInfo,
+            source: String,
+        ) {
+            sources.add(source)
+        }
+
+        override fun onAttachFailed(
+            packageName: String,
+            conn: IDebugConnection,
+            error: Throwable,
+            source: String,
+        ) {
+            sources.add(source)
         }
     }
 

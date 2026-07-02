@@ -66,13 +66,25 @@ interface AutoConnectListener {
 
     /**
      * attach 完成后回调, 通知 UI 切换。
+     * @param source 触发来源 ("logcat" / "bridge"), 供 UI 显示 "来自 logcat 信号" 等
      */
-    fun onAttachSuccess(packageName: String, conn: IDebugConnection, info: com.itsaky.androidide.debugger.connection.AttachInfo)
+    fun onAttachSuccess(
+        packageName: String,
+        conn: IDebugConnection,
+        info: com.itsaky.androidide.debugger.connection.AttachInfo,
+        source: String,
+    )
 
     /**
      * attach 失败回调, 用于 UI 显示错误。
+     * @param source 触发来源 ("logcat" / "bridge")
      */
-    fun onAttachFailed(packageName: String, conn: IDebugConnection, error: Throwable)
+    fun onAttachFailed(
+        packageName: String,
+        conn: IDebugConnection,
+        error: Throwable,
+        source: String,
+    )
 }
 
 /**
@@ -95,11 +107,21 @@ class DefaultAutoConnectListener : AutoConnectListener {
     override fun pickConnectionType(packageName: String, hint: AutoConnectHint): ConnectionType {
         return ConnectionType.AidlSocket
     }
-    override fun onAttachSuccess(packageName: String, conn: IDebugConnection, info: com.itsaky.androidide.debugger.connection.AttachInfo) {
-        log.info("AppReadyAutoConnect: attached to {} (jdwp={})", packageName, info.jdwpDescription)
+    override fun onAttachSuccess(
+        packageName: String,
+        conn: IDebugConnection,
+        info: com.itsaky.androidide.debugger.connection.AttachInfo,
+        source: String,
+    ) {
+        log.info("AppReadyAutoConnect: [{}] attached to {} (jdwp={})", source, packageName, info.jdwpDescription)
     }
-    override fun onAttachFailed(packageName: String, conn: IDebugConnection, error: Throwable) {
-        log.warn("AppReadyAutoConnect: attach to {} failed: {}", packageName, error.message)
+    override fun onAttachFailed(
+        packageName: String,
+        conn: IDebugConnection,
+        error: Throwable,
+        source: String,
+    ) {
+        log.warn("AppReadyAutoConnect: [{}] attach to {} failed: {}", source, packageName, error.message)
     }
 }
 
@@ -243,23 +265,23 @@ class AppReadyAutoConnect(
         // resolve -> connect -> attach
         val r = conn.resolve()
         if (r.isFailure) {
-            listener.onAttachFailed(packageName, conn, r.exceptionOrNull()!!)
+            listener.onAttachFailed(packageName, conn, r.exceptionOrNull()!!, source)
             activeByPkg.remove(packageName, conn)
             return
         }
         val c = conn.connect()
         if (c.isFailure) {
-            listener.onAttachFailed(packageName, conn, c.exceptionOrNull()!!)
+            listener.onAttachFailed(packageName, conn, c.exceptionOrNull()!!, source)
             activeByPkg.remove(packageName, conn)
             return
         }
         val a = conn.attach()
         if (a.isFailure) {
-            listener.onAttachFailed(packageName, conn, a.exceptionOrNull()!!)
+            listener.onAttachFailed(packageName, conn, a.exceptionOrNull()!!, source)
             activeByPkg.remove(packageName, conn)
             return
         }
-        listener.onAttachSuccess(packageName, conn, a.getOrNull()!!)
+        listener.onAttachSuccess(packageName, conn, a.getOrNull()!!, source)
     }
 }
 

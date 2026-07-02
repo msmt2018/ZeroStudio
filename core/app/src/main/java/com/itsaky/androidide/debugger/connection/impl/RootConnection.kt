@@ -66,7 +66,12 @@ class RootConnection(
     private val rootClientImpl: RootClient by lazy { rootClient ?: RootClient.create() }
 
     // ---- 运行时状态 ----
-    @Volatile private var socket: Socket? = null
+    // 子项目 4: Root 路径下走 InputStream/OutputStream (跟 AidlSocketConnection
+    //   LocalBridge 路径同款), 不存 java.net.Socket 字段 (因 host jdwp 是
+    //   abstract unix socket, 通过 su -c socat 转 stdin/stdout)
+    @Volatile private var stream: com.itsaky.androidide.debugger.connection.root.RootJdwpStream? = null
+    @Volatile private var input: java.io.InputStream? = null
+    @Volatile private var output: java.io.OutputStream? = null
     @Volatile private var hostPid: Int = 0
     private val sessionIdGenerator = AtomicLong(System.currentTimeMillis())
     private val incoming = MutableSharedFlow<ByteArray>(replay = 0, extraBufferCapacity = 64)
@@ -120,7 +125,7 @@ class RootConnection(
         }
     }
 
-    // ---- attach: 走 su 把 host JDWP socket fd 转给 IDE ----
+    // ---- attach: 走 su + socat 拿 host JDWP stdin/stdout ----
 
     override suspend fun attach(): Result<AttachInfo> {
         val pid = hostPid
@@ -129,17 +134,20 @@ class RootConnection(
         }
         val attempt = retryPolicy.retry { _ ->
             runCatching {
-                val sock = rootClientImpl.openJdwpSocket(
+                val s = rootClientImpl.openJdwpStream(
                     hostPid = pid,
                     suBin = settings.root.suBinary,
                     timeoutMs = settings.root.probeTimeoutMs,
                 )
                 // 走 JDWP 握手 + VM.Version
                 val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
-                    socket = sock,
+                    output = s.output,
+                    input = s.input,
                     commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
                 )
-                socket = sock
+                stream = s
+                input = s.input
+                output = s.output
                 AttachInfo(
                     pid = pid,
                     jdwpSessionId = sessionIdGenerator.get(),
@@ -148,13 +156,12 @@ class RootConnection(
             }.onFailure { log.warn("attach attempt failed: {}", it.message) }
         }
         return attempt.onSuccess { info ->
-            val sock = socket
-            if (sock == null) {
-                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("attach returned but socket is null"))))
+            if (input == null || output == null) {
+                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("attach returned but stream is null"))))
                 return@onSuccess
             }
             transitionTo(ConnectionState.Attached(info.pid, info.jdwpSessionId))
-            startReadLoop(sock)
+            startReadLoopFromStream(input!!)
         }.onFailure { t ->
             transitionTo(ConnectionState.Closed(mapAttachError(t)))
         }
@@ -163,11 +170,11 @@ class RootConnection(
     // ---- detach / 字节流 / 钩子 / 释放 ----
 
     override suspend fun detach() {
-        val sock = socket
-        socket = null
-        if (sock != null) {
+        val s = stream
+        stream = null
+        if (s != null) {
             runCatching {
-                val out = sock.getOutputStream()
+                val out = output ?: s.output
                 val cmd = AidlJdwpProtocol.buildVmVersionCommand(0)
                 cmd[10] = 2 // VM.Dispose
                 synchronized(out) {
@@ -175,43 +182,51 @@ class RootConnection(
                     out.flush()
                 }
             }.onFailure { log.debug("detach: VM.Dispose failed: {}", it.message) }
-            runCatching { sock.close() }
+            runCatching { s.close() }
         }
+        input = null
+        output = null
         transitionTo(ConnectionState.Closed(null))
     }
 
     override suspend fun sendJdwp(bytes: ByteArray) {
-        val sock = socket ?: error("not attached")
+        val out = output ?: error("not attached")
         check(currentState() is ConnectionState.Attached) {
             "sendJdwp requires Attached state, was ${currentState()}"
         }
         withContext(Dispatchers.IO) {
-            sock.getOutputStream().apply { write(bytes); flush() }
+            synchronized(out) {
+                out.write(bytes)
+                out.flush()
+            }
         }
     }
 
     override fun receiveJdwp(): Flow<ByteArray> = incoming.asSharedFlow()
 
     override fun attachedSocket(): Socket {
-        val sock = socket ?: error("not attached")
-        return sock
+        // Root 路径下走 InputStream/OutputStream, 不返回 java.net.Socket
+        throw UnsupportedOperationException(
+            "RootConnection: attachedSocket() not available; use sendJdwp()/receiveJdwp() flow API"
+        )
     }
 
     override fun release() {
-        runCatching { socket?.close() }
-        socket = null
+        runCatching { stream?.close() }
+        stream = null
+        input = null
+        output = null
         super.release()
     }
 
     // ---- 私有 ----
 
-    private fun startReadLoop(sock: Socket) {
+    private fun startReadLoopFromStream(ins: java.io.InputStream) {
         Thread({
             try {
-                val input = sock.getInputStream()
                 val buf = ByteArray(8192)
-                while (!sock.isClosed) {
-                    val n = try { input.read(buf) } catch (e: IOException) { -1 }
+                while (currentState() is ConnectionState.Attached) {
+                    val n = try { ins.read(buf) } catch (e: IOException) { -1 }
                     if (n <= 0) break
                     val chunk = ByteArray(n)
                     System.arraycopy(buf, 0, chunk, 0, n)

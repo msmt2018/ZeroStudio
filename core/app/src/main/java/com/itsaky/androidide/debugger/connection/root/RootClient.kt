@@ -40,17 +40,17 @@ interface RootClient {
     ): Int
 
     /**
-     * 走 su + 内部 attach agent 拿 host JDWP socket, 转成 IDE 端 java.net.Socket。
-     * 真实实现依赖子项目 8 host runtime (需要在 host 进程跑 attach agent 命令,
-     * 拿到 JDWP fd 后转成 stdin/stdout 走 su -c 回到 IDE 端)。
+     * 走 su + 内部 attach agent 拿 host JDWP socket fd, 转成 IDE 端
+     * 的 InputStream/OutputStream (不是 java.net.Socket, 因 jdwp 是 unix
+     * abstract namespace socket, su -c 通过 socat 把 stdin/stdout 接到 socket).
      *
-     * 当前实现: 留 stub, 抛 NotImplementedError。子项目 8 完成后实现。
+     * @return RootJdwpStream (input/output 流), 失败抛 IOException
      */
-    fun openJdwpSocket(
+    fun openJdwpStream(
         hostPid: Int,
         suBin: String,
         timeoutMs: Long,
-    ): Socket
+    ): RootJdwpStream
 
     companion object {
         @JvmStatic
@@ -59,7 +59,25 @@ interface RootClient {
 }
 
 /**
- * 默认生产实现 (骨架, 等子项目 8 一起补全)。
+ * 子项目 4: Root 路径下拿到的 JDWP 字节流 (不走 java.net.Socket, 因 jdwp 是
+ * abstract unix socket, 通过 su -c socat 桥接出 stdin/stdout).
+ *
+ * close() 应该关掉 su -c 的进程 + 流。
+ */
+data class RootJdwpStream(
+    val input: java.io.InputStream,
+    val output: java.io.OutputStream,
+    val onClose: () -> Unit = {},
+) : java.io.Closeable {
+    override fun close() {
+        runCatching { input.close() }
+        runCatching { output.close() }
+        runCatching { onClose() }
+    }
+}
+
+/**
+ * 默认生产实现。
  */
 class DefaultRootClient : RootClient {
 
@@ -83,21 +101,43 @@ class DefaultRootClient : RootClient {
         }
     }
 
-    override fun openJdwpSocket(
+    override fun openJdwpStream(
         hostPid: Int,
         suBin: String,
         timeoutMs: Long,
-    ): Socket {
-        // 留 stub, 等子项目 8 host runtime (attach agent + socat) 一起提供
-        // 预期实现:
-        //   1) su -c 'cat /proc/<host_pid>/net/unix' 找 jdwp socket path
-        //   2) su -c 'cat /proc/<host_pid>/cmdline' 校验 host process
-        //   3) su -c 'socat - UNIX-CONNECT:<path>' 起 stdin/stdout 转发
-        //   4) IDE 端拿 Process 的 stdout / 写 stdin 当 Socket 用
-        throw UnsupportedOperationException(
-            "RootClient.openJdwpSocket 依赖子项目 8 host runtime 一起提供, " +
-                "暂未实装"
-        )
+    ): RootJdwpStream {
+        // 子项目 4 真实实现: 走 su exec + socat 把 host 的 @jdwp unix socket
+        //   转成 stdin/stdout. RootConnection 走 InputStream/OutputStream 路径
+        //   (与 AidlSocketConnection LocalBridge 同款, 不走 java.net.Socket).
+        //
+        //   1) su -c 'cat /proc/<host_pid>/net/unix' 校验 @jdwp socket 存在
+        //   2) su -c 'socat - UNIX-CONNECT:@jdwp' 起 stdin/stdout 桥接
+        //   3) IDE 端拿 Process.inputStream/outputStream 当 jdwp 字节流用
+        try {
+            val netUnix = execWithTimeout(
+                arrayOf(suBin, "-c", "cat /proc/$hostPid/net/unix"),
+                timeoutMs,
+            )
+            if (!netUnix.contains("@jdwp")) {
+                throw IOException("no jdwp socket found in /proc/$hostPid/net/unix")
+            }
+            // 起 socat (如设备装了)
+            val socat = ProcessBuilder(suBin, "-c", "socat - UNIX-CONNECT:@jdwp")
+                .redirectErrorStream(true)
+                .start()
+            return RootJdwpStream(
+                input = socat.inputStream,
+                output = socat.outputStream,
+                onClose = {
+                    runCatching { socat.destroyForcibly() }
+                },
+            )
+        } catch (t: Throwable) {
+            throw IOException(
+                "RootClient.openJdwpStream failed (socat may not be installed): ${t.message}",
+                t,
+            )
+        }
     }
 
     private fun execWithTimeout(cmd: Array<String>, timeoutMs: Long): String {
@@ -125,18 +165,22 @@ class DefaultRootClient : RootClient {
 }
 
 /**
- * 测试用 fake: 可预置 findProcessId / openJdwpSocket 返回值。
+ * 测试用 fake: 可预置 findProcessId / openJdwpStream 返回值。
  */
 class FakeRootClient(
     private val pidResult: Int = 0,
-    private val socketResult: Socket? = null,
+    private val streamResult: RootJdwpStream? = null,
 ) : RootClient {
 
     var findProcessIdCallCount: Int = 0
         private set
-    var openJdwpSocketCallCount: Int = 0
+    var openJdwpStreamCallCount: Int = 0
         private set
     var lastPid: Int = 0
+        private set
+    var lastPackageName: String? = null
+        private set
+    var lastSuBin: String? = null
         private set
 
     override fun findProcessId(
@@ -145,18 +189,21 @@ class FakeRootClient(
         timeoutMs: Long,
     ): Int {
         findProcessIdCallCount++
+        lastPackageName = packageName
+        lastSuBin = suBin
         return pidResult
     }
 
-    override fun openJdwpSocket(
+    override fun openJdwpStream(
         hostPid: Int,
         suBin: String,
         timeoutMs: Long,
-    ): Socket {
-        openJdwpSocketCallCount++
+    ): RootJdwpStream {
+        openJdwpStreamCallCount++
         lastPid = hostPid
-        return socketResult ?: throw UnsupportedOperationException(
-            "FakeRootClient: socketResult is null, can't open real socket"
+        lastSuBin = suBin
+        return streamResult ?: throw UnsupportedOperationException(
+            "FakeRootClient: streamResult is null, can't open real stream"
         )
     }
 }

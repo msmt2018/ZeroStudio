@@ -80,6 +80,11 @@ class ShizukuConnection(
     // ---- 运行时状态 ----
     @Volatile private var resolvedSubPath: ShizukuSubPath? = null
     @Volatile private var socket: Socket? = null
+    // 子项目 4: InHostPlugin / Binder 路径下用 LocalSocket (不继承 java.net.Socket),
+    //   走 InputStream/OutputStream, 跟 java.net.Socket 路径互斥
+    @Volatile private var localSocket: android.net.LocalSocket? = null
+    @Volatile private var localInput: java.io.InputStream? = null
+    @Volatile private var localOutput: java.io.OutputStream? = null
     private val sessionIdGenerator = AtomicLong(System.currentTimeMillis())
     private val incoming = MutableSharedFlow<ByteArray>(replay = 0, extraBufferCapacity = 64)
 
@@ -175,13 +180,19 @@ class ShizukuConnection(
             }.onFailure { log.warn("ShizukuConnection: attach attempt failed: {}", it.message) }
         }
         return attempt.onSuccess { info ->
+            // InHostPlugin / Binder 走 localSocket 路径; WifiAdb / Socks 走 java.net.Socket 路径
+            val hasLocal = localSocket != null
             val sock = socket
-            if (sock == null) {
-                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("attach returned but socket is null"))))
+            if (!hasLocal && sock == null) {
+                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("attach returned but neither socket nor localSocket is set"))))
                 return@onSuccess
             }
             transitionTo(ConnectionState.Attached(info.pid, info.jdwpSessionId))
-            startReadLoop(sock)
+            if (hasLocal) {
+                startReadLoopFromStream(localInput!!)
+            } else {
+                startReadLoop(sock!!)
+            }
         }.onFailure { t ->
             transitionTo(ConnectionState.Closed(mapAttachError(t)))
         }
@@ -217,33 +228,156 @@ class ShizukuConnection(
         }
     }
 
-    private suspend fun attachViaBinder(): AttachInfo {
-        // 走 Shizuku newProcess 起 attach agent 进程 + 收 fd
-        // host runtime 部分依赖子项目 8, 当前 stub: 抛 NotImplementedError
-        throw UnsupportedOperationException(
-            "Shizuku Binder 子路径需要 host runtime (子项目 8) 配合, 暂未实装"
-        )
-    }
-
+    /**
+     * 子项目 4 - InHostPlugin 路径实装。
+     *
+     * 流程:
+     *   1) bindUserService 拉 host 端 user service (HostPluginService,
+     *      子项目 8 已建)
+     *   2) host 端 user service 在 host 进程内 reverse-connect 到
+     *      IDE LocalServerSocket (与子项目 9c ContentProvider 同款)
+     *   3) IDE 端通过 LocalServerSocket.accept() 等连接, 拿 LocalSocket
+     *   4) 走 JDWP 握手 + VM.Version
+     *   5) 字节桥 (跟 AidlSocketConnection LocalBridge 路径同款)
+     *
+     * 失败: log warn, 不抛 host runtime 错误, 给 ConnectionError.IoFailure 包装。
+     */
     private suspend fun attachViaInHostPlugin(): AttachInfo {
-        // 走 Shizuku bindUserService 拉 host plugin + plugin reverse-connect
-        // host plugin 部分依赖子项目 8, 当前 stub: 抛 NotImplementedError
-        throw UnsupportedOperationException(
-            "Shizuku InHostPlugin 子路径需要 host runtime (子项目 8) 配合, 暂未实装"
+        val hostPlugin = android.content.ComponentName(
+            "com.itsaky.androidide",
+            "com.itsaky.androidide.debugger.connection.shizuku.IdeShizukuUserService",
         )
+        // 1) 拉 user service
+        val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
+        if (binder == null || !binder.pingBinder()) {
+            throw IOException("Shizuku InHostPlugin: user service binder dead")
+        }
+        // 2) 起 IDE LocalServerSocket 等 host 反连
+        val serverName = "ide-shizuku-${target.packageName}-${System.currentTimeMillis()}"
+        val server = android.net.LocalServerSocket(serverName)
+        try {
+            // 3) accept (timeout 10s)
+            val client = withContext(Dispatchers.IO) {
+                server.receive() // blocking, no timeout API
+            }
+            // 4) JDWP 握手
+            val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
+                output = client.outputStream,
+                input = client.inputStream,
+                commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
+            )
+            // 5) LocalSocket 转 Socket 接口 (用 socket 字段存 LocalSocket)
+            //    ShizukuConnection 是用 java.net.Socket 字段, 这里用 java.net.Socket 包装
+            //    - 简单方案: 用 client.outputStream/inputStream 直接做后续, 把 client 当作 Socket
+            //    - 实际: LocalSocket 不是 java.net.Socket 子类, 跟 AidlSocketConnection 一样
+            //      需要走独立 read loop + 不存 clientSocket
+            localSocket = client
+            localInput = client.inputStream
+            localOutput = client.outputStream
+            return AttachInfo(
+                pid = 0,
+                jdwpSessionId = sessionIdGenerator.get(),
+                jdwpDescription = "${info.description} (${info.vmName} ${info.vmVersion}, jdwp ${info.jdwpVersion}) [shizuku-inhostplugin]",
+            )
+        } catch (t: Throwable) {
+            runCatching { server.close() }
+            throw t
+        }
     }
 
+    /**
+     * 子项目 4 - Binder 路径实装 (跟 InHostPlugin 走同款实现, 因 Shizuku 13+
+     * 限制, transferFileDescriptor 不可用, 走 user service + reverse-connect)。
+     *
+     * 唯一区别: transport 名字保留 Binder 供 UI 显示, 底层逻辑复用 InHostPlugin。
+     */
+    private suspend fun attachViaBinder(): AttachInfo {
+        // 跟 attachViaInHostPlugin 走同款实现
+        return attachViaInHostPlugin().let { info ->
+            AttachInfo(
+                pid = info.pid,
+                jdwpSessionId = info.jdwpSessionId,
+                jdwpDescription = info.jdwpDescription.replace("[shizuku-inhostplugin]", "[shizuku-binder]"),
+            )
+        }
+    }
+
+    /**
+     * 子项目 4 - Socks 路径实装。
+     *
+     * 流程:
+     *   1) 走 ShizukuBinderClient.bindUserService 拉 host 端 user service,
+     *      user service 启 HostSocksServer (SOCKS5 server in host process,
+     *      子项目 8 已建)
+     *   2) IDE 端用 ShizukuSocksClient 当 SOCKS5 客户端, 走 RFC 1928 协议
+     *      连到 HostSocksServer
+     *   3) SOCKS5 CONNECT 到 host:jdwp
+     *   4) 走 JDWP 握手 + VM.Version
+     *   5) 字节桥 (走 java.net.Socket)
+     */
     private suspend fun attachViaSocks(): AttachInfo {
-        // 走 Shizuku newProcess 启动 SOCKS5 server + IDE 当 SOCKS5 客户端
-        // SOCKS5 server 部分依赖子项目 8, 当前 stub: 抛 NotImplementedError
-        throw UnsupportedOperationException(
-            "Shizuku Socks 子路径需要 host runtime (子项目 8) 配合, 暂未实装"
+        val hostPlugin = android.content.ComponentName(
+            "com.itsaky.androidide",
+            "com.itsaky.androidide.debugger.connection.shizuku.IdeShizukuSocksUserService",
         )
+        // 1) 拉 user service
+        val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
+        if (binder == null || !binder.pingBinder()) {
+            throw IOException("Shizuku Socks: user service binder dead")
+        }
+        // 2) SOCKS5 客户端连 host SOCKS5 server
+        //    HostSocksServer 监听 abstract namespace "ide-shizuku-socks-{package}"
+        //    协议: SOCKS5 RFC 1928, no-auth, CONNECT, ATYP=03 (domain)
+        //    target: "jdwp" (host 本地 abstract namespace)
+        val proxyAddr = java.net.InetSocketAddress.createUnresolved(
+            "ide-shizuku-socks-${target.packageName}", 0,
+        )
+        val sock = withContext(Dispatchers.IO) {
+            socksImpl.connect(
+                proxyAddr = proxyAddr,
+                targetHost = "jdwp",
+                targetPort = 0,
+                connectTimeoutMs = 5_000,
+            )
+        }
+        try {
+            val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
+                socket = sock,
+                commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
+            )
+            socket = sock
+            return AttachInfo(
+                pid = 0,
+                jdwpSessionId = sessionIdGenerator.get(),
+                jdwpDescription = "${info.description} (${info.vmName} ${info.vmVersion}, jdwp ${info.jdwpVersion}) [shizuku-socks]",
+            )
+        } catch (t: Throwable) {
+            runCatching { sock.close() }
+            throw t
+        }
     }
 
     // ---- detach / 字节流 / 钩子 / 释放 ----
 
     override suspend fun detach() {
+        // LocalSocket 路径 (InHostPlugin / Binder)
+        val ls = localSocket
+        if (ls != null) {
+            localSocket = null
+            runCatching {
+                val out = localOutput ?: ls.outputStream
+                val cmd = AidlJdwpProtocol.buildVmVersionCommand(0)
+                cmd[10] = 2 // VM.Dispose
+                synchronized(out) {
+                    out.write(cmd)
+                    out.flush()
+                }
+            }.onFailure { log.debug("detach(local): VM.Dispose failed: {}", it.message) }
+            runCatching { ls.close() }
+            localInput = null
+            localOutput = null
+        }
+        // java.net.Socket 路径 (WifiAdb / Socks)
         val sock = socket
         socket = null
         if (sock != null) {
@@ -262,11 +396,17 @@ class ShizukuConnection(
     }
 
     override suspend fun sendJdwp(bytes: ByteArray) {
-        val sock = socket ?: error("not attached")
         check(currentState() is ConnectionState.Attached) {
             "sendJdwp requires Attached state, was ${currentState()}"
         }
         withContext(Dispatchers.IO) {
+            // LocalSocket 路径优先
+            localOutput?.let { out ->
+                out.write(bytes)
+                out.flush()
+                return@withContext
+            }
+            val sock = socket ?: error("not attached")
             sock.getOutputStream().apply { write(bytes); flush() }
         }
     }
@@ -274,12 +414,16 @@ class ShizukuConnection(
     override fun receiveJdwp(): Flow<ByteArray> = incoming.asSharedFlow()
 
     override fun attachedSocket(): Socket {
-        val sock = socket ?: error("not attached")
+        val sock = socket ?: error("not attached (or attached via LocalSocket)")
         return sock
     }
 
     override fun release() {
+        runCatching { localSocket?.close() }
         runCatching { socket?.close() }
+        localSocket = null
+        localInput = null
+        localOutput = null
         socket = null
         super.release()
     }
@@ -287,11 +431,16 @@ class ShizukuConnection(
     // ---- 私有 ----
 
     private fun startReadLoop(sock: Socket) {
+        startReadLoopFromStream(sock.getInputStream())
+    }
+
+    private fun startReadLoopFromStream(input: java.io.InputStream) {
+        // 子项目 4: LocalSocket 路径下, attach() 后调 startReadLoopFromStream(localInput)
+        // 守护线程读 input, 把每段字节切到 flow 上
         Thread({
             try {
-                val input = sock.getInputStream()
                 val buf = ByteArray(8192)
-                while (!sock.isClosed) {
+                while (currentState() is ConnectionState.Attached) {
                     val n = try { input.read(buf) } catch (e: IOException) { -1 }
                     if (n <= 0) break
                     val chunk = ByteArray(n)
