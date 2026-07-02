@@ -61,6 +61,14 @@ class ShizukuConnection(
 
     private val log = ILogger.ROOT
 
+    /**
+     * InHostPlugin 路径下等 host 端 reverse-connect 的超时。
+     * server.receive() 是阻塞且无 timeout API, 必须用 coroutine withTimeoutOrNull
+     * 保护, 否则 host 端 user service 启动后但 reverse-connect 失败时 IDE 端会
+     * 无限阻塞。
+     */
+    private val INHOSTPLUGIN_ACCEPT_TIMEOUT_MS = 10_000L
+
     override val capabilities: Set<ConnectionCapability> = setOf(
         ConnectionCapability.CanInstallInHost,    // 注入 host plugin (InHostPlugin 路径)
         ConnectionCapability.CanReadProcNet,      // 读 /proc/<host_pid>/fd/ (Binder 路径)
@@ -85,6 +93,10 @@ class ShizukuConnection(
     @Volatile private var localSocket: android.net.LocalSocket? = null
     @Volatile private var localInput: java.io.InputStream? = null
     @Volatile private var localOutput: java.io.OutputStream? = null
+    // 子项目 4 修复: InHostPlugin 路径下 accept 用的 LocalServerSocket 必须
+    //   在 detach/release 时 close, 否则 abstract namespace 的 socket name 不会
+    //   被释放, 下次 attach 会卡住或冲突。
+    @Volatile private var inHostPluginServer: android.net.LocalServerSocket? = null
     private val sessionIdGenerator = AtomicLong(System.currentTimeMillis())
     private val incoming = MutableSharedFlow<ByteArray>(replay = 0, extraBufferCapacity = 64)
 
@@ -249,22 +261,32 @@ class ShizukuConnection(
         // 2) 起 IDE LocalServerSocket 等 host 反连
         val serverName = "ide-shizuku-${target.packageName}-${System.currentTimeMillis()}"
         val server = android.net.LocalServerSocket(serverName)
+        inHostPluginServer = server
         try {
-            // 3) accept (timeout 10s)
+            // 3) accept with timeout: server.receive() 是阻塞且无 timeout API,
+            //    用 withTimeoutOrNull + 异步 receive 来加超时保护, 否则 host
+            //    一旦不反连 IDE 端会无限阻塞。
             val client = withContext(Dispatchers.IO) {
-                server.receive() // blocking, no timeout API
-            }
+                kotlinx.coroutines.withTimeoutOrNull(INHOSTPLUGIN_ACCEPT_TIMEOUT_MS) {
+                    try {
+                        server.receive()
+                    } catch (t: Throwable) {
+                        log.warn("Shizuku InHostPlugin: receive() failed: {}", t.message)
+                        null
+                    }
+                }
+            } ?: throw IOException(
+                "Shizuku InHostPlugin: host did not reverse-connect within " +
+                    "${INHOSTPLUGIN_ACCEPT_TIMEOUT_MS}ms (LocalServerSocket='$serverName')"
+            )
             // 4) JDWP 握手
             val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
                 output = client.outputStream,
                 input = client.inputStream,
                 commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
             )
-            // 5) LocalSocket 转 Socket 接口 (用 socket 字段存 LocalSocket)
-            //    ShizukuConnection 是用 java.net.Socket 字段, 这里用 java.net.Socket 包装
-            //    - 简单方案: 用 client.outputStream/inputStream 直接做后续, 把 client 当作 Socket
-            //    - 实际: LocalSocket 不是 java.net.Socket 子类, 跟 AidlSocketConnection 一样
-            //      需要走独立 read loop + 不存 clientSocket
+            // 5) LocalSocket 不是 java.net.Socket 子类, 跟 AidlSocketConnection 一样
+            //    需要走独立 read loop + 不存 clientSocket
             localSocket = client
             localInput = client.inputStream
             localOutput = client.outputStream
@@ -275,6 +297,7 @@ class ShizukuConnection(
             )
         } catch (t: Throwable) {
             runCatching { server.close() }
+            inHostPluginServer = null
             throw t
         }
     }
@@ -375,8 +398,7 @@ class ShizukuConnection(
             localSocket = null
             runCatching {
                 val out = localOutput ?: ls.outputStream
-                val cmd = AidlJdwpProtocol.buildVmVersionCommand(0)
-                cmd[10] = 2 // VM.Dispose
+                val cmd = AidlJdwpProtocol.buildVmDisposeCommand(0)
                 synchronized(out) {
                     out.write(cmd)
                     out.flush()
@@ -392,8 +414,7 @@ class ShizukuConnection(
         if (sock != null) {
             runCatching {
                 val out = sock.getOutputStream()
-                val cmd = AidlJdwpProtocol.buildVmVersionCommand(0)
-                cmd[10] = 2 // VM.Dispose
+                val cmd = AidlJdwpProtocol.buildVmDisposeCommand(0)
                 synchronized(out) {
                     out.write(cmd)
                     out.flush()
@@ -401,6 +422,9 @@ class ShizukuConnection(
             }.onFailure { log.debug("detach: VM.Dispose failed: {}", it.message) }
             runCatching { sock.close() }
         }
+        // LocalServerSocket 路径 (InHostPlugin)
+        runCatching { inHostPluginServer?.close() }
+        inHostPluginServer = null
         transitionTo(ConnectionState.Closed(null))
     }
 
@@ -430,10 +454,12 @@ class ShizukuConnection(
     override fun release() {
         runCatching { localSocket?.close() }
         runCatching { socket?.close() }
+        runCatching { inHostPluginServer?.close() }
         localSocket = null
         localInput = null
         localOutput = null
         socket = null
+        inHostPluginServer = null
         super.release()
     }
 

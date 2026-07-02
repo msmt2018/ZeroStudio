@@ -316,8 +316,7 @@ class AidlSocketConnection(
             localBridgeSocket = null
             runCatching {
                 val out = localBridgeOutput ?: ls.outputStream
-                val cmd = AidlJdwpProtocol.buildVmVersionCommand(0)
-                cmd[10] = 2 // VM.Dispose
+                val cmd = AidlJdwpProtocol.buildVmDisposeCommand(0)
                 synchronized(outgoingLock) {
                     out.write(cmd)
                     out.flush()
@@ -332,11 +331,8 @@ class AidlSocketConnection(
         clientSocket = null
         if (sock != null) {
             runCatching {
-                // 走 VM.Dispose 命令 (1, 2): data 字段为空
                 val out = sock.getOutputStream()
-                val cmd = AidlJdwpProtocol.buildVmVersionCommand(0)
-                // 把 command 字节改成 VM.Dispose = 2
-                cmd[10] = 2
+                val cmd = AidlJdwpProtocol.buildVmDisposeCommand(0)
                 synchronized(outgoingLock) {
                     out.write(cmd)
                     out.flush()

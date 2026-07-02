@@ -46,6 +46,22 @@ object AidlJdwpProtocol {
     /** VM.Version Command ID。 */
     const val COMMAND_VM_VERSION: Byte = 1
 
+    /**
+     * VM.Dispose Command ID。
+     *
+     * 历史 bug: 之前 5 处 detach() 调 `buildVmVersionCommand(0)` 然后改
+     * `cmd[10] = 2 // VM.Dispose`, 但 commandSet=VirtualMachine(=1) 下:
+     *   - 1 = Version
+     *   - 2 = ClassesBySignature    (这个被错误当作 Dispose)
+     *   - 6 = Dispose               (实际正确的 Dispose)
+     *   - 10 = Exit
+     *
+     * 也就是说旧代码发的实际是 ClassesBySignature, 不是 Dispose。VM 通常会
+     * 把它当成未知/无返回命令忽略掉, 所以表面看"detach 没崩", 但语义错。
+     * 改用专用 builder, 避免改字节。
+     */
+    const val COMMAND_VM_DISPOSE: Byte = 6
+
     /** VM.Version 响应中字符串字段的固定头部: 4 字节 length + utf-8 bytes。 */
     private const val JDWP_STRING_HEADER_SIZE = 4
 
@@ -95,6 +111,35 @@ object AidlJdwpProtocol {
         out[8] = 0x00 // FLAG_COMMAND
         out[9] = COMMAND_SET_VM
         out[10] = COMMAND_VM_VERSION
+        return out
+    }
+
+    /**
+     * 构造一个 VM.Dispose 命令包 (raw 字节)。
+     *
+     * 与 [buildVmVersionCommand] 同结构, 但 command 字节是 [COMMAND_VM_DISPOSE]
+     * (=6), data 字段同样为空 (length = 11)。
+     *
+     * 用途: detach() 时发给 VM, 让 host 端 JDWP session 主动关闭
+     * (`VirtualMachine.Dispose` 在 spec 里描述为 "invalidates this virtual
+     * machine ID in the target VM"; 不发这个 detach 时只能靠 socket close
+     * 触发 VM 端的 EOF 处理, 但 VM 内部状态可能未释放)。
+     *
+     * @param id 命令 id, 跟 VM.Version 一组用, 便于在 log 里识别
+     */
+    fun buildVmDisposeCommand(id: Int): ByteArray {
+        val out = ByteArray(11)
+        out[0] = 0
+        out[1] = 0
+        out[2] = 0
+        out[3] = 11 // length = 11 (header only)
+        out[4] = ((id ushr 24) and 0xff).toByte()
+        out[5] = ((id ushr 16) and 0xff).toByte()
+        out[6] = ((id ushr 8) and 0xff).toByte()
+        out[7] = (id and 0xff).toByte()
+        out[8] = 0x00 // FLAG_COMMAND
+        out[9] = COMMAND_SET_VM
+        out[10] = COMMAND_VM_DISPOSE
         return out
     }
 

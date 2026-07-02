@@ -179,8 +179,7 @@ class RootConnection(
         if (s != null) {
             runCatching {
                 val out = output ?: s.output
-                val cmd = AidlJdwpProtocol.buildVmVersionCommand(0)
-                cmd[10] = 2 // VM.Dispose
+                val cmd = AidlJdwpProtocol.buildVmDisposeCommand(0)
                 synchronized(out) {
                     out.write(cmd)
                     out.flush()

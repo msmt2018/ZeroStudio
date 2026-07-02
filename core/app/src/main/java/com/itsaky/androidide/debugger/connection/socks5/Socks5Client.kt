@@ -74,12 +74,17 @@ class Socks5Client(
             out.writeByte(0x05) // VER
             out.writeByte(0x01) // CMD=CONNECT
             out.writeByte(0x00) // RSV
-            val parts = targetHost.split(".").mapNotNull { it.toIntOrNull() }
-            val isIpv4 = parts.size == 4 && parts.all { it in 0..255 }
+            // IPv4 检测: 必须 split 出 4 段且每段都能解析为 0..255
+            // 之前实现只检查 toIntOrNull 后的 parts 数, 遇到 "127.0.0.1.foo"
+            // (split 5 段, "foo" 解析失败, parts.size=4) 会被误判为 IPv4
+            // 并丢掉 "foo" 一段; 改用 split 后的 raw 数 + 每段都能解析。
+            val splitParts = targetHost.split(".")
+            val isIpv4 = splitParts.size == 4 &&
+                splitParts.all { it.toIntOrNull()?.let { v -> v in 0..255 } == true }
             if (isIpv4) {
                 out.writeByte(0x01) // ATYP=IPv4
-                for (p in parts) {
-                    out.writeByte(p and 0xff)
+                for (p in splitParts) {
+                    out.writeByte(p.toInt() and 0xff)
                 }
             } else {
                 val bytes = targetHost.toByteArray(Charsets.US_ASCII)
