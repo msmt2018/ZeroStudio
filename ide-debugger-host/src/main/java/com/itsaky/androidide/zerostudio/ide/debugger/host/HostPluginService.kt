@@ -27,6 +27,7 @@
 
 package com.itsaky.androidide.zerostudio.ide.debugger.host
 
+import android.net.LocalSocket
 import android.os.IBinder
 import android.util.Log
 
@@ -104,22 +105,34 @@ class HostPluginService : android.app.Service() {
     private fun startBridge() {
         if (bridgeThread != null) return
         bridgeThread = Thread({
-            val name = ideSocketName ?: return@Thread
+            val name = ideSocketName
+            if (name == null) {
+                Log.w(tag, "startBridge: ideSocketName is null, abort (this should not happen)")
+                return@Thread
+            }
+            // Phase 12q: try-finally 资源关闭 (之前如果 openLocalAbstractJdwpSocket
+            // 抛异常, ide socket 不会 close, FDs 泄漏; 跟 HostAttachAgentBootstrap
+            // 同款修法, 跟 HostAttachAgent.bridgeBytes 风格一致)
+            // Phase 12q: thread 设 daemon, host app 退出时 JVM 不会被这个 service
+            // thread block (之前没设 daemon, host app 关掉时 thread 还活着,
+            // 阻止进程退出, 内存 dump 显示 stale 引用)
+            var ide: LocalSocket? = null
+            var jdwp: LocalSocket? = null
             try {
-                val ide = HostAttachAgent.connectToIdeLocalServer(name)
-                val jdwp = HostAttachAgent.openLocalAbstractJdwpSocket()
-                try {
-                    HostAttachAgent.bridgeBytes(ide, jdwp)
-                } finally {
-                    runCatching { ide.close() }
-                    runCatching { jdwp.close() }
-                }
+                ide = HostAttachAgent.connectToIdeLocalServer(name)
+                jdwp = HostAttachAgent.openLocalAbstractJdwpSocket()
+                HostAttachAgent.bridgeBytes(ide, jdwp)
             } catch (t: Throwable) {
                 Log.w(tag, "bridge failed: ${t.message}")
             } finally {
+                runCatching { ide?.close() }
+                runCatching { jdwp?.close() }
                 runCatching { stopSelf() }
             }
-        }, "HostPluginService-bridge").apply { start() }
+        }, "HostPluginService-bridge").apply {
+            isDaemon = true
+            start()
+        }
     }
 
     companion object {
