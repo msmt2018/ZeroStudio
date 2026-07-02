@@ -69,20 +69,24 @@ class HostPluginService : android.app.Service() {
     }
 
     /**
-     * 计算 IDE LocalServerSocket 名字, 跟 ShizukuConnection.attachViaInHostPlugin()
-     * 端 serverName = "ide-shizuku-${target.packageName}-${ts}" 的旧实现不同;
-     * 旧实现用 timestamp 每次新建, 但 Shizuku 反射加载本类时拿不到 IDE 用的
-     * timestamp, 必须用约定名 (固定 suffix, 不带 timestamp)。
+     * 计算 IDE LocalServerSocket 名字, 跟 [com.itsaky.androidide.debugger.connection.impl.SizukuConnection]
+     * 端一致: 拼上 host 进程包名, 避免多 host app 同一时间 attach 时冲突
+     * (固定名 "ide-shizuku-inhostplugin" 在多 host app 并发调试场景会 race,
+     * IDE 端 LocalServerSocket(name) bind 同名会失败)。
      *
-     * 当前简化: 用一个全局约定的 "inhostplugin-{pkg}" 名, 多次 attach 复用
-     * 同一个 socket name (IDE 端需要 close 旧 server 才能 bind 同名 socket,
-     * 失败 fallback 用 timestamp 后缀)。
+     * 拼包名后, host app A 用 "ide-shizuku-inhostplugin-com.foo.A",
+     * host app B 用 "ide-shizuku-inhostplugin-com.bar.B", 完全独立。
+     *
+     * Fallback: applicationContext 拿不到或 pkg 为空时用固定根名, 跟旧实现兼容
+     * (理论不会发生, host app 一定有 packageName)。
      */
     private fun computeIdeSocketName(): String {
-        // 暂用 package 推不出来, 用一个固定根名 + 后缀。
-        // (host 进程里拿不到 IDE 端用哪个 package 当 target.packageName,
-        //  只能 IDE 在 release/detach 时 close 旧 server, 复用同名 socket)
-        return "ide-shizuku-inhostplugin"
+        val pkg = applicationContext?.packageName
+        return if (pkg.isNullOrBlank()) {
+            DEFAULT_IDE_SOCKET_NAME
+        } else {
+            "$DEFAULT_IDE_SOCKET_NAME-$pkg"
+        }
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
@@ -120,5 +124,12 @@ class HostPluginService : android.app.Service() {
 
     companion object {
         const val EXTRA_IDE_SOCKET_NAME = "ide_socket_name"
+
+        /**
+         * IDE LocalServerSocket 名字的根名; host 端 [computeIdeSocketName] /
+         * IDE 端 [com.itsaky.androidide.debugger.connection.impl.ShizukuConnection]
+         * 都拼上 host 进程包名, 多 host app 并发调试不冲突。
+         */
+        const val DEFAULT_IDE_SOCKET_NAME = "ide-shizuku-inhostplugin"
     }
 }

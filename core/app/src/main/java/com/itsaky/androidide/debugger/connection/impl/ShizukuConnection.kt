@@ -69,6 +69,15 @@ class ShizukuConnection(
      */
     private val INHOSTPLUGIN_ACCEPT_TIMEOUT_MS = 10_000L
 
+    /**
+     * InHostPlugin 路径下 IDE LocalServerSocket 名字的根名, host 端
+     * [com.itsaky.androidide.zerostudio.ide.debugger.host.HostPluginService.computeIdeSocketName]
+     * 拼上 host 进程包名 (target.packageName) 后拼成完整名 (e.g.
+     * "ide-shizuku-inhostplugin-com.foo.A")。拼包名避免多 host app 并发
+     * 调试时 race (固定名多个 LocalServerSocket bind 会失败)。
+     */
+    private val INHOSTPLUGIN_SOCKET_NAME_PREFIX = "ide-shizuku-inhostplugin"
+
     override val capabilities: Set<ConnectionCapability> = setOf(
         ConnectionCapability.CanInstallInHost,    // 注入 host plugin (InHostPlugin 路径)
         ConnectionCapability.CanReadProcNet,      // 读 /proc/<host_pid>/fd/ (Binder 路径)
@@ -265,10 +274,17 @@ class ShizukuConnection(
         }
         // 2) 起 IDE LocalServerSocket 等 host 反连
         //    Shizuku 反射加载 HostPluginService 时拿不到 IDE 端 timestamp,
-        //    必须用约定名 (固定 "ide-shizuku-inhostplugin", 跟 host 端
-        //    HostPluginService.computeIdeSocketName() 一致)。
-        //    多次 attach 复用同名 socket, IDE 端 release() 时必须 close server。
-        val serverName = "ide-shizuku-inhostplugin"
+        //    必须用约定名 (拼包名: "${INHOSTPLUGIN_SOCKET_NAME_PREFIX}-${target.packageName}"),
+        //    跟 host 端 HostPluginService.computeIdeSocketName() 一致。拼包名避免
+        //    多 host app 并发 attach 时 race (固定名多个 LocalServerSocket bind
+        //    会失败)。多次 attach 复用同名 socket, IDE 端 release() 时必须 close
+        //    server。
+        val pkg = target.packageName
+        val serverName = if (pkg.isBlank()) {
+            INHOSTPLUGIN_SOCKET_NAME_PREFIX
+        } else {
+            "$INHOSTPLUGIN_SOCKET_NAME_PREFIX-$pkg"
+        }
         val server = android.net.LocalServerSocket(serverName)
         inHostPluginServer = server
         try {
