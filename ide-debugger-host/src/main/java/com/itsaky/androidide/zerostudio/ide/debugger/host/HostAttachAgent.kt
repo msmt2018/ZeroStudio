@@ -29,16 +29,21 @@
  *      不引用 Android API (但允许 compileOnly androidx.* 方便 IDE 集成)
  *    - 类名 / 方法名都要 ProGuard 保留 (consumer-rules.pro 已配)
  *    - 失败抛出明确错误信息, 不会 silently exit
+ *    - 所有阻塞点 (connect / read) 都有 timeout / interrupt 退出路径
  */
 
 package com.itsaky.androidide.zerostudio.ide.debugger.host
 
 import java.io.IOException
-import java.net.Socket
+import java.io.InputStream
+import java.io.InterruptedIOException
+import java.io.OutputStream
 import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.util.Log
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Main entry point, invoked via `app_process` from a Shizuku / root attach.
@@ -55,28 +60,50 @@ object HostAttachAgent {
 
     private const val TAG = "HostAttachAgent"
 
+    /** Connect timeout to IDE / jdwp LocalServerSocket. */
+    private const val CONNECT_TIMEOUT_MS: Long = 10_000L
+
+    /** Polling interval for retrying failed [LocalSocket.connect] calls. */
+    private const val CONNECT_RETRY_MS: Long = 100L
+
+    /** Maximum wait for the second pump thread to drain after the first one ended. */
+    private const val DRAIN_JOIN_TIMEOUT_MS: Long = 2_000L
+
+    /**
+     * Exit codes for [app_process], semantic. Values are stable so external scripts
+     * can match on them. We start at 2 (1 is reserved by JVM for uncaught
+     * exceptions).
+     */
+    private enum class ExitCode(val code: Int) {
+        OK(0),
+        USAGE(2),                  // no ideSocketName arg
+        IDE_CONNECT_FAILED(3),     // failed to connect to IDE LocalServerSocket
+        JDWP_OPEN_FAILED(4),       // failed to open host's own localabstract:jdwp
+        BRIDGE_FAILED(5),          // bridgeBytes threw
+    }
+
     @JvmStatic
     fun main(args: Array<String>) {
         if (args.isEmpty()) {
             System.err.println("usage: HostAttachAgent <ideLocalServerSocketName>")
-            exitProcess(2)
+            exitProcess(ExitCode.USAGE)
         }
         val ideSocketName = args[0]
         Log.i(TAG, "starting, ide socket=$ideSocketName")
 
         val ideSocket = try {
-            connectToIdeLocalServer(ideSocketName)
+            connectToIdeLocalServer(ideSocketName, CONNECT_TIMEOUT_MS)
         } catch (t: Throwable) {
             System.err.println("failed to connect to IDE LocalServerSocket '$ideSocketName': ${t.message}")
-            exitProcess(3)
+            exitProcess(ExitCode.IDE_CONNECT_FAILED)
         }
 
         val jdwpSocket = try {
-            openLocalAbstractJdwpSocket()
+            openLocalAbstractJdwpSocket(CONNECT_TIMEOUT_MS)
         } catch (t: Throwable) {
             System.err.println("failed to open localabstract:jdwp self socket: ${t.message}")
             runCatching { ideSocket.close() }
-            exitProcess(4)
+            exitProcess(ExitCode.JDWP_OPEN_FAILED)
         }
 
         Log.i(TAG, "attached, bridging ide <-> jdwp")
@@ -88,19 +115,47 @@ object HostAttachAgent {
             runCatching { ideSocket.close() }
             runCatching { jdwpSocket.close() }
         }
-        exitProcess(0)
+        exitProcess(ExitCode.OK)
     }
 
     /**
-     * Connect to IDE's LocalServerSocket. Uses Android's [LocalSocket] which
-     * talks the Linux abstract UNIX domain socket protocol that
-     * [android.net.LocalServerSocket] binds.
+     * Connect to IDE's LocalServerSocket. Polls with timeout so a missing IDE
+     * server does not block forever. Each failed attempt rebuilds a fresh
+     * [LocalSocket] since Android's LocalSocket enters an error state after
+     * a failed connect and cannot be reused.
+     *
+     * @param name     abstract namespace socket name
+     * @param timeoutMs total budget; 0 means "use default"
      */
     @Throws(IOException::class)
-    fun connectToIdeLocalServer(name: String): LocalSocket {
-        val sock = LocalSocket()
-        sock.connect(LocalSocketAddress(name, LocalSocketAddress.Namespace.ABSTRACT))
-        return sock
+    fun connectToIdeLocalServer(name: String, timeoutMs: Long = CONNECT_TIMEOUT_MS): LocalSocket {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        val addr = LocalSocketAddress(name, LocalSocketAddress.Namespace.ABSTRACT)
+        var attempt = 0
+        while (true) {
+            val sock = LocalSocket()
+            try {
+                sock.connect(addr)
+                return sock
+            } catch (e: IOException) {
+                runCatching { sock.close() }
+                attempt++
+                val now = System.currentTimeMillis()
+                if (now >= deadline) {
+                    throw IOException(
+                        "timed out after ${timeoutMs}ms ($attempt attempt(s)) connecting to '$name'",
+                        e,
+                    )
+                }
+                try {
+                    Thread.sleep(CONNECT_RETRY_MS)
+                } catch (ie: InterruptedException) {
+                    throw InterruptedIOException("interrupted while connecting to '$name'").apply {
+                        initCause(ie)
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -113,10 +168,8 @@ object HostAttachAgent {
      * 之类的命令。
      */
     @Throws(IOException::class)
-    fun openLocalAbstractJdwpSocket(): LocalSocket {
-        val sock = LocalSocket()
-        sock.connect(LocalSocketAddress("jdwp", LocalSocketAddress.Namespace.ABSTRACT))
-        return sock
+    fun openLocalAbstractJdwpSocket(timeoutMs: Long = CONNECT_TIMEOUT_MS): LocalSocket {
+        return connectToIdeLocalServer("jdwp", timeoutMs)
     }
 
     /**
@@ -126,21 +179,12 @@ object HostAttachAgent {
      *   - thread A: ide.inputStream -> jdwp.outputStream  (IDE -> host VM)
      *   - thread B: jdwp.inputStream -> ide.outputStream  (host VM -> IDE)
      *
-     * 任何一侧 close / EOF, 关掉另一侧, join 线程, 返回。
+     * 任何一侧 close / EOF / interrupt, 关掉两侧 stream 触发对方 pump 从 read
+     * 阻塞退出, 两 thread 用 [CountDownLatch] 同步, 主线程 join 等两边都收尾。
      */
     @Throws(IOException::class)
     fun bridgeBytes(ide: LocalSocket, jdwp: LocalSocket) {
-        val a = Thread({
-            pump(ide.inputStream, jdwp.outputStream, "ide->jdwp")
-        }, "HostAttachAgent-ide2jdwp").apply { isDaemon = false; start() }
-        val b = Thread({
-            pump(jdwp.inputStream, ide.outputStream, "jdwp->ide")
-        }, "HostAttachAgent-jdwp2ide").apply { isDaemon = false; start() }
-        // 阻塞主线程直到任一转发线程结束
-        a.join()
-        runCatching { ide.close() }
-        runCatching { jdwp.close() }
-        b.join(2000)
+        bridgeBytes(ide.inputStream, ide.outputStream, jdwp.inputStream, jdwp.outputStream)
     }
 
     /**
@@ -148,24 +192,56 @@ object HostAttachAgent {
      * LocalSocket 的场景使用。
      */
     @Throws(IOException::class)
-    fun bridgeBytes(ideIn: java.io.InputStream, ideOut: java.io.OutputStream, jdwpIn: java.io.InputStream, jdwpOut: java.io.OutputStream) {
+    fun bridgeBytes(
+        ideIn: InputStream,
+        ideOut: OutputStream,
+        jdwpIn: InputStream,
+        jdwpOut: OutputStream,
+    ) {
+        val latch = CountDownLatch(2)
         val a = Thread({
-            pump(ideIn, jdwpOut, "ide->jdwp")
+            try {
+                pump(ideIn, jdwpOut, "ide->jdwp")
+            } finally {
+                latch.countDown()
+            }
         }, "HostAttachAgent-ide2jdwp").apply { isDaemon = false; start() }
         val b = Thread({
-            pump(jdwpIn, ideOut, "jdwp->ide")
+            try {
+                pump(jdwpIn, ideOut, "jdwp->ide")
+            } finally {
+                latch.countDown()
+            }
         }, "HostAttachAgent-jdwp2ide").apply { isDaemon = false; start() }
-        a.join()
+
+        // 等任一 pump 先结束
+        latch.await()
+        // 关闭两侧 output stream 触发另一 pump 从 read 阻塞退出
         runCatching { ideOut.close() }
         runCatching { jdwpOut.close() }
-        b.join(2000)
+        // interrupt 兜底 (read 阻塞在 socket 内核 buffer 满时不会立刻抛, 但 close 一定能唤醒)
+        a.interrupt()
+        b.interrupt()
+        // 等第二 pump 收尾, 带超时
+        latch.await(DRAIN_JOIN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        a.join(DRAIN_JOIN_TIMEOUT_MS)
+        b.join(DRAIN_JOIN_TIMEOUT_MS)
     }
 
-    private fun pump(`in`: java.io.InputStream, out: java.io.OutputStream, name: String) {
+    /**
+     * Pump bytes from [in] to [out] in 8 KiB chunks. 响应 [Thread.interrupt] 退出
+     * 以及上游 stream close 触发的 EOF / IOException。
+     */
+    private fun pump(`in`: InputStream, out: OutputStream, name: String) {
         val buf = ByteArray(8192)
         try {
-            while (true) {
-                val n = `in`.read(buf)
+            while (!Thread.currentThread().isInterrupted) {
+                val n = try {
+                    `in`.read(buf)
+                } catch (e: InterruptedIOException) {
+                    Log.i(TAG, "$name interrupted")
+                    return
+                }
                 if (n < 0) {
                     Log.i(TAG, "$name EOF")
                     return
@@ -173,6 +249,7 @@ object HostAttachAgent {
                 out.write(buf, 0, n)
                 out.flush()
             }
+            Log.i(TAG, "$name loop exit (interrupted)")
         } catch (t: Throwable) {
             Log.w(TAG, "$name ended: ${t.message}")
         }
@@ -189,7 +266,7 @@ object HostAttachAgent {
         return ide to jdwp
     }
 
-    private fun exitProcess(code: Int) {
-        kotlin.system.exitProcess(code)
+    private fun exitProcess(code: ExitCode) {
+        kotlin.system.exitProcess(code.code)
     }
 }
