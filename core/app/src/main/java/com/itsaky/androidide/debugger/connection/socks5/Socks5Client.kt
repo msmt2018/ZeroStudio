@@ -37,12 +37,18 @@ class Socks5Client(
 ) {
 
     /**
+     * SOCKS5 协议握手阶段的 read 超时 (ms)。握手完成 (REP=0 收到后) 立即
+     * 重置回 0 (无限), 让上层 JDWP 流量正常用阻塞 read 等 IDE 命令。
+     */
+    private val handshakeReadTimeoutMs: Int = 5_000
+
+    /**
      * 通过 SOCKS5 代理连到目标 host:port。
      *
      * @param proxyAddr SOCKS5 server 地址
      * @param targetHost 目标 host (IPv4 dotted-quad 或 domain name)
      * @param targetPort 目标端口
-     * @param connectTimeoutMs 建链超时
+     * @param connectTimeoutMs TCP 建链超时
      * @return 已经完成 SOCKS5 握手的 Socket, 内层流量直接是目标协议
      */
     @Throws(IOException::class)
@@ -55,6 +61,9 @@ class Socks5Client(
         require(targetPort in 1..65535) { "targetPort out of range: $targetPort" }
         val socket = Socket()
         socket.connect(proxyAddr, connectTimeoutMs)
+        // 握手阶段 read 超时保护: 防止 host 端 SOCKS5 server 半死导致无限阻塞。
+        // 完成后 (REP=0 收到后) 重置回 0, 让上层 JDWP 流量正常阻塞 read。
+        socket.soTimeout = handshakeReadTimeoutMs
         try {
             val out = DataOutputStream(socket.getOutputStream())
             val input = DataInputStream(socket.getInputStream())
@@ -117,6 +126,8 @@ class Socks5Client(
                 val msg = socks5ErrorMessage(rep)
                 throw IOException("SOCKS5 CONNECT failed: REP=$rep ($msg)")
             }
+            // 握手完成, 重置 read timeout 回 0 (无限), 让上层 JDWP 流量正常用阻塞 read
+            socket.soTimeout = 0
             log.info("Socks5Client: connected via SOCKS5 to {}:{}", targetHost, targetPort)
             return socket
         } catch (t: Throwable) {
