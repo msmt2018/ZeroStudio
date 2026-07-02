@@ -241,7 +241,11 @@ abstract class AdbForwardConnection(
             info = info,
             ok = finalSock != null,
             failureMsg = "attach returned but client socket is missing",
-            onAttached = { startReadLoop(finalSock!!) },
+            // Phase 12m: 移除默认启 read loop。attachedSocket() 会被 JdwpClient
+            // 拿去 (走 ConnectionBackedDebugger.run() -> debugger.forClient(client)),
+            // 之前默认 onAttached 调 startReadLoop 跟 JdwpClient 内部 read 抢同
+            // socket.inputStream, 字节被 split 丢失。
+            onAttached = { /* JdwpClient 接管, 不启 read loop */ },
         )
     }
 

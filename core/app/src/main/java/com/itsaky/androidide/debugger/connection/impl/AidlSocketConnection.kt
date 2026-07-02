@@ -244,7 +244,13 @@ class AidlSocketConnection(
             info = info,
             ok = finalSock != null,
             failureMsg = "attach returned but client socket is missing",
-            onAttached = { startReadLoopFromSocket(finalSock!!) },
+            // Phase 12m: TCP 路径下 attachedSocket() 会被 JdwpClient 拿去
+            // (走 ConnectionBackedDebugger.run() -> debugger.forClient(client)),
+            // **不再启 read loop**。之前默认 onAttached 调 startReadLoopFromSocket,
+            // 跟 JdwpClient 内部 read 抢同一 socket.inputStream, 字节被 split 丢失。
+            // receiveJdwp() flow 仍保留 (接口签名), 但没人 collect 时 flow 永
+            // 不 emit, 不影响主路径。
+            onAttached = { /* TCP 路径: JdwpClient 接管, 不启 read loop */ },
         )
     }
 

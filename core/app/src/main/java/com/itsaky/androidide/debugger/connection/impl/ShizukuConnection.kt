@@ -203,13 +203,12 @@ class ShizukuConnection(
             info = info,
             ok = hasLocal || sock != null,
             failureMsg = "attach returned but neither socket nor localSocket is set",
-            onAttached = {
-                if (hasLocal) {
-                    startReadLoopFromStream(localInput!!)
-                } else {
-                    startReadLoop(sock!!)
-                }
-            },
+            // Phase 12m: 移除默认启 read loop (理由同 AidlSocketConnection /
+            // AdbForwardConnection / InnetVmSocksConnection)。attachedSocket()
+            // 会被 JdwpClient 拿去, 跟 read loop 抢同 socket.inputStream
+            // 会导致字节被 split 丢失。receiveJdwp() flow 仍保留 (接口签名),
+            // 没人 collect 时永不 emit, 不影响主路径。
+            onAttached = { /* JdwpClient 接管, 不启 read loop */ },
         )
     }
 

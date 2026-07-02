@@ -157,7 +157,8 @@ class InnetVmSocksConnection(
             info = info,
             ok = sock != null,
             failureMsg = "attach returned but socket is missing",
-            onAttached = { startReadLoop(sock!!) },
+            // Phase 12m: 移除默认启 read loop (理由同 AdbForwardConnection)。
+            onAttached = { /* JdwpClient 接管, 不启 read loop */ },
         )
     }
 
