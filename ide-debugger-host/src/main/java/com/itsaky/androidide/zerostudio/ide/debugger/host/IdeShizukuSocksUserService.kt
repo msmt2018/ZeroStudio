@@ -80,12 +80,15 @@ class IdeShizukuSocksUserService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder {
-        Log.i(tag, "onBind: triggering HostSocksServer startup")
-        // 启动 SOCKS5 server, listen 在 127.0.0.1:39939 (IDE 端固定默认端口)
-        // Shizuku 反射加载本类不传自定义 intent extras, 跟 IDE 端
-        // ShizukuConfig.socksPort = 39939 默认值保持一致, 端到端默认跑通。
-        // 用户想改端口: IDE 端改 settings.shizuku.socksPort, host 端用
-        // getSystemProperty / 约定 file 读到约定值 (尚未实装, 留 TODO)。
+        Log.i(tag, "onBind: triggering HostSocksServer startup on default port")
+        // 启动 SOCKS5 server, listen 在 127.0.0.1:39939 (跟 IDE 端
+        // ShizukuConfig.socksPort = 39939 默认值保持一致, 端到端默认跑通)。
+        // Phase 12x 调研结论: Shizuku 13.1.5 的 [Shizuku.UserServiceArgs] 没有
+        // .args(Bundle) API, IDE 端改 settings.shizuku.socksPort 不能从
+        // onBind(Intent) extras 传进来 (intent 永远没 extras)。
+        // Phase 12y TODO: 实装 ISocksControl AIDL, host 端 onBind 返真 binder,
+        // IDE 端 attachViaSocks 拿 binder 后调 transact(CODE_SET_SOCKS_PORT, port)
+        // 走 binder 协议传 port 给 host 启动 SOCKS5 server 在 user-given port。
         val requestedPort = intent?.getIntExtra(EXTRA_SOCKS_PORT, DEFAULT_SOCKS_PORT) ?: DEFAULT_SOCKS_PORT
         val bindHost = intent?.getStringExtra(EXTRA_BIND_HOST) ?: DEFAULT_BIND_HOST
         try {

@@ -369,6 +369,13 @@ class ShizukuConnection(
             target.packageName,
             "com.itsaky.androidide.zerostudio.ide.debugger.host.IdeShizukuSocksUserService",
         )
+        // Phase 12x: 之前 IDE 端改 settings.shizuku.socksPort 走 Bundle{port=...}
+        // 传 host, 失败 — Shizuku 13.1.5 没 .args(Bundle) API (内部 forAdd() Bundle
+        // 私有)。Phase 12x 改 class 路径 rikka.shizuku.api.UserServiceArgs ->
+        // rikka.shizuku.Shizuku.UserServiceArgs 修编译错误, args 参数被忽略。
+        // Phase 12y TODO: 实装 ISocksControl AIDL, host 端 user service onBind 返
+        // 真 binder, IDE 端 attachViaSocks 拿 binder 后调
+        // binder.transact(CODE_SET_SOCKS_PORT, ...) 传 port 给 host。
         val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
         if (binder == null || !binder.pingBinder()) {
             throw IOException("Shizuku Socks: user service binder dead")

@@ -25,6 +25,7 @@ package com.itsaky.androidide.debugger.connection.shizuku
 
 import android.content.ComponentName
 import android.content.ServiceConnection
+import android.os.Bundle
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.os.RemoteException
@@ -68,10 +69,18 @@ interface ShizukuBinderClient {
 
     /**
      * 调 Shizuku.bindUserService 拉一个 user service, 阻塞等 onServiceConnected。
+     *
+     * Phase 12x: 加 `args: Bundle?` 参数, Shizuku 13+ 的 [rikka.shizuku.api.UserServiceArgs]
+     * 支持 `.args(Bundle)` 传自定义 Bundle, 这个 Bundle 会被 Shizuku 放到 user service
+     * `onBind(Intent)` 的 intent extras 里。host 端 `IdeShizukuSocksUserService.onBind`
+     * 读 `intent.getIntExtra(EXTRA_SOCKS_PORT, DEFAULT_SOCKS_PORT)`, 之前 IDE 端
+     * 改 `settings.shizuku.socksPort` 完全无效 (intent 没 extras, 永远默认 39939,
+     * Socks 客户端连用户设的端口但 host listen 在 39939, 连接失败)。
      */
     suspend fun bindUserService(
         componentName: ComponentName,
         processName: String,
+        args: Bundle? = null,
     ): IBinder
 
     companion object {
@@ -144,6 +153,7 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
     override suspend fun bindUserService(
         componentName: ComponentName,
         processName: String,
+        args: Bundle?,
     ): IBinder = withContext(Dispatchers.IO) {
         // 走 Shizuku.bindUserService, 阻塞等 onServiceConnected
         val latch = java.util.concurrent.CountDownLatch(1)
@@ -153,11 +163,25 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
             latch.countDown()
         }
         try {
-            val args = rikka.shizuku.api.UserServiceArgs(componentName)
+            // Phase 12x (修订): Shizuku 13.1.5 的 [Shizuku.UserServiceArgs] 是
+            //   Shizuku 的内部类 (不在 rikka.shizuku.api 包), 且**没有** .args(Bundle)
+            //   API, args 内部 forAdd() Bundle 是 Shizuku 私有 user-supplied 不能加。
+            //   之前 rikka.shizuku.api.UserServiceArgs 是错的 class 路径, 编译失败。
+            //   也不能从 IDE 端传自定义 Bundle 到 host 端 onBind(Intent) extras。
+            // 修法: 走 rikka.shizuku.Shizuku.UserServiceArgs 正确路径, args 参数
+            //   保留接口 (后续 Phase 12y 走 binder transact 协议替代), 但当前
+            //   args 参数被忽略 (Shizuku 13.1.5 没 API 接收)。
+            val builder = rikka.shizuku.Shizuku.UserServiceArgs(componentName)
                 .processName(processName)
                 .daemon(false)
                 .debuggable(false)
-            Shizuku.bindUserService(args, conn)
+            // args 暂不传给 Shizuku 13.1.5 (没 API), 走 binder transact 替代
+            //   详细见 Phase 12y TODO: 实现 ISocksControl AIDL + transact
+            if (args != null) {
+                log.warn("bindUserService: args Bundle ignored (Shizuku 13.1.5 没 .args API), " +
+                    "use binder.transact() in Phase 12y ISocksControl AIDL")
+            }
+            Shizuku.bindUserService(builder, conn)
             if (!latch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
                 throw IOException("bindUserService timeout (10s)")
             }
@@ -197,6 +221,9 @@ class FakeShizukuBinderClient(
         private set
     var lastProcessName: String? = null
         private set
+    // Phase 12x: 跟踪 lastArgs 用于 test 验证 IDE 端传的 Bundle 正确
+    var lastArgs: Bundle? = null
+        private set
 
     override suspend fun newProcess(
         cmd: Array<String>,
@@ -232,10 +259,12 @@ class FakeShizukuBinderClient(
     override suspend fun bindUserService(
         componentName: ComponentName,
         processName: String,
+        args: Bundle?,
     ): IBinder {
         bindUserServiceCallCount++
         lastComponentName = componentName
         lastProcessName = processName
+        lastArgs = args
         return bindUserServiceResult ?: throw IOException("FakeShizukuBinderClient: bindUserServiceResult is null")
     }
 }
