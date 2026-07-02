@@ -74,7 +74,7 @@ interface IDebugConnection {
     /**
      * Attached 状态时返回用于 JDWP 通信的底层 Socket。
      * 默认抛 UnsupportedOperationException,只有真正用 socket 作为传输
-     * (AIDL Socket / Shizuku C / Root / InnetVm / UsbLan) 的实现才
+     * (AIDL Socket / Shizuku C / Root / InnetVmAdb / UsbLan) 的实现才
      * override。
      *
      * <p>返回的 Socket 由 IDebugConnection 拥有,调 detach()/release() 时

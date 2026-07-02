@@ -44,13 +44,18 @@ object DebugConnectionPreferences {
     const val ROOT_PROBE_TIMEOUT_MS = "ide.debugger.connection.root.probeTimeoutMs"
     const val ROOT_ALLOW_MAGISK = "ide.debugger.connection.root.allowMagisk"
 
-    // ---- InnetVm ----
-    const val INNET_SOCKS_HOST = "ide.debugger.connection.innet.socksHost"
-    const val INNET_SOCKS_PORT = "ide.debugger.connection.innet.socksPort"
-    const val INNET_SOCKS_USER = "ide.debugger.connection.innet.socksUser"
-    const val INNET_SOCKS_PASSWORD = "ide.debugger.connection.innet.socksPassword"
-    const val INNET_ADB_HOST = "ide.debugger.connection.innet.adbHost"
-    const val INNET_ADB_PORT = "ide.debugger.connection.innet.adbPort"
+    // ---- InnetVmSocks 代理 ----
+    const val INNET_SOCKS_HOST = "ide.debugger.connection.innetSocks.socksHost"
+    const val INNET_SOCKS_PORT = "ide.debugger.connection.innetSocks.socksPort"
+    const val INNET_SOCKS_USER = "ide.debugger.connection.innetSocks.socksUser"
+    const val INNET_SOCKS_PASSWORD = "ide.debugger.connection.innetSocks.socksPassword"
+    const val INNET_SOCKS_CONNECT_TIMEOUT_MS = "ide.debugger.connection.innetSocks.connectTimeoutMs"
+
+    // ---- InnetVmAdb 端口转发 ----
+    const val INNET_ADB_HOST = "ide.debugger.connection.innetAdb.adbHost"
+    const val INNET_ADB_PORT = "ide.debugger.connection.innetAdb.adbPort"
+    const val INNET_ADB_SERIAL = "ide.debugger.connection.innetAdb.adbSerial"
+    const val INNET_ADB_CONNECT_TIMEOUT_MS = "ide.debugger.connection.innetAdb.connectTimeoutMs"
 
     // ---- UsbLan ----
     const val USB_ADB_HOST = "ide.debugger.connection.usb.adbHost"
@@ -63,8 +68,12 @@ object DebugConnectionPreferences {
         get() = prefManager.getString(ACTIVE_TYPE, ConnectionType.AidlSocket.id)!!
         set(value) { prefManager.putString(ACTIVE_TYPE, value) }
 
+    /**
+     * 读时用 fromIdCompat 把旧 id "innet_vm" 映射到新的 SOCKS5 方案,
+     * 保证从旧版本升级上来的用户不会回到默认 AIDL socket。
+     */
     var activeType: ConnectionType
-        get() = ConnectionType.fromId(prefManager.getString(ACTIVE_TYPE, null))
+        get() = ConnectionType.fromIdCompat(prefManager.getString(ACTIVE_TYPE, null))
         set(value) { prefManager.putString(ACTIVE_TYPE, value.id) }
 
     var autoRetry: Boolean
@@ -124,7 +133,7 @@ object DebugConnectionPreferences {
         get() = prefManager.getBoolean(ROOT_ALLOW_MAGISK, true)
         set(value) { prefManager.putBoolean(ROOT_ALLOW_MAGISK, value) }
 
-    // ---- InnetVm ----
+    // ---- InnetVmSocks ----
     var innetSocksHost: String
         get() = prefManager.getString(INNET_SOCKS_HOST, "127.0.0.1")!!
         set(value) { prefManager.putString(INNET_SOCKS_HOST, value) }
@@ -141,6 +150,11 @@ object DebugConnectionPreferences {
         get() = prefManager.getString(INNET_SOCKS_PASSWORD, null)
         set(value) { prefManager.putString(INNET_SOCKS_PASSWORD, value) }
 
+    var innetSocksConnectTimeoutMs: Long
+        get() = prefManager.getLong(INNET_SOCKS_CONNECT_TIMEOUT_MS, 10_000L)
+        set(value) { prefManager.putLong(INNET_SOCKS_CONNECT_TIMEOUT_MS, value) }
+
+    // ---- InnetVmAdb ----
     var innetAdbHost: String
         get() = prefManager.getString(INNET_ADB_HOST, "127.0.0.1")!!
         set(value) { prefManager.putString(INNET_ADB_HOST, value) }
@@ -148,6 +162,14 @@ object DebugConnectionPreferences {
     var innetAdbPort: Int
         get() = prefManager.getInt(INNET_ADB_PORT, 5555)
         set(value) { prefManager.putInt(INNET_ADB_PORT, value) }
+
+    var innetAdbSerial: String?
+        get() = prefManager.getString(INNET_ADB_SERIAL, null)
+        set(value) { prefManager.putString(INNET_ADB_SERIAL, value) }
+
+    var innetAdbConnectTimeoutMs: Long
+        get() = prefManager.getLong(INNET_ADB_CONNECT_TIMEOUT_MS, 5_000L)
+        set(value) { prefManager.putLong(INNET_ADB_CONNECT_TIMEOUT_MS, value) }
 
     // ---- UsbLan ----
     var usbAdbHost: String
@@ -188,13 +210,18 @@ object DebugConnectionPreferences {
             probeTimeoutMs = rootProbeTimeoutMs,
             allowMagiskSu = rootAllowMagisk,
         ),
-        innetVm = InnetVmConfig(
+        innetSocks = InnetSocksConfig(
             socksHost = innetSocksHost,
             socksPort = innetSocksPort,
             socksUser = innetSocksUser,
             socksPassword = innetSocksPassword,
-            remoteAdbHost = innetAdbHost,
-            remoteAdbPort = innetAdbPort,
+            connectTimeoutMs = innetSocksConnectTimeoutMs,
+        ),
+        innetAdb = InnetAdbConfig(
+            adbHost = innetAdbHost,
+            adbPort = innetAdbPort,
+            adbSerial = innetAdbSerial,
+            connectTimeoutMs = innetAdbConnectTimeoutMs,
         ),
         usbLan = UsbLanConfig(
             adbHost = usbAdbHost,
@@ -219,16 +246,18 @@ object DebugConnectionPreferences {
         rootSuBin = settings.root.suBinPath
         rootProbeTimeoutMs = settings.root.probeTimeoutMs
         rootAllowMagisk = settings.root.allowMagiskSu
-        innetSocksHost = settings.innetVm.socksHost
-        innetSocksPort = settings.innetVm.socksPort
-        innetSocksUser = settings.innetVm.socksUser
-        innetSocksPassword = settings.innetVm.socksPassword
-        innetAdbHost = settings.innetVm.remoteAdbHost
-        innetAdbPort = settings.innetVm.remoteAdbPort
+        innetSocksHost = settings.innetSocks.socksHost
+        innetSocksPort = settings.innetSocks.socksPort
+        innetSocksUser = settings.innetSocks.socksUser
+        innetSocksPassword = settings.innetSocks.socksPassword
+        innetSocksConnectTimeoutMs = settings.innetSocks.connectTimeoutMs
+        innetAdbHost = settings.innetAdb.adbHost
+        innetAdbPort = settings.innetAdb.adbPort
+        innetAdbSerial = settings.innetAdb.adbSerial
+        innetAdbConnectTimeoutMs = settings.innetAdb.connectTimeoutMs
         usbAdbHost = settings.usbLan.adbHost
         usbAdbPort = settings.usbLan.adbPort
         usbAdbSerial = settings.usbLan.adbSerial
         usbConnectTimeoutMs = settings.usbLan.connectTimeoutMs
     }
-
 }

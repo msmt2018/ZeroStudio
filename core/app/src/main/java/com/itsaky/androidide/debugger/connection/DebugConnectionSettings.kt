@@ -49,21 +49,33 @@ data class RootConfig(
 )
 
 /**
- * 内网虚拟机方案参数。
- * @param socksHost SOCKS5 代理地址
+ * 内网虚拟机 SOCKS5 代理方案参数。
+ * @param socksHost SOCKS5 代理地址 (VM 端提供的代理监听地址)
  * @param socksPort SOCKS5 代理端口
  * @param socksUser 代理用户名 (可选)
  * @param socksPassword 代理密码 (可选)
- * @param remoteAdbHost 远端 adb 主机 (光速虚拟机 / vmos 一般是 127.0.0.1)
- * @param remoteAdbPort 远端 adb 端口
+ * @param connectTimeoutMs SOCKS5 建链超时
  */
-data class InnetVmConfig(
+data class InnetSocksConfig(
     val socksHost: String = "127.0.0.1",
     val socksPort: Int = 1080,
     val socksUser: String? = null,
     val socksPassword: String? = null,
-    val remoteAdbHost: String = "127.0.0.1",
-    val remoteAdbPort: Int = 5555,
+    val connectTimeoutMs: Long = 10_000L,
+)
+
+/**
+ * 内网虚拟机 ADB 网络端口转发方案参数。
+ * @param adbHost VM 端 adb 监听地址 (一般是 127.0.0.1 或 VM 内部 IP)
+ * @param adbPort VM 端 adb 端口 (默认 5555)
+ * @param adbSerial 多设备时指定 serial
+ * @param connectTimeoutMs adb connect 超时
+ */
+data class InnetAdbConfig(
+    val adbHost: String = "127.0.0.1",
+    val adbPort: Int = 5555,
+    val adbSerial: String? = null,
+    val connectTimeoutMs: Long = 5_000L,
 )
 
 /**
@@ -81,7 +93,7 @@ data class UsbLanConfig(
 )
 
 /**
- * 5 种方案的参数汇总 + 全局开关。
+ *  6 种方案的参数汇总 + 全局开关。
  * 通过 [DebugConnectionPreferences] 读写持久化。
  */
 data class DebugConnectionSettings(
@@ -92,6 +104,7 @@ data class DebugConnectionSettings(
     val aidlSocket: AidlSocketConfig = AidlSocketConfig(),
     val shizuku: ShizukuConfig = ShizukuConfig(),
     val root: RootConfig = RootConfig(),
-    val innetVm: InnetVmConfig = InnetVmConfig(),
+    val innetSocks: InnetSocksConfig = InnetSocksConfig(),
+    val innetAdb: InnetAdbConfig = InnetAdbConfig(),
     val usbLan: UsbLanConfig = UsbLanConfig(),
 )

@@ -33,7 +33,8 @@ class DebuggerPreferences(
     addPreference(AidlSocketOptionsGroup())
     addPreference(ShizukuOptionsGroup())
     addPreference(RootOptionsGroup())
-    addPreference(InnetVmOptionsGroup())
+    addPreference(InnetSocksOptionsGroup())
+    addPreference(InnetAdbOptionsGroup())
     addPreference(UsbLanOptionsGroup())
   }
 }
@@ -191,16 +192,17 @@ private class RootSuBinEdit(
 }
 
 @Parcelize
-private class InnetVmOptionsGroup(
-    override val key: String = "idepref_debugger_innet",
-    override val title: Int = ConnectionType.InnetVm.displayName.let { _ -> R.string.idepref_debugger_innet_socks_host_title },
+private class InnetSocksOptionsGroup(
+    override val key: String = "idepref_debugger_innet_socks",
+    override val title: Int = R.string.idepref_debugger_innet_socks_title,
     override val children: List<IPreference> = mutableListOf(),
 ) : IPreferenceGroup() {
   init {
     addPreference(InnetSocksHostEdit())
     addPreference(InnetSocksPortEdit())
-    addPreference(InnetAdbHostEdit())
-    addPreference(InnetAdbPortEdit())
+    addPreference(InnetSocksUserEdit())
+    addPreference(InnetSocksPasswordEdit())
+    addPreference(InnetSocksConnectTimeoutEdit())
   }
 }
 
@@ -233,6 +235,62 @@ private class InnetSocksPortEdit(
 }
 
 @Parcelize
+private class InnetSocksUserEdit(
+    override val key: String = DebugConnectionPreferences.INNET_SOCKS_USER,
+    override val title: Int = R.string.idepref_debugger_innet_socks_user_title,
+) : EditTextPreference() {
+  override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
+    DebugConnectionPreferences.innetSocksUser = (newValue as? String)
+    return true
+  }
+  override fun onConfigureTextInput(input: com.google.android.material.textfield.TextInputLayout) {
+    input.editText?.setText(DebugConnectionPreferences.innetSocksUser ?: "")
+  }
+}
+
+@Parcelize
+private class InnetSocksPasswordEdit(
+    override val key: String = DebugConnectionPreferences.INNET_SOCKS_PASSWORD,
+    override val title: Int = R.string.idepref_debugger_innet_socks_password_title,
+) : EditTextPreference() {
+  override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
+    DebugConnectionPreferences.innetSocksPassword = (newValue as? String)
+    return true
+  }
+  override fun onConfigureTextInput(input: com.google.android.material.textfield.TextInputLayout) {
+    input.editText?.setText(DebugConnectionPreferences.innetSocksPassword ?: "")
+  }
+}
+
+@Parcelize
+private class InnetSocksConnectTimeoutEdit(
+    override val key: String = DebugConnectionPreferences.INNET_SOCKS_CONNECT_TIMEOUT_MS,
+    override val title: Int = R.string.idepref_debugger_innet_socks_connect_timeout_title,
+) : EditTextPreference() {
+  override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
+    DebugConnectionPreferences.innetSocksConnectTimeoutMs = (newValue as? String)?.toLongOrNull() ?: 10_000L
+    return true
+  }
+  override fun onConfigureTextInput(input: com.google.android.material.textfield.TextInputLayout) {
+    input.editText?.setText(DebugConnectionPreferences.innetSocksConnectTimeoutMs.toString())
+  }
+}
+
+@Parcelize
+private class InnetAdbOptionsGroup(
+    override val key: String = "idepref_debugger_innet_adb",
+    override val title: Int = R.string.idepref_debugger_innet_adb_title,
+    override val children: List<IPreference> = mutableListOf(),
+) : IPreferenceGroup() {
+  init {
+    addPreference(InnetAdbHostEdit())
+    addPreference(InnetAdbPortEdit())
+    addPreference(InnetAdbSerialEdit())
+    addPreference(InnetAdbConnectTimeoutEdit())
+  }
+}
+
+@Parcelize
 private class InnetAdbHostEdit(
     override val key: String = DebugConnectionPreferences.INNET_ADB_HOST,
     override val title: Int = R.string.idepref_debugger_innet_adb_host_title,
@@ -257,6 +315,34 @@ private class InnetAdbPortEdit(
   }
   override fun onConfigureTextInput(input: com.google.android.material.textfield.TextInputLayout) {
     input.editText?.setText(DebugConnectionPreferences.innetAdbPort.toString())
+  }
+}
+
+@Parcelize
+private class InnetAdbSerialEdit(
+    override val key: String = DebugConnectionPreferences.INNET_ADB_SERIAL,
+    override val title: Int = R.string.idepref_debugger_innet_adb_serial_title,
+) : EditTextPreference() {
+  override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
+    DebugConnectionPreferences.innetAdbSerial = (newValue as? String)
+    return true
+  }
+  override fun onConfigureTextInput(input: com.google.android.material.textfield.TextInputLayout) {
+    input.editText?.setText(DebugConnectionPreferences.innetAdbSerial ?: "")
+  }
+}
+
+@Parcelize
+private class InnetAdbConnectTimeoutEdit(
+    override val key: String = DebugConnectionPreferences.INNET_ADB_CONNECT_TIMEOUT_MS,
+    override val title: Int = R.string.idepref_debugger_innet_adb_connect_timeout_title,
+) : EditTextPreference() {
+  override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
+    DebugConnectionPreferences.innetAdbConnectTimeoutMs = (newValue as? String)?.toLongOrNull() ?: 5_000L
+    return true
+  }
+  override fun onConfigureTextInput(input: com.google.android.material.textfield.TextInputLayout) {
+    input.editText?.setText(DebugConnectionPreferences.innetAdbConnectTimeoutMs.toString())
   }
 }
 

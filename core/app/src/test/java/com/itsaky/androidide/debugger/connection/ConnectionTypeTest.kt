@@ -45,7 +45,8 @@ class ConnectionTypeTest {
         assertFalse(ConnectionType.AidlSocket.requiresRoot)
         assertFalse(ConnectionType.Shizuku.requiresRoot)
         assertTrue(ConnectionType.Root.requiresRoot)
-        assertFalse(ConnectionType.InnetVm.requiresRoot)
+        assertFalse(ConnectionType.InnetVmSocks.requiresRoot)
+        assertFalse(ConnectionType.InnetVmAdb.requiresRoot)
         assertFalse(ConnectionType.UsbLan.requiresRoot)
     }
 
@@ -54,8 +55,33 @@ class ConnectionTypeTest {
         assertFalse(ConnectionType.AidlSocket.requiresShizuku)
         assertTrue(ConnectionType.Shizuku.requiresShizuku)
         assertFalse(ConnectionType.Root.requiresShizuku)
-        assertFalse(ConnectionType.InnetVm.requiresShizuku)
+        assertFalse(ConnectionType.InnetVmSocks.requiresShizuku)
+        assertFalse(ConnectionType.InnetVmAdb.requiresShizuku)
         assertFalse(ConnectionType.UsbLan.requiresShizuku)
+    }
+
+    @Test
+    fun `ALL has 6 types after split`() {
+        // 5 -> 6 after splitting InnetVm into InnetVmSocks + InnetVmAdb
+        assertEquals(6, ConnectionType.ALL.size)
+    }
+
+    @Test
+    fun `fromIdCompat maps old innet_vm id to InnetVmSocks`() {
+        assertSame(ConnectionType.InnetVmSocks, ConnectionType.fromIdCompat("innet_vm"))
+    }
+
+    @Test
+    fun `fromIdCompat falls back to default for unknown id`() {
+        assertSame(ConnectionType.AidlSocket, ConnectionType.fromIdCompat("nope"))
+        assertSame(ConnectionType.AidlSocket, ConnectionType.fromIdCompat(null))
+    }
+
+    @Test
+    fun `fromIdCompat roundtrips current ids`() {
+        for (type in ConnectionType.ALL) {
+            assertSame(type, ConnectionType.fromIdCompat(type.id))
+        }
     }
 
     @Test
@@ -141,9 +167,15 @@ class DebugConnectionRegistryTest {
     }
 
     @Test
-    fun `create returns InnetVmConnection for InnetVm type`() {
-        val conn = DebugConnectionRegistry.create(ConnectionType.InnetVm, target, settings)
-        assertEquals(ConnectionType.InnetVm, conn.type)
+    fun `create returns InnetVmSocksConnection for InnetVmSocks type`() {
+        val conn = DebugConnectionRegistry.create(ConnectionType.InnetVmSocks, target, settings)
+        assertEquals(ConnectionType.InnetVmSocks, conn.type)
+    }
+
+    @Test
+    fun `create returns InnetVmAdbConnection for InnetVmAdb type`() {
+        val conn = DebugConnectionRegistry.create(ConnectionType.InnetVmAdb, target, settings)
+        assertEquals(ConnectionType.InnetVmAdb, conn.type)
     }
 
     @Test

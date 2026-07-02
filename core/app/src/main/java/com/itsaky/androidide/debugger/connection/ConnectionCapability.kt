@@ -15,7 +15,7 @@ sealed class ConnectionCapability {
     /** 能读 /proc/net/unix 找 jdwp socket (Root、Shizuku B 路径) */
     object CanReadProcNet : ConnectionCapability()
 
-    /** 能开 SOCKS5 出口 (Shizuku D 路径、InnetVm) */
+    /** 能开 SOCKS5 出口 (Shizuku D 路径、InnetVmSocks) */
     object CanExposeSocks : ConnectionCapability()
 
     /** 依赖宿主应用前台运行 (AIDL Socket 等) */

@@ -11,7 +11,8 @@
 package com.itsaky.androidide.debugger.connection
 
 import com.itsaky.androidide.debugger.connection.impl.AidlSocketConnection
-import com.itsaky.androidide.debugger.connection.impl.InnetVmConnection
+import com.itsaky.androidide.debugger.connection.impl.InnetVmAdbConnection
+import com.itsaky.androidide.debugger.connection.impl.InnetVmSocksConnection
 import com.itsaky.androidide.debugger.connection.impl.RootConnection
 import com.itsaky.androidide.debugger.connection.impl.ShizukuConnection
 import com.itsaky.androidide.debugger.connection.impl.UsbLanConnection
@@ -30,7 +31,8 @@ object DebugConnectionRegistry {
         ConnectionType.AidlSocket -> AidlSocketConnection(target, settings)
         ConnectionType.Shizuku -> ShizukuConnection(target, settings)
         ConnectionType.Root -> RootConnection(target, settings)
-        ConnectionType.InnetVm -> InnetVmConnection(target, settings)
+        ConnectionType.InnetVmSocks -> InnetVmSocksConnection(target, settings)
+        ConnectionType.InnetVmAdb -> InnetVmAdbConnection(target, settings)
         ConnectionType.UsbLan -> UsbLanConnection(target, settings)
     }
 

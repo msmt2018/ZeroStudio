@@ -311,8 +311,15 @@
      <string name="idepref_debugger_root_su_bin_title">su binary path</string>
      <string name="idepref_debugger_innet_socks_host_title">SOCKS5 host</string>
      <string name="idepref_debugger_innet_socks_port_title">SOCKS5 port</string>
+     <string name="idepref_debugger_innet_socks_user_title">SOCKS5 user (optional)</string>
+     <string name="idepref_debugger_innet_socks_password_title">SOCKS5 password (optional)</string>
+     <string name="idepref_debugger_innet_socks_connect_timeout_title">SOCKS5 connect timeout (ms)</string>
+     <string name="idepref_debugger_innet_socks_title">Inner-VM (SOCKS5)</string>
      <string name="idepref_debugger_innet_adb_host_title">Remote ADB host</string>
      <string name="idepref_debugger_innet_adb_port_title">Remote ADB port</string>
+     <string name="idepref_debugger_innet_adb_serial_title">Remote ADB serial (optional)</string>
+     <string name="idepref_debugger_innet_adb_connect_timeout_title">Remote ADB connect timeout (ms)</string>
+     <string name="idepref_debugger_innet_adb_title">Inner-VM (ADB forward)</string>
      <string name="idepref_debugger_usb_adb_host_title">ADB host</string>
      <string name="idepref_debugger_usb_adb_port_title">ADB port</string>
      <string name="idepref_debugger_usb_adb_serial_title">ADB serial (optional)</string>
