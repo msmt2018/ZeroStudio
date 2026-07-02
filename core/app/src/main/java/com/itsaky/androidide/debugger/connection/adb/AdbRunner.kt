@@ -125,18 +125,29 @@ class DefaultAdbRunner : AdbRunner {
         val outBuf = arrayOfNulls<String>(null)
         val errBuf = arrayOfNulls<String>(null)
         val done = CountDownLatch(1)
-        val errRef = arrayOfNulls<Throwable>(null)
+        // Phase 12u: 命名错位 + err thread 静默吞错修
+        //   - 之前 errRef 名字暗示是 err thread 异常, 实际是 out thread 异常
+        //     (line 132 out catch 写, line 151 读), 错位让读代码的人混乱
+        //   - err thread catch (_: Throwable) 静默吞, 跟 out thread 行为不一致;
+        //     stderr 读失败时用户拿到空 stderr 实际是 read 失败
+        // 修法: 重命名 outErr (out thread 异常, 失败抛 IOException 包),
+        // 加 errErr (err thread 异常, 失败 log warn 不抛 — 跟之前行为一致
+        //   保留 AdbResult.stderr 返空字符串, 但留 log 让排查有线索)
+        val outErr = arrayOfNulls<Throwable>(null)
+        val errErr = arrayOfNulls<Throwable>(null)
         thread(name = "AdbRunner-out", isDaemon = true) {
             try {
                 outBuf[0] = proc.inputStream.readBytes().toString(Charsets.UTF_8)
             } catch (t: Throwable) {
-                errRef[0] = t
+                outErr[0] = t
             }
         }
         thread(name = "AdbRunner-err", isDaemon = true) {
             try {
                 errBuf[0] = proc.errorStream.readBytes().toString(Charsets.UTF_8)
-            } catch (_: Throwable) { /* ignore */ }
+            } catch (t: Throwable) {
+                errErr[0] = t
+            }
         }
         thread(name = "AdbRunner-wait", isDaemon = true) {
             try {
@@ -148,7 +159,11 @@ class DefaultAdbRunner : AdbRunner {
             runCatching { proc.destroyForcibly() }
             throw IOException("adb: timeout (${timeoutMs}ms): ${cmd.joinToString(" ")}")
         }
-        if (errRef[0] != null) throw errRef[0]!!
+        // out thread 失败: 抛 IOException 包, 跟 AdbResult 协议一致
+        outErr[0]?.let { throw IOException("adb: read stdout failed: ${it.message}", it) }
+        // err thread 失败: log warn 但不抛 (跟之前一致, stderr 返空字符串;
+        //   主流程靠 stdout + exit code 判定, stderr 读失败不算 hard error)
+        errErr[0]?.let { log.warn("adb: read stderr failed: {}", it.message) }
         val stdout = outBuf[0] ?: ""
         val stderr = errBuf[0] ?: ""
         log.debug("adb {} -> exit={}, stdout={}, stderr={}", args, proc.exitValue(),
