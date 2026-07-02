@@ -328,9 +328,7 @@ class ShizukuConnectionTest {
 
         try {
             acceptStarted.await()
-            // 3) 用一个 custom ShizukuSocksClient 实例, 但 proxyAddr 是固定的
-            //    (ide-shizuku-socks-{pkg}:0 unresolved). 我们用反射不能改, 但
-            //    验证 Socks5Client 被调用 + connect 失败 (因 hostname 无法解析)。
+            // 3) 用配置好的 socksPort (proxyPort) 调 Socks 路径
             val probe = FakeShizukuProbe()
             val mockBinder = mockk<android.os.IBinder>(relaxed = true)
             every { mockBinder.pingBinder() } returns true
@@ -338,7 +336,11 @@ class ShizukuConnectionTest {
             val conn = ShizukuConnection(
                 target = target,
                 settings = baseSettings.copy(
-                    shizuku = baseSettings.shizuku.copy(subPath = ShizukuConfig.SubPath.Socks),
+                    shizuku = baseSettings.shizuku.copy(
+                        subPath = ShizukuConfig.SubPath.Socks,
+                        socksHost = "127.0.0.1",
+                        socksPort = proxyPort,
+                    ),
                 ),
                 probe = probe,
                 binderClient = fakeBinder,
@@ -350,17 +352,50 @@ class ShizukuConnectionTest {
             val cr = conn.connect()
             assertTrue("connect should succeed (mocked binder): ${cr.exceptionOrNull()?.message}", cr.isSuccess)
             val ar = conn.attach()
-            // Socks5Client 会去解析 "ide-shizuku-socks-{pkg}" hostname, 找不到 -> 失败
-            // 这证明 Socks 路径真的被选了 + 真的跑了 Socks5Client
-            assertTrue("attach should fail (hostname unresolvable): ${ar.exceptionOrNull()?.message}", ar.isFailure)
-            // 验证 Socks 路径在 attach 失败后, 状态是 Closed
+            // 完整 Socks 流程: bindUserService(mock) -> socks5 connect (到真 127.0.0.1:proxyPort)
+            // -> JDWP 握手 -> VM.Version -> 成功 attached
+            assertTrue(
+                "attach on Socks should succeed with configured proxy: ${ar.exceptionOrNull()?.message}",
+                ar.isSuccess,
+            )
             val state = conn.state.value
-            assertTrue("state should be Closed after Socks attach failure", state is ConnectionState.Closed)
+            assertTrue("state should be Attached after Socks attach", state is ConnectionState.Attached)
         } finally {
             proxyServer.close()
             socksThread.join(5_000L)
         }
         acceptFinished.await()
+    }
+
+    @Test
+    fun `attach on Socks subPath fails with clear error when socksPort is 0`() = runBlocking {
+        // 已知限制: 默认 socksPort=0, attach 阶段应抛清晰错误提示用户配 port
+        val probe = FakeShizukuProbe()
+        val mockBinder = mockk<android.os.IBinder>(relaxed = true)
+        every { mockBinder.pingBinder() } returns true
+        val fakeBinder = FakeShizukuBinderClient(pingResult = true, bindUserServiceResult = mockBinder)
+        val conn = ShizukuConnection(
+            target = target,
+            settings = baseSettings.copy(
+                shizuku = baseSettings.shizuku.copy(
+                    subPath = ShizukuConfig.SubPath.Socks,
+                    socksPort = 0,  // 默认未配置
+                ),
+            ),
+            probe = probe,
+            binderClient = fakeBinder,
+            socksClient = com.itsaky.androidide.debugger.connection.shizuku.ShizukuSocksClient(),
+        )
+
+        conn.resolve()
+        conn.connect()
+        val ar = conn.attach()
+        assertTrue("attach should fail when socksPort = 0", ar.isFailure)
+        val msg = ar.exceptionOrNull()?.message ?: ""
+        assertTrue(
+            "error message should mention socksPort configuration: $msg",
+            msg.contains("socksPort") && msg.contains("not configured"),
+        )
     }
 
     @Test

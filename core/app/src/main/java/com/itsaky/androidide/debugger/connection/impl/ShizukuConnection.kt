@@ -303,24 +303,39 @@ class ShizukuConnection(
      *   3) SOCKS5 CONNECT 到 host:jdwp
      *   4) 走 JDWP 握手 + VM.Version
      *   5) 字节桥 (走 java.net.Socket)
+     *
+     * 已知限制: Socks5Client 走 java.net.Socket, 需要 SOCKS5 代理监听在
+     * 真 TCP 端口 (非 abstract namespace)。HostSocksServer.startOnTcp()
+     * 支持 TCP, 但 host 端 user service 需在启动后报告端口给 IDE。
+     * 截至目前, host 端 IdeShizukuSocksUserService 尚未实装, 所以 socksPort
+     * 仍由用户在 ShizukuConfig 显式配置, 默认 0 = attach 阶段抛错。
      */
     private suspend fun attachViaSocks(): AttachInfo {
+        // 1) 拉 user service (host 端 user service 应启 SOCKS5 server)
         val hostPlugin = android.content.ComponentName(
             "com.itsaky.androidide",
             "com.itsaky.androidide.debugger.connection.shizuku.IdeShizukuSocksUserService",
         )
-        // 1) 拉 user service
         val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
         if (binder == null || !binder.pingBinder()) {
             throw IOException("Shizuku Socks: user service binder dead")
         }
         // 2) SOCKS5 客户端连 host SOCKS5 server
-        //    HostSocksServer 监听 abstract namespace "ide-shizuku-socks-{package}"
-        //    协议: SOCKS5 RFC 1928, no-auth, CONNECT, ATYP=03 (domain)
-        //    target: "jdwp" (host 本地 abstract namespace)
-        val proxyAddr = java.net.InetSocketAddress.createUnresolved(
-            "ide-shizuku-socks-${target.packageName}", 0,
-        )
+        //    proxyAddr 必须用真 TCP 端口 (Socks5Client 走 java.net.Socket, 不支持
+        //    abstract namespace)。HostSocksServer.startOnTcp() 支持 TCP, 但 host
+        //    端 user service 尚未实装自动报告端口, 所以默认 socksPort=0 会失败。
+        //    用户需在 DebugConnectionPreferences 里显式配 socksPort 才能跑通。
+        val socksHost = settings.shizuku.socksHost
+        val socksPort = settings.shizuku.socksPort
+        if (socksPort <= 0) {
+            throw IOException(
+                "Shizuku Socks: socksPort not configured (got $socksPort). " +
+                    "Set shizuku.socksPort in DebugConnectionSettings to a real TCP port " +
+                    "where host-side IdeShizukuSocksUserService is listening (see " +
+                    "HostSocksServer.startOnTcp)."
+            )
+        }
+        val proxyAddr = java.net.InetSocketAddress(socksHost, socksPort)
         val sock = withContext(Dispatchers.IO) {
             socksImpl.connect(
                 proxyAddr = proxyAddr,
