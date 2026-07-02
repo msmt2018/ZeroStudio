@@ -122,14 +122,33 @@ class DefaultRootClient : RootClient {
                 throw IOException("no jdwp socket found in /proc/$hostPid/net/unix")
             }
             // 起 socat (如设备装了)
+            // Phase 12v: 两个真问题修
+            //   1) 之前 redirectErrorStream(true) 把 stderr 合到 inputStream 一起给
+            //      RootConnection, RootConnection 读到的 JDWP 字节流里会夹 stderr
+            //      字节, JDWP 协议直接挂
+            //   2) stderr 没人 drain: socat 写 stderr 满 kernel pipe buffer 会
+            //      deadlock, socat 卡死, IDE 端 inputStream.read() 永久阻塞
+            //   3) onClose destroyForcibly 不等 socat 实际退出, socat zombie
+            //      短时间占 FDs
+            // 修法: stderr 独立 (不 redirectErrorStream), 起 daemon thread drain
+            //   stderr; onClose destroyForcibly + waitFor 兜底
             val socat = ProcessBuilder(suBin, "-c", "socat - UNIX-CONNECT:@jdwp")
-                .redirectErrorStream(true)
+                .redirectErrorStream(false)
                 .start()
+            val socatErrDrain = thread(name = "RootClient-socat-err", isDaemon = true) {
+                runCatching { socat.errorStream.readBytes() }
+            }
             return RootJdwpStream(
                 input = socat.inputStream,
                 output = socat.outputStream,
                 onClose = {
                     runCatching { socat.destroyForcibly() }
+                    // waitFor 兜底: destroyForcibly 发 SIGKILL 但不阻塞, 等
+                    // 真退出避免 socat zombie 短时间占 FDs
+                    runCatching {
+                        socat.waitFor(2_000L, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    }
+                    runCatching { socatErrDrain.join(500L) }
                 },
             )
         } catch (t: Throwable) {
