@@ -73,6 +73,28 @@ public class JdwpClient {
         Socket s = new Socket();
         s.connect(new InetSocketAddress(host, port), HANDSHAKE_TIMEOUT_MS);
         s.setTcpNoDelay(true);
+        connectInternal(s, host, port);
+    }
+
+    /**
+     * Use a Socket that has already been connected by an external layer
+     * (e.g. {@code IDebugConnection.attachedSocket()} from the
+     * connection abstraction). The Socket is NOT closed by this method on
+     * failure; the caller owns it.
+     *
+     * <p>This is the integration point between the new connection layer
+     * (sub-project 1) and the existing JDWP client. The host/port params
+     * are used only for logging and {@link #host()}/{@link #port()}
+     * accessors; pass empty/0 if unknown.
+     */
+    public void connect(@NonNull Socket socket, @Nullable String host, int port)
+            throws IOException {
+        socket.setTcpNoDelay(true);
+        connectInternal(socket, host == null ? "" : host, port);
+    }
+
+    private void connectInternal(@NonNull Socket s, @NonNull String host, int port)
+            throws IOException {
         try {
             performHandshake(s);
         } catch (IOException e) {

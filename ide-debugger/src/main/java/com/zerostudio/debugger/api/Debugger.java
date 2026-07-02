@@ -79,6 +79,17 @@ public final class Debugger
     }
 
     /**
+     * Public factory: build a Debugger backed by an externally-configured
+     * {@link JdwpClient}. Used by the connection abstraction
+     * (sub-project 1) to wire an {@code IDebugConnection}-managed
+     * Socket into the existing JDWP machinery.
+     */
+    @NonNull
+    public static Debugger forClient(@NonNull JdwpClient client) {
+        return new Debugger(client);
+    }
+
+    /**
      * Package-private constructor used by the unit tests to inject a fake
      * {@link JdwpClient} (see {@code FakeJdwpClient} in src/test). The
      * production code path always goes through the no-arg constructor.
