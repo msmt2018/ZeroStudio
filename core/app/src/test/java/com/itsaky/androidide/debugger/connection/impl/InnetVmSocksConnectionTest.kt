@@ -39,10 +39,10 @@ class InnetVmSocksConnectionTest {
     private fun makeSettings(host: String, port: Int): DebugConnectionSettings {
         return DebugConnectionSettings(
             innetSocks = InnetSocksConfig(
-                host = host,
-                port = port,
-                username = "",
-                password = "",
+                socksHost = host,
+                socksPort = port,
+                socksUser = "",
+                socksPassword = "",
                 connectTimeoutMs = 5_000L,
             ),
             retryMaxAttempts = 1,
@@ -70,8 +70,8 @@ class InnetVmSocksConnectionTest {
             target = target,
             settings = makeSettings(host = "127.0.0.1", port = 1)
                 .copy(innetSocks = InnetSocksConfig(
-                    host = "127.0.0.1",
-                    port = 1,
+                    socksHost = "127.0.0.1",
+                    socksPort = 1,
                     connectTimeoutMs = 500L,
                 )),
         )
@@ -180,8 +180,8 @@ class InnetVmSocksConnectionTest {
             target = target,
             settings = makeSettings(host = "127.0.0.1", port = 1)
                 .copy(innetSocks = InnetSocksConfig(
-                    host = "127.0.0.1",
-                    port = 1,
+                    socksHost = "127.0.0.1",
+                    socksPort = 1,
                     connectTimeoutMs = 100L,
                 )),
         )

@@ -68,11 +68,11 @@ class InnetVmSocksConnection(
 
     override suspend fun resolve(): Result<ResolveInfo> {
         val cfg = settings.innetSocks
-        if (cfg.host.isBlank() || cfg.port <= 0) {
+        if (cfg.socksHost.isBlank() || cfg.socksPort <= 0) {
             transitionTo(ConnectionState.Closed(ConnectionError.PortResolveFailed))
             return Result.failure(IOException("InnetVmSocks host/port not configured"))
         }
-        val addr = InetSocketAddress(cfg.host, cfg.port)
+        val addr = InetSocketAddress(cfg.socksHost, cfg.socksPort)
         val attempt = retryPolicy.retry { _ ->
             runCatching {
                 // 尝试一次 TCP connect, 失败抛 IOException
@@ -90,7 +90,7 @@ class InnetVmSocksConnection(
             Result.success(
                 ResolveInfo(
                     transportKind = "socks5",
-                    endpoint = "socks5://${cfg.host}:${cfg.port}",
+                    endpoint = "socks5://${cfg.socksHost}:${cfg.socksPort}",
                     requiresHostRunning = false,
                 )
             )
