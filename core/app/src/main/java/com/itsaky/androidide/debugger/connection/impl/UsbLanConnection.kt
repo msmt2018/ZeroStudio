@@ -84,7 +84,9 @@ class UsbLanConnection(
         }
         if (targetSerial.isNullOrBlank()) {
             // 不指定 serial: 至少要有一台状态是 "device"
-            val hasReady = deviceLines.any { it.contains(Regex("\\bdevice\\b$")) || it.endsWith("\tdevice") }
+            // adb devices 输出格式: "<serial>\t<state>[ ...]" (serial 跟 state 之间是 tab)
+            // 直接 endsWith("device") 即可 (state 一定是最后非空白部分)
+            val hasReady = deviceLines.any { it.endsWith("device") }
             if (!hasReady) {
                 throw IOException("adb devices: no device in 'device' state, found: $deviceLines")
             }

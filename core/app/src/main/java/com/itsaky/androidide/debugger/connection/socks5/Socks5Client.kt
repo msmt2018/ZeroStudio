@@ -58,7 +58,12 @@ class Socks5Client(
         targetPort: Int,
         connectTimeoutMs: Int = 5_000,
     ): Socket {
-        require(targetPort in 1..65535) { "targetPort out of range: $targetPort" }
+        // 允许 targetPort = 0: 按 RFC 1928, port 是 16-bit, 0 是保留值, SOCKS5 server
+        // 收到 0x0000 可视作 "server-side routing" (client 不关心实际端口, 由 SOCKS5
+        // server 自行决定转发到哪个 host 端口)。InnetVmSocksConnection 路径下
+        // SOCKS5 server 固定转发到 host:jdwp, client 写 0 即可。
+        // (之前 require 1..65535 太严格, 把 InnetVmSocks 路径直接挡在 IllegalArgumentException)
+        require(targetPort in 0..65535) { "targetPort out of range: $targetPort" }
         val socket = Socket()
         socket.connect(proxyAddr, connectTimeoutMs)
         // 握手阶段 read 超时保护: 防止 host 端 SOCKS5 server 半死导致无限阻塞。

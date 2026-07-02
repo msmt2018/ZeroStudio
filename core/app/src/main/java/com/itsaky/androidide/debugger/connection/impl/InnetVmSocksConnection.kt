@@ -122,10 +122,14 @@ class InnetVmSocksConnection(
         val attempt = retryPolicy.retry { _ ->
             runCatching {
                 // 1) SOCKS5 握手
+                //    Socks5Client 现在允许 targetPort = 0 (RFC 1928 "server-side routing"):
+                //    InnetVmSocks 路径下 SOCKS5 server (虚拟机自带) 固定转发到 host:jdwp,
+                //    client 不需要知道具体端口, 写 0x0000 让 server 自行决定。
+                //    (之前 require 1..65535 把这条路径直接挡在 IllegalArgumentException)
                 val sock = socksClient.connect(
                     proxyAddr = addr,
                     targetHost = "127.0.0.1",  // SOCKS5 server 自己转发到 host JDWP
-                    targetPort = 0,            // host JDWP 端口, 由 SOCKS5 server 端配置
+                    targetPort = 0,            // 0 = SOCKS5 server-side routing
                     connectTimeoutMs = settings.innetSocks.connectTimeoutMs.toInt(),
                 )
                 // 2) 走 JDWP 握手 + VM.Version
