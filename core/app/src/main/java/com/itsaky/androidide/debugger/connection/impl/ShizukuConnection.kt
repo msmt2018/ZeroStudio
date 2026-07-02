@@ -130,27 +130,16 @@ class ShizukuConnection(
         // connect() 阶段只做"准备",具体 attach 留到 attach()。
         // 4 条路径的准备:
         //   WifiAdb: 不需要, 让 attach() 走 AidlSocketConnection
-        //   Binder: 不需要, 让 attach() 调 ShizukuBinderClient.newProcess
-        //   InHostPlugin: 调 ShizukuBinderClient.bindUserService 拉 host plugin
-        //   Socks: 调 ShizukuBinderClient.newProcess 启动 SOCKS5 server
+        //   Binder: 不需要 (跟 InHostPlugin 走同款实装, bindUserService 在 attach)
+        //   InHostPlugin: bindUserService 在 attach() 阶段做 (避免重复调用)
+        //   Socks: 由 attach 阶段 Socks 客户端连接
         val attempt = retryPolicy.retry { _ ->
             runCatching {
                 when (subPath) {
                     ShizukuSubPath.WifiAdb -> { /* nothing to do */ }
                     ShizukuSubPath.Binder -> { /* nothing to do, prepare in attach */ }
-                    ShizukuSubPath.InHostPlugin -> {
-                        // host plugin 注入: Shizuku 把 IDE 的 user service 注入 host 进程,
-                        // 进程名 = target package name。ComponentName 是 IDE 自己定义的
-                        // ShizukuServiceConnection 实现 (子项目 8 一起提供)。
-                        val hostPlugin = android.content.ComponentName(
-                            "com.itsaky.androidide",
-                            "com.itsaky.androidide.debugger.connection.shizuku.IdeShizukuUserService",
-                        )
-                        binderImpl.bindUserService(hostPlugin, target.packageName)
-                    }
-                    ShizukuSubPath.Socks -> {
-                        // 由 attach 阶段 Socks 客户端连接
-                    }
+                    ShizukuSubPath.InHostPlugin -> { /* bindUserService 在 attach() 阶段做, 避免重复 */ }
+                    ShizukuSubPath.Socks -> { /* 由 attach 阶段 Socks 客户端连接 */ }
                     ShizukuSubPath.Auto -> error("Auto should have been resolved by resolve()")
                 }
             }.onFailure { log.warn("ShizukuConnection: connect attempt failed: {}", it.message) }

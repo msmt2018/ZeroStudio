@@ -207,7 +207,9 @@ class ShizukuConnectionTest {
     }
 
     @Test
-    fun `connect on InHostPlugin calls bindUserService`() = runBlocking {
+    fun `connect on InHostPlugin is no-op (bindUserService moved to attach)`() = runBlocking {
+        // 子项目 4 重构: 之前 connect() 调 bindUserService (结果丢弃) + attach() 再调,
+        // 造成重复。现已挪到 attach() 阶段。
         val probe = FakeShizukuProbe()
         val fakeBinder = FakeShizukuBinderClient(pingResult = true)
         val conn = ShizukuConnection(
@@ -221,19 +223,14 @@ class ShizukuConnectionTest {
 
         conn.resolve()
         val cr = conn.connect()
-        // connect 阶段会调 bindUserService. 但 fakeBinder 返回 null, 所以 connect 失败
-        // 但 connect 阶段本身期望成功 (state 转入 Handshaking). bindUserService 失败
-        // 留到 attach 阶段
-        // 这里 fakeBinder 没返 binder, 会抛 IOException
-        // connect 阶段: 实际 InHostPlugin path 会调 bindUserService. 因 fakeBinder 抛错
-        // connect 会失败
-        // 预期: connect 失败 (因为 fakeBinder 没返 binder)
-        if (cr.isFailure) {
-            assertNotNull(cr.exceptionOrNull())
-        } else {
-            // 如果 fakeBinder 给个非空 binder, connect 成功
-            assertEquals(1, fakeBinder.bindUserServiceCallCount)
-        }
+        // connect 是 no-op, 应该成功
+        assertTrue("connect on InHostPlugin should succeed (no-op): ${cr.exceptionOrNull()?.message}", cr.isSuccess)
+        // 不应调 bindUserService
+        assertEquals(
+            "connect() should not call bindUserService (moved to attach)",
+            0,
+            fakeBinder.bindUserServiceCallCount,
+        )
     }
 
     // ---- attach: Socks 路径 (用真 SOCKS5 server) ----
