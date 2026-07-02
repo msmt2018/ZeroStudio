@@ -132,17 +132,25 @@ class InnetVmSocksConnection(
                     targetPort = 0,            // 0 = SOCKS5 server-side routing
                     connectTimeoutMs = settings.innetSocks.connectTimeoutMs.toInt(),
                 )
-                // 2) 走 JDWP 握手 + VM.Version
-                val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
-                    socket = sock,
-                    commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
-                )
-                socket = sock
-                AttachInfo(
-                    pid = 0,
-                    jdwpSessionId = sessionIdGenerator.get(),
-                    jdwpDescription = "${info.description} (${info.vmName} ${info.vmVersion}, jdwp ${info.jdwpVersion})",
-                )
+                // Phase 12t: try-catch close sock (跟 AdbForwardConnection /
+                // AidlSocketConnection LocalBridge 同款), 之前握手失败 sock 没人
+                // close, 多次 retry 后 FDs 累积泄漏。
+                try {
+                    // 2) 走 JDWP 握手 + VM.Version
+                    val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
+                        socket = sock,
+                        commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
+                    )
+                    socket = sock
+                    AttachInfo(
+                        pid = 0,
+                        jdwpSessionId = sessionIdGenerator.get(),
+                        jdwpDescription = "${info.description} (${info.vmName} ${info.vmVersion}, jdwp ${info.jdwpVersion})",
+                    )
+                } catch (t: Throwable) {
+                    runCatching { sock.close() }
+                    throw t
+                }
             }.onFailure { log.warn("attach attempt failed: {}", it.message) }
         }
         // 失败: 走 mapAttachError
