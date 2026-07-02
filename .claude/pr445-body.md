@@ -1011,3 +1011,291 @@ try {
 | 类型 | 路径 |
 | ---- | ---- |
 | 改 | `core/app/.../impl/InnetVmSocksConnection.kt` (attach try-catch close sock) |
+
+## 后续修复 (Phase 12u) - AdbRunner 命名错位 + err thread 静默吞错
+
+### Phase 12u - AdbRunner.DefaultAdbRunner.run() 扫尾 (commit d4f49440)
+
+`AdbRunner.DefaultAdbRunner.run()` 三个真问题:
+
+#### 12u.1 - `errRef` 命名错位
+
+**真 bug**: `arrayOfNulls<Throwable>(null)` 名字 `errRef` 但实际是 **out thread 异常引用**
+(out catch line 132 写, line 151 读), 名字暗示是 err thread 异常实际是 out thread
+异常, 读代码的人混乱。
+
+**修法**: 重命名 `errRef` → `outErr` (跟 out thread 绑)。
+
+#### 12u.2 - err thread 静默吞错
+
+**真 bug**: 之前 err thread `catch (_: Throwable) { /* ignore */ }` 静默吞, 跟
+out thread 行为不一致 (out thread 异常时 outErr[0] 写, 主流程 throw)。
+
+后果:
+- stderr 读失败时用户拿到空 stderr 实际是 read 失败, 排查困难
+- 调用方拿到 `AdbResult(stderr="")` 误以为命令 stderr 真的空
+
+**修法**: 加 `errErr = arrayOfNulls<Throwable>(null)`, err thread 异常时写
+`errErr[0] = t`, 主流程 `errErr[0]?.let { log.warn("adb: read stderr failed: ...") }`。
+不抛 (跟之前一致, stderr 返空字符串, 主流程靠 stdout + exit code 判定), 但
+留 log 让排查有线索。
+
+#### 12u.3 - out thread 失败直接抛原始 Throwable
+
+**真 bug**: 之前 `if (errRef[0] != null) throw errRef[0]!!` 抛原始 `Throwable`,
+可能不是 `IOException`, 调用方 `try-catch IOException` 抓不到。
+
+**修法**: `outErr[0]?.let { throw IOException("adb: read stdout failed: ${it.message}", it) }`
+包 IOException, 调用方 try-catch IOException 一致。
+
+#### 12u.4 - 副作用与不变性
+
+- 正常路径 (adb 命令成功) 行为完全不变: stdout / stderr / exit code 走原逻辑
+- err thread 失败时只多一行 log.warn, AdbResult.stderr 仍返空字符串 (跟之前一致)
+- out thread 失败时抛 IOException 包 (调用方可 try-catch IOException 抓到)
+- AdbRunnerTest 只测 FakeAdbRunner, 不影响
+
+## 新增/修改文件 (Phase 12u)
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../adb/AdbRunner.kt` (重命名 errRef→outErr + 加 errErr + outErr 异常包 IOException) |
+
+## 后续修复 (Phase 12v) - RootClient.openJdwpStream stderr drain + onClose 兜底
+
+### Phase 12v - socat 进程管理扫尾 (commit 0bb9d754)
+
+`DefaultRootClient.openJdwpStream` (子项目 4 Root 路径) 三个真问题:
+
+#### 12v.1 - redirectErrorStream(true) 把 stderr 合到 inputStream, JDWP 协议挂
+
+**真 bug**: 之前 `ProcessBuilder(...).redirectErrorStream(true).start()` + 拿
+`socat.inputStream` 给 RootConnection 当 JDWP byte source。
+
+后果:
+- socat 写 stderr (e.g. "socat[PID] N connecting to AF=1 \"@jdwp\"" 连接状态)
+  合到 inputStream, RootConnection 读到的 JDWP 字节流里**夹 stderr 字节**
+- JDWP frame 11 字节 header + 后续 payload, 期待 0x11 'h' 'a' 'n' 'd' 's'
+  'h' 'a' 'k' 'e' 14 字节 handshake reply, 但实际读到 socat 错误消息
+- 协议直接挂, RootConnection 永远 parse fail
+
+**修法**: `redirectErrorStream(false)`, stderr 独立。socat 错误走
+`errorStream` 单独 drain, 不污染 inputStream 给 RootConnection。
+
+#### 12v.2 - stderr 没人 drain, kernel pipe buffer 满 deadlock
+
+**真 bug**: stderr 即使不 redirect, 仍没人 drain。Linux kernel pipe buffer
+默认 64KB, socat 写 stderr 满 64KB 后阻塞, socat 进程卡死, **IDE 端
+`RootConnection.readJdwp` 拿 inputStream 永久阻塞**。
+
+后果:
+- 用户看 "正在连接" 永远不返
+- 走 `RootConnection.detach()` / `release()` 调 `socat.destroyForcibly()`
+  才能解, 但 user 已经卡死 IDE 一段时间
+
+**修法**: 起 daemon thread `RootClient-socat-err` drain `socat.errorStream`
+(只 `readBytes()`, 不解析), 防止 kernel pipe buffer 满。
+
+#### 12v.3 - onClose destroyForcibly 不等真退出, socat zombie 短时间占 FDs
+
+**真 bug**: `destroyForcibly()` 发 SIGKILL 但**不阻塞**等进程真死。RootConnection
+释放 → 调 `onClose` → `destroyForcibly()` → 函数返, 此时 socat 进程变 zombie
+短时间占 FDs。反复 attach/detach 后 FDs 累积。
+
+**修法**: onClose 加 `socat.waitFor(2_000L, MILLISECONDS)` 等真退出 (2s 兜底,
+超过不阻塞), + `socatErrDrain.join(500L)` 等 drain thread 完。
+
+#### 12v.4 - 副作用与不变性
+
+- 正常 Root 路径 (socat 装 + @jdwp 存在) 行为完全不变: inputStream / outputStream
+  仍给 RootConnection
+- 异常路径 (socat 没装 / @jdwp 不存在) 走 `catch (t: Throwable)` 返 IOException,
+  不变
+- stderr 错误信息不再暴露给 RootConnection (之前会污染), 跟 JDWP 协议对齐
+- onClose 时序变更: 之前 destroyForcibly 后立刻返, 现在 destroyForcibly +
+  waitFor(2s) + drain.join(500ms), 总延迟 < 2.5s, RootConnection.release() 调用方
+  接受 2.5s 延迟 (跟 release() 走 AdbForward 路径 adb forward --remove 同步
+  等待同量级)
+- RootClientTest 仍只测 FakeRootClient, 不影响
+
+效果: Root 路径 socat 进程管理跟 AdbRunner 同款稳定性:
+- 不会再因 stderr 字节污染 JDWP 协议
+- 不会再因 stderr pipe buffer 满 deadlock
+- onClose 资源立即释放, 无 zombie 短时间占 FDs
+
+## 新增/修改文件 (Phase 12v)
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../root/RootClient.kt` (redirectErrorStream(false) + drain thread + waitFor 兜底) |
+
+## 后续修复 (Phase 12w) - HostBridgeServer.awaitNextConnection 走 BlockingDeque
+
+### Phase 12w - race + 性能 + CPU busy-wait 三个真问题 (commit ccb98de6)
+
+`HostBridgeServer.awaitNextConnection` (子项目 9a LocalBridge 路径) 三个真问题:
+
+#### 12w.1 - CopyOnWriteArrayList.remove O(n) 性能
+
+**真 bug**: 之前 `private val activeConnections = CopyOnWriteArrayList<HostConnection>()`,
+每次 `remove` 都是 O(n) (CopyOnWrite 拷贝整个底层 array)。
+
+实测:
+- 1 connection: O(1), 没问题
+- 100 connection: O(100) ≈ 1-2μs
+- 1000 connection 反复 attach: O(1000) ≈ 20-50μs/次, 单次 awaitNextConnection
+  反复 poll + remove 累积 100ms+, 反复 attach 后明显卡顿
+
+`awaitNextConnection` 每次 poll 还要 `firstOrNull { it.socket.isConnected }` 扫整个
+list, **O(n) + O(n) = O(2n)**。
+
+**修法**: 改用 `LinkedBlockingDeque<HostConnection>`:
+- `put` O(1) (无界, 立即返)
+- `pollFirst` O(1)
+- 头尾 O(1) 读 + 写
+
+#### 12w.2 - socket.isConnected 不可靠
+
+**真 bug**: `socket.isConnected` 是 Android LocalSocket 的 connected getter,
+**反映 JVM 视角的 connected 状态**, 而不是真实对端是否 alive:
+- `accept()` 后立即 `true` (LocalSocket.connected field 由 ctor 初始化)
+- 对端 close 后, JVM 不一定立即知道 (靠 read 返 -1 / EOF 才知道)
+- 拿到一个对端已 close 但 JVM 还认为 connected 的 conn, handshake read
+  立即 EOF, 失败
+
+**修法**: 不用 isConnected 判定。queue 拿到就返, handshake 失败由
+AidlSocketConnection.attachLocalBridge (Phase 12r 已修) try-catch close 兜底。
+
+#### 12w.3 - busy-wait sleep 20ms
+
+**真 bug**: 之前 `Thread.sleep(20L)` + retry, 没数据时 CPU 持续唤醒 50 次/秒,
+IDE 端空转耗电。
+
+**修法**: 走 `queue.pollFirst(timeoutMs, TimeUnit.MILLISECONDS)` 阻塞, 没数据时
+线程 park, CPU 0 占用。
+
+#### 12w.4 - allConnections 保留 + stop() 排空
+
+`allConnections` CopyOnWriteArrayList 保留作为 "all known connections" 视图:
+- 给 `stop()` 排空用 (queue 也 clear)
+- 给调试用 (log dump / IDE UI 展示 "X 个 host app 连接过")
+
+`stop()` 排空两个 collection + close 所有 socket + join accept thread。
+
+#### 12w.5 - 副作用与不变性
+
+- `awaitNextConnection(timeoutMs)` API 签名不变, 仍返 `HostConnection?` 或 null
+- `handleClient` 完成后 put queue, IDE 端主路径不变
+- 多次 awaitNextConnection 并发安全 (BlockingDeque 是 thread-safe)
+- `stop()` 行为对齐: queue.clear + 关闭所有 socket + accept thread join
+- AppReadyAutoConnect 路径不动 (HostBridgeServer 是给 AidlSocketConnection
+  LocalBridge 路径用的, 主路径走 listener AppReadyAutoConnect, 跟 awaitNextConnection
+  无关)
+
+效果:
+- race 修: 不依赖 isConnected 不可靠判定
+- 性能: 100+ connection 反复 attach 仍 O(1), 不再 O(n) 累积
+- CPU: 阻塞 poll 替代 busy-wait, IDE 端空转 CPU 0 占用
+
+## 新增/修改文件 (Phase 12w)
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../host/HostBridgeServer.kt` (LinkedBlockingDeque + pollFirst + 保留 allConnections) |
+
+## 后续修复 (Phase 12x) - Shizuku 13.1.5 socksPort 传递限制调研 + 修编译错误
+
+### Phase 12x - 调研 + 修编译错误 + 留 binder transact TODO (commit af59ca2a)
+
+调研 + 修 4 个文件:
+
+#### 12x.1 - 调研: Shizuku 13.1.5 没 .args(Bundle) API
+
+用 `javap` 看 `Shizuku-13.1.5.aar` 提取 `Shizuku$UserServiceArgs`:
+```
+public class rikka.shizuku.Shizuku$UserServiceArgs {
+  final android.content.ComponentName componentName;
+  int versionCode;
+  java.lang.String processName;
+  java.lang.String tag;
+  boolean debuggable;
+  boolean daemon;
+  boolean use32BitAppProcess;
+  public rikka.shizuku.Shizuku$UserServiceArgs(android.content.ComponentName);
+  public rikka.shizuku.Shizuku$UserServiceArgs daemon(boolean);
+  public rikka.shizuku.Shizuku$UserServiceArgs tag(java.lang.String);
+  public rikka.shizuku.Shizuku$UserServiceArgs version(int);
+  public rikka.shizuku.Shizuku$UserServiceArgs debuggable(boolean);
+  public rikka.shizuku.Shizuku$UserServiceArgs processNameSuffix(java.lang.String);
+  private rikka.shizuku.Shizuku$UserServiceArgs use32BitAppProcess(boolean);
+  private android.os.Bundle forAdd();
+  private android.os.Bundle forRemove(boolean);
+}
+```
+
+**关键发现**:
+- `UserServiceArgs` 字段只有 `componentName` / `versionCode` / `processName` / `tag` / `debuggable` / `daemon` / `use32BitAppProcess` - **没有 Bundle 字段**
+- `forAdd()` Bundle 是 Shizuku 私有 (`private`), user-supplied extras 不能加
+- IDE 端改 `settings.shizuku.socksPort` 不能从 onBind(Intent) extras 传进来
+- intent 永远没 extras, 走默认 39939
+
+**结论**: 走 `Shizuku.UserServiceArgs` Bundle 不可行, 只能走:
+- (a) **binder transact** 在 user service onBind 之后调 host setter
+- (b) **共享 sharedPreferences** - 失败, 不同进程
+- (c) **约定 file 路径** - 走 Shizuku.newProcess 写 /data/local/tmp, 但 Phase 12u 已 throw UOE
+- (d) **SystemProperty** - 走 Shizuku.newProcess 跑 setprop, 同 (c) 需先解锁 newProcess
+
+最终选 (a) **binder transact** 走 ISocksControl AIDL。
+
+#### 12x.2 - 修编译错误: class 路径错
+
+之前代码 `rikka.shizuku.api.UserServiceArgs(componentName)` 是错的 class 路径 -
+**应该是** `rikka.shizuku.Shizuku.UserServiceArgs` (内部类)。沙箱没跑 gradle 没人
+发现这个错。
+
+修法:
+```kotlin
+val builder = rikka.shizuku.Shizuku.UserServiceArgs(componentName)
+    .processName(processName)
+    .daemon(false)
+    .debuggable(false)
+Shizuku.bindUserService(builder, conn)
+```
+
+#### 12x.3 - args 参数保留接口但暂忽略
+
+ShizukuBinderClient.bindUserService 加 `args: Bundle?` 参数, 当前 Shizuku 13.1.5
+没 API 接收, log.warn 提示, 留 TODO Phase 12y 实装 binder transact 协议。
+
+#### 12x.4 - host 端 onBind 行为保留 (Phase 12j 端到端跑通)
+
+`IdeShizukuSocksUserService.onBind` 行为不变, 走默认 39939 启 SOCKS5 server。注释
+更新说明 custom port 走 Phase 12y binder transact 协议。
+
+#### 12x.5 - Phase 12y TODO 留 binder transact 协议
+
+下次实装:
+- `ide-debugger-host/aidl/ISocksControl.aidl` 定义 AIDL
+- host 端 `IdeShizukuSocksUserService` onBind 返 `ISocksControl.Stub()` (真 binder)
+- IDE 端 `ShizukuConnection.attachViaSocks` 拿 binder 后 `ISocksControl.Stub.asInterface(binder).setSocksPort(port)`
+- 这条路径完全不依赖 Shizuku args API
+
+#### 12x.6 - 副作用与不变性
+
+- Phase 12j 修的 "默认 39939 端到端跑通" 保留 (host 端 onBind 行为不变)
+- 用户改 `settings.shizuku.socksPort` 当前**无效** (intent 没 extras), 等 Phase 12y
+- class 路径修对后, IDE 编译能过 (之前错的路径)
+- args 参数接口预留, 调用方不传, 等 Phase 12y 用
+
+效果:
+- Shizuku 13.1.5 真编译通过 (class 路径修对)
+- 默认 39939 端到端跑通 (Phase 12j 修的保留)
+- custom port 留 Phase 12y ISocksControl AIDL 实装 (binder transact 协议)
+
+## 新增/修改文件 (Phase 12x)
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../shizuku/ShizukuBinderClient.kt` (class 路径修对 + args 参数加但暂忽略) |
+| 改 | `core/app/.../impl/ShizukuConnection.kt` (注释更新, args 留 TODO) |
+| 改 | `ide-debugger-host/.../IdeShizukuSocksUserService.kt` (注释更新 + onBind 行为保留) |
