@@ -62,18 +62,26 @@ class ConnectionBackedDebugger(
         }
         val attachInfo = attachResult.getOrThrow()
 
-        // 4) 取 Socket,桥接到 JdwpClient
+        // 4) 取 Socket, 桥接到 JdwpClient
         try {
             val socket = connection.attachedSocket()
             val client = JdwpClient()
             client.connect(socket, "", 0)
             debugger = Debugger.forClient(client)
             log.info("ConnectionBackedDebugger attached: ${connection.type} pid=${attachInfo.pid}")
-        } catch (UnsupportedOperationException uoe) {
+        } catch (uoe: UnsupportedOperationException) {
+            // Phase 12s: 失败路径必须 cleanup - 之前 return failure 不 cleanup,
+            // connection 仍卡在 Attached state, FDs (LocalSocket / ServerSocket /
+            // adb forward) 没人 release, 反复 attach 失败后 FDs 累积泄漏。
+            // (跟 Phase 12p/12q/12r 同款问题)
             log.warn("ConnectionBackedDebugger: $uoe (this is expected for stub impls)")
+            runCatching { connection.detach() }
+            runCatching { connection.release() }
             return Result.failure(uoe)
-        } catch (Throwable t) {
+        } catch (t: Throwable) {
             log.error("ConnectionBackedDebugger: bridging failed", t)
+            runCatching { connection.detach() }
+            runCatching { connection.release() }
             return Result.failure(t)
         }
 
