@@ -2,11 +2,11 @@
 
 > 配套 spec: `docs/superpowers/specs/2026-07-02-debugger-injection-generator.md`
 > 计划日期: 2026-07-02
-> 状态: 🟡 待执行
+> 状态: ✅ 已完成 (Phase 1-6) + Phase 7 (集成测试) + Phase 8 (部署检查表)
 
 ## 概述
 
-按 spec + brainstorming 待办列表, 把以下 6 个未完成工作拆成可执行 plan:
+按 spec + brainstorming 待办列表, 把以下未完成工作拆成可执行 plan:
 
 1. **子项目 10 - 注入器生成器** (spec 主体)
 2. **修子项目 9d 遗留 bug**: `withManifestPlaceholders` 是 no-op, 需真正注入
@@ -14,6 +14,8 @@
 4. **连接层 3 - ShizukuConnection 替换 stub**
 5. **连接层 4 - RootConnection 替换 stub**
 6. **AppReadyAutoConnect 补充测试**
+7. **Phase 7 - BuildTimeInjector 端到端集成测试**
+8. **Phase 8 - 子项目 11 真实部署验证检查表**
 
 每个工作都按 TDD 流程: 写测试 → 实现 → 通过。
 
@@ -342,3 +344,56 @@ IDE 端 RootConnection 真连过来。
 7. 最后: PR #445 更新
 
 每个 Phase 都是独立 commit + push。
+
+---
+
+## Phase 7: BuildTimeInjector 端到端集成测试 ✅
+
+**问题**: 单元测试 (Phase 1-2) 覆盖了 `renderIdeDebuggerBootstrapKt` /
+`parsePreheatBreakpoints` / plugin helpers 的纯函数逻辑, 但没有端到端验证:
+- 生成的 .kt 文件能不能写到磁盘 + 拿到 Gradle 期望的路径
+- 4 段结构 (常量 + data class + preheat + init) 在真实文件里都齐
+- parsePreheatBreakpoints + renderIdeDebuggerBootstrapKt 串起来能工作
+- 多次重新生成只 buildTs 变 (其余稳定)
+
+**目标**: 写一个集成测试, 模拟 IDE 端常量 + 真实 bp 列表 + 写到
+`build/generated/source/ide_debugger/debug/kotlin/...` 路径 + 验证结构。
+
+**做法**:
+- `BuildTimeInjectorIntegrationTest` (新)
+- 7 个集成测试:
+  1. 完整生成产物 (写文件 + 验证 4 段结构)
+  2. 真实 IDE 版本 + group + name + sdk 注入
+  3. 真实预热 bp 列表 (多文件 + 每行每列)
+  4. 空 bp 用 `emptyList()`
+  5. 包名路径与 Manifest placeholder 一致
+  6. 多次重新生成只 buildTs 变
+  7. parsePreheatBreakpoints -> renderIdeDebuggerBootstrapKt 端到端
+
+**不做**: 调 kotlinc 编译 (沙箱无 SDK 工具链); 模拟真 Android 启动
+(沙箱无 Android runtime)。
+
+---
+
+## Phase 8: 子项目 11 真实部署验证检查表 ✅
+
+**问题**: 端到端验证需要真机 + 真 IDE APK + 6 选 1 切换, 沙箱环境跑不了。
+但需要给真机测试者一份完整检查表, 保证不出遗漏。
+
+**目标**: 写一份可在真机执行的部署验证检查表, 覆盖 6 选 1 全部路径 +
+BuildTimeInjector 编译期注入验证 + 新鲜度验证 + 失败模式验证。
+
+**做法**:
+- `docs/superpowers/specs/2026-07-02-subproject-11-deployment-checklist.md` (新)
+- 8 大节:
+  1. 前置条件
+  2. 编译期验证 (BuildTimeInjector 注入)
+  3. 部署期验证 (HostAttachAgentBootstrap 反连)
+  4. 6 选 1 连接方案验证 (AidlSocket / Shizuku/WifiAdb / Shizuku/InHostPlugin /
+     Shizuku/Socks / Root / InnetVmSocks / InnetVmAdb / UsbLan)
+  5. 断点注入验证 (BuildTimeInjector 核心)
+  6. 新鲜度验证 (build 多次 IDE 端常量更新)
+  7. 失败模式验证
+  8. 验收标准 (Definition of Done)
+
+**用法**: 合并 PR #445 前, 跑完所有 checkbox 才能标 Ready for Review。
