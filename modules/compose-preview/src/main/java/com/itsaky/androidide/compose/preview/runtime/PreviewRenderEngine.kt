@@ -310,13 +310,27 @@ class PreviewRenderEngine(
             !Modifier.isStatic(it.modifiers) && it.name == functionName
         }
 
-    /** 通过无参构造实例化, 失败则在 [view] 上画错误并返回 null. */
-    private fun instantiateOrNull(clazz: Class<*>, view: ComposeView, className: String): Any? = try {
-        clazz.getDeclaredConstructor().newInstance()
-    } catch (e: Throwable) {
-        LOG.error("Failed to instantiate {} (non-static composable)", className, e)
-        showError(view, "Cannot instantiate ${clazz.simpleName}: ${e.message ?: e::class.java.simpleName}")
-        null
+        // 保存 lastRender 让 [attach] 在新 view 上重放. args 用 copyOf() 防止外部
+        // Array 被原地修改; [LastRender] 持有独立副本. replay 时不再覆盖, 由 [fromReplay]
+        // 标志守卫 (attach 主动 replay 时 fromReplay=true, 保留 activity 上次 setContent
+        // 时记录的 lastRender, 避免在 applyContent 之前的覆盖时序差导致 view 抖动).
+        if (!fromReplay) {
+            lastRender = LastRender(
+                previewDex = previewDex,
+                projectDex = projectDex,
+                className = className,
+                functionName = functionName,
+                args = args.copyOf(),
+                previewConfig = previewConfig,
+                orientation = orientation,
+            )
+        }
+
+        // 4) setContent + 通过 currentComposer 注入 (v3.4: 应用 PreviewConfig; v3.5: 应用 orientation)
+        applyContent(view, lastRender!!, clazz, instance)
+        if (!fromReplay) {
+            LOG.info("Rendered composable: {}#{} (orientation={})", className, functionName, orientation)
+        }
     }
 
     /**
@@ -331,7 +345,31 @@ class PreviewRenderEngine(
         instance: Any?,
     ) {
         view.setContent {
-            PreviewScreen(invoker, clazz, instance, request)
+            // 【v3.5】用 LocalConfiguration 注入 orientation. Compose 在
+            // BoxWithConstraints / Modifier.aspectRatio / LocalConfiguration.current.orientation
+            // 处能正确响应, preview 内容按 orientation 重新布局.
+            val configuration = LocalConfiguration.current
+            val orientedConfiguration = remember(configuration, saved.orientation) {
+                val updated = android.content.res.Configuration(configuration)
+                updated.orientation = if (saved.orientation.isLandscape) {
+                    android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                } else {
+                    android.content.res.Configuration.ORIENTATION_PORTRAIT
+                }
+                updated
+            }
+            CompositionLocalProvider(
+                LocalConfiguration provides orientedConfiguration,
+            ) {
+                PreviewConfigTheme(saved.previewConfig) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
+                        RenderComposable(invoker, effectiveClass, effectiveInstance, saved.functionName, saved.args)
+                    }
+                }
+            }
         }
     }
 

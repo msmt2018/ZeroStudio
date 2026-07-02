@@ -69,7 +69,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import coil3.ImageLoader
-import coil3.execute
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.svg.SvgDecoder
@@ -77,7 +76,6 @@ import com.itsaky.androidide.file.FileValidator
 import com.itsaky.androidide.file.MimeTypeConstants
 import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
 import java.io.File
-import java.io.FileInputStream
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -204,9 +202,12 @@ private fun ImagePreviewScreen(filePath: String?) {
     }
 
     // 异步加载: 拿到 ImageData 给 UI 显示
+    // 注意: appCtx 是 @Composable getter, 不能在 produceState 的 suspend 块内调用,
+    // 必须先在 Composable 作用域里取值, 再传给 loadImage.
+    val ctx = LocalContext.current.applicationContext
     val state by produceState<ImageUiState>(initialValue = ImageUiState.Loading, file) {
-        value = runCatching { loadImage(file) }.fold(
-            onSuccess = { ImageUiState.Loaded(it) },
+        value = runCatching { loadImage(ctx, file) }.fold(
+            onSuccess = { ImageUiState.Loaded(bitmap = it.bitmap, mime = it.mime) },
             onFailure = { ImageUiState.Error(it.message ?: it.javaClass.simpleName) },
         )
     }
@@ -373,16 +374,16 @@ private sealed interface ImageUiState {
 /**
  * 顶层加载入口 —— 根据文件后缀 / 内容分发到不同解码器.
  */
-private suspend fun loadImage(file: File): LoadedImage = withContext(Dispatchers.IO) {
+private suspend fun loadImage(ctx: Context, file: File): LoadedImage = withContext(Dispatchers.IO) {
     val name = file.name.lowercase(Locale.US)
     val ext = name.substringAfterLast('.', "").lowercase(Locale.US)
     // 优先按"内容是不是 Android vector"判, 避免 layout XML 等被错路由
     if (ext == "xml" && FileValidator.isLikelyAndroidVector(file)) {
-        decodeVectorXml(file)
+        decodeVectorXml(ctx, file)
     } else if (ext in ImagePreviewFragment.SVG_FORMATS) {
-        decodeSvg(file)
+        decodeSvg(ctx, file)
     } else {
-        decodeRaster(file)
+        decodeRaster(ctx, file)
     }
 }
 
@@ -393,8 +394,7 @@ private suspend fun loadImage(file: File): LoadedImage = withContext(Dispatchers
  * 流程: VectorMasterDrawable 解析 XML → 取内在宽高 (或从 `<vector>` 头读
  * android:width/height) → 用 [Canvas] 渲染到 [Bitmap].
  */
-private fun decodeVectorXml(file: File): LoadedImage {
-    val ctx = appCtx
+private fun decodeVectorXml(ctx: Context, file: File): LoadedImage {
     val drawable = try {
         VectorMasterDrawable(ctx, file)
     } catch (e: Throwable) {
@@ -432,7 +432,7 @@ private fun readVectorDimensions(file: File, density: Float): Pair<Int, Int> {
         val h = attrPx(head, "android:height", density) ?: fallback
         w.coerceAtLeast(1) to h.coerceAtLeast(1)
     } catch (e: Throwable) {
-        Log.w(TAG, "readVectorDimensions: fallback for $file", e)
+        Log.w(ImagePreviewFragment.TAG, "readVectorDimensions: fallback for $file", e)
         fallback to fallback
     }
 }
@@ -460,8 +460,7 @@ private fun attrPx(xml: String, attr: String, density: Float): Int? {
  * [Drawable] 后再用 [Canvas] 渲染到 [Bitmap], 让 Compose Image 直接吃
  * BitmapPainter, 缩放时无重影.
  */
-private suspend fun decodeSvg(file: File): LoadedImage {
-    val ctx = appCtx
+private suspend fun decodeSvg(ctx: Context, file: File): LoadedImage {
     val loader = ImageLoader.Builder(ctx)
         .components {
             // 显式注册 SVG decoder, 避免依赖 service-loader 的自动发现
@@ -486,8 +485,7 @@ private suspend fun decodeSvg(file: File): LoadedImage {
  * 走 Coil 3.x 默认 decoder, 异步在 IO 线程. 解码得到 [Drawable] 后渲染到
  * [Bitmap].
  */
-private suspend fun decodeRaster(file: File): LoadedImage {
-    val ctx = appCtx
+private suspend fun decodeRaster(ctx: Context, file: File): LoadedImage {
     val mime = guessMimeByExt(file)
     val loader = ImageLoader.Builder(ctx).build()
     val req = ImageRequest.Builder(ctx)
@@ -577,15 +575,6 @@ private fun humanReadableSize(bytes: Long): String {
     }
     return String.format(Locale.US, "%.1f %s", size, units[unitIdx])
 }
-
-/**
- * 在 Composable 中拿到 application context, 避免持有 Activity 引用.
- * 用 [LocalContext] 拿到的实际上是 Activity / sub-context, 但
- * 传给 Coil / BitmapFactory / VectorMasterDrawable 都安全.
- */
-private val appCtx: Context
-    @Composable
-    get() = LocalContext.current.applicationContext
 
 private val LOG = LoggerFactory.getLogger("ImagePreviewFragment")
 
