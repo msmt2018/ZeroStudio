@@ -45,7 +45,8 @@ import com.itsaky.androidide.compose.preview.PreviewConfig
 import com.itsaky.androidide.compose.preview.ui.DeviceOrientation
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.lang.reflect.Modifier
+// v4 修复: 与 androidx.compose.ui.Modifier 同名, 用 as 别名避免歧义.
+import java.lang.reflect.Modifier as JvmModifier
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -229,6 +230,38 @@ class PreviewRenderEngine(
     }
 
     /**
+     * 兼容 [ComposePreviewFragment] 等旧调用方的扁平签名. 内部构造 [RenderRequest]
+     * 然后委托给 [render]. 命名参数一一对应, 不需要把 RenderRequest 的字段
+     * 透传出去 (避免调用方与数据结构紧耦合).
+     *
+     * v4 修复: 老 fragment 直接调 `engine.render(previewDex=..., projectDex=...,
+     * className=...)` 走的就是这个分支, 之前 v4 重命名成 [render] 单参数版本
+     * 后 fragment 编译会爆 "No parameter with name 'previewDex' found" —
+     * 加这个重载既保 v3 调用契约, 又不破坏 v4 的 RenderRequest 抽象.
+     */
+    fun render(
+        previewDex: File?,
+        projectDex: List<File>,
+        className: String,
+        functionName: String,
+        previewConfig: PreviewConfig?,
+        orientation: DeviceOrientation,
+        args: Array<out Any?> = emptyArray(),
+    ) {
+        render(
+            RenderRequest(
+                previewDex = previewDex,
+                projectDex = projectDex,
+                className = className,
+                functionName = functionName,
+                args = args,
+                previewConfig = previewConfig,
+                orientation = orientation,
+            )
+        )
+    }
+
+    /**
      * 用最近一次成功 render 的 [LastSnapshot] 重新渲染. 用于 gradle rebuild 完成
      * 后不重新传 dex (dex 已存在) 但希望立即看到最新代码的场景.
      */
@@ -307,29 +340,27 @@ class PreviewRenderEngine(
     /** 判断给定方法是否需要先 newInstance 才能调用. */
     private fun functionNeedsInstance(clazz: Class<*>, functionName: String): Boolean =
         clazz.declaredMethods.any {
-            !Modifier.isStatic(it.modifiers) && it.name == functionName
+            !JvmModifier.isStatic(it.modifiers) && it.name == functionName
         }
 
-        // 保存 lastRender 让 [attach] 在新 view 上重放. args 用 copyOf() 防止外部
-        // Array 被原地修改; [LastRender] 持有独立副本. replay 时不再覆盖, 由 [fromReplay]
-        // 标志守卫 (attach 主动 replay 时 fromReplay=true, 保留 activity 上次 setContent
-        // 时记录的 lastRender, 避免在 applyContent 之前的覆盖时序差导致 view 抖动).
-        if (!fromReplay) {
-            lastRender = LastRender(
-                previewDex = previewDex,
-                projectDex = projectDex,
-                className = className,
-                functionName = functionName,
-                args = args.copyOf(),
-                previewConfig = previewConfig,
-                orientation = orientation,
+    /**
+     * 实例化 [clazz] (无参构造). 失败时在 [view] 上画错误占位并返回 null.
+     *
+     * 抽出成 helper 是为了让 [doRender] / [renderFromSnapshot] 都能复用同一套
+     * 错误处理路径, 且 `fromReplay` 的差异不会泄漏到反射逻辑.
+     */
+    private fun instantiateOrNull(clazz: Class<*>, view: ComposeView, className: String): Any? {
+        return try {
+            val ctor = clazz.getDeclaredConstructor()
+            ctor.isAccessible = true
+            ctor.newInstance()
+        } catch (e: Throwable) {
+            showError(
+                view,
+                "Failed to instantiate '$className': " +
+                    (e.cause?.message ?: e.message ?: e::class.java.simpleName)
             )
-        }
-
-        // 4) setContent + 通过 currentComposer 注入 (v3.4: 应用 PreviewConfig; v3.5: 应用 orientation)
-        applyContent(view, lastRender!!, clazz, instance)
-        if (!fromReplay) {
-            LOG.info("Rendered composable: {}#{} (orientation={})", className, functionName, orientation)
+            null
         }
     }
 
@@ -345,31 +376,7 @@ class PreviewRenderEngine(
         instance: Any?,
     ) {
         view.setContent {
-            // 【v3.5】用 LocalConfiguration 注入 orientation. Compose 在
-            // BoxWithConstraints / Modifier.aspectRatio / LocalConfiguration.current.orientation
-            // 处能正确响应, preview 内容按 orientation 重新布局.
-            val configuration = LocalConfiguration.current
-            val orientedConfiguration = remember(configuration, saved.orientation) {
-                val updated = android.content.res.Configuration(configuration)
-                updated.orientation = if (saved.orientation.isLandscape) {
-                    android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                } else {
-                    android.content.res.Configuration.ORIENTATION_PORTRAIT
-                }
-                updated
-            }
-            CompositionLocalProvider(
-                LocalConfiguration provides orientedConfiguration,
-            ) {
-                PreviewConfigTheme(saved.previewConfig) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background,
-                    ) {
-                        RenderComposable(invoker, effectiveClass, effectiveInstance, saved.functionName, saved.args)
-                    }
-                }
-            }
+            PreviewScreen(invoker, clazz, instance, request)
         }
     }
 
@@ -469,8 +476,17 @@ class RenderRequest(
  * v4 新增: [PreviewRenderEngine] 用于在 [PreviewRenderEngine.attach] 时自动
  * replay 的快照. 故意只存"重放"必需的字段, 不带 dex — dex 在 [DexRuntime] 里,
  * 重放时直接拿 [activeRuntime] 重新 loadClass, 不需要重新传 dex.
+ *
+ * 故意声明为 `class` 而非 `data class` — 与 [RenderRequest] 同理, 避免 data class
+ * 自动生成 [args] 数组的 contentEquals 比较 (snapshot 主要用作"传值", 不作为
+ * hash key).
+ *
+ * v4 修复: 必须 `public` (不能 `internal`), 因为 [PreviewRenderEngine.snapshotForTransfer]
+ * 和 [PreviewRenderEngine.preloadSnapshot] 是 public 方法, 其签名里出现了
+ * [LastSnapshot] 类型. 之前用 `internal class` 编译时 Kotlin 直接
+ * 报 "'public' function exposes its 'internal' return/parameter type".
  */
-internal class LastSnapshot(
+class LastSnapshot(
     val className: String,
     val functionName: String,
     val args: Array<out Any?>,
