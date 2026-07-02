@@ -29,12 +29,13 @@ package com.itsaky.androidide.debugger.connection.host
 
 import android.net.LocalServerSocket
 import android.net.LocalSocket
-import android.net.LocalSocketAddress
 import com.itsaky.androidide.utils.ILogger
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.LinkedBlockingDeque
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -78,7 +79,18 @@ class HostBridgeServer(
     @Volatile private var acceptThread: Thread? = null
     private val running = AtomicBoolean(false)
     private val idGenerator = AtomicLong(System.currentTimeMillis())
-    private val activeConnections = CopyOnWriteArrayList<HostConnection>()
+    // Phase 12w: 改用 LinkedBlockingDeque 替代 CopyOnWriteArrayList
+    //   - CopyOnWriteArrayList.remove O(n): 反复 attach/detach 性能差, 单次 100ms+,
+    //     而且 awaitNextConnection 每次 poll 都要 firstOrNull 扫整个 list
+    //   - socket.isConnected 不可靠: Android LocalSocket.isConnected 反映 JVM 视角
+    //     connected 状态, 但 accept 后立即 true, 即使对端 close 后 JVM 不一定
+    //     知道, 走 isConnected 判定可能拿到已经 close 的 conn
+    //   - busy-wait sleep 20ms: 没数据时 CPU 持续唤醒
+    // 修法: queue.put/poll 替代, 走阻塞 poll 不用 busy-wait, O(1) 操作
+    private val activeConnections = LinkedBlockingDeque<HostConnection>()
+    // 保留 CopyOnWriteArrayList 作为 "all known connections" 视图 (给 stop()
+    //   排空 + 调试用), Phase 12w 之后不主路径
+    private val allConnections = CopyOnWriteArrayList<HostConnection>()
 
     @Volatile private var listener: ((HostConnection) -> Unit)? = null
 
@@ -194,7 +206,8 @@ class HostBridgeServer(
                 return
             }
             val conn = HostConnection(hello = hello, socket = client)
-            activeConnections.add(conn)
+            activeConnections.put(conn)
+            allConnections.add(conn)
             log.info("HostBridgeServer: received HELLO pkg={} pid={} id={}", hello.packageName, hello.pid, idGenerator.incrementAndGet())
             // 通知 listener (AppReadyAutoConnect)
             try {
