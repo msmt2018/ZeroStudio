@@ -33,6 +33,7 @@ import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketAddress
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
@@ -47,72 +48,122 @@ class HostSocksServer {
     private val tag = "HostSocksServer"
     @Volatile private var abstractServer: LocalServerSocket? = null
     @Volatile private var tcpServer: ServerSocket? = null
+    @Volatile private var acceptThread: Thread? = null
+
+    /**
+     * 防止 [startOnAbstract] / [startOnTcp] 二次启动泄漏前一个 server socket;
+     * 调 stop() 后可再次 start (running 重置为 false)。
+     */
+    private val running = AtomicBoolean(false)
 
     /**
      * 在 abstract namespace 监听 (Shizuku InHostPlugin 路径用)。
+     *
+     * 重复调用: 抛 [IllegalStateException] (避免泄漏前一个 server socket)。
      */
     @Throws(IOException::class)
     fun startOnAbstract(name: String): String {
-        val lss = LocalServerSocket(name)
-        abstractServer = lss
-        log("listening on abstract=$name")
-        thread(name = "HostSocksServer-abstract", isDaemon = false) {
-            try {
-                while (!lss.isClosed) {
-                    val client = lss.accept()
-                    thread(name = "HostSocksServer-handler-${name}", isDaemon = true) {
-                        try {
-                            handleSocksClient(client.inputStream, client.outputStream)
-                        } catch (t: Throwable) {
-                            log("handler ended: ${t.message}")
-                        } finally {
-                            runCatching { client.close() }
+        if (!running.compareAndSet(false, true)) {
+            throw IllegalStateException("HostSocksServer already started; call stop() first")
+        }
+        try {
+            val lss = LocalServerSocket(name)
+            abstractServer = lss
+            log("listening on abstract=$name")
+            acceptThread = thread(name = "HostSocksServer-abstract", isDaemon = false) {
+                try {
+                    while (!lss.isClosed) {
+                        val client = lss.accept()
+                        thread(name = "HostSocksServer-handler-${name}", isDaemon = true) {
+                            try {
+                                handleSocksClient(client.inputStream, client.outputStream)
+                            } catch (t: Throwable) {
+                                log("handler ended: ${t.message}")
+                            } finally {
+                                runCatching { client.close() }
+                            }
                         }
                     }
+                } catch (t: Throwable) {
+                    if (!lss.isClosed) log("abstract accept loop ended: ${t.message}")
+                } finally {
+                    running.set(false)
                 }
-            } catch (t: Throwable) {
-                if (!lss.isClosed) log("abstract accept loop ended: ${t.message}")
             }
+            return name
+        } catch (t: Throwable) {
+            running.set(false)
+            throw t
         }
-        return name
     }
 
     /**
      * 在 TCP 端口监听 (InnetVmSocks VM 内 SOCKS5 server 走这个)。
      * 返回 listen port, 失败抛 IOException。
+     *
+     * 重复调用: 抛 [IllegalStateException] (避免泄漏前一个 server socket)。
      */
     @Throws(IOException::class)
     fun startOnTcp(host: String = "127.0.0.1", port: Int = 0): Int {
-        val addr: SocketAddress = java.net.InetSocketAddress(host, port)
-        val ss = ServerSocket()
-        ss.bind(addr)
-        tcpServer = ss
-        log("listening on tcp=${ss.localPort}")
-        thread(name = "HostSocksServer-tcp", isDaemon = false) {
-            try {
-                while (!ss.isClosed) {
-                    val client = ss.accept()
-                    val tag = "tcp:$host:${ss.localPort}"
-                    thread(name = "HostSocksServer-handler-$tag", isDaemon = true) {
-                        try {
-                            handleSocksClient(client.getInputStream(), client.getOutputStream())
-                        } catch (t: Throwable) {
-                            log("handler ended: ${t.message}")
-                        } finally {
-                            runCatching { client.close() }
+        if (!running.compareAndSet(false, true)) {
+            throw IllegalStateException("HostSocksServer already started; call stop() first")
+        }
+        try {
+            val addr: SocketAddress = java.net.InetSocketAddress(host, port)
+            val ss = ServerSocket()
+            ss.bind(addr)
+            tcpServer = ss
+            log("listening on tcp=${ss.localPort}")
+            acceptThread = thread(name = "HostSocksServer-tcp", isDaemon = false) {
+                try {
+                    while (!ss.isClosed) {
+                        val client = ss.accept()
+                        val handlerTag = "tcp:$host:${ss.localPort}"
+                        thread(name = "HostSocksServer-handler-$handlerTag", isDaemon = true) {
+                            try {
+                                handleSocksClient(client.getInputStream(), client.getOutputStream())
+                            } catch (t: Throwable) {
+                                log("handler ended: ${t.message}")
+                            } finally {
+                                runCatching { client.close() }
+                            }
                         }
                     }
+                } catch (t: Throwable) {
+                    if (!ss.isClosed) log("tcp accept loop ended: ${t.message}")
+                } finally {
+                    running.set(false)
                 }
-            } catch (t: Throwable) {
-                if (!ss.isClosed) log("tcp accept loop ended: ${t.message}")
             }
+            return ss.localPort
+        } catch (t: Throwable) {
+            running.set(false)
+            throw t
         }
-        return ss.localPort
     }
 
+    /**
+     * 停止 server: close 两种 server socket, 等 accept thread 收尾 (带超时)。
+     * handler thread 是 daemon, JVM exit 自动 kill; 这里不等 handler 收尾。
+     */
     fun stop() {
         runCatching { abstractServer?.close() }
         runCatching { tcpServer?.close() }
+        abstractServer = null
+        tcpServer = null
+        // 等 accept thread 退出循环 (close server socket 触发 accept 抛 SocketException)
+        acceptThread?.let { t ->
+            t.join(STOP_JOIN_TIMEOUT_MS)
+        }
+        acceptThread = null
+    }
+
+    /** Whether server is currently listening (after start, before stop). */
+    fun isRunning(): Boolean = running.get()
+
+    private companion object {
+        /** stop() 等 accept thread 收尾的超时 (ms)。 */
+        const val STOP_JOIN_TIMEOUT_MS = 2_000L
     }
 
     // ---- 私有: SOCKS5 协议实现 ----
