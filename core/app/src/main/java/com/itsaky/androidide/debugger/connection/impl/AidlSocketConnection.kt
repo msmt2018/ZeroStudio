@@ -278,20 +278,27 @@ class AidlSocketConnection(
                 // 注: conn.socket 是 LocalSocket, 不是 java.net.Socket。
                 // 必须走 InputStream/OutputStream 重载, 不能用 Socket 重载
                 // (LocalSocket 不继承 java.net.Socket)。
+                // Phase 12r: handshake 抛时显式 close conn.socket, 之前 try
+                // 块里没人 close, 多次 retry 失败后 LocalSocket FDs 累积泄漏。
                 val ls = conn.socket
-                val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
-                    output = ls.outputStream,
-                    input = ls.inputStream,
-                    commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
-                )
-                localBridgeSocket = ls
-                localBridgeInput = ls.inputStream
-                localBridgeOutput = ls.outputStream
-                AttachInfo(
-                    pid = conn.hello.pid,
-                    jdwpSessionId = sessionIdGenerator.get(),
-                    jdwpDescription = "${info.description} (${info.vmName} ${info.vmVersion}, jdwp ${info.jdwpVersion}) [local-bridge]",
-                )
+                try {
+                    val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
+                        output = ls.outputStream,
+                        input = ls.inputStream,
+                        commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
+                    )
+                    localBridgeSocket = ls
+                    localBridgeInput = ls.inputStream
+                    localBridgeOutput = ls.outputStream
+                    AttachInfo(
+                        pid = conn.hello.pid,
+                        jdwpSessionId = sessionIdGenerator.get(),
+                        jdwpDescription = "${info.description} (${info.vmName} ${info.vmVersion}, jdwp ${info.jdwpVersion}) [local-bridge]",
+                    )
+                } catch (t: Throwable) {
+                    runCatching { ls.close() }
+                    throw t
+                }
             }.onFailure { t ->
                 log.warn("AidlSocketConnection: attachLocalBridge failed: {}", t.message)
             }

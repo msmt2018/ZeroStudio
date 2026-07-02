@@ -174,10 +174,19 @@ class HostBridgeServer(
 
     private fun handleClient(client: LocalSocket) {
         try {
-            // 读 HELLO 行 (最多 1024 字节, 阻塞 5s)
+            // Phase 12r: 改用 BufferedReader.readLine() 走阻塞 read + soTimeout,
+            // 之前 readLineWithTimeout 轮询 input.available() 在 LocalSocket 上不可靠
+            // (Android LocalSocket InputStream 的 available() 经常返 0 即使 kernel
+            //  buffer 已有数据, 走非阻塞 polling 会一直 sleep 直到 5s timeout 返空,
+            // HELLO 被丢弃, 端到端 host 端发 HELLO IDE 端不响应)。
             client.soTimeout = HELLO_READ_TIMEOUT_MS.toInt()
             val input = client.inputStream
-            val raw = readLineWithTimeout(input, HELLO_READ_TIMEOUT_MS)
+            val raw = try {
+                BufferedReader(InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8)).readLine()
+            } catch (e: java.net.SocketTimeoutException) {
+                log.warn("HostBridgeServer: HELLO read timeout ({}ms), dropping connection", HELLO_READ_TIMEOUT_MS)
+                null
+            }
             val hello = parseHello(raw)
             if (hello == null) {
                 log.warn("HostBridgeServer: dropping connection, invalid HELLO: '{}'", raw)
@@ -217,26 +226,6 @@ class HostBridgeServer(
         }
         if (pkg.isNullOrBlank() || pid <= 0) return null
         return HostHello(packageName = pkg, pid = pid, raw = raw)
-    }
-
-    private fun readLineWithTimeout(input: java.io.InputStream, timeoutMs: Long): String {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        val sb = StringBuilder()
-        val buf = ByteArray(1)
-        while (System.currentTimeMillis() < deadline) {
-            // 非阻塞读: 用 available() 看有没有数据
-            if (input.available() > 0) {
-                val n = input.read(buf)
-                if (n < 0) break
-                val c = buf[0].toInt().toChar()
-                if (c == '\n') return sb.toString().trimEnd('\r')
-                sb.append(c)
-                if (sb.length >= 1024) return sb.toString()
-            } else {
-                try { Thread.sleep(20L) } catch (_: InterruptedException) { break }
-            }
-        }
-        return sb.toString()
     }
 
     companion object {
