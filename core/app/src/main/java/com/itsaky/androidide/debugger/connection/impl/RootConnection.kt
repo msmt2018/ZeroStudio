@@ -155,16 +155,20 @@ class RootConnection(
                 )
             }.onFailure { log.warn("attach attempt failed: {}", it.message) }
         }
-        return attempt.onSuccess { info ->
-            if (input == null || output == null) {
-                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("attach returned but stream is null"))))
-                return@onSuccess
-            }
-            transitionTo(ConnectionState.Attached(info.pid, info.jdwpSessionId))
-            startReadLoopFromStream(input!!)
-        }.onFailure { t ->
+        // 失败: 走 mapAttachError
+        attempt.exceptionOrNull()?.let { t ->
             transitionTo(ConnectionState.Closed(mapAttachError(t)))
+            return Result.failure(t)
         }
+        // 成功但 post-condition 失败: 走 finishAttach (ok=false 分支)
+        val info = attempt.getOrNull()!!
+        val ins = input
+        return finishAttach(
+            info = info,
+            ok = stream != null && ins != null && output != null,
+            failureMsg = "attach returned but root jdwp stream is missing",
+            onAttached = { startReadLoopFromStream(ins!!) },
+        )
     }
 
     // ---- detach / 字节流 / 钩子 / 释放 ----

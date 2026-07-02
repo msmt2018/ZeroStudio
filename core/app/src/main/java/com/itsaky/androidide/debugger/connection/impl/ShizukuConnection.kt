@@ -168,23 +168,28 @@ class ShizukuConnection(
                 }
             }.onFailure { log.warn("ShizukuConnection: attach attempt failed: {}", it.message) }
         }
-        return attempt.onSuccess { info ->
-            // InHostPlugin / Binder 走 localSocket 路径; WifiAdb / Socks 走 java.net.Socket 路径
-            val hasLocal = localSocket != null
-            val sock = socket
-            if (!hasLocal && sock == null) {
-                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("attach returned but neither socket nor localSocket is set"))))
-                return@onSuccess
-            }
-            transitionTo(ConnectionState.Attached(info.pid, info.jdwpSessionId))
-            if (hasLocal) {
-                startReadLoopFromStream(localInput!!)
-            } else {
-                startReadLoop(sock!!)
-            }
-        }.onFailure { t ->
+        // 失败: 走 mapAttachError
+        attempt.exceptionOrNull()?.let { t ->
             transitionTo(ConnectionState.Closed(mapAttachError(t)))
+            return Result.failure(t)
         }
+        // 成功但 post-condition 失败: 走 finishAttach (ok=false 分支)
+        val info = attempt.getOrNull()!!
+        // InHostPlugin / Binder 走 localSocket 路径; WifiAdb / Socks 走 java.net.Socket 路径
+        val hasLocal = localSocket != null
+        val sock = socket
+        return finishAttach(
+            info = info,
+            ok = hasLocal || sock != null,
+            failureMsg = "attach returned but neither socket nor localSocket is set",
+            onAttached = {
+                if (hasLocal) {
+                    startReadLoopFromStream(localInput!!)
+                } else {
+                    startReadLoop(sock!!)
+                }
+            },
+        )
     }
 
     // ---- 4 个子路径的 attach 细节 ----

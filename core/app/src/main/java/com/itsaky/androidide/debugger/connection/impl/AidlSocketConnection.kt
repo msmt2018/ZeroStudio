@@ -232,18 +232,20 @@ class AidlSocketConnection(
                 log.warn("AidlSocketConnection: attach attempt failed: {}", t.message)
             }
         }
-        return attempt.onSuccess { info ->
-            val finalSock = clientSocket
-            if (finalSock == null) {
-                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("client socket missing"))))
-                return@onSuccess
-            }
-            transitionTo(ConnectionState.Attached(info.pid, info.jdwpSessionId))
-            // 启动一个读循环,把 host 端过来的 JDWP 帧发到 incoming flow
-            startReadLoopFromSocket(finalSock)
-        }.onFailure { t ->
+        // 失败: 走 mapAttachError
+        attempt.exceptionOrNull()?.let { t ->
             transitionTo(ConnectionState.Closed(mapAttachError(t)))
+            return Result.failure(t)
         }
+        // 成功但 post-condition 失败: 走 finishAttach (ok=false 分支)
+        val info = attempt.getOrNull()!!
+        val finalSock = clientSocket
+        return finishAttach(
+            info = info,
+            ok = finalSock != null,
+            failureMsg = "attach returned but client socket is missing",
+            onAttached = { startReadLoopFromSocket(finalSock!!) },
+        )
     }
 
     /**
@@ -288,17 +290,21 @@ class AidlSocketConnection(
                 log.warn("AidlSocketConnection: attachLocalBridge failed: {}", t.message)
             }
         }
-        return attempt.onSuccess { info ->
-            if (localBridgeSocket == null) {
-                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("local bridge socket missing"))))
-                return@onSuccess
-            }
-            transitionTo(ConnectionState.Attached(info.pid, info.jdwpSessionId))
-            // 启动 LocalSocket 专用的读循环 (不依赖 java.net.Socket)
-            startReadLoopFromStream(localBridgeInput!!)
-        }.onFailure { t ->
+        // 失败: 走 mapAttachError
+        attempt.exceptionOrNull()?.let { t ->
             transitionTo(ConnectionState.Closed(mapAttachError(t)))
+            return Result.failure(t)
         }
+        // 成功但 post-condition 失败: 走 finishAttach (ok=false 分支)
+        val info = attempt.getOrNull()!!
+        val ls = localBridgeSocket
+        val ins = localBridgeInput
+        return finishAttach(
+            info = info,
+            ok = ls != null && ins != null,
+            failureMsg = "attachLocalBridge returned but local bridge socket/stream is missing",
+            onAttached = { startReadLoopFromStream(ins!!) },
+        )
     }
 
     // ---- detach: 走 VM.Dispose + 关闭 socket(LocalBridge / TCP 分支) ----

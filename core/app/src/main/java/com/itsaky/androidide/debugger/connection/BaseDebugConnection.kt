@@ -10,6 +10,7 @@
 
 package com.itsaky.androidide.debugger.connection
 
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +45,39 @@ abstract class BaseDebugConnection(
         throw UnsupportedOperationException(
             "Debugger connection: $type sub-project $subProject '$op' not implemented yet"
         )
+    }
+
+    /**
+     * 收尾 attach() 的双步: 验证 post-condition, 然后决定是进 Attached 还是 Closed。
+     *
+     * 为什么需要这个 helper: 直接在 `attempt.onSuccess { info -> ... }` 里调
+     *   `transitionTo(Closed(...))` 然后 `return@onSuccess` 是错的, 因为
+     *   `onSuccess` 的返回值是 Unit, 实际返回的是外层 `Result.success(info)`;
+     *   调用方会拿到 success 但观察 state 看到 Closed, 行为不一致。
+     *
+     * 用法:
+     *   val info = attempt.getOrNull() ?: return attempt
+     *   val sock = clientSocket
+     *   return finishAttach(
+     *       info = info,
+     *       ok = sock != null,
+     *       failureMsg = "client socket missing",
+     *       onAttached = { startReadLoop(sock!!) },
+     *   )
+     */
+    protected fun finishAttach(
+        info: AttachInfo,
+        ok: Boolean,
+        failureMsg: String,
+        onAttached: () -> Unit,
+    ): Result<AttachInfo> {
+        if (!ok) {
+            transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException(failureMsg))))
+            return Result.failure(IllegalStateException(failureMsg))
+        }
+        transitionTo(ConnectionState.Attached(info.pid, info.jdwpSessionId))
+        onAttached()
+        return Result.success(info)
     }
 
     // 字节流默认抛 NotImplementedError; 子类真正实现时 override 即可。

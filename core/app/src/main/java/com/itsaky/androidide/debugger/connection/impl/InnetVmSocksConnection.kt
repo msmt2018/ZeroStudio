@@ -141,17 +141,20 @@ class InnetVmSocksConnection(
                 )
             }.onFailure { log.warn("attach attempt failed: {}", it.message) }
         }
-        return attempt.onSuccess { info ->
-            val sock = socket
-            if (sock == null) {
-                transitionTo(ConnectionState.Closed(ConnectionError.IoFailure(IOException("attach returned but socket is null"))))
-                return@onSuccess
-            }
-            transitionTo(ConnectionState.Attached(info.pid, info.jdwpSessionId))
-            startReadLoop(sock)
-        }.onFailure { t ->
+        // 失败: 走 mapAttachError
+        attempt.exceptionOrNull()?.let { t ->
             transitionTo(ConnectionState.Closed(mapAttachError(t)))
+            return Result.failure(t)
         }
+        // 成功但 post-condition 失败: 走 finishAttach (ok=false 分支)
+        val info = attempt.getOrNull()!!
+        val sock = socket
+        return finishAttach(
+            info = info,
+            ok = sock != null,
+            failureMsg = "attach returned but socket is missing",
+            onAttached = { startReadLoop(sock!!) },
+        )
     }
 
     // ---- detach / 字节流 / 钩子 / 释放 ----
