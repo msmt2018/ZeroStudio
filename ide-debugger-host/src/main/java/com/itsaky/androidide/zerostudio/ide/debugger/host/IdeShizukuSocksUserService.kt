@@ -61,12 +61,25 @@ class IdeShizukuSocksUserService : Service() {
     @Volatile var actualSocksPort: Int = -1
         private set
 
+    /**
+     * Shizuku 13+ user service 协议: onBind 返回的 IBinder 会被 ShizukuBinderClient
+     * 读到, 返回 null 会抛 "binder is null" 让 IDE 端 throw 死循环。返回 [noopBinder]
+     * 即可 (Shizuku 不读 binder 内容, 只调 pingBinder() 验活性, Binder 基类自带实现)。
+     *
+     * 跟 [HostPluginService] 同样的修复 (Phase 12c), 之前实现返回 null + 注释说
+     * "返回 null 也行" 是错的, 改 noopBinder 保持一致。
+     */
+    private val noopBinder: IBinder = object : IBinder {
+        // 空实现: Shizuku / IDE 只调 pingBinder(), Binder 基类自带 transact
+        // PING_TRANSACTION 返回 true 的实现, 无需 override
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.i(tag, "onCreate in host process pid=${android.os.Process.myPid()}")
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(intent: Intent?): IBinder {
         Log.i(tag, "onBind: triggering HostSocksServer startup")
         // 启动 SOCKS5 server, 监听 127.0.0.1:0 (随机端口)
         // Shizuku 端不读 binder 内容, IDE 通过 SocksConfig.socksPort 配置约定端口,
@@ -85,9 +98,7 @@ class IdeShizukuSocksUserService : Service() {
         } catch (t: Throwable) {
             Log.e(tag, "startOnTcp failed: ${t.message}", t)
         }
-        // 返回 null: Shizuku 端 ServiceConnection 只用 onServiceConnected 触发,
-        // 不读 binder 内容, 任何 IBinder 都可以 (包括 null)
-        return null
+        return noopBinder
     }
 
     override fun onUnbind(intent: Intent?): Boolean {

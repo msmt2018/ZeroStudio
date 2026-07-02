@@ -125,32 +125,39 @@ class HostSocksServer {
      *      我们无视 CMD / DST.ADDR / DST.PORT, 全部 CONNECT 到 localabstract:jdwp
      *   3) reply VER REP RSV ATYP(1=0.0.0.0) BND.ADDR(4 bytes 0) BND.PORT(2 bytes 0)
      *   4) 双向 forward
+     *
+     * 早期 EOF (greeting / request 阶段 client 直接断开) 视作正常 client 行为,
+     * 静默退出不打 error log。SOCKS5 client 协议不合法 (ver/ATYP/CMD) 仍抛 IOException。
      */
     @Throws(IOException::class)
     private fun handleSocksClient(input: InputStream, output: OutputStream) {
         // 1) greeting
-        val ver = readByte(input)
+        val ver = readByteOrNull(input) ?: return
         if (ver != 0x05.toByte()) throw IOException("not SOCKS5: ver=$ver")
-        val nMethods = readByte(input).toInt() and 0xff
-        val methods = ByteArray(nMethods)
-        readFully(input, methods)
+        val nMethods = readByteOrNull(input)?.toInt()?.and(0xff) ?: return
+        if (nMethods < 0) throw IOException("invalid SOCKS5 NMETHODS=$nMethods")
+        if (!readFullyOrNull(input, nMethods)) return
         output.write(byteArrayOf(0x05, 0x00))
         output.flush()
 
         // 2) request
-        val reqVer = readByte(input)
+        val reqVer = readByteOrNull(input) ?: return
         if (reqVer != 0x05.toByte()) throw IOException("not SOCKS5 request: ver=$reqVer")
-        val cmd = readByte(input)
-        readByte(input)  // RSV
-        val atyp = readByte(input).toInt() and 0xff
+        val cmd = readByteOrNull(input) ?: return
+        val rsv = readByteOrNull(input) ?: return
+        val atyp = readByteOrNull(input)?.toInt()?.and(0xff) ?: return
         // skip DST.ADDR + DST.PORT - 我们直接接到 jdwp, 不关心客户端想要的目标
         when (atyp) {
-            0x01 -> { readFully(input, ByteArray(4)) }
-            0x03 -> { val len = readByte(input).toInt() and 0xff; readFully(input, ByteArray(len)) }
-            0x04 -> { readFully(input, ByteArray(16)) }
+            0x01 -> { if (!readFullyOrNull(input, 4)) return }
+            0x03 -> {
+                val len = readByteOrNull(input)?.toInt()?.and(0xff) ?: return
+                if (len < 0) throw IOException("invalid SOCKS5 domain length=$len")
+                if (!readFullyOrNull(input, len)) return
+            }
+            0x04 -> { if (!readFullyOrNull(input, 16)) return }
             else -> throw IOException("unsupported SOCKS5 ATYP=$atyp")
         }
-        readFully(input, ByteArray(2))  // DST.PORT
+        if (!readFullyOrNull(input, 2)) return  // DST.PORT
         if (cmd != 0x01.toByte()) {
             // 仅支持 CONNECT
             output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0))  // command not supported
@@ -175,19 +182,29 @@ class HostSocksServer {
         }
     }
 
-    private fun readByte(input: InputStream): Byte {
+    /**
+     * 读 1 字节, EOF 时返 null (表示 client 正常断开, 不当 error)。
+     * 其他 IOException 仍向上抛。
+     */
+    private fun readByteOrNull(input: InputStream): Byte? {
         val b = input.read()
-        if (b < 0) throw IOException("unexpected EOF in SOCKS5 read")
-        return b.toByte()
+        return if (b < 0) null else b.toByte()
     }
 
-    private fun readFully(input: InputStream, dst: ByteArray) {
+    /**
+     * 读 [n] 字节, EOF 时返 false (表示 client 正常断开, 不当 error)。
+     * 其他 IOException 仍向上抛。
+     */
+    private fun readFullyOrNull(input: InputStream, n: Int): Boolean {
+        if (n == 0) return true
         var off = 0
-        while (off < dst.size) {
-            val n = input.read(dst, off, dst.size - off)
-            if (n < 0) throw IOException("unexpected EOF in SOCKS5 readFully")
-            off += n
+        val buf = ByteArray(n)
+        while (off < n) {
+            val read = input.read(buf, off, n - off)
+            if (read < 0) return false
+            off += read
         }
+        return true
     }
 
     private fun log(msg: String) = Log.i(tag, msg)
