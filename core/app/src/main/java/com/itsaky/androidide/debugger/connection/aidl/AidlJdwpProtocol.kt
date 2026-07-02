@@ -157,24 +157,39 @@ object AidlJdwpProtocol {
     fun performHandshakeAndVersionProbe(
         socket: Socket,
         commandId: Int = 1,
+    ): VmVersionInfo = performHandshakeAndVersionProbe(
+        output = socket.getOutputStream(),
+        input = socket.getInputStream(),
+        commandId = commandId,
+    )
+
+    /**
+     * 子项目 9e: 重载, 接受 InputStream/OutputStream, 供 LocalSocket (不继承
+     * java.net.Socket) 等场景使用。
+     */
+    @Throws(IOException::class)
+    fun performHandshakeAndVersionProbe(
+        output: java.io.OutputStream,
+        input: java.io.InputStream,
+        commandId: Int = 1,
     ): VmVersionInfo {
-        val out = DataOutputStream(socket.getOutputStream())
-        val input = DataInputStream(socket.getInputStream())
+        val out = DataOutputStream(output)
+        val ins = DataInputStream(input)
         // 1. 写 handshake
         writeHandshake(out)
         out.flush()
         // 2. 读 handshake 校验
-        readAndVerifyHandshake(input)
+        readAndVerifyHandshake(ins)
         // 3. 写 VM.Version
         out.write(buildVmVersionCommand(commandId))
         out.flush()
         // 4. 读响应包
         val header = ByteArray(11)
-        input.readFully(header)
+        ins.readFully(header)
         val payloadLength = readInt(header, 0)
         val payload = ByteArray(payloadLength)
         if (payloadLength > 0) {
-            input.readFully(payload)
+            ins.readFully(payload)
         }
         val fullPacket = ByteArray(11 + payloadLength)
         System.arraycopy(header, 0, fullPacket, 0, 11)

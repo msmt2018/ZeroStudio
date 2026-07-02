@@ -1,0 +1,252 @@
+/*
+ *  ZeroStudio IDE - 断点调试器连接层
+ *
+ *  HostBridgeServer: IDE 端 LocalServerSocket 接收 host app 反向连接 (子项目 9a)。
+ *
+ *  背景:
+ *    子项目 1-8 完成了 6 选 1 连接方案的 IDE 端 + host 端 runtime, 但端到端
+ *    集成存在"宿主应用启动后 IDE 端断点调试器没反应"问题。
+ *    现有 AidlSocketConnection 是"IDE bind ServerSocket -> launch host app
+ *    (Intent extra 传 port) -> host 反连"模式, 必须 IDE 先启动 host。
+ *    如果用户**手动**启动 host app (如点 launcher 图标), IDE 端不响应。
+ *
+ *  本类解决这个:
+ *    - IDE 启动后 bind 一个 abstract namespace 的 LocalServerSocket, 名字
+ *      由 build-time 注入的 Manifest placeholder 决定 (per-project 唯一)
+ *    - host app 启动后, 走 HostAttachAgent 反向连这个 LocalServerSocket
+ *    - host 端发一行 HELLO 协议头 (HELLO pkg=<pkg> pid=<pid>), IDE 解析后
+ *      触发 AppReadyAutoConnect
+ *    - accept 的 socket 包装成 LocalSocket 供 AIDL+Socket connection attach 用
+ *
+ *  设计要点:
+ *    - 单实例: IDE 进程内只允许一个 LocalServerSocket (避免冲突)
+ *    - 多连接: host 可能多次启动 (调试时), accept 循环
+ *    - 超时: accept 设 soTimeout, 关闭时 wait 不阻塞
+ *    - HELLO 协议: 简单 key=value 形式, 解析失败丢弃连接
+ */
+
+package com.itsaky.androidide.debugger.connection.host
+
+import android.net.LocalServerSocket
+import android.net.LocalSocket
+import android.net.LocalSocketAddress
+import com.itsaky.androidide.utils.ILogger
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.InputStreamReader
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+
+/**
+ * 收到的 host 端 HELLO 信息。
+ */
+data class HostHello(
+    val packageName: String,
+    val pid: Int,
+    val raw: String,
+)
+
+/**
+ * 收到的 host 反向连接 (LocalSocket 包装, 仍可读写)。
+ */
+class HostConnection(
+    val hello: HostHello,
+    val socket: LocalSocket,
+) {
+    val receivedAt: Long = System.currentTimeMillis()
+}
+
+/**
+ * IDE 端 LocalServerSocket 服务。
+ *
+ * 用法 (由 IDE 启动时构造, 单例):
+ * ```
+ *   val server = HostBridgeServer("ide-debug-bridge-com.example.app")
+ *   server.setListener { conn -> AppReadyAutoConnect.onHostConnected(conn) }
+ *   server.start()  // bind + accept loop
+ *   // 之后不用了:
+ *   server.stop()
+ * ```
+ */
+class HostBridgeServer(
+    val localSocketName: String,
+) {
+    private val log = ILogger.ROOT
+
+    @Volatile private var serverSocket: LocalServerSocket? = null
+    @Volatile private var acceptThread: Thread? = null
+    private val running = AtomicBoolean(false)
+    private val idGenerator = AtomicLong(System.currentTimeMillis())
+    private val activeConnections = CopyOnWriteArrayList<HostConnection>()
+
+    @Volatile private var listener: ((HostConnection) -> Unit)? = null
+
+    fun setListener(l: ((HostConnection) -> Unit)?) {
+        this.listener = l
+    }
+
+    /**
+     * 启动 LocalServerSocket, 进入 accept 循环。
+     * 重复调用是 no-op, 不会重启。
+     *
+     * @throws IOException bind 失败
+     */
+    @Throws(IOException::class)
+    fun start() {
+        if (!running.compareAndSet(false, true)) {
+            log.debug("HostBridgeServer: already running on '{}'", localSocketName)
+            return
+        }
+        val lss = try {
+            LocalServerSocket(localSocketName)
+        } catch (t: Throwable) {
+            running.set(false)
+            throw IOException("failed to bind LocalServerSocket '$localSocketName': ${t.message}", t)
+        }
+        serverSocket = lss
+        log.info("HostBridgeServer: bound abstract socket '{}'", localSocketName)
+        val t = Thread({ acceptLoop(lss) }, "HostBridgeServer-accept")
+        t.isDaemon = true
+        acceptThread = t
+        t.start()
+    }
+
+    /**
+     * 停止服务: 关闭 LocalServerSocket + 关闭所有 active connection + join accept thread。
+     */
+    fun stop() {
+        if (!running.compareAndSet(true, false)) return
+        log.info("HostBridgeServer: stopping")
+        runCatching { serverSocket?.close() }
+        serverSocket = null
+        // 关闭所有 active
+        for (c in activeConnections) {
+            runCatching { c.socket.close() }
+        }
+        activeConnections.clear()
+        // accept thread 会因 serverSocket.close() 抛 IOException 退出
+        acceptThread?.let { t ->
+            try { t.join(2_000L) } catch (_: InterruptedException) { }
+        }
+        acceptThread = null
+    }
+
+    /**
+     * 阻塞等待下一个 host 端连接 (用于 AidlSocketConnection.attachViaLocalBridge)。
+     *
+     * @param timeoutMs 等待时间
+     * @return 第一个 [HostConnection]; 超时返回 null
+     */
+    fun awaitNextConnection(timeoutMs: Long): HostConnection? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (running.get() && System.currentTimeMillis() < deadline) {
+            val next = activeConnections.firstOrNull { it.socket.isConnected }
+            if (next != null) {
+                activeConnections.remove(next)
+                return next
+            }
+            try { Thread.sleep(20L) } catch (_: InterruptedException) { return null }
+        }
+        return null
+    }
+
+    /**
+     * 是否正在 listen。
+     */
+    fun isRunning(): Boolean = running.get()
+
+    // ---- 私有 ----
+
+    private fun acceptLoop(lss: LocalServerSocket) {
+        while (running.get() && !lss.isClosed) {
+            try {
+                val client = lss.accept()
+                handleClient(client)
+            } catch (t: Throwable) {
+                if (running.get()) {
+                    log.warn("HostBridgeServer: accept failed: {}", t.message)
+                }
+            }
+        }
+        log.info("HostBridgeServer: accept loop ended")
+    }
+
+    private fun handleClient(client: LocalSocket) {
+        try {
+            // 读 HELLO 行 (最多 1024 字节, 阻塞 5s)
+            client.soTimeout = HELLO_READ_TIMEOUT_MS.toInt()
+            val input = client.inputStream
+            val raw = readLineWithTimeout(input, HELLO_READ_TIMEOUT_MS)
+            val hello = parseHello(raw)
+            if (hello == null) {
+                log.warn("HostBridgeServer: dropping connection, invalid HELLO: '{}'", raw)
+                runCatching { client.close() }
+                return
+            }
+            val conn = HostConnection(hello = hello, socket = client)
+            activeConnections.add(conn)
+            log.info("HostBridgeServer: received HELLO pkg={} pid={} id={}", hello.packageName, hello.pid, idGenerator.incrementAndGet())
+            // 通知 listener (AppReadyAutoConnect)
+            try {
+                listener?.invoke(conn)
+            } catch (t: Throwable) {
+                log.warn("HostBridgeServer: listener threw: {}", t.message)
+            }
+        } catch (t: Throwable) {
+            log.warn("HostBridgeServer: handleClient failed: {}", t.message)
+            runCatching { client.close() }
+        }
+    }
+
+    private fun parseHello(raw: String): HostHello? {
+        if (raw.isBlank()) return null
+        // 协议: "HELLO pkg=<pkg> pid=<pid> [extra=...]"
+        val trimmed = raw.trim()
+        if (!trimmed.startsWith("HELLO ")) return null
+        val parts = trimmed.substringAfter("HELLO ").split(Regex("\\s+"))
+        var pkg: String? = null
+        var pid: Int = 0
+        for (p in parts) {
+            val kv = p.split("=", limit = 2)
+            if (kv.size != 2) continue
+            when (kv[0]) {
+                "pkg" -> pkg = kv[1]
+                "pid" -> pid = kv[1].toIntOrNull() ?: 0
+            }
+        }
+        if (pkg.isNullOrBlank() || pid <= 0) return null
+        return HostHello(packageName = pkg, pid = pid, raw = raw)
+    }
+
+    private fun readLineWithTimeout(input: java.io.InputStream, timeoutMs: Long): String {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        val sb = StringBuilder()
+        val buf = ByteArray(1)
+        while (System.currentTimeMillis() < deadline) {
+            // 非阻塞读: 用 available() 看有没有数据
+            if (input.available() > 0) {
+                val n = input.read(buf)
+                if (n < 0) break
+                val c = buf[0].toInt().toChar()
+                if (c == '\n') return sb.toString().trimEnd('\r')
+                sb.append(c)
+                if (sb.length >= 1024) return sb.toString()
+            } else {
+                try { Thread.sleep(20L) } catch (_: InterruptedException) { break }
+            }
+        }
+        return sb.toString()
+    }
+
+    companion object {
+        const val HELLO_READ_TIMEOUT_MS: Long = 5_000L
+
+        /**
+         * 默认的 LocalServerSocket 名字生成 (per-uid 唯一):
+         *   ide-debug-bridge-<uid>
+         */
+        fun defaultName(uid: Int = android.os.Process.myUid()): String =
+            "ide-debug-bridge-$uid"
+    }
+}

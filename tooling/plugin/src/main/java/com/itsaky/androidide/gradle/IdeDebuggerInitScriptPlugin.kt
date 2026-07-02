@@ -53,6 +53,22 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     /** <meta-data> name that the provider reads to learn the JDWP port. */
     const val BOOTSTRAP_META_PORT = "com.zerostudio.debugger.PORT_HINT"
 
+    /**
+     * 子项目 9d: 新增 host ADRT AAR + Manifest placeholder 注入。
+     *
+     * IDE_LOG_PLUGIN_ARTIFACT: 注入 host 端 JdwpServer / LogCaptureService (已有)
+     * IDE_DEBUGGER_HOST_ARTIFACT: 注入 host ADRT runtime (子项目 8 新建)
+     *   - HostAttachAgent (app_process 入口)
+     *   - HostAttachAgentBootstrap (ContentProvider, 子项目 9c)
+     *   - HostPluginService (Shizuku InHostPlugin)
+     *   - HostSocksServer (Socks 路径)
+     *   - 配套的 Manifest placeholder + provider (子项目 9c)
+     */
+    const val IDE_DEBUGGER_HOST_ARTIFACT = "ide-debugger-host"
+
+    /** Manifest placeholder key (用于注入 IDE LocalServerSocket 名字) */
+    const val IDE_LOCAL_SERVER_NAME_PLACEHOLDER = "ideLocalServerName"
+
     private val logger = Logging.getLogger(IdeDebuggerInitScriptPlugin::class.java)
   }
 
@@ -106,11 +122,13 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
       // 1. Add :ide-log-plugin AAR (defensive: IdeLogInitScriptPlugin
       //    usually also does this; re-adding is harmless because
       //    the dep is the same artifact).
+      // 子项目 9d: 同样注入 :ide-debugger-host AAR (host ADRT runtime)
       try {
         variant.withRuntimeConfiguration {
           listOf(
               IdeLogInitScriptPlugin.IDE_LOG_PLUGIN_ARTIFACT,
               IdeLogInitScriptPlugin.IDE_DEBUGGER_ARTIFACT,
+              IDE_DEBUGGER_HOST_ARTIFACT,  // 子项目 9d: host ADRT
           ).forEach { artifact ->
             val dep = project.dependencies.ideDependency(
                 LIB_GROUP_TOOLING, artifact, project.isTestEnv
@@ -130,18 +148,31 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
       //    AndroidManifest.xml doesn't need to declare the
       //    bootstrap provider. The placeholder name is the
       //    fully-qualified provider class.
+      // 子项目 9d: 同样注入 ideLocalServerName placeholder, 给 HostAttachAgentBootstrap
+      //   ContentProvider 读 (走 meta-data android:name="ide_local_server_name")
       try {
         variant.withManifestPlaceholders(
             project,
             mapOf(
                 "${BOOTSTRAP_PROVIDER_CLASS}.AUTHORITY" to BOOTSTRAP_AUTHORITY,
                 "${BOOTSTRAP_PROVIDER_CLASS}.META_PORT" to "0",
+                IDE_LOCAL_SERVER_NAME_PLACEHOLDER to computeLocalServerName(project),
             )
         )
       } catch (e: Throwable) {
         logger.warn("manifest placeholder injection failed: ${e.message}")
       }
     }
+  }
+
+  /**
+   * 子项目 9d: 计算 host 端要反连的 IDE LocalServerSocket 名字。
+   * 名字 = "ide-debug-bridge-{group}-{name}", 唯一避免冲突。
+   */
+  private fun computeLocalServerName(project: Project): String {
+    val group = (project.group?.toString() ?: project.path.replace(":", "-")).take(64)
+    val name = project.name.take(64)
+    return "ide-debug-bridge-${group}-${name}".lowercase()
   }
 
   private fun ApplicationVariant.withRuntimeConfiguration(action: org.gradle.api.artifacts.Configuration.() -> Unit) {
