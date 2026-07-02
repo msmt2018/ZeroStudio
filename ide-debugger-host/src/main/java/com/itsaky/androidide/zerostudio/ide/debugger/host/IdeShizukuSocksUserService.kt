@@ -81,13 +81,12 @@ class IdeShizukuSocksUserService : Service() {
 
     override fun onBind(intent: Intent?): IBinder {
         Log.i(tag, "onBind: triggering HostSocksServer startup")
-        // 启动 SOCKS5 server, 监听 127.0.0.1:0 (随机端口)
-        // Shizuku 端不读 binder 内容, IDE 通过 SocksConfig.socksPort 配置约定端口,
-        // 这里是 0 (随机) 时 IDE 必须用别的方式拿到 port, 后续会改:
-        //   - 简化版: 写死固定端口 (e.g. 39939) 避免跨进程通信
-        //   - 进阶版: 写一个辅助 file / system prop 让 IDE 读
-        // 当前先用 intent extra 里的 "socksPort", 默认 0 表示 IDE 端会自己 retry
-        val requestedPort = intent?.getIntExtra(EXTRA_SOCKS_PORT, 0) ?: 0
+        // 启动 SOCKS5 server, listen 在 127.0.0.1:39939 (IDE 端固定默认端口)
+        // Shizuku 反射加载本类不传自定义 intent extras, 跟 IDE 端
+        // ShizukuConfig.socksPort = 39939 默认值保持一致, 端到端默认跑通。
+        // 用户想改端口: IDE 端改 settings.shizuku.socksPort, host 端用
+        // getSystemProperty / 约定 file 读到约定值 (尚未实装, 留 TODO)。
+        val requestedPort = intent?.getIntExtra(EXTRA_SOCKS_PORT, DEFAULT_SOCKS_PORT) ?: DEFAULT_SOCKS_PORT
         val bindHost = intent?.getStringExtra(EXTRA_BIND_HOST) ?: DEFAULT_BIND_HOST
         try {
             val server = HostSocksServer()
@@ -122,6 +121,11 @@ class IdeShizukuSocksUserService : Service() {
         const val EXTRA_BIND_HOST = "ide.shizuku.socks.bindHost"
         /** 默认监听地址: 127.0.0.1 (host 进程内, 不对外暴露) */
         const val DEFAULT_BIND_HOST = "127.0.0.1"
+        /**
+         * 默认监听端口: 39939, 跟 IDE 端 [com.itsaky.androidide.debugger.connection.DebugConnectionSettings.ShizukuConfig.socksPort]
+         * 默认值保持一致, 端到端 Socks 路径默认跑通。
+         */
+        const val DEFAULT_SOCKS_PORT = 39939
 
         /**
          * host 端 FQN. Shizuku 反射加载本类时使用, 必须跟 manifest 里的一致

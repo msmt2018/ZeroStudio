@@ -38,6 +38,8 @@ object DebugConnectionPreferences {
     const val SHIZUKU_BINDER_TIMEOUT_MS = "ide.debugger.connection.shizuku.binderTimeoutMs"
     const val SHIZUKU_PLUGIN_ASSET = "ide.debugger.connection.shizuku.pluginAsset"
     const val SHIZUKU_SOCKS_FALLBACK = "ide.debugger.connection.shizuku.socksFallback"
+    const val SHIZUKU_SOCKS_HOST = "ide.debugger.connection.shizuku.socksHost"
+    const val SHIZUKU_SOCKS_PORT = "ide.debugger.connection.shizuku.socksPort"
 
     // ---- Root ----
     const val ROOT_SU_BIN = "ide.debugger.connection.root.suBin"
@@ -119,6 +121,18 @@ object DebugConnectionPreferences {
     var shizukuSocksFallback: Boolean
         get() = prefManager.getBoolean(SHIZUKU_SOCKS_FALLBACK, true)
         set(value) { prefManager.putBoolean(SHIZUKU_SOCKS_FALLBACK, value) }
+
+    var shizukuSocksHost: String
+        get() = prefManager.getString(SHIZUKU_SOCKS_HOST, "127.0.0.1")!!
+        set(value) { prefManager.putString(SHIZUKU_SOCKS_HOST, value) }
+
+    /**
+     * SOCKS5 子路径专用: host 端 IdeShizukuSocksUserService 监听的 TCP 端口。
+     * 默认 39939, 跟 host 端 DEFAULT_SOCKS_PORT 一致, 端到端 Socks 路径默认跑通。
+     */
+    var shizukuSocksPort: Int
+        get() = prefManager.getInt(SHIZUKU_SOCKS_PORT, 39939)
+        set(value) { prefManager.putInt(SHIZUKU_SOCKS_PORT, value) }
 
     // ---- Root ----
     var rootSuBin: String
@@ -204,6 +218,8 @@ object DebugConnectionPreferences {
             binderTimeoutMs = shizukuBinderTimeoutMs,
             hostPluginAssetName = shizukuPluginAsset,
             enableSocksFallback = shizukuSocksFallback,
+            socksHost = shizukuSocksHost,
+            socksPort = shizukuSocksPort,
         ),
         root = RootConfig(
             suBinPath = rootSuBin,
@@ -243,6 +259,8 @@ object DebugConnectionPreferences {
         shizukuBinderTimeoutMs = settings.shizuku.binderTimeoutMs
         shizukuPluginAsset = settings.shizuku.hostPluginAssetName
         shizukuSocksFallback = settings.shizuku.enableSocksFallback
+        shizukuSocksHost = settings.shizuku.socksHost
+        shizukuSocksPort = settings.shizuku.socksPort
         rootSuBin = settings.root.suBinPath
         rootProbeTimeoutMs = settings.root.probeTimeoutMs
         rootAllowMagisk = settings.root.allowMagiskSu

@@ -26,9 +26,10 @@ data class AidlSocketConfig(
  * @param binderTimeoutMs binder 调用超时
  * @param hostPluginAssetName C 路径注入的 stub apk asset 名
  * @param enableSocksFallback 失败时是否降级到 SOCKS5 出口 (子路径 D)
- * @param socksHost SOCKS5 子路径专用: IDE 端 Socks5Client 连的代理地址。
- *        0.0.0.0 = 127.0.0.1, port 0 = 由 host 端 user service 报告 (尚未实装)
- * @param socksPort SOCKS5 子路径专用: SOCKS5 代理端口
+ * @param socksHost SOCKS5 子路径专用: IDE 端 Socks5Client 连的代理地址 (默认 127.0.0.1)
+ * @param socksPort SOCKS5 子路径专用: SOCKS5 代理端口。默认 39939, 跟 host 端
+ *        IdeShizukuSocksUserService.DEFAULT_SOCKS_PORT 一致, 端到端 Socks 路径
+ *        默认跑通 (无需用户手动配)
  */
 data class ShizukuConfig(
     val subPath: SubPath = SubPath.Auto,
@@ -36,7 +37,7 @@ data class ShizukuConfig(
     val hostPluginAssetName: String = "shizuku_host_bridge.apk",
     val enableSocksFallback: Boolean = true,
     val socksHost: String = "127.0.0.1",
-    val socksPort: Int = 0,
+    val socksPort: Int = 39939,
 ) {
     enum class SubPath { Auto, WifiAdb, Binder, InHostPlugin, Socks }
 }

@@ -357,11 +357,9 @@ class ShizukuConnection(
      *   4) 走 JDWP 握手 + VM.Version
      *   5) 字节桥 (走 java.net.Socket)
      *
-     * 已知限制: Socks5Client 走 java.net.Socket, 需要 SOCKS5 代理监听在
-     * 真 TCP 端口 (非 abstract namespace)。HostSocksServer.startOnTcp()
-     * 支持 TCP, 但 host 端 user service 需在启动后报告端口给 IDE。
-     * 截至目前, host 端 IdeShizukuSocksUserService 尚未实装, 所以 socksPort
-     * 仍由用户在 ShizukuConfig 显式配置, 默认 0 = attach 阶段抛错。
+     * 端口: 默认 39939 (跟 host 端 IdeShizukuSocksUserService.DEFAULT_SOCKS_PORT
+     * 一致), 用户可通过 [com.itsaky.androidide.debugger.connection.DebugConnectionPreferences]
+     * 改 `shizukuSocksPort` 覆盖。
      */
     private suspend fun attachViaSocks(): AttachInfo {
         // 1) 拉 user service (host 端 IdeShizukuSocksUserService 启 SOCKS5 server)
@@ -378,17 +376,17 @@ class ShizukuConnection(
         }
         // 2) SOCKS5 客户端连 host SOCKS5 server
         //    proxyAddr 必须用真 TCP 端口 (Socks5Client 走 java.net.Socket, 不支持
-        //    abstract namespace)。HostSocksServer.startOnTcp() 支持 TCP, 但 host
-        //    端 user service 尚未实装自动报告端口, 所以默认 socksPort=0 会失败。
-        //    用户需在 DebugConnectionPreferences 里显式配 socksPort 才能跑通。
-        val socksHost = settings.shizuku.socksHost
+        //    abstract namespace)。默认 39939, 跟 host 端一致 (Phase 12j 修);
+        //    用户可改 settings.shizuku.socksPort 覆盖 (DebugConnectionPreferences
+        //    持久化 shizukuSocksPort)。Socks 路径的 host 端端口之前完全没渠道
+        //    告知 IDE, 这里固定默认端口 + prefs 覆盖两端一致。
+        val socksHost = settings.shizuku.socksHost.ifBlank { "127.0.0.1" }
         val socksPort = settings.shizuku.socksPort
-        if (socksPort <= 0) {
+        if (socksPort <= 0 || socksPort > 65535) {
             throw IOException(
-                "Shizuku Socks: socksPort not configured (got $socksPort). " +
-                    "Set shizuku.socksPort in DebugConnectionSettings to a real TCP port " +
-                    "where host-side IdeShizukuSocksUserService is listening (see " +
-                    "HostSocksServer.startOnTcp)."
+                "Shizuku Socks: socksPort invalid (got $socksPort). " +
+                    "Set shizukuSocksPort in DebugConnectionPreferences to a valid TCP " +
+                    "port (default 39939 matches host-side IdeShizukuSocksUserService.DEFAULT_SOCKS_PORT)."
             )
         }
         val proxyAddr = java.net.InetSocketAddress(socksHost, socksPort)
