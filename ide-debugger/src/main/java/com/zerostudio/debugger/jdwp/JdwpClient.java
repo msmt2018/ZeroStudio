@@ -86,10 +86,22 @@ public class JdwpClient {
      * (sub-project 1) and the existing JDWP client. The host/port params
      * are used only for logging and {@link #host()}/{@link #port()}
      * accessors; pass empty/0 if unknown.
+     *
+     * <p>{@code setTcpNoDelay} is best-effort: if the underlying socket
+     * does not support it (e.g. Android {@code LocalSocket} passed through
+     * a {@code Socket} adapter, or some test fakes), the call is logged
+     * and ignored rather than aborting the connection.
      */
     public void connect(@NonNull Socket socket, @Nullable String host, int port)
             throws IOException {
-        socket.setTcpNoDelay(true);
+        try {
+            socket.setTcpNoDelay(true);
+        } catch (Throwable t) {
+            // LocalSocket / test fakes may not support TcpNoDelay. Not fatal
+            // for JDWP correctness — the protocol uses length-prefixed
+            // framing so Nagle batching does not break anything.
+            Log.d(TAG, "setTcpNoDelay not supported by socket: " + t.getMessage());
+        }
         connectInternal(socket, host == null ? "" : host, port);
     }
 
