@@ -62,8 +62,8 @@
 - [ ] git CD/CI/PR/workflow container
 - [x] (Chat ai)[https://github.com/rikkahub/rikkahub] Support assistant skills, tts ， mcp， Numerous common provider models etc...
 - [ ] Preview function
-    - [x]  AndroidX Jetpack Compose Preview 
-    - [ ] advanced images Preview
+    - [x] AndroidX Jetpack Compose Preview 
+    - [x] images Preview
     - [x] Markdown preview
     - [ ] web(html，vue，nodejs，js，etc ...) preview
     - [ ] C/C++ drawing preview
