@@ -155,7 +155,15 @@ internal fun renderIdeDebuggerBootstrapKt(
     } else {
         preheatBreakpoints.joinToString(
             prefix = "listOf(\n        ",
-            postfix = ",\n    )",
+            // 之前 postfix = ",\n    )" 多了一个 ',' — 生成的 .kt 编译失败
+            // (separator 已经负责 elements 之间的 ','; postfix 不能再加 ',').
+            // 修后 postfix 走 "\n    )", 生成:
+            //   listOf(
+            //           BreakpointLocation(...),
+            //           BreakpointLocation(...),
+            //       )
+            // Phase 12n 修。
+            postfix = "\n    )",
             separator = ",\n        ",
         ) { bp ->
             "BreakpointLocation(\n" +
