@@ -1,7 +1,7 @@
 /*
  *  ZeroStudio IDE - Host ADRT (Android Debug Runtime)
  *
- *  HostAttachAgentBootstrap: 子项目 9c 的一部分。
+ *  HostAttachAgentBootstrap: 子项目 9c + 10 的一部分。
  *
  *  host 端 ContentProvider, 在 host app 启动时 (早于 Application.onCreate)
  *  被 Android framework 实例化, 启动一个反连线程:
@@ -21,10 +21,16 @@
  *  合并 AndroidManifest 后这个 provider 会被自动注册。
  *
  *  安全: 不申请任何权限, 只走 abstract namespace 套接字, 在 host 进程内执行。
+ *
+ *  子项目 10 扩展: 把 startBridgeThread 重命名为 startReverseConnectThread
+ *  + 改 public, 接受 Application 而不是 Context (更类型安全, 对应 host app
+ *  Application.onCreate 入口)。生成的 IdeDebuggerBootstrap.init(application)
+ *  调这个 public 方法。
  */
 
 package com.itsaky.androidide.zerostudio.ide.debugger.host;
 
+import android.app.Application;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
@@ -35,13 +41,12 @@ import android.net.LocalSocket;
 import android.net.LocalSocketAddress;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 /**
- * 子项目 9c: host 端 ContentProvider, 启动时反连 IDE LocalServerSocket。
+ * 子项目 9c + 10: host 端 ContentProvider, 启动时反连 IDE LocalServerSocket。
  *
  * Manifest placeholder 约定 (由 IdeDebuggerInitScriptPlugin 注入):
  *   - {@code ide_local_server_name}:  IDE 端 LocalServerSocket 名字 (abstract)
@@ -54,6 +59,9 @@ import androidx.annotation.Nullable;
  *   5) Provider 返回 true; 后续 bridge 跑在 daemon thread
  *
  * 失败处理: 占位符缺失 / 反连失败 -> log + 不抛, 让 host app 正常启动。
+ *
+ * 子项目 10 扩展: 还提供 public {@link #startReverseConnectThread(Application, String)}
+ * 给生成的 IdeDebuggerBootstrap.init() 调, 多次调用幂等 (用 [AtomicBoolean] 保护)。
  */
 public final class HostAttachAgentBootstrap extends ContentProvider {
 
@@ -61,6 +69,10 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
 
     /** Manifest meta-data key: IDE LocalServerSocket 名字 */
     public static final String META_IDE_SOCKET_NAME = "ide_local_server_name";
+
+    /** 子项目 10: 幂等保护, ContentProvider + 显式 init 不会重复起线程 */
+    private static final java.util.concurrent.atomic.AtomicBoolean sStarted =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     @Override
     public boolean onCreate() {
@@ -72,7 +84,7 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
             return true;
         }
         Log.i(TAG, "starting reverse-connect to IDE LocalServerSocket '" + socketName + "'");
-        startBridgeThread(ctx, socketName);
+        startReverseConnectThread(toApplication(ctx), socketName);
         return true;
     }
 
@@ -108,6 +120,32 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
         return 0;
     }
 
+    // ---- 公开 API (子项目 10) ----
+
+    /**
+     * 子项目 10: 启动反连线程 (与 ContentProvider.onCreate 互补)。
+     *
+     * 多次调用幂等: 通过 [AtomicBoolean] 保护, 只有第一次调用会真正启动线程。
+     * 这样 ContentProvider (自动) + 显式 init(application) (手动) 两条路径
+     * 不会重复起线程。
+     *
+     * @param app host app 的 Application 实例
+     * @param socketName IDE 端 LocalServerSocket 名字 (abstract namespace)
+     */
+    public static void startReverseConnectThread(@NonNull Application app, @NonNull String socketName) {
+        if (app == null) throw new IllegalArgumentException("app == null");
+        if (socketName == null || socketName.isEmpty()) {
+            Log.w(TAG, "startReverseConnectThread: socketName is null/empty; skip");
+            return;
+        }
+        if (!sStarted.compareAndSet(false, true)) {
+            Log.i(TAG, "startReverseConnectThread: already started; skip");
+            return;
+        }
+        Log.i(TAG, "startReverseConnectThread: socket=" + socketName);
+        startBridgeThreadInternal(app, socketName);
+    }
+
     // ---- 私有 ----
 
     /**
@@ -129,7 +167,30 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
         }
     }
 
-    private void startBridgeThread(Context ctx, String socketName) {
+    private static Application toApplication(Context ctx) {
+        if (ctx instanceof Application) return (Application) ctx;
+        // ContentProvider 给的 context 是 Application 实例, 但用 getApplicationContext() 拿保险
+        Context appCtx = ctx.getApplicationContext();
+        if (appCtx instanceof Application) return (Application) appCtx;
+        // 不期望: 退化成 Application 装饰器包装
+        Log.w(TAG, "context is not Application; wrapping");
+        return new ApplicationContextWrapper(appCtx);
+    }
+
+    /**
+     * 把 Context 当作 Application 用的最小包装。
+     * 注: 这是 fallback 路径, 正常情况 ContentProvider 的 getContext() 已经是 Application。
+     */
+    private static final class ApplicationContextWrapper extends Application {
+        private final Context mBase;
+        ApplicationContextWrapper(Context base) {
+            super();
+            this.mBase = base;
+            attachBaseContext(base);
+        }
+    }
+
+    private static void startBridgeThreadInternal(Context ctx, String socketName) {
         Thread t = new Thread(() -> {
             try {
                 // 1) 反向连 IDE LocalServerSocket
