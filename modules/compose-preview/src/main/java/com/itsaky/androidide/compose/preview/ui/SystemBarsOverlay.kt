@@ -88,6 +88,91 @@ import java.util.Locale
  * @param batteryPercent 电量百分比 (0..100, null = 不显示)
  * @param notificationDot 是否显示通知小红点
  */
+/**
+ * 仅渲染状态栏的 composable. v4 拆分: 让 [com.itsaky.androidide.compose.preview.ui.PhoneOrFoldableFrame]
+ * 能把状态栏 / 导航栏作为 content 的 sibling 放在 Column 里, 配合 `weight(1f)`
+ * 让 preview 内容自然限定在两块系统栏之间的区域, 修复 "compose UI 越过虚拟状态栏
+ * 显示在设备外面" 的 bug. 旧 [SystemBarsOverlay] 用 `fillMaxSize` + 透明
+ * `Spacer.weight(1f)` 假装分隔, 实际上 preview 内容仍占满整个屏幕, 状态栏只是
+ * 覆盖在上面, 用户能透过状态栏看到 preview 内容.
+ */
+@Composable
+fun StatusBar(
+    profile: DeviceProfile,
+    systemBarsTheme: SystemBarsTheme = SystemBarsTheme.AUTO,
+    clockProvider: () -> Date = { Date() },
+    batteryPercent: Int? = 85,
+    notificationDot: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    val (bg, fg) = resolveThemeColors(systemBarsTheme)
+    var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = clockProvider()
+            delay(1_000)
+        }
+    }
+    val timeText = remember(now) {
+        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now)
+    }
+    val isTranslucent = systemBarsTheme.isTranslucent()
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(profile.statusBarHeightDp.dp)
+    ) {
+        StatusBarContent(
+            time = timeText,
+            foreground = fg,
+            background = bg,
+            isTranslucent = isTranslucent,
+            batteryPercent = batteryPercent,
+            notificationDot = notificationDot,
+        )
+    }
+}
+
+/**
+ * 仅渲染导航栏的 composable. 配套 [StatusBar] 使用, 见 [StatusBar] 的注释.
+ */
+@Composable
+fun NavigationBar(
+    profile: DeviceProfile,
+    systemBarsTheme: SystemBarsTheme = SystemBarsTheme.AUTO,
+    useGestureNav: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val (bg, fg) = resolveThemeColors(systemBarsTheme)
+    val isTranslucent = systemBarsTheme.isTranslucent()
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(profile.navigationBarHeightDp.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        NavigationBarContent(
+            foreground = fg,
+            background = bg,
+            isTranslucent = isTranslucent,
+            useGestureNav = useGestureNav,
+        )
+    }
+}
+
+/**
+ * 统一解析主题色: [SystemBarsTheme.AUTO] 跟随 Composable 当前背景明度.
+ */
+@Composable
+private fun resolveThemeColors(systemBarsTheme: SystemBarsTheme): Pair<Color, Color> {
+    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val resolved = when (systemBarsTheme) {
+        SystemBarsTheme.AUTO -> if (isDarkTheme) SystemBarsTheme.DARK else SystemBarsTheme.LIGHT
+        else -> systemBarsTheme
+    }
+    return resolved.colors()
+}
+
 @Composable
 fun SystemBarsOverlay(
     profile: DeviceProfile,
@@ -100,65 +185,25 @@ fun SystemBarsOverlay(
     notificationDot: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
-    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val resolvedTheme = when (systemBarsTheme) {
-        SystemBarsTheme.AUTO -> if (isDarkTheme) SystemBarsTheme.DARK else SystemBarsTheme.LIGHT
-        else -> systemBarsTheme
-    }
-    val (bg, fg) = resolvedTheme.colors()
-
-    // v3.4: 时钟 1s 刷新 (秒级), 之前 v2.1 是 10s. 让用户能看见秒针跳.
-    var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = clockProvider()
-            delay(1_000)
-        }
-    }
-    val timeText = remember(now) {
-        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now)
-    }
-
     Column(modifier = modifier.fillMaxSize()) {
-        // 状态栏
         if (showStatusBar && profile.statusBarHeightDp > 0) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(profile.statusBarHeightDp.dp)
-            ) {
-                StatusBarContent(
-                    time = timeText,
-                    foreground = fg,
-                    background = bg,
-                    isTranslucent = resolvedTheme.isTranslucent(),
-                    batteryPercent = batteryPercent,
-                    notificationDot = notificationDot,
-                )
-            }
+            StatusBar(
+                profile = profile,
+                systemBarsTheme = systemBarsTheme,
+                clockProvider = clockProvider,
+                batteryPercent = batteryPercent,
+                notificationDot = notificationDot,
+            )
         } else {
             Spacer(Modifier.height(0.dp))
         }
-
-        // 中间留空 (由外部 content 占位)
         Spacer(modifier = Modifier.weight(1f))
-
-        // 导航栏
         if (showNavigationBar && profile.navigationBarHeightDp > 0) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(profile.navigationBarHeightDp.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                NavigationBarContent(
-                    foreground = fg,
-                    background = bg,
-                    isTranslucent = resolvedTheme.isTranslucent(),
-                    useGestureNav = useGestureNav,
-                )
-            }
+            NavigationBar(
+                profile = profile,
+                systemBarsTheme = systemBarsTheme,
+                useGestureNav = useGestureNav,
+            )
         }
     }
 }

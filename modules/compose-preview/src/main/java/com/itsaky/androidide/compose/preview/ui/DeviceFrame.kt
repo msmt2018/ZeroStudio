@@ -365,43 +365,58 @@ private fun PhoneOrFoldableFrame(
                     )
                     .clip(RoundedCornerShape(profile.cornerRadiusDp.dp))
             ) {
-                // 3) 内容
-                content()
+                // v4 修复 #1: 系统栏与 content 改为 Column sibling, 而不是 Box overlay.
+                // 之前把 content() 和 SystemBarsOverlay 放在同一个 fillMaxSize Box 里,
+                // SystemBarsOverlay 用 Spacer.weight(1f) 假装分隔, 实际 content 占满
+                // 整个屏幕, 系统栏只是覆盖在上面, 用户透过状态栏能看到 preview 内容.
+                // 现在 status bar | content(weight=1f) | nav bar 三段式, preview 内容
+                // 严格限定在两块系统栏之间的区域, 不会再越过虚拟状态栏 / 导航栏.
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (showStatusBar && profile.statusBarHeightDp > 0) {
+                        StatusBar(
+                            profile = profile,
+                            systemBarsTheme = systemBarsTheme,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    ) {
+                        // 3) 内容
+                        content()
 
-                // 4) 切口叠加 (在内容之上) — 用 effectiveCutout (已旋转锚点)
-                if (showCutout && profile.effectiveCutout != null) {
-                    CutoutOverlay(
-                        cutout = profile.effectiveCutout,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                        // 4) 切口叠加 (在内容之上) — 用 effectiveCutout (已旋转锚点)
+                        if (showCutout && profile.effectiveCutout != null) {
+                            CutoutOverlay(
+                                cutout = profile.effectiveCutout,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        // 5) 折叠铰链 (仅内屏) — 【PR-C】可拖拽改变 foldAngle
+                        // 【v3.5】横屏时铰链方向翻转: 原 horizontal = true (Galaxy Z Fold)
+                        // 在 LANDSCAPE 模式下变 horizontal = false (竖向铰链).
+                        if (profile.formFactor == DeviceProfile.FormFactor.FOLDABLE_INNER) {
+                            var foldAngle by remember { mutableStateOf(0f) }
+                            FoldableHingeOverlay(
+                                foldAngle = foldAngle,
+                                onFoldAngleChange = { foldAngle = it },
+                                modifier = Modifier.fillMaxSize(),
+                                // 横屏时铰链方向对调: 屏幕从竖向 (长边垂直) 变成
+                                // 横向 (长边水平), 所以铰链从"水平"变"垂直".
+                                horizontal = !profile.orientation.isLandscape,
+                            )
+                        }
+                    }
+                    if (showNavigationBar && profile.navigationBarHeightDp > 0) {
+                        NavigationBar(
+                            profile = profile,
+                            systemBarsTheme = systemBarsTheme,
+                            useGestureNav = useGestureNav,
+                        )
+                    }
                 }
-
-                // 5) 折叠铰链 (仅内屏) — 【PR-C】可拖拽改变 foldAngle
-                // 【v3.5】横屏时铰链方向翻转: 原 horizontal = true (Galaxy Z Fold)
-                // 在 LANDSCAPE 模式下变 horizontal = false (竖向铰链).
-                if (profile.formFactor == DeviceProfile.FormFactor.FOLDABLE_INNER) {
-                    var foldAngle by remember { mutableStateOf(0f) }
-                    FoldableHingeOverlay(
-                        foldAngle = foldAngle,
-                        onFoldAngleChange = { foldAngle = it },
-                        modifier = Modifier.fillMaxSize(),
-                        // 横屏时铰链方向对调: 屏幕从竖向 (长边垂直) 变成
-                        // 横向 (长边水平), 所以铰链从"水平"变"垂直".
-                        horizontal = !profile.orientation.isLandscape,
-                    )
-                }
-
-                // 6) 状态栏 + 导航栏 — 横屏时 status bar / nav bar 仍在
-                // "新屏幕的顶/底" (因为 SystemBarsOverlay 内部已是 Spacer.weight
-                // 布局, 不需要再旋转). 数值不变 (statusBar 高度 = 原 statusBar 高度).
-                SystemBarsOverlay(
-                    profile = profile,
-                    systemBarsTheme = systemBarsTheme,
-                    showStatusBar = showStatusBar,
-                    showNavigationBar = showNavigationBar,
-                    useGestureNav = useGestureNav,
-                    modifier = Modifier.fillMaxSize(),
-                )
             }
 
             // 7) 物理按键 (屏幕外侧) — 用 effectivePhysicalKeys (已旋转).

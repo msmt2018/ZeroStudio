@@ -32,6 +32,8 @@ import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
 import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
 import com.itsaky.androidide.events.FileContextMenuItemClickEvent
 import com.itsaky.androidide.events.ListProjectFilesRequestEvent
+import com.itsaky.androidide.file.FileValidator
+import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
 import com.itsaky.androidide.fragments.sheets.OptionsListFragment
 import com.itsaky.androidide.models.SheetOption
 import com.itsaky.androidide.utils.ApkInstaller
@@ -89,7 +91,39 @@ class FileTreeActionHandler : BaseEventHandler() {
       return
     }
 
+    // === 图片预览路由 ===
+    // 文件后缀命中 ImagePreviewFragment.SUPPORTED_FORMATS 时, 直接在 IDE
+    // 内的 Image Preview tab 里打开, 不再走系统 Intent.ACTION_VIEW 调外部
+    // viewer (老逻辑会把用户切出 IDE). `.xml` 文件需要做 content sniff:
+    // layout / manifest / values 等 .xml 都不是 vector, 走 content 头 1KB
+    // 包含 "<vector" 才算 Android vector drawable, 避免误判.
+    if (isSupportedImageFile(event.file)) {
+      val ext = event.file.extension.lowercase()
+      val tabId = context.fragmentTabManager?.openFileTab(
+        filePath = event.file.absolutePath,
+        fileExtension = ext,
+      )
+      if (tabId != null) {
+        log.info("Opened image preview tab {} for {}", tabId, event.file)
+        return
+      }
+      // tab 没注册 (理论不会, 走不到这里) → fall through 到普通 openFile
+    }
+
     context.openFile(event.file)
+  }
+
+  /**
+   * 判断给定文件是否应该走 [ImagePreviewFragment]. 规则:
+   *  - 扩展名在 [ImagePreviewFragment.SUPPORTED_FORMATS] 中
+   *  - 对 `.xml` 还要做 [FileValidator.isLikelyAndroidVector] content sniff,
+   *    排除 layout / manifest / values 等非 vector xml.
+   */
+  private fun isSupportedImageFile(file: File): Boolean {
+    val ext = file.extension.lowercase()
+    if (ext.isEmpty() || ext !in ImagePreviewFragment.SUPPORTED_FORMATS) return false
+    if (ext == "xml") return FileValidator.isLikelyAndroidVector(file)
+    return true
   }
 
   @Suppress("UNCHECKED_CAST")

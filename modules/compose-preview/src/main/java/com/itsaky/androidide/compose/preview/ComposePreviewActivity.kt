@@ -72,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.itsaky.androidide.compose.preview.runtime.PreviewRenderEngine
+import com.itsaky.androidide.compose.preview.runtime.RenderRequest
 import com.itsaky.androidide.compose.preview.ui.AttributeEditPanel
 import com.itsaky.androidide.compose.preview.ui.ComposableFunctionPicker
 import com.itsaky.androidide.compose.preview.ui.DebugToolbar
@@ -182,15 +183,19 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                             // v3.4: 传入对应 @Composable 的 PreviewConfig, 让 uiMode /
                             // showBackground / backgroundColor 真正生效.
                             // v3.5: 传 deviceConfig.orientation, 让 LocalConfiguration 注入横竖屏.
+                            // v4: 统一用 RenderRequest 数据类, 杜绝 v3 那种 "render 一调用
+                            //     就触发 4~5 步副作用" 的隐式耦合.
                             val previewConfig = state.previewConfigs
                                 .firstOrNull { it.functionName == functionName }
                             engine.render(
-                                previewDex = state.dexFile,
-                                projectDex = state.projectDexFiles,
-                                className = state.className,
-                                functionName = functionName,
-                                previewConfig = previewConfig,
-                                orientation = state.deviceConfig.orientation,
+                                RenderRequest(
+                                    previewDex = state.dexFile,
+                                    projectDex = state.projectDexFiles,
+                                    className = state.className,
+                                    functionName = functionName,
+                                    previewConfig = previewConfig,
+                                    orientation = state.deviceConfig.orientation,
+                                )
                             )
                         }
                     }
@@ -210,12 +215,14 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                         val previewConfig = state.previewConfigs
                             .firstOrNull { it.functionName == functionName }
                         engine.render(
-                            previewDex = state.dexFile,
-                            projectDex = state.projectDexFiles,
-                            className = state.className,
-                            functionName = functionName,
-                            previewConfig = previewConfig,
-                            orientation = state.deviceConfig.orientation,
+                            RenderRequest(
+                                previewDex = state.dexFile,
+                                projectDex = state.projectDexFiles,
+                                className = state.className,
+                                functionName = functionName,
+                                previewConfig = previewConfig,
+                                orientation = state.deviceConfig.orientation,
+                            )
                         )
                     }
                 }
@@ -234,18 +241,14 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
     /**
      * 【v3.3】拿 preview view 引用 (供 [ScreenshotExporter] 用).
      * 返回 render engine 的 ComposeView, 如果 engine 还没 attach 返回 null.
+     *
+     * v4: 直接走 engine 公开 getter, 不再用反射拿私有字段.
      */
     fun previewViewForExport(): android.view.View? {
-        return renderEngine?.let { engine ->
-            // 反射拿私有字段 composeView
-            val field = engine.javaClass.getDeclaredField("composeView").apply { isAccessible = true }
-            field.get(engine) as? android.view.View
-        } ?: run {
+        return renderEngine?.currentComposeView() ?: run {
             // fallback: 找根 FrameLayout 中的 ComposeView
             window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content)
-                ?.let { root ->
-                    findComposeView(root)
-                }
+                ?.let { root -> findComposeView(root) }
         }
     }
 
@@ -269,13 +272,12 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
      * 触发 AndroidView 重建时), 强制 detach 旧引擎 + 新建引擎. 否则旧 ComposeView
      * 仍然 addView 在旧 FrameLayout 上, 用户看到的是"切回后黑屏".
      *
-     * 【v3.6】在新建引擎时拷贝 [com.itsaky.androidide.compose.preview.runtime.LastRender]
-     * 到新引擎, 让 [PreviewRenderEngine.attach] 自动重放上一次的渲染, 避免"切
-     * 设备模式 / 切 profile 后预览区黑屏". 之前 v3.2 把旧引擎 detach 后, 新引擎
-     * 的 [PreviewRenderEngine.lastRender] 默认是 null, attach 时不会自动重放,
-     * 只能等 [viewModel.previewState] 重新发射 Ready 才会触发 render. 但
-     * collect 不会对"当前值"重新发射, 第一次发射时 new engine 还没创建好,
-     * 后续的 Ready 发射要么不会发生, 要么时序与 attach 错位, 表现为黑屏.
+     * 【v3.6】在新建引擎时把旧引擎的 [com.itsaky.androidide.compose.preview.runtime.LastSnapshot]
+     * 拷到新引擎, 让 [PreviewRenderEngine.attach] 自动重放上一次的渲染, 避免"切
+     * 设备模式 / 切 profile 后预览区黑屏".
+     *
+     * 【v4】改用 [PreviewRenderEngine.snapshotForTransfer] / [PreviewRenderEngine.preloadSnapshot]
+     * 公开 API, 替代 v3 直接读写 engine 内部字段.
      */
     fun attachPreviewContainer(container: android.widget.FrameLayout) {
         val existing = renderEngine
@@ -289,12 +291,12 @@ class ComposePreviewActivity : androidx.appcompat.app.AppCompatActivity() {
                 System.identityHashCode(existing.container),
                 System.identityHashCode(container),
             )
-            // 拷贝 lastRender — 新 engine 的 attach 会用它自动 replay, 避免黑屏.
-            val savedLastRender = existing.lastRender
+            val savedSnapshot = existing.snapshotForTransfer()
             existing.detach()
-            val newEngine = PreviewRenderEngine(this, container).apply {
-                lastRender = savedLastRender
-            }.also { it.attach() }
+            val newEngine = PreviewRenderEngine(this, container).also {
+                it.preloadSnapshot(savedSnapshot)
+                it.attach()
+            }
             renderEngine = newEngine
         }
     }
