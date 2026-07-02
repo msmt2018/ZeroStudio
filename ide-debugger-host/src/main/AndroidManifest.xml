@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+        ide-debugger-host: 不需要任何权限, host 进程内运行, 通过 JDWP
+        桥接到 IDE。它不申请 / 启动任何服务, 不读写公共存储, 也不访问
+        网络。所有 IO 都通过 AbstractJDWPSocket (Android VM 内部抽象套接字)
+        和 IDE 端的 LocalServerSocket (在 host 进程内) 完成。
+    -->
+</manifest>

@@ -177,6 +177,7 @@ include(
 
     ":ide-decompiler",
     ":ide-debugger",
+    ":ide-debugger-host",
     ":ide-log-plugin",
     ":ide-language",
 
