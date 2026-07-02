@@ -282,21 +282,45 @@ class GradleBuildService :
 
     val initScript = File(tmpDir, "ide-logger-init.gradle")
     try {
+      // 先确保 ~/.androidide/plugin/logger/ 下的几个 AAR 已经从
+      // debugger-library.zip 里解压出来 — init script 写的是固定
+      // 文件名(name: 'logsender' / 'ide-log-plugin-1.0.0' / 'ide-debugger'),
+      // 必须保证这些文件存在,否则 flatDir 解析失败整个 build 挂掉。
+      ensureLoggerPluginArtifacts()
+
+      // 【修复】AGP 8.x 用 `implementation files('.../*.aar')` 时偶尔只入 dex
+      // 不合并 manifest(IDE 端 implementation(projects.logging.logsender)
+      // 就是这个症状)。改成 flatDir + name: '...' 后,AGP 会按正常 AAR
+      // 依赖路径处理 — 同步把 classes.jar 打进 dex **并**把 AAR 的
+      // AndroidManifest.xml 合并进 host manifest,
+      // LogSenderInstaller provider / LogSenderService service 才能出现。
+      val pluginDirPath = getLoggerPluginDir().absolutePath.replace("\\", "\\\\")
       initScript.writeText(
           """
             allprojects {
+                repositories {
+                    flatDir {
+                        dirs "$pluginDirPath"
+                    }
+                }
                 afterEvaluate {
-                    if (plugins.hasPlugin('com.android.application') || 
+                    if (plugins.hasPlugin('com.android.application') ||
                         plugins.hasPlugin('com.android.library')) {
-                        
+
                         android {
                             compileOptions {
                                 coreLibraryDesugaringEnabled = true
                             }
                         }
-                        
+
                         dependencies {
-                            implementation files(${getLoggerRuntimeAars().joinToString(", ") { "'${it.absolutePath}'" }})
+                            // 旧 AIDL 日志转发链 (LogSender + LogSenderInstaller +
+                            // LogSenderService)。Bug fix: 之前这个 AAR 没被注入
+                            // 任何宿主 App,导致 AppLogFragment 完全收不到 host 日志。
+                            implementation name: 'logsender'
+                            // 新 JDWP/LogCapture 链 (PR-1 之后)。
+                            implementation name: 'ide-log-plugin-1.0.0'
+                            implementation name: 'ide-debugger'
                             coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
                         }
                     }
@@ -321,17 +345,13 @@ class GradleBuildService :
     return dir
   }
 
-  /** Extracts and returns the logger/debugger runtime AAR files. */
-  private fun getLoggerRuntimeAars(): List<File> {
-    ensureLoggerPluginArtifacts()
-    val pluginDir = getLoggerPluginDir()
-    return listOf(
-        File(pluginDir, "ide-log-plugin-1.0.0.aar"),
-        File(pluginDir, "ide-debugger.aar"),
-    )
-  }
-
-  /** Copies and expands the bundled logger/debugger runtime archive from APK assets. */
+  /**
+   * Copies and expands the bundled logger/debugger runtime archive from APK assets.
+   *
+   * 实际写到 `~/.androidide/plugin/logger/` 的 AAR/JAR 列表见
+   * [createLoggerInitScript] — 那里的 `flatDir` + `name: '...'` 是
+   * 唯一的真实依赖来源;本方法只负责把它们落盘。
+   */
   private fun ensureLoggerPluginArtifacts() {
     val artifacts =
         arrayOf(

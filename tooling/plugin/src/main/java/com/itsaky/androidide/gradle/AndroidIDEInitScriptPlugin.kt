@@ -61,16 +61,22 @@ class AndroidIDEInitScriptPlugin : Plugin<Gradle> {
     }
 
     target.projectsLoaded { gradle ->
-      gradle.rootProject.subprojects { sub ->
-        if (!sub.buildFile.exists()) {
-          return@subprojects
-        }
-
-        sub.afterEvaluate {
-          logger.info("Applying plugin '${BuildInfo.PACKAGE_NAME}' to project '${sub.path}'")
-          sub.pluginManager.apply(BuildInfo.PACKAGE_NAME)
+      // 【修复】原来只对 rootProject.subprojects 应用,单 module 项目
+      // (即根目录就是 app module 的情况) 完全被漏掉,LogSenderPlugin /
+      // IdeLogInitScriptPlugin 都不会跑,LogReceiverService 永远收不到
+      // host 端日志。
+      //
+      // 现在先 apply 到 rootProject(单 module 场景),再统一遍历
+      // subprojects(多 module 场景),跳过 root 自身避免重复 apply。
+      fun applyIdePlugin(project: Project) {
+        if (!project.buildFile.exists()) return
+        project.afterEvaluate {
+          logger.info("Applying plugin '${BuildInfo.PACKAGE_NAME}' to project '${project.path}'")
+          project.pluginManager.apply(BuildInfo.PACKAGE_NAME)
         }
       }
+      applyIdePlugin(gradle.rootProject)
+      gradle.rootProject.subprojects { sub -> applyIdePlugin(sub) }
     }
   }
 
