@@ -192,20 +192,25 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
 
     private static void startBridgeThreadInternal(Context ctx, String socketName) {
         Thread t = new Thread(() -> {
+            LocalSocket ide = null;
+            LocalSocket jdwp = null;
             try {
                 // 1) 反向连 IDE LocalServerSocket
-                LocalSocket ide = new LocalSocket();
-                ide.connect(new LocalSocketAddress(socketName, LocalSocketAddress.Namespace.ABSTRACT));
-                // 2) HELLO 头
+                //    走 HostAttachAgent 的 connectToIdeLocalServer (有 connect timeout +
+                //    retry + 重建 socket 机制, Phase 12f 加的), 不要再裸 new LocalSocket().connect()
+                //    (之前注释说走这个 helper, 但实际裸调, IDE 端 LocalServerSocket 没启
+                //    时 host 端永远卡, ContentProvider 早期 init 阶段没有 UI 提示)
+                ide = HostAttachAgent.connectToIdeLocalServer(socketName, HostAttachAgent.CONNECT_TIMEOUT_MS_PUBLIC);
+                // 2) HELLO 头 (走 HostBridgeServer.parseHello 解析, Phase 12i EOF 安全
+                //    静默退出, 这边是 write 不会有 EOF 问题)
                 String hello = "HELLO pkg=" + ctx.getPackageName()
                         + " pid=" + android.os.Process.myPid()
                         + " sdk=" + Build.VERSION.SDK_INT + "\n";
                 ide.getOutputStream().write(hello.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 ide.getOutputStream().flush();
 
-                // 3) 打开 localabstract:jdwp
-                LocalSocket jdwp = new LocalSocket();
-                jdwp.connect(new LocalSocketAddress("jdwp", LocalSocketAddress.Namespace.ABSTRACT));
+                // 3) 打开 localabstract:jdwp (同 helper, 走 connect timeout)
+                jdwp = HostAttachAgent.openLocalAbstractJdwpSocket(HostAttachAgent.CONNECT_TIMEOUT_MS_PUBLIC);
 
                 Log.i(TAG, "reverse-connect ok; bridging IDE <-> jdwp");
 
@@ -213,6 +218,16 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
                 HostAttachAgentBridge.bridge(ide, jdwp);
             } catch (Throwable th) {
                 Log.w(TAG, "reverse-connect / bridge failed: " + th.getMessage());
+            } finally {
+                // Phase 12p: 资源关闭 (之前如果 ide/jdwp connect 成功后 throw,
+                // socket 不会 close, 资源泄漏; try-with-resources 在 Java 7+ 支持
+                // LocalSocket, 但 flow 里有 4 步, 用 try-finally 跟现有代码风格一致)
+                if (ide != null) {
+                    try { ide.close(); } catch (Throwable ignored) { }
+                }
+                if (jdwp != null) {
+                    try { jdwp.close(); } catch (Throwable ignored) { }
+                }
             }
         }, "HostAttachAgentBootstrap-bridge");
         t.setDaemon(true);

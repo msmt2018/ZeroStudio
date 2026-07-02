@@ -63,6 +63,14 @@ object HostAttachAgent {
     /** Connect timeout to IDE / jdwp LocalServerSocket. */
     private const val CONNECT_TIMEOUT_MS: Long = 10_000L
 
+    /**
+     * Public accessor for [CONNECT_TIMEOUT_MS] (Java interop 友好).
+     * [HostAttachAgentBootstrap] 是 Java, 不能直接读 Kotlin private const,
+     * 通过这个 @JvmField 暴露, 走同一 10s 默认值.
+     */
+    @JvmField
+    public val CONNECT_TIMEOUT_MS_PUBLIC: Long = CONNECT_TIMEOUT_MS
+
     /** Polling interval for retrying failed [LocalSocket.connect] calls. */
     private const val CONNECT_RETRY_MS: Long = 100L
 
