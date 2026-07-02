@@ -451,6 +451,58 @@ class AppReadyAutoConnectTest {
         assertEquals(2, factoryCalls.get())
     }
 
+    // ---- 17. per-package debounce 修复: 不同 pkg 互不干扰 ----
+
+    @Test
+    fun `per-package debounce - different packages do not interfere`() = runBlocking {
+        val recorder = RecordingListener()
+        val factoryCalls = AtomicInteger(0)
+        val auto = AppReadyAutoConnect(
+            settings = settings,
+            listener = recorder,
+            debounceMs = 1_000L,  // 1s 防抖
+            connectionFactory = { t, _, _ ->
+                factoryCalls.incrementAndGet()
+                FakeDebugConnection(type = t).asSuccess()
+            },
+        )
+
+        // 第一次 pkg A
+        auto.onLogcatSignal("com.A", 5005, "debug")
+        waitUntilOrFail(2_000L) { recorder.successes.size == 1 }
+        // 立即触发 pkg B (距 pkg A < 1s, 但 pkg B 自己从未触发, 应该不被 debounce)
+        auto.onLogcatSignal("com.B", 5006, "debug")
+        waitUntilOrFail(2_000L) { recorder.successes.size == 2 }
+        // 立即再触发 pkg C, 同样应该不被 debounce
+        auto.onLogcatSignal("com.C", 5007, "debug")
+        waitUntilOrFail(2_000L) { recorder.successes.size == 3 }
+        assertEquals(3, factoryCalls.get())
+    }
+
+    @Test
+    fun `per-package debounce - same package within window is dropped`() = runBlocking {
+        val recorder = RecordingListener()
+        val factoryCalls = AtomicInteger(0)
+        val auto = AppReadyAutoConnect(
+            settings = settings,
+            listener = recorder,
+            debounceMs = 1_000L,
+            connectionFactory = { t, _, _ ->
+                factoryCalls.incrementAndGet()
+                FakeDebugConnection(type = t).asSuccess()
+            },
+        )
+
+        // pkg A 第一次
+        auto.onLogcatSignal("com.A", 5005, "debug")
+        waitUntilOrFail(2_000L) { recorder.successes.size == 1 }
+        // pkg A 立即再触发 (同 pkg, < 1s, 应被 debounce 掉)
+        auto.onLogcatSignal("com.A", 5006, "debug")
+        delay(500L)  // 等一会, 确认没新 success
+        assertEquals("same package within window should be debounced", 1, recorder.successes.size)
+        assertEquals("factory should not be called again", 1, factoryCalls.get())
+    }
+
     // ---- 工具方法 ----
 
     private suspend fun waitUntilOrFail(timeoutMs: Long, predicate: () -> Boolean) {

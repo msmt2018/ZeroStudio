@@ -52,7 +52,6 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 协调自动 attach 流程的接口。
@@ -154,7 +153,11 @@ class AppReadyAutoConnect(
 ) {
     private val log = ILogger.ROOT
     private val running = AtomicBoolean(false)
-    private val lastScheduleAt = AtomicLong(0L)
+    /**
+     * Per-packageName 最后调度时间 (ms)。用 map 不用全局变量, 避免
+     * packageA 触发后 100ms 内 packageB 也被 debounce 误跳过。
+     */
+    private val lastScheduleAtByPkg = ConcurrentHashMap<String, Long>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pendingJobs = CopyOnWriteArrayList<Job>()
     /** packageName -> 当前活跃的 connection (用于 attach 复用, 避免每次创建) */
@@ -241,12 +244,15 @@ class AppReadyAutoConnect(
 
     private fun schedule(packageName: String, hint: AutoConnectHint, source: String) {
         val now = System.currentTimeMillis()
-        val last = lastScheduleAt.get()
+        val last = lastScheduleAtByPkg[packageName] ?: 0L
         if (now - last < debounceMs) {
-            log.debug("AppReadyAutoConnect: debounced ({}ms since last), skipping", now - last)
+            log.debug(
+                "AppReadyAutoConnect: debounced for pkg={} ({}ms since last), skipping",
+                packageName, now - last,
+            )
             return
         }
-        lastScheduleAt.set(now)
+        lastScheduleAtByPkg[packageName] = now
         val job = scope.launch {
             // 给 host app 一点时间完成反连
             delay(300L)
