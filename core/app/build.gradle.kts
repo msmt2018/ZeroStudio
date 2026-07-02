@@ -284,6 +284,10 @@ dependencies {
   implementation(projects.modules.colorpicker)
   implementation(libs.common.soraLanguageTextmate)
 
+  // Shizuku 客户端 API (子项目 3 断点调试连接层用)
+  // 不依赖 Shizuku server / manager, 只用 rikka.shizuku.Shizuku 静态 API
+  implementation(projects.modules.shizuku.api)
+
   coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")
   testImplementation(projects.testing.unitTest)
