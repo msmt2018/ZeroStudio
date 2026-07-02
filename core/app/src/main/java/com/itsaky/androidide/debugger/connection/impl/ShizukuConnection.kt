@@ -249,9 +249,14 @@ class ShizukuConnection(
      * 失败: log warn, 不抛 host runtime 错误, 给 ConnectionError.IoFailure 包装。
      */
     private suspend fun attachViaInHostPlugin(): AttachInfo {
+        // host 端 user service FQN (定义在 ide-debugger-host AAR, 被 host APK
+        // 打包, Shizuku 13+ 通过反射在 host 进程内 load 这个 class)。
+        // ComponentName.package 必须是 host 的包名 (target.packageName),
+        // 不是 IDE 的包名 - 之前用 "com.itsaky.androidide" 是错的, 改成 target.packageName
+        // 后 Shizuku 才能在 host 进程的 classpath 里找到这个 class。
         val hostPlugin = android.content.ComponentName(
-            "com.itsaky.androidide",
-            "com.itsaky.androidide.debugger.connection.shizuku.IdeShizukuUserService",
+            target.packageName,
+            "com.itsaky.androidide.zerostudio.ide.debugger.host.HostPluginService",
         )
         // 1) 拉 user service
         val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
@@ -259,7 +264,11 @@ class ShizukuConnection(
             throw IOException("Shizuku InHostPlugin: user service binder dead")
         }
         // 2) 起 IDE LocalServerSocket 等 host 反连
-        val serverName = "ide-shizuku-${target.packageName}-${System.currentTimeMillis()}"
+        //    Shizuku 反射加载 HostPluginService 时拿不到 IDE 端 timestamp,
+        //    必须用约定名 (固定 "ide-shizuku-inhostplugin", 跟 host 端
+        //    HostPluginService.computeIdeSocketName() 一致)。
+        //    多次 attach 复用同名 socket, IDE 端 release() 时必须 close server。
+        val serverName = "ide-shizuku-inhostplugin"
         val server = android.net.LocalServerSocket(serverName)
         inHostPluginServer = server
         try {
@@ -339,10 +348,13 @@ class ShizukuConnection(
      * 仍由用户在 ShizukuConfig 显式配置, 默认 0 = attach 阶段抛错。
      */
     private suspend fun attachViaSocks(): AttachInfo {
-        // 1) 拉 user service (host 端 user service 应启 SOCKS5 server)
+        // 1) 拉 user service (host 端 IdeShizukuSocksUserService 启 SOCKS5 server)
+        //    同 attachViaInHostPlugin: ComponentName.package 必须是 host 包名,
+        //    之前用 "com.itsaky.androidide" (IDE 包) 是错的, host 进程 classpath
+        //    里没有这个 class, bindUserService 会失败。
         val hostPlugin = android.content.ComponentName(
-            "com.itsaky.androidide",
-            "com.itsaky.androidide.debugger.connection.shizuku.IdeShizukuSocksUserService",
+            target.packageName,
+            "com.itsaky.androidide.zerostudio.ide.debugger.host.IdeShizukuSocksUserService",
         )
         val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
         if (binder == null || !binder.pingBinder()) {
