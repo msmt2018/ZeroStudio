@@ -207,20 +207,24 @@ object HostAttachAgent {
         jdwpOut: OutputStream,
     ) {
         val latch = CountDownLatch(2)
+        // Phase 13b: thread 设 daemon, 跟 Phase 12p/12q 修的 HostAttachAgentBootstrap
+        // / HostPluginService 风格一致。host app 退出时 JVM 不会被这两个
+        // forward thread block (之前 isDaemon = false 是 user thread, host app
+        // 退出时这俩 thread 还活着, 阻止 host 进程退出, 内存 dump 显示 leak trace)。
         val a = Thread({
             try {
                 pump(ideIn, jdwpOut, "ide->jdwp")
             } finally {
                 latch.countDown()
             }
-        }, "HostAttachAgent-ide2jdwp").apply { isDaemon = false; start() }
+        }, "HostAttachAgent-ide2jdwp").apply { isDaemon = true; start() }
         val b = Thread({
             try {
                 pump(jdwpIn, ideOut, "jdwp->ide")
             } finally {
                 latch.countDown()
             }
-        }, "HostAttachAgent-jdwp2ide").apply { isDaemon = false; start() }
+        }, "HostAttachAgent-jdwp2ide").apply { isDaemon = true; start() }
 
         // 等任一 pump 先结束
         latch.await()
