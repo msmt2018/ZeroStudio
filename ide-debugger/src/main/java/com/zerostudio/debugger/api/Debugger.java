@@ -39,6 +39,7 @@ import com.zerostudio.debugger.model.BreakpointStore;
 import com.zerostudio.debugger.model.DebugSession;
 import com.zerostudio.debugger.model.EvalEngine;
 import com.zerostudio.debugger.model.SourceLocator;
+import com.zerostudio.debugger.symbol.SourceNameMapper;
 import com.zerostudio.debugger.api.EvalResult;
 import java.util.ArrayList;
 import java.util.List;
@@ -125,6 +126,27 @@ public final class Debugger
     public SourceLocator sourceLocator() { return sourceLocator; }
     public EvalEngine eval() { return eval; }
     public JdwpClient client() { return client; }
+    /** Phase 20: Symbol & DWARF Manager facade. */
+    public SourceNameMapper symbolMapper() { return SourceNameMapper.getInstance(); }
+
+    /**
+     * Phase 20: 异步读取进程内存。
+     * 实现: 走 JdwpClient.MemoryRead (VirtualMachine.GetMemoryInfo + RawData read).
+     * 默认行为: 在生产 stub 中返回 0 字节 + 提示信息(待 Phase 21+ 接通真实 JDWP)。
+     */
+    public void readMemoryAsync(long address, int length,
+                                @NonNull java.util.function.Consumer<MemoryReadResult> cb) {
+        if (length <= 0) {
+            cb.accept(MemoryReadResult.error("length must be > 0"));
+            return;
+        }
+        if (length > 4096) {
+            cb.accept(MemoryReadResult.error("length must be <= 4096"));
+            return;
+        }
+        // 默认 stub: 0 字节 + "not yet wired" 提示。
+        cb.accept(MemoryReadResult.error("readMemoryAsync: 真实 JDWP 接入在 Phase 21+"));
+    }
 
     /**
      * Look up a single local variable by name in the current frame. Used
