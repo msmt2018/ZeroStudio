@@ -190,6 +190,20 @@ abstract class AdbForwardConnection(
                 log.warn("{}: connect attempt failed: {}", type, t.message)
                 runCatching { serverSocket?.close() }
                 serverSocket = null
+                // Phase 18: connect 失败时 adb forward 规则也清, 之前 serverSocket
+                //   关了但 adb forward 还留在 adb server 列表里, 多次 retry 后 adb
+                //   forward 规则累积, 占用 adb server 端 localabstract:jdwp-<pid>
+                //   namespace + 旧 port 一直占着。
+                val portToCleanup = localPort
+                if (portToCleanup > 0) {
+                    runCatching {
+                        val r = runAdb(listOf("forward", "--remove", "tcp:$portToCleanup"))
+                        if (!r.isSuccess) {
+                            log.debug("connect: adb forward --remove tcp:{} cleanup failed: {}",
+                                portToCleanup, r.stderr.trim())
+                        }
+                    }.onFailure { log.debug("connect: adb forward --remove threw: {}", it.message) }
+                }
                 localPort = 0
             }
         }

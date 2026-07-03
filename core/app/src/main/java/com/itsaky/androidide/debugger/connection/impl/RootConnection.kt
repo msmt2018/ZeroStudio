@@ -139,20 +139,34 @@ class RootConnection(
                     suBin = settings.root.suBinary,
                     timeoutMs = settings.root.probeTimeoutMs,
                 )
-                // 走 JDWP 握手 + VM.Version
-                val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
-                    output = s.output,
-                    input = s.input,
-                    commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
-                )
-                stream = s
-                input = s.input
-                output = s.output
-                AttachInfo(
-                    pid = pid,
-                    jdwpSessionId = sessionIdGenerator.get(),
-                    jdwpDescription = "${info.description} (${info.vmName} ${info.vmVersion}, jdwp ${info.jdwpVersion})",
-                )
+                // Phase 17: 跟 InnetVmSocksConnection / AdbForwardConnection 同款
+                //   try-catch close 模式 (Phase 12t), 之前 [performHandshakeAndVersionProbe]
+                //   抛异常时 `s` (LiveProcess) 没人关, socat 子进程永远 leak。
+                //   多次 retry 失败后子进程累积, 设备里跑一堆僵尸 socat, 占用内存 +
+                //   占用 JDWP unix abstract namespace。
+                try {
+                    // 走 JDWP 握手 + VM.Version
+                    val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(
+                        output = s.output,
+                        input = s.input,
+                        commandId = (sessionIdGenerator.incrementAndGet() and 0x7fffffff).toInt(),
+                    )
+                    stream = s
+                    input = s.input
+                    output = s.output
+                    AttachInfo(
+                        pid = pid,
+                        jdwpSessionId = sessionIdGenerator.get(),
+                        jdwpDescription = "${info.description} (${info.vmName} ${info.vmVersion}, jdwp ${info.jdwpVersion})",
+                    )
+                } catch (t: Throwable) {
+                    runCatching { s.close() }
+                    // Phase 17: 失败路径 input / output 也不要留半截引用, detach / release
+                    //   拿空引用不做事。
+                    input = null
+                    output = null
+                    throw t
+                }
             }.onFailure { log.warn("attach attempt failed: {}", it.message) }
         }
         // 失败: 走 mapAttachError

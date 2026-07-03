@@ -2331,4 +2331,159 @@ resolver ?: ShizukuSubPathResolver(
 | 改 | `core/app/.../impl/ShizukuConnection.kt` (+userServiceHandle 字段 + resolverImpl 注入 hostPluginProbe + attachVia* 改 handle + catch 块 stopSocks/unbind + detach/release unbind) |
 | 改 | `core/app/src/test/.../ShizukuConnectionTest.kt` (FakeShizukuBinderClient.bindUserService 返值测试改 .binder + unbindUserServiceCallCount 断言) |
 
+---
+
+# Phase 17 - RootConnection.attach 失败路径 socat LiveProcess leak 修 (commit `XXX`)
+
+## 真问题
+
+`RootConnection.attach` 走 `rootClientImpl.openJdwpStream` 拿 `s: LiveProcess`,
+然后 `performHandshakeAndVersionProbe` 拿 input/output 做 JDWP 握手 + VM.Version
+探测。之前没 try-catch close `s`, 握手失败时 (e.g. JDWP 14 字节握手失败 / EOF /
+timeout) `s` 没人关, socat 子进程永远 leak。
+
+后果:
+- socat 子进程 (`su -c 'socat - UNIX-CONNECT:@jdwp'`) 永远在 host 进程列表里
+- 多次 retry 失败后 socat 子进程累积, 占用内存 + 占用 JDWP unix abstract namespace
+- 跟 Phase 12p/12q/12r/12s 同款 leak 模式, 之前漏修 RootConnection 这条路径
+
+## 修法
+
+跟 `AdbForwardConnection.attach` line 213-227 / `InnetVmSocksConnection.attach`
+line 138-153 / `AidlSocketConnection.attachLocalBridge` line 283-301 同款 try-catch
+模式 (Phase 12t 引入):
+
+```kotlin
+val s = rootClientImpl.openJdwpStream(
+    hostPid = pid,
+    suBin = settings.root.suBinary,
+    timeoutMs = settings.root.probeTimeoutMs,
+)
+// Phase 17: 失败路径必须 close s (LiveProcess), 跟 Phase 12p/12q/12r/12s 同款
+try {
+    val info = AidlJdwpProtocol.performHandshakeAndVersionProbe(...)
+    stream = s
+    input = s.input
+    output = s.output
+    AttachInfo(...)
+} catch (t: Throwable) {
+    runCatching { s.close() }                  // LiveProcess.close() -> destroyForcibly + waitFor
+    input = null                              // 失败路径别留半截 input/output 引用
+    output = null
+    throw t
+}
+```
+
+`LiveProcess.close()` 内部 `destroyForcibly` + `waitFor(2_000L)` + drain join,
+socat 进程真退出。
+
+## 副作用
+
+- Root 路径 attach 失败不再 leak socat 子进程
+- 反复 attach 失败后子进程不累积
+- 5 个 connection 路径 (`AidlSocketConnection TCP/LocalBridge` / `AdbForwardConnection` /
+  `InnetVmSocksConnection` / `ShizukuConnection` / `RootConnection`) 全部走
+  "handshake 失败 close resource" 模式
+- `ConnectionBackedDebugger.run()` 失败路径已 cleanup (Phase 12s), 跟 RootConnection
+  配合端到端无 FDs 泄漏
+
+## 限制
+
+- 沙箱无设备, 真机 e2e 验证留 Phase 10
+- `LiveProcess.close()` 内部 destroyForcibly + waitFor(2s) + drain.join(500ms) 总延迟
+  < 2.5s, RootConnection.release() 调用方接受
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/RootConnection.kt` (attach try-catch close LiveProcess + 失败路径 input/output 置 null) |
+
+---
+
+# Phase 18 - AdbForwardConnection.connect 失败路径 adb forward leak 修 (commit `XXX`)
+
+## 真问题
+
+`AdbForwardConnection.connect` (子项目 6/7 共享实装) 走完
+`adb shell pidof` -> `bind ServerSocket` -> `adb forward` 4 步, 失败时只关
+serverSocket, **adb forward 规则还留在 adb server 列表里**。
+
+后果:
+- `retryPolicy.retry` 默认 `maxAttempts = settings.retryMaxAttempts` (3-6 次),
+  每次失败泄漏 1 条 adb forward 规则
+- 多次 retry 失败后 adb forward 规则累积, 占用 adb server 端
+  `localabstract:jdwp-<pid>` namespace + 旧 port 一直占着
+- adb server 重启才清
+
+## 修法
+
+跟 Phase 12p/12q/12r/12s/17 同款 try-catch cleanup 模式, catch 块加 adb forward
+清理:
+
+```kotlin
+}.onFailure { t ->
+    log.warn("{}: connect attempt failed: {}", type, t.message)
+    runCatching { serverSocket?.close() }
+    serverSocket = null
+    // Phase 18: connect 失败时 adb forward 规则也清, 之前 serverSocket 关了
+    //   但 adb forward 还留在 adb server 列表里, 多次 retry 后 adb forward
+    //   规则累积, 占用 adb server 端 localabstract:jdwp-<pid> namespace +
+    //   旧 port 一直占着。
+    val portToCleanup = localPort
+    if (portToCleanup > 0) {
+        runCatching {
+            val r = runAdb(listOf("forward", "--remove", "tcp:$portToCleanup"))
+            if (!r.isSuccess) {
+                log.debug("connect: adb forward --remove tcp:{} cleanup failed: {}",
+                    portToCleanup, r.stderr.trim())
+            }
+        }.onFailure { log.debug("connect: adb forward --remove threw: {}", it.message) }
+    }
+    localPort = 0
+}
+```
+
+`runAdb` 走子类 `AdbRunner` (Phase 13h 抽的 ProcessRunner), 跟 attach 阶段同款。
+
+## 副作用
+
+- AdbForward 路径 connect 失败不再 leak adb forward 规则
+- 3 个 connection 共享 AdbForwardConnection (`UsbLanConnection` / `InnetVmAdbConnection`
+  / `AdbForwardConnection` 直接) 全部受益
+- 反复 connect 失败后 adb server 端 namespace 不累积
+- `localPort` 重置在 cleanup 后, 避免下次 connect 拿到旧 port
+
+## 限制
+
+- `adb forward --remove` 失败仅 log, 不抛 (cleanup 阶段不破坏原异常路径)
+- 沙箱无设备, 真机 e2e 验证留 Phase 10
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/AdbForwardConnection.kt` (connect onFailure 块加 adb forward --remove 兜底) |
+
+---
+
+# Phase 19 - plans + specs 全部 review (commit `XXX`)
+
+## 工作内容
+
+- `.claude/plans/injector-and-connection-layer.md`: 8 phase 全部 ✅, 没新工作
+- `.claude/patch.json`: 老的 PR body 备份, 包含所有 phase 描述, 跟 pr445-body.md
+  大量重复, 跳过 (历史备份不动)
+- `.claude/phase12{p..x}.md` / `phase12y+13c.md` / `phase13d.md` / `phase13l.md` /
+  `phase10.md` / `phase7.md`: 各 phase 文档 + TODO 文档化, 已 commit
+- `docs/superpowers/specs/`: 10 个 spec, 全部对应已 commit phase, 没新工作
+
+## 结论
+
+整个连接层 (子项目 1-11) + BuildTimeInjector (子项目 10) + 部署检查表
+(子项目 11) 全部完成。Phase 7 (BuildTimeInjector 端到端验证) / Phase 10
+(真机 e2e) / Phase 13l (SubPathCapability 测试) 沙箱无 gradle / 无设备 / 无
+test runner, 留 TODO 文档化等有环境的开发者补。
+
+
 
