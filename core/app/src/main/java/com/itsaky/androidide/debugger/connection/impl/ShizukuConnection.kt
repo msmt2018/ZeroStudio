@@ -91,7 +91,16 @@ class ShizukuConnection(
     private val fdImpl: ShizukuFdTransporter by lazy { fdTransporter ?: ShizukuFdTransporter.create() }
     private val socksImpl: ShizukuSocksClient by lazy { socksClient ?: ShizukuSocksClient() }
     private val resolverImpl: ShizukuSubPathResolver by lazy {
-        resolver ?: ShizukuSubPathResolver(probeImpl, listOf())
+        // Phase 13a: 之前传 listOf() 空 capabilities, Auto 模式 for 循环空迭代
+        // 永远走 fallback WifiAdb, 4 个 ShizukuSubPathCapability 实装完全没接入。
+        // 现在传 defaultShizukuSubPathCapabilities(serverApiVersion) 4 个
+        // capability, Auto 模式按 WifiAdb / Binder / InHostPlugin / Socks 顺序探测。
+        // serverApiVersion 走 lazy probe 后从 ShizukuStatus 取。
+        val apiVersion = runCatching { probeImpl.probe().serverApiVersion }.getOrDefault(-1)
+        resolver ?: ShizukuSubPathResolver(
+            probeImpl,
+            defaultShizukuSubPathCapabilities(serverApiVersion = apiVersion),
+        )
     }
 
     // ---- 运行时状态 ----
