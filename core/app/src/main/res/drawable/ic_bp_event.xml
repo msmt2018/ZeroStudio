@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - Event Listener 断点图标
+  圆点 + 光标点击符号
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFAB40"
+        android:pathData="M12,7 C9.24,7 7,9.24 7,12 C7,14.76 9.24,17 12,17 C14.76,17 17,14.76 17,12 C17,9.24 14.76,7 12,7 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M10,9 L14,9 L14,10 L10,10 Z M10,11 L14,11 L14,14 C14,14.55 13.55,15 13,15 C12.45,15 12,14.55 12,14 L10,14 L10,15 C10,15.55 10.45,16 11,16 L13,16 C13.55,16 14,15.55 14,15 L14,11.5 L15,11.5 L15,15.5 C15,16.3 14.3,17 13.5,17 L10.5,17 C9.7,17 9,16.3 9,15.5 L9,9 Z"/>
+</vector>

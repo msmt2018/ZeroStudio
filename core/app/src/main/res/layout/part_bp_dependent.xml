@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 依赖断点选择 part (Phase 20)
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginTop="10dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bpd_dependent_label"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        android:textColor="#A0FFFFFF"/>
+
+    <Spinner
+        android:id="@+id/bpd_dep_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:minHeight="48dp"/>
+</LinearLayout>

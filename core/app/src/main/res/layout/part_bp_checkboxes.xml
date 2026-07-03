@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 复选框容器 part (Phase 20)
+  默认所有 CheckBox 隐藏,Java 端按 entry 决定显示哪些
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginTop="6dp">
+
+    <CheckBox
+        android:id="@+id/bpcb_temporary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bcd_temporary"
+        android:textColor="#F0FFFFFF"
+        android:visibility="gone"/>
+
+    <CheckBox
+        android:id="@+id/bpcb_entry"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bcd_method_entry"
+        android:textColor="#F0FFFFFF"
+        android:visibility="gone"/>
+
+    <CheckBox
+        android:id="@+id/bpcb_exit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bcd_method_exit"
+        android:textColor="#F0FFFFFF"
+        android:visibility="gone"/>
+
+    <CheckBox
+        android:id="@+id/bpcb_access"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bcd_watch_access"
+        android:textColor="#F0FFFFFF"
+        android:visibility="gone"/>
+
+    <CheckBox
+        android:id="@+id/bpcb_modification"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bcd_watch_modification"
+        android:textColor="#F0FFFFFF"
+        android:visibility="gone"/>
+
+    <CheckBox
+        android:id="@+id/bpcb_caught"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bcd_exception_caught"
+        android:textColor="#F0FFFFFF"
+        android:visibility="gone"/>
+
+    <CheckBox
+        android:id="@+id/bpcb_uncaught"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bcd_exception_uncaught"
+        android:textColor="#F0FFFFFF"
+        android:visibility="gone"/>
+</LinearLayout>

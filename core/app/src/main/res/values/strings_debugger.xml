@@ -237,4 +237,93 @@
 
     <!-- PR-D6: 目标包记录 -->
     <string name="debugger_target_pkg">目标包: %1$s</string>
+
+    <!-- Phase 20: 断点类型选择弹窗 (4 类 + 13 子类型) -->
+    <string name="debugger_bp_type_picker_title">选择断点类型</string>
+    <string name="debugger_bp_cat_gutter">Gutter · 行号边栏</string>
+    <string name="debugger_bp_cat_variables">Variables · 变量面板</string>
+    <string name="debugger_bp_cat_window">Breakpoints Window · 断点管理面板</string>
+    <string name="debugger_bp_cat_browser">Browser · 浏览器开发者工具</string>
+
+    <!-- 第一类 5 个 -->
+    <string name="debugger_bp_type_line_title">普通行断点</string>
+    <string name="debugger_bp_type_line_desc">程序运行到这一行之前暂停</string>
+    <string name="debugger_bp_type_method_title">方法/函数入口断点</string>
+    <string name="debugger_bp_type_method_desc">进入或退出该方法时暂停 (适合无源码库)</string>
+    <string name="debugger_bp_type_condition_title">条件断点</string>
+    <string name="debugger_bp_type_condition_desc">仅当条件表达式为真时暂停</string>
+    <string name="debugger_bp_type_log_title">日志断点/跟踪点</string>
+    <string name="debugger_bp_type_log_desc">不暂停,仅打印日志</string>
+    <string name="debugger_bp_type_inline_title">内联断点</string>
+    <string name="debugger_bp_type_inline_desc">精准停在某行的特定子表达式</string>
+
+    <!-- 第二类 2 个 (字段 watch) + 1 个 (Instance Filter) -->
+    <string name="debugger_bp_type_watch_mod_title">字段修改断点</string>
+    <string name="debugger_bp_type_watch_mod_desc">谁改了它就立刻暂停</string>
+    <string name="debugger_bp_type_watch_acc_title">字段读取断点</string>
+    <string name="debugger_bp_type_watch_acc_desc">谁读了它就立刻暂停</string>
+    <string name="debugger_bp_type_instance_title">实例过滤器</string>
+    <string name="debugger_bp_type_instance_desc">仅在指定对象实例通过时暂停</string>
+
+    <!-- 第三类 3 个 -->
+    <string name="debugger_bp_type_exception_title">异常断点</string>
+    <string name="debugger_bp_type_exception_desc">在抛出指定异常时暂停</string>
+    <string name="debugger_bp_type_symbolic_title">符号断点</string>
+    <string name="debugger_bp_type_symbolic_desc">在调用指定函数时暂停 (无源码库)</string>
+    <string name="debugger_bp_type_dependent_title">依赖断点</string>
+    <string name="debugger_bp_type_dependent_desc">仅当另一个断点先触发时本断点才生效</string>
+
+    <!-- 第四类 3 个 (浏览器开发者工具特有, Phase 20 接口预留) -->
+    <string name="debugger_bp_type_dom_title">DOM 修改断点</string>
+    <string name="debugger_bp_type_dom_desc">修改指定 HTML 节点时暂停前端 JS</string>
+    <string name="debugger_bp_type_xhr_title">XHR/Fetch 请求断点</string>
+    <string name="debugger_bp_type_xhr_desc">匹配 URL 的网络请求时暂停</string>
+    <string name="debugger_bp_type_event_title">事件监听器断点</string>
+    <string name="debugger_bp_type_event_desc">指定事件触发时暂停事件处理函数</string>
+
+    <!-- Phase 20: 第三类断点添加菜单 (BreakpointListFragment 顶栏 +) -->
+    <string name="debugger_bp_add_special">添加特殊断点</string>
+    <string name="debugger_bp_add_exception">异常断点…</string>
+    <string name="debugger_bp_add_symbolic">符号断点…</string>
+    <string name="debugger_bp_add_dependent">依赖断点…</string>
+
+    <!-- Phase 20: 详细设置弹窗 (BreakpointDetailDialog) -->
+    <string name="debugger_bpd_title">断点详情</string>
+    <string name="debugger_bpd_validation_element_empty">元素名称不能为空</string>
+    <string name="debugger_bpd_method_name_hint">方法名 (例: foo(int,String))</string>
+    <string name="debugger_bpd_field_name_hint">字段路径 (例: com.example.Foo.name)</string>
+    <string name="debugger_bpd_instance_id_hint">实例 ID (例: @0x7f0a0012)</string>
+    <string name="debugger_bpd_exception_class_hint">异常类名 (例: java.lang.NullPointerException)</string>
+    <string name="debugger_bpd_symbol_name_hint">符号名 (例: malloc / MyClass::foo)</string>
+    <string name="debugger_bpd_dependent_hint">仅当此断点先触发时本断点才生效</string>
+    <string name="debugger_bpd_dependent_label">依赖断点</string>
+    <string name="debugger_bpd_dependent_none">(无 — 不依赖任何断点)</string>
+    <string name="debugger_bpd_dependent_no_existing">请先添加至少一个行断点,再创建依赖断点</string>
+    <string name="debugger_bpd_inline_offset">子表达式偏移 (bytes)</string>
+    <string name="debugger_bpd_inline_offset_hint">例如 12</string>
+    <string name="debugger_bpd_instance_id">实例 ID (含 @)</string>
+    <string name="debugger_bpd_element_hint_generic">元素名称</string>
+    <string name="debugger_bpd_dom_selector_hint">DOM 选择器 (例: #root > .item:first-child)</string>
+    <string name="debugger_bpd_xhr_url_hint">URL 片段 (例: /api/v1/users)</string>
+    <string name="debugger_bpd_event_name_hint">事件名 (例: click / keydown / setInterval)</string>
+
+    <!-- Phase 20: Variables 面板右键菜单 (第二类) -->
+    <string name="debugger_var_ctx_watch_mod">修改时暂停 (Break on Modification)</string>
+    <string name="debugger_var_ctx_watch_acc">读取时暂停 (Break on Access)</string>
+    <string name="debugger_var_ctx_instance_filter">按此实例过滤 (Filter by instance)</string>
+
+    <!-- Phase 20: 命中次数模式 (与 breakpoint.HitCountMode 一一对应) -->
+    <string-array name="debugger_bcd_hit_count_modes">
+        <item>每次命中</item>
+        <item>等于 N</item>
+        <item>大于 N</item>
+        <item>每 N 次</item>
+    </string-array>
+
+    <!-- Phase 20: 内存视图 (Memory View) -->
+    <string name="debugger_mem_tab">内存</string>
+    <string name="debugger_mem_address">内存地址 (0x... 或十进制)</string>
+    <string name="debugger_mem_length">字节数</string>
+    <string name="debugger_mem_refresh">读取</string>
+    <string name="debugger_mem_empty">输入地址 + 长度 → 读取</string>
 </resources>

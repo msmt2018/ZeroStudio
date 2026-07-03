@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 依赖断点图标
+  圆点 + 两个小连接点 + 横线
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFAB40"
+        android:pathData="M12,7 C9.24,7 7,9.24 7,12 C7,14.76 9.24,17 12,17 C14.76,17 17,14.76 17,12 C17,9.24 14.76,7 12,7 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9,11 L15,11 L15,12 L9,12 Z M8.4,11.5 C8.7,11.5 9,11.2 9,10.9 C9,10.6 8.7,10.3 8.4,10.3 C8.1,10.3 7.8,10.6 7.8,10.9 C7.8,11.2 8.1,11.5 8.4,11.5 Z M15.6,11.5 C15.9,11.5 16.2,11.2 16.2,10.9 C16.2,10.6 15.9,10.3 15.6,10.3 C15.3,10.3 15,10.6 15,10.9 C15,11.2 15.3,11.5 15.6,11.5 Z"/>
+</vector>

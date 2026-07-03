@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 命中次数 part (Phase 20)
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginTop="10dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/debugger_bcd_hit_count"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        android:textColor="#A0FFFFFF"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical">
+
+        <Spinner
+            android:id="@+id/bphc_mode"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:minHeight="48dp"/>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/bphc_input_layout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:hint="@string/debugger_bcd_hit_count_value"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            app:boxStrokeColor="#FFAB40"
+            xmlns:app="http://schemas.android.com/apk/res-auto">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/bphc_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#F0FFFFFF"
+                android:inputType="number"
+                android:singleLine="true"/>
+        </com.google.android.material.textfield.TextInputLayout>
+    </LinearLayout>
+</LinearLayout>

@@ -162,6 +162,9 @@ public final class BreakpointTypePicker {
                         p.leftMargin = x;
                         p.topMargin = y;
                         ghost.setLayoutParams(p);
+                        // Phase 20: 用 WeakReference 跟踪,onDismiss 时一定清理,
+                        // 避免 Activity 销毁后 ghost 仍在 root 上导致 WindowLeaked。
+                        ghost.setTag(new java.lang.ref.WeakReference<>(root));
                         root.addView(ghost);
                     }
                 }
@@ -179,11 +182,22 @@ public final class BreakpointTypePicker {
 
     public void dismiss() {
         try { popup.dismiss(); } catch (Throwable ignored) {}
-        // 清理 ghost anchor
-        View ghost = popup.getAnchorView();
-        if (ghost != null && ghost.getParent() instanceof ViewGroup) {
-            try { ((ViewGroup) ghost.getParent()).removeView(ghost); } catch (Throwable ignored) {}
-        }
+        // 清理 ghost anchor — Phase 20: 即便 popup.dismiss 抛错也尝试清理。
+        try {
+            View ghost = popup.getAnchorView();
+            if (ghost != null && ghost.getParent() instanceof ViewGroup) {
+                try { ((ViewGroup) ghost.getParent()).removeView(ghost); } catch (Throwable ignored) {}
+            } else if (ghost != null) {
+                // Phase 20: 从 tag 拿 root 引用,二次清理
+                Object tag = ghost.getTag();
+                if (tag instanceof java.lang.ref.WeakReference) {
+                    Object root = ((java.lang.ref.WeakReference<?>) tag).get();
+                    if (root instanceof ViewGroup) {
+                        try { ((ViewGroup) root).removeView(ghost); } catch (Throwable ignored) {}
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
         currentCb = null;
     }
 

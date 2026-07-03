@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点详细设置弹窗 (Phase 20 重构)
+  高斯模糊磨砂半透明 + 动态内容
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:padding="20dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:maxWidth="560dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_dialog_frosted_glass"
+        android:padding="20dp">
+
+        <!-- 标题: 位置 + 类型 -->
+        <TextView
+            android:id="@+id/bpd_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bpd_title"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textColor="#F0FFFFFF"
+            android:fontFamily="sans-serif-medium"/>
+
+        <TextView
+            android:id="@+id/bpd_location"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="#A0FFFFFF"
+            android:fontFamily="monospace"
+            tools:text="MainActivity.kt : 27"
+            xmlns:tools="http://schemas.android.com/tools"/>
+
+        <!-- 启用 / 禁用 -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/bpd_enabled"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/debugger_bcd_enabled"
+            android:textColor="#F0FFFFFF"
+            android:contentDescription="@string/debugger_bcd_enabled_desc"
+            tools:checked="true"
+            xmlns:tools="http://schemas.android.com/tools"/>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:maxHeight="480dp"
+            android:scrollbars="vertical">
+
+            <LinearLayout
+                android:id="@+id/bpd_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="2dp"/>
+        </ScrollView>
+
+        <!-- 校验信息 -->
+        <TextView
+            android:id="@+id/bpd_validation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:padding="8dp"
+            android:background="@drawable/bg_panel_frosted"
+            android:textColor="#FFAB40"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:visibility="gone"
+            tools:text="字段不能为空"
+            tools:visibility="visible"
+            xmlns:tools="http://schemas.android.com/tools"/>
+
+        <!-- 按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp"
+            android:gravity="end">
+
+            <TextView
+                android:id="@+id/bpd_btn_cancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="10dp"
+                android:text="@android:string/cancel"
+                android:textColor="#A0FFFFFF"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"/>
+
+            <TextView
+                android:id="@+id/bpd_btn_save"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:padding="10dp"
+                android:text="@string/debugger_bcd_btn_save"
+                android:textColor="#FFAB40"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:fontFamily="sans-serif-medium"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"/>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

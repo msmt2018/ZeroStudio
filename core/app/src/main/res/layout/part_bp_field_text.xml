@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 通用文本字段 part (Phase 20)
+  label + TextInputLayout + TextInputEditText
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginTop="10dp">
+
+    <TextView
+        android:id="@+id/bpft_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        android:textColor="#A0FFFFFF"
+        tools:text="Element Name"
+        xmlns:tools="http://schemas.android.com/tools"/>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/bpft_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        app:boxStrokeColor="#FFAB40"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/bpft_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#F0FFFFFF"
+            android:singleLine="true"/>
+    </com.google.android.material.textfield.TextInputLayout>
+</LinearLayout>

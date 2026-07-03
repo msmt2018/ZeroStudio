@@ -161,6 +161,9 @@ public class BreakpointSidebar extends View {
     private int rowAtY(float y) {
         if (editor == null) return -1;
         int firstRow = editor.getFirstVisibleRow();
+        // PR-D6 / Phase 20: firstVisibleRow 偶发为 -1 (用户滚到编辑器顶部上方时) —
+        // clamp 到 0 避免 NPE / index out of bounds。
+        if (firstRow < 0) firstRow = 0;
         float rowHeight = editor.getRowHeight();
         if (rowHeight <= 0f) return -1;
         return firstRow + (int) (y / rowHeight);
@@ -180,16 +183,19 @@ public class BreakpointSidebar extends View {
         if (bps.isEmpty()) return;
 
         final float rowHeight = editor.getRowHeight();
+        if (rowHeight <= 0f) return;
         final float firstVisibleRow = editor.getFirstVisibleRow();
-        final int lastVisibleRow = (int) (firstVisibleRow + (getHeight() / Math.max(1f, rowHeight)) + 1);
+        // PR-D6 / Phase 20: 同样 clamp 到 0,避免 firstVisibleRow < 0 时 NPE。
+        final int firstRow = firstVisibleRow < 0 ? 0 : (int) firstVisibleRow;
+        final int lastVisibleRow = firstRow + (int) (getHeight() / Math.max(1f, rowHeight)) + 1;
 
         final float cx = getWidth() / 2f;
         final float r = dp(GLYPH_RADIUS_DP);
 
         for (IdeBreakpoint bp : bps) {
-            if (bp.line < firstVisibleRow || bp.line > lastVisibleRow) continue;
+            if (bp.line < firstRow || bp.line > lastVisibleRow) continue;
             if (bp.line <= 0) continue;
-            float topY = (bp.line - firstVisibleRow) * rowHeight;
+            float topY = (bp.line - firstRow) * rowHeight;
             float cy = topY + rowHeight / 2f;
             if (cy < r || cy > getHeight() - r) continue;
 

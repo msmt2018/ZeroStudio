@@ -26,7 +26,9 @@ import com.itsaky.androidide.activities.editor.BaseEditorActivity;
 import com.itsaky.androidide.debugger.BreakpointConditionDialog;
 import com.itsaky.androidide.debugger.adapter.BreakpointListAdapter;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
+import com.itsaky.androidide.debugger.model.BreakpointTypeCatalog;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
+import com.itsaky.androidide.debugger.view.BreakpointDetailDialog;
 import com.itsaky.androidide.ui.CodeEditorView;
 import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
 import java.util.List;
@@ -40,6 +42,7 @@ public class BreakpointListFragment extends Fragment
     private View clearAll;
     private View enableAll;
     private View disableAll;
+    private View addSpecial;   // Phase 20: 顶栏 "+" 按钮 — 第三类断点 (Exception / Symbolic / Dependent)
 
     @Nullable
     @Override
@@ -58,6 +61,7 @@ public class BreakpointListFragment extends Fragment
         clearAll = view.findViewById(R.id.bp_action_clear);
         enableAll = view.findViewById(R.id.bp_action_enable_all);
         disableAll = view.findViewById(R.id.bp_action_disable_all);
+        addSpecial = view.findViewById(R.id.bp_action_add_special);
 
         adapter = new BreakpointListAdapter();
         adapter.setListener(new BreakpointListAdapter.Listener() {
@@ -80,6 +84,7 @@ public class BreakpointListFragment extends Fragment
                 BreakpointManager.getInstance().enableAll());
         if (disableAll != null) disableAll.setOnClickListener(v ->
                 BreakpointManager.getInstance().disableAll());
+        if (addSpecial != null) addSpecial.setOnClickListener(v -> showAddSpecialMenu());
 
         BreakpointManager.getInstance().addListener(this);
         onBreakpointsChanged(BreakpointManager.getInstance().snapshot());
@@ -147,5 +152,56 @@ public class BreakpointListFragment extends Fragment
                         new com.itsaky.androidide.models.Position(
                                 bp.line - 1, 0));
         activity.openFileAndSelect(new java.io.File(bp.file), range);
+    }
+
+    /**
+     * Phase 20: 顶栏 "+" → 弹第三类断点菜单 (Exception / Symbolic / Dependent)。
+     * 选择后通过 BreakpointDetailDialog (高斯模糊磨砂) 走标准流程。
+     */
+    private void showAddSpecialMenu() {
+        View anchor = addSpecial != null ? addSpecial : requireView();
+        PopupMenu menu = new PopupMenu(requireContext(), anchor);
+        menu.getMenu().add(0, 1, 0, R.string.debugger_bp_add_exception);
+        menu.getMenu().add(0, 2, 1, R.string.debugger_bp_add_symbolic);
+        menu.getMenu().add(0, 3, 2, R.string.debugger_bp_add_dependent);
+        menu.setOnMenuItemClickListener(item -> {
+            int id = item.getItemId();
+            if (id == 1) {
+                // 异常断点 — 必须 element = 异常类名,故用 showForNew + preset element=null
+                BreakpointDetailDialog.showForNew(
+                        requireActivity(),
+                        "Global", 1,
+                        BreakpointTypeCatalog.ENTRY_EXCEPTION,
+                        null, null);
+                return true;
+            }
+            if (id == 2) {
+                BreakpointDetailDialog.showForNew(
+                        requireActivity(),
+                        "Global", 1,
+                        BreakpointTypeCatalog.ENTRY_SYMBOLIC,
+                        null, null);
+                return true;
+            }
+            if (id == 3) {
+                // 依赖断点 — 用户需要先有一个行断点,这里引导"选择一个已存在的"
+                List<IdeBreakpoint> existing = BreakpointManager.getInstance().snapshot();
+                if (existing.isEmpty()) {
+                    FlashbarActivityUtilsKt.flashInfo(requireActivity(),
+                            getString(R.string.debugger_bpd_dependent_no_existing));
+                    return true;
+                }
+                // 简化: 直接打开详情 dialog 选第一个作为主断点
+                IdeBreakpoint first = existing.get(0);
+                BreakpointDetailDialog.showForNew(
+                        requireActivity(),
+                        first.file, first.line,
+                        BreakpointTypeCatalog.ENTRY_DEPENDENT,
+                        first.id, null);
+                return true;
+            }
+            return false;
+        });
+        menu.show();
     }
 }
