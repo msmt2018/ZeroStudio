@@ -232,7 +232,33 @@ class InnetVmSocksConnection(
         }, "InnetVmSocksConnection-read").apply { isDaemon = true; start() }
     }
 
+    /**
+     * **Phase 13g 增强**: 之前 mapConnectError 一律 IOException -> IoFailure,
+     * mapAttachError 仅简单 match "Bad handshake" / "SOCKS5 CONNECT failed" /
+     * "timeout" 3 个 pattern。
+     *
+     * 真实错误来源有 4 类:
+     *   1) SOCKS5 server 不可达 (TCP connect 失败: ConnectException / NoRouteToHostException)
+     *   2) SOCKS5 server 拒绝 (REP 0x01-0x08, e.g. "Connection refused" / "Network
+     *      unreachable" / "Host unreachable")
+     *   3) SOCKS5 协议错 (VER 不匹配 / ATYP 未知 / domain too long) - 服务端 bug
+     *   4) JDWP 14 字节握手失败 (走完 SOCKS5 后内层协议不对, e.g. SOCKS5 server 转发错
+     *      目标 / host app 没启 debug / VM 内 JDWP socket 错)
+     *
+     * 现在按 SOCKS5 REP code / message 细分:
+     *   - REP=0x05 "Connection refused" -> IoFailure (host 端口未开, retryable)
+     *   - REP=0x03/0x04 "Network/Host unreachable" -> NetworkUnreachable
+     *   - "SOCKS5 server returned method=$method" -> PermissionDenied (server 要 auth,
+     *     当前 client 不支持)
+     *   - "SOCKS5 response version" / "unknown ATYP" / "domain too long" -> IoFailure
+     *     (协议层错, server bug 或版本不匹配)
+     *   - "Bad handshake" / "EOF during handshake" -> JdwpHandshakeFailed
+     *   - 其它 IOException -> IoFailure
+     */
     private fun mapConnectError(t: Throwable): ConnectionError = when (t) {
+        is java.net.ConnectException -> ConnectionError.NetworkUnreachable
+        is java.net.NoRouteToHostException -> ConnectionError.NetworkUnreachable
+        is java.net.SocketTimeoutException -> ConnectionError.Timeout
         is IOException -> ConnectionError.IoFailure(t)
         else -> ConnectionError.Unknown(t)
     }
@@ -240,8 +266,36 @@ class InnetVmSocksConnection(
     private fun mapAttachError(t: Throwable): ConnectionError {
         val msg = t.message.orEmpty()
         return when {
-            msg.contains("Bad handshake", ignoreCase = true) -> ConnectionError.JdwpHandshakeFailed
-            msg.contains("SOCKS5 CONNECT failed", ignoreCase = true) -> ConnectionError.NetworkUnreachable
+            // SOCKS5 server 要 auth (no-auth only client 走不了)
+            msg.contains("SOCKS5 server returned method=", ignoreCase = true) &&
+                !msg.contains("method=0x00") ->
+                ConnectionError.PermissionDenied
+            // SOCKS5 protocol-level 错: server 错版本 / 错 ATYP / domain too long
+            msg.contains("SOCKS5 server returned version=", ignoreCase = true) ||
+                msg.contains("SOCKS5 response version=", ignoreCase = true) ||
+                msg.contains("SOCKS5: unknown ATYP", ignoreCase = true) ||
+                msg.contains("SOCKS5 domain too long", ignoreCase = true) ->
+                ConnectionError.IoFailure(t)
+            // SOCKS5 CONNECT failed: REP code 细分
+            msg.contains("REP=0x05", ignoreCase = true) ||
+                msg.contains("Connection refused", ignoreCase = true) ->
+                ConnectionError.IoFailure(t)  // host 端 jdwp 端口没开, retryable
+            msg.contains("REP=0x03", ignoreCase = true) ||
+                msg.contains("REP=0x04", ignoreCase = true) ||
+                msg.contains("Network unreachable", ignoreCase = true) ||
+                msg.contains("Host unreachable", ignoreCase = true) ->
+                ConnectionError.NetworkUnreachable
+            msg.contains("REP=0x06", ignoreCase = true) ||
+                msg.contains("TTL expired", ignoreCase = true) ->
+                ConnectionError.Timeout
+            msg.contains("SOCKS5 CONNECT failed", ignoreCase = true) ->
+                // 兜底: 其他 REP (0x01 general failure / 0x02 not allowed / 0x07/0x08)
+                ConnectionError.IoFailure(t)
+            // JDWP 14 字节握手失败 / EOF
+            msg.contains("Bad handshake", ignoreCase = true) ||
+                msg.contains("EOF during handshake", ignoreCase = true) ->
+                ConnectionError.JdwpHandshakeFailed
+            // 通用 timeout
             msg.contains("timeout", ignoreCase = true) -> ConnectionError.Timeout
             t is IOException -> ConnectionError.IoFailure(t)
             else -> ConnectionError.Unknown(t)
