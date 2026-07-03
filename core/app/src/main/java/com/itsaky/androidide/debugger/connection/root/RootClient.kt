@@ -1,5 +1,5 @@
 /*
- *  ZeroStudio IDE - Debugger Connection Layer
+ *  ZeroStudio IDE - Debug Connection Layer
  *
  *  RootClient: 走 su -c 起 root 进程做具体操作 (找 pid / open JDWP socket)。
  *
@@ -13,17 +13,20 @@
  *  暂留 stub 实现 (返回 -1 / 抛 NotImplemented), 子项目 8 完成后补全。
  *
  *  测试用 FakeRootClient: 可预置 findProcessId / openJdwpSocket 返回值。
+ *
+ *  Phase 13h: findProcessId 走 ProcessRunner 公共实现 (替代直接 ProcessBuilder
+ *  + daemon thread + CountDownLatch, 跟 DefaultAdbRunner 共享)。
+ *  openJdwpStream 走 ProcessRunner.startLive (长生命周期 stream, 暴露
+ *  inputStream/outputStream 给 RootConnection 接管, onClose 由 RootConnection
+ *  lifecycle 调)。
  */
 
 package com.itsaky.androidide.debugger.connection.root
 
+import com.itsaky.androidide.debugger.connection.process.ProcessRunner
 import com.itsaky.androidide.utils.ILogger
 import java.io.IOException
-import java.io.InputStream
-import java.io.OutputStream
 import java.net.Socket
-import java.nio.charset.StandardCharsets
-import kotlin.concurrent.thread
 
 /**
  * Root 客户端抽象。
@@ -79,7 +82,9 @@ data class RootJdwpStream(
 /**
  * 默认生产实现。
  */
-class DefaultRootClient : RootClient {
+class DefaultRootClient(
+    private val processRunner: ProcessRunner = ProcessRunner(),
+) : RootClient {
 
     private val log = ILogger.ROOT
 
@@ -90,9 +95,10 @@ class DefaultRootClient : RootClient {
     ): Int {
         // Android 8+ 用 pgrep / pidof 拿 pid
         // `pidof <packageName>` 拿第一行数字
-        val cmd = arrayOf(suBin, "-c", "pidof $packageName || pgrep -f $packageName || echo -1")
+        val cmd = listOf(suBin, "-c", "pidof $packageName || pgrep -f $packageName || echo -1")
         return try {
-            val output = execWithTimeout(cmd, timeoutMs).trim()
+            val result = processRunner.run(cmd, timeoutMs, redirectErrorStream = true)
+            val output = result.stdout.trim()
             val firstLine = output.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: "-1"
             firstLine.split(Regex("\\s+")).firstOrNull()?.toIntOrNull() ?: -1
         } catch (t: Throwable) {
@@ -114,14 +120,15 @@ class DefaultRootClient : RootClient {
         //   2) su -c 'socat - UNIX-CONNECT:@jdwp' 起 stdin/stdout 桥接
         //   3) IDE 端拿 Process.inputStream/outputStream 当 jdwp 字节流用
         try {
-            val netUnix = execWithTimeout(
-                arrayOf(suBin, "-c", "cat /proc/$hostPid/net/unix"),
+            val netUnixResult = processRunner.run(
+                listOf(suBin, "-c", "cat /proc/$hostPid/net/unix"),
                 timeoutMs,
+                redirectErrorStream = true,
             )
+            val netUnix = netUnixResult.stdout
             if (!netUnix.contains("@jdwp")) {
                 throw IOException("no jdwp socket found in /proc/$hostPid/net/unix")
             }
-            // 起 socat (如设备装了)
             // Phase 12v: 两个真问题修
             //   1) 之前 redirectErrorStream(true) 把 stderr 合到 inputStream 一起给
             //      RootConnection, RootConnection 读到的 JDWP 字节流里会夹 stderr
@@ -132,24 +139,15 @@ class DefaultRootClient : RootClient {
             //      短时间占 FDs
             // 修法: stderr 独立 (不 redirectErrorStream), 起 daemon thread drain
             //   stderr; onClose destroyForcibly + waitFor 兜底
-            val socat = ProcessBuilder(suBin, "-c", "socat - UNIX-CONNECT:@jdwp")
-                .redirectErrorStream(false)
-                .start()
-            val socatErrDrain = thread(name = "RootClient-socat-err", isDaemon = true) {
-                runCatching { socat.errorStream.readBytes() }
-            }
+            // Phase 13h: 走 ProcessRunner.startLive 拿 LiveProcess (内部已包 stderr
+            //   drain + onClose destroyForcibly + waitFor 2s 兜底)
+            val live = processRunner.startLive(
+                listOf(suBin, "-c", "socat - UNIX-CONNECT:@jdwp")
+            )
             return RootJdwpStream(
-                input = socat.inputStream,
-                output = socat.outputStream,
-                onClose = {
-                    runCatching { socat.destroyForcibly() }
-                    // waitFor 兜底: destroyForcibly 发 SIGKILL 但不阻塞, 等
-                    // 真退出避免 socat zombie 短时间占 FDs
-                    runCatching {
-                        socat.waitFor(2_000L, java.util.concurrent.TimeUnit.MILLISECONDS)
-                    }
-                    runCatching { socatErrDrain.join(500L) }
-                },
+                input = live.inputStream,
+                output = live.outputStream,
+                onClose = { live.close() },
             )
         } catch (t: Throwable) {
             throw IOException(
@@ -157,29 +155,6 @@ class DefaultRootClient : RootClient {
                 t,
             )
         }
-    }
-
-    private fun execWithTimeout(cmd: Array<String>, timeoutMs: Long): String {
-        val p = ProcessBuilder(*cmd).redirectErrorStream(true).start()
-        val done = java.util.concurrent.CountDownLatch(1)
-        val outRef = arrayOfNulls<String>(null)
-        val errRef = arrayOfNulls<Throwable>(null)
-        thread(name = "RootExec", isDaemon = true) {
-            try {
-                outRef[0] = p.inputStream.readBytes().toString(StandardCharsets.UTF_8)
-            } catch (t: Throwable) {
-                errRef[0] = t
-            } finally {
-                done.countDown()
-            }
-        }
-        val finished = done.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-        if (!finished) {
-            runCatching { p.destroyForcibly() }
-            throw IOException("exec timeout (${timeoutMs}ms): ${cmd.joinToString(" ")}")
-        }
-        if (errRef[0] != null) throw errRef[0]!!
-        return outRef[0] ?: ""
     }
 }
 
