@@ -448,20 +448,36 @@ class AidlSocketConnection(
         }
     }
 
+    /**
+     * Phase 6: 跟 AdbForwardConnection.mapXxxError 同款细分模式.
+     * 4 类错误来源走不同 ConnectionError 分支.
+     */
     private fun mapConnectError(t: Throwable): ConnectionError = when (t) {
-        is IOException -> ConnectionError.IoFailure(t)
+        is java.net.ConnectException -> ConnectionError.NetworkUnreachable
+        is java.net.NoRouteToHostException -> ConnectionError.NetworkUnreachable
+        is java.net.SocketTimeoutException -> ConnectionError.Timeout
+        is java.io.IOException -> ConnectionError.IoFailure(t)
         else -> ConnectionError.Unknown(t)
     }
 
     private fun mapAttachError(t: Throwable): ConnectionError {
         val msg = t.message.orEmpty()
         return when {
+            // LocalServerSocket bind 失败 (端口已占用 / abstract namespace 冲突)
+            msg.contains("address already in use", ignoreCase = true) ||
+                msg.contains("EADDRINUSE", ignoreCase = true) ->
+                ConnectionError.AddressInUse
+            // JDWP 14 字节握手失败 / EOF
             msg.contains("Bad handshake", ignoreCase = true) ||
                 msg.contains("EOF during handshake", ignoreCase = true) ->
                 ConnectionError.JdwpHandshakeFailed
-            msg.contains("reply timeout", ignoreCase = true) ->
-                ConnectionError.Timeout
-            t is IOException -> ConnectionError.IoFailure(t)
+            // HELLO 解析失败 (host 端 HELLO 协议版本不匹配)
+            msg.contains("invalid HELLO", ignoreCase = true) ->
+                ConnectionError.IoFailure(t)
+            // 通用 timeout
+            msg.contains("timeout", ignoreCase = true) ||
+                msg.contains("reply timeout", ignoreCase = true) -> ConnectionError.Timeout
+            t is java.io.IOException -> ConnectionError.IoFailure(t)
             else -> ConnectionError.Unknown(t)
         }
     }

@@ -343,19 +343,43 @@ abstract class AdbForwardConnection(
      * e2e 测试时再决定要不要删.
      */
 
+    /**
+     * Phase 6: 跟 P13g InnetVmSocksConnection.mapXxxError 同款细分模式,
+     * 4 类错误来源走不同 ConnectionError 分支:
+     *   - adb server 不可达 (ConnectException / NoRouteToHostException) -> NetworkUnreachable
+     *   - adb server 拒绝 (Permission denied / 设备 unauthorized) -> PermissionDenied
+     *   - SocketTimeoutException / "reply timeout" -> Timeout
+     *   - 其他 IOException -> IoFailure
+     */
     protected open fun mapConnectError(t: Throwable): ConnectionError = when (t) {
-        is IOException -> ConnectionError.IoFailure(t)
+        is java.net.ConnectException -> ConnectionError.NetworkUnreachable
+        is java.net.NoRouteToHostException -> ConnectionError.NetworkUnreachable
+        is java.net.SocketTimeoutException -> ConnectionError.Timeout
+        is java.io.IOException -> ConnectionError.IoFailure(t)
         else -> ConnectionError.Unknown(t)
     }
 
     protected open fun mapAttachError(t: Throwable): ConnectionError {
         val msg = t.message.orEmpty()
         return when {
+            // adb forward 失败 (本地端口已占用 / adb forward 格式错)
+            msg.contains("address already in use", ignoreCase = true) ||
+                msg.contains("cannot bind", ignoreCase = true) ->
+                ConnectionError.AddressInUse
+            // JDWP 14 字节握手失败 / EOF
             msg.contains("Bad handshake", ignoreCase = true) ||
                 msg.contains("EOF during handshake", ignoreCase = true) ->
                 ConnectionError.JdwpHandshakeFailed
-            msg.contains("reply timeout", ignoreCase = true) -> ConnectionError.Timeout
-            t is IOException -> ConnectionError.IoFailure(t)
+            // adb 设备 disconnected / unauthorized
+            msg.contains("device not found", ignoreCase = true) ||
+                msg.contains("device '", ignoreCase = true) && msg.contains("' not found", ignoreCase = true) ->
+                ConnectionError.DeviceNotFound
+            msg.contains("unauthorized", ignoreCase = true) ->
+                ConnectionError.PermissionDenied
+            // 通用 timeout
+            msg.contains("timeout", ignoreCase = true) ||
+                msg.contains("reply timeout", ignoreCase = true) -> ConnectionError.Timeout
+            t is java.io.IOException -> ConnectionError.IoFailure(t)
             else -> ConnectionError.Unknown(t)
         }
     }

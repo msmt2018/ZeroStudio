@@ -563,17 +563,46 @@ class ShizukuConnection(
      * e2e 测试时再决定要不要删.
      */
 
+    /**
+     * Phase 6: 跟 AdbForwardConnection.mapXxxError 同款细分模式.
+     * ShizukuConnection 走 Shizuku user service, 4 类错误来源:
+     *   - Shizuku 没启 / 没授权 -> PermissionDenied
+     *   - user service 不可用 -> IoFailure
+     *   - transferFileDescriptor 不可用 (13+ 限制) -> 走 fallback
+     *   - SOCKS5 server 启失败 -> IoFailure
+     */
     private fun mapConnectError(t: Throwable): ConnectionError = when (t) {
-        is IOException -> ConnectionError.IoFailure(t)
+        is java.net.ConnectException -> ConnectionError.NetworkUnreachable
+        is java.net.NoRouteToHostException -> ConnectionError.NetworkUnreachable
+        is java.net.SocketTimeoutException -> ConnectionError.Timeout
+        is java.io.IOException -> ConnectionError.IoFailure(t)
         else -> ConnectionError.Unknown(t)
     }
 
     private fun mapAttachError(t: Throwable): ConnectionError {
         val msg = t.message.orEmpty()
         return when {
-            msg.contains("Bad handshake", ignoreCase = true) -> ConnectionError.JdwpHandshakeFailed
-            msg.contains("permission", ignoreCase = true) -> ConnectionError.PermissionDenied
-            t is IOException -> ConnectionError.IoFailure(t)
+            // Shizuku 权限拒绝
+            msg.contains("permission", ignoreCase = true) ||
+                msg.contains("shizuku", ignoreCase = true) && msg.contains("denied", ignoreCase = true) ->
+                ConnectionError.PermissionDenied
+            // Shizuku server 死了 / 不可用
+            msg.contains("shizuku service not running", ignoreCase = true) ||
+                msg.contains("shizuku binder dead", ignoreCase = true) ->
+                ConnectionError.IoFailure(t)
+            // Shizuku 14+ transferFileDescriptor 限制 (Phase 13d 走 fallback)
+            msg.contains("transferFileDescriptor", ignoreCase = true) ->
+                ConnectionError.IoFailure(t)
+            // SOCKS5 server 启失败 (Phase 12y ISocksControl 协议)
+            msg.contains("SocksControl", ignoreCase = true) ->
+                ConnectionError.IoFailure(t)
+            // JDWP 14 字节握手失败 / EOF
+            msg.contains("Bad handshake", ignoreCase = true) ||
+                msg.contains("EOF during handshake", ignoreCase = true) ->
+                ConnectionError.JdwpHandshakeFailed
+            // 通用 timeout
+            msg.contains("timeout", ignoreCase = true) -> ConnectionError.Timeout
+            t is java.io.IOException -> ConnectionError.IoFailure(t)
             else -> ConnectionError.Unknown(t)
         }
     }

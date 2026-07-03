@@ -250,17 +250,40 @@ class RootConnection(
         }
     }
 
+    /**
+     * Phase 6: 跟 AdbForwardConnection.mapXxxError 同款细分模式.
+     * RootConnection 走 RootClient (su -c), 4 类错误来源:
+     *   - su binary 不可达 (ConnectException) -> NetworkUnreachable
+     *   - su permission denied (Permission denied) -> PermissionDenied
+     *   - socat not installed / sock not found -> IoFailure
+     *   - JDWP handshake fail -> JdwpHandshakeFailed
+     */
     private fun mapConnectError(t: Throwable): ConnectionError = when (t) {
-        is IOException -> ConnectionError.IoFailure(t)
+        is java.net.ConnectException -> ConnectionError.NetworkUnreachable
+        is java.net.NoRouteToHostException -> ConnectionError.NetworkUnreachable
+        is java.net.SocketTimeoutException -> ConnectionError.Timeout
+        is java.io.IOException -> ConnectionError.IoFailure(t)
         else -> ConnectionError.Unknown(t)
     }
 
     private fun mapAttachError(t: Throwable): ConnectionError {
         val msg = t.message.orEmpty()
         return when {
-            msg.contains("Bad handshake", ignoreCase = true) -> ConnectionError.JdwpHandshakeFailed
+            // su 权限拒绝
+            msg.contains("permission denied", ignoreCase = true) ||
+                msg.contains("not allowed", ignoreCase = true) ->
+                ConnectionError.PermissionDenied
+            // socat 不可用 / @jdwp socket not found
+            msg.contains("socat", ignoreCase = true) && msg.contains("not found", ignoreCase = true) ||
+                msg.contains("no jdwp socket", ignoreCase = true) ->
+                ConnectionError.IoFailure(t)
+            // JDWP 14 字节握手失败 / EOF
+            msg.contains("Bad handshake", ignoreCase = true) ||
+                msg.contains("EOF during handshake", ignoreCase = true) ->
+                ConnectionError.JdwpHandshakeFailed
+            // 通用 timeout
             msg.contains("timeout", ignoreCase = true) -> ConnectionError.Timeout
-            t is IOException -> ConnectionError.IoFailure(t)
+            t is java.io.IOException -> ConnectionError.IoFailure(t)
             else -> ConnectionError.Unknown(t)
         }
     }

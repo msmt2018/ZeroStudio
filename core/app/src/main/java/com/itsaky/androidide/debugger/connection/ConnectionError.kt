@@ -34,6 +34,12 @@ sealed class ConnectionError(val retryable: Boolean) {
     /** 网络不可达 (内网 VM / USB/LAN 方案可能遇到) */
     object NetworkUnreachable : ConnectionError(retryable = true)
 
+    /** 端口被占用 (adb forward / ServerSocket bind 失败时) */
+    object AddressInUse : ConnectionError(retryable = false)
+
+    /** 目标 adb 设备未找到 / 已断开 (adb devices 找不到 serial) */
+    object DeviceNotFound : ConnectionError(retryable = true)
+
     /** 通用 IO 失败 */
     data class IoFailure(val cause: Throwable) : ConnectionError(retryable = true)
 
@@ -50,6 +56,8 @@ sealed class ConnectionError(val retryable: Boolean) {
         JdwpHandshakeFailed -> "JDWP 握手失败"
         PortResolveFailed -> "JDWP 端口解析失败"
         NetworkUnreachable -> "网络不可达"
+        AddressInUse -> "端口被占用 (检查 adb forward / IDE 端 ServerSocket)"
+        DeviceNotFound -> "目标设备未找到 (adb devices 看不到 serial)"
         is IoFailure -> "IO 失败: ${cause.message ?: cause.javaClass.simpleName}"
         is Unknown -> "未知错误: ${cause.message ?: cause.javaClass.simpleName}"
     }
