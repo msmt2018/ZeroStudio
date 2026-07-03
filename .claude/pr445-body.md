@@ -1299,3 +1299,207 @@ ShizukuBinderClient.bindUserService 加 `args: Bundle?` 参数, 当前 Shizuku 1
 | 改 | `core/app/.../shizuku/ShizukuBinderClient.kt` (class 路径修对 + args 参数加但暂忽略) |
 | 改 | `core/app/.../impl/ShizukuConnection.kt` (注释更新, args 留 TODO) |
 | 改 | `ide-debugger-host/.../IdeShizukuSocksUserService.kt` (注释更新 + onBind 行为保留) |
+
+---
+
+## Phase 13a: ShizukuConnection Auto subPath 永远 fallback WifiAdb 真 bug 修 (commit e38a326f)
+
+**Commit**: `e38a326fcc97e0a1213f736180f3c32d105f0245`
+**日期**: 2026-07-03
+**类型**: 真 bug 修 (auto-resolve 路径)
+
+### 13a.1 - 真问题
+
+`ShizukuConnection.resolverImpl` 之前传 `listOf()` 空 capabilities, Auto 模式
+走 `for (cap in capabilities)` 空迭代, 永远 fallback 走 `WifiAdb`。4 个
+`ShizukuSubPathCapability` 实现 (WifiAdb / Binder / InHostPlugin / Socks) 全部
+missing 没人接入生产代码。
+
+**影响**:
+- 用户在 UI 选 Auto 永远走 WifiAdb 路径, 其他 3 个子路径形同虚设
+- 即便设备无 adb 串号, 仍坚持走 WifiAdb (走不通才报错)
+- 实装的 4 个 capability 代码 dead code
+
+### 13a.2 - 修法
+
+新增 `core/app/.../shizuku/ShizukuSubPathCapabilities.kt` 实装 4 个 capability:
+
+- **WifiAdbCapability**: 检查 adbSerial 非空 (最宽松, 默认 fallback)
+- **BinderCapability**: Shizuku 12/13 `transferFileDescriptor` 不可用返 false,
+  14+ 返 true (Phase 13d TODO 修)
+- **InHostPluginCapability**: 探测 host 装 `ide-debugger-host` aar
+- **SocksCapability**: 同 InHostPluginCapability (host 装 plugin 才可用)
+
+工厂方法 `defaultShizukuSubPathCapabilities(serverApiVersion, adbProbe,
+hostPluginProbe)` 按 WifiAdb / Binder / InHostPlugin / Socks 顺序组装。
+
+`ShizukuConnection.resolverImpl` 改传 `defaultShizukuSubPathCapabilities(serverApiVersion = apiVersion)`,
+`serverApiVersion` 走 lazy probe 一次拿 `ShizukuStatus.serverApiVersion`。
+
+### 13a.3 - 副作用
+
+- Auto 模式按顺序真探测 4 个 capability, 选第一个 usable, 不再永远 fallback
+  WifiAdb
+- 设备无 adb 串号时, 选 InHostPlugin (host app 已装 plugin) 或 Socks
+- 兼容性 OK: WifiAdb 仍是 fallback, 旧行为保留
+
+### 13a.4 - 限制
+
+- InHostPluginCapability / SocksCapability 用 host 进程探测, Phase 13l TODO
+  跑测试 verify
+- BinderCapability Shizuku 14+ 才真可用, 13+ 走 fallback InHostPlugin
+
+## 新增/修改文件 (Phase 13a)
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 增 | `core/app/.../shizuku/ShizukuSubPathCapabilities.kt` (4 capability + 工厂方法) |
+| 改 | `core/app/.../impl/ShizukuConnection.kt` (resolverImpl 改传 default 4 capability) |
+
+---
+
+## Phase 13b: HostAttachAgent.bridgeBytes daemon 修 (commit 8f8cb89a)
+
+**Commit**: `8f8cb89a95223ba96463d26603772230b8b2c0d1`
+**日期**: 2026-07-03
+**类型**: lifecycle 修 (daemon thread)
+
+### 13b.1 - 真问题
+
+`HostAttachAgent.bridgeBytes` 两个 forward thread 之前 `isDaemon = false`,
+host app 退出时这俩 thread 还活着 user thread, 阻止 host 进程退出 (跟
+Phase 12p/12q 修的 `HostAttachAgentBootstrap` / `HostPluginService` 风格
+矛盾 - 那两个 phase 都改成 `isDaemon = true`)。
+
+**影响**:
+- 调试结束 host app 应该立即退出, 但因 bridge thread user thread 没死,
+  host 进程被 block 几秒甚至十几秒
+- 多个 host app 同时调试结束, 进程退出延迟累积
+- 跟 Phase 12p/12q daemon 策略不一致, 同一文件内 style 不统一
+
+### 13b.2 - 修法
+
+`ide-debugger-host/.../HostAttachAgent.kt` line 220, 227 两个 forward
+thread 改 `isDaemon = true`, 跟 host 进程生命周期对齐。
+
+### 13b.3 - 副作用
+
+- host app 退出时 bridge thread 立即被 JVM 中断, 进程能正常 exit
+- 跟 Phase 12p/12q daemon 策略一致
+- 调试会话字节桥接功能不变 (Jvm 在 exit 前 flush 完 socket buffer)
+
+## 新增/修改文件 (Phase 13b)
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `ide-debugger-host/.../HostAttachAgent.kt` (line 220, 227 改 isDaemon = true) |
+
+---
+
+## Phase 12y + 13c: Socks 路径走 ISocksControl binder transact + lifecycle 完善 (commit ba7a144b)
+
+**Commit**: `ba7a144b60dc202511482ba5c763e403a89267bf`
+**日期**: 2026-07-03
+**类型**: 新功能 (custom port 走 binder) + lifecycle 修复 (端口释放)
+
+### 12y+13c.1 - 真问题
+
+两个真问题合并实装:
+
+#### 12y.1 - Shizuku 13+ 无法传自定义 port 给 host 端 SOCKS5 server
+
+- 用户在 DebugConnectionPreferences 设 `shizukuSocksPort = 50000`
+- 旧实现走 `UserServiceArgs(args: Bundle).forAdd()` 把 port 塞 Bundle 传 host
+- **Bug 根因** (Phase 12x 已调研): Shizuku 13.1.5 aar `javap` 确认
+  `Shizuku$UserServiceArgs` 是内部类, 字段只有 componentName/versionCode/
+  processName/tag/debuggable/daemon/use32BitAppProcess, **没有 Bundle 字段**,
+  `forAdd()` Bundle 是 private 不可加 user-supplied extras
+- **结果**: 旧实现传 port 完全无效, 永远走 host 端 hardcoded 39939
+- **影响**: 多 IDE 实例同 device 跑 Shizuku Socks 会端口冲突, 用户期望的
+  "自定义端口"功能完全失灵
+
+#### 13c.1 - Socks 路径 lifecycle 缺失, 资源不释放
+
+- IDE 端 attach 走 Socks 路径成功 (Socks5Client 拿到 socket)
+- 用户结束调试, IDE 端 release / detach
+- 旧实现只 close 了 `java.net.Socket`, **没有 stop host 端 SOCKS5 server**
+- host 端 `IdeShizukuSocksUserService.socksServer: HostSocksServer?` 继续
+  hold 39939 端口
+- **结果**: detach 后 host 进程 leak SOCKS5 server, 下次 IDE attach 端口
+  冲突或占用错误
+
+### 12y+13c.2 - 修法
+
+#### ISocksControl 协议 (不走 .aidl 编译)
+
+```
+DESCRIPTOR = "com.itsaky.androidide.zerostudio.ide.debugger.host.IdeShizukuSocksUserService.ISocksControl"
+
+CODE_SET_SOCKS_PORT (1): 设 SOCKS5 server 监听端口 (0 = OS 选随机), reply 写 int actualPort
+CODE_GET_SOCKS_PORT (2): 取 SOCKS5 server actual port (没启返 -1)
+CODE_STOP_SOCKS (3): 停 SOCKS5 server
+```
+
+走 `Binder.onTransact` 自定义 (沙箱无 gradle 不能验证 .aidl 编译), `enforceInterface`
+防 IDE 端 binder 错连别的 user service。
+
+#### IDE 端 - 新增 SocksControlTransact 类
+
+`core/app/.../shizuku/SocksControlTransact.kt`:
+- `setSocksPort(binder, requestedPort)`: 走 transact, 返 host 端 actual port
+- `getSocksPort(binder)`: 诊断用, 取 actual port
+- `stopSocks(binder)`: 停 SOCKS5 server, **pingBinder 死了静默跳过**
+
+#### IDE 端 - ShizukuConnection 修改
+
+- 加字段 `@Volatile socksControlBinderRef: IBinder?` + `socksControlTransact = SocksControlTransact()`
+- `attachViaSocks` 改走 binder transact (拿 binder → 校验 port → 调 setSocksPort
+  拿 actualPort → 保留 binderRef → Socks5Client 连 actualPort)
+- `detach()` 加 stopSocks 兜底
+- `release()` 加 stopSocks 兜底 (sync)
+
+#### host 端 - IdeShizukuSocksUserService 修改
+
+- `onBind` 改返 `socksControlBinder` (替代 `noopBinder`)
+- 新增 `socksControlBinder: IBinder` 内部类 (Binder 子类) 处理 3 个 code
+- `handleSetSocksPort(requested, reply)`: 校验 1..65535 或 0, 停老 server
+  启新 server, 写 actualPort
+- `handleStopSocks(reply)`: 停 server, 设 actualSocksPort = -1
+- companion object 加 4 const (3 code + DESCRIPTOR)
+
+### 12y+13c.3 - 测试矩阵
+
+| 场景 | 旧行为 | 新行为 |
+|------|--------|--------|
+| 默认 39939 | 走 39939 | 走 39939 (兼容) |
+| 用户配 50000 | 走 39939 (BUG) | 走 50000 |
+| 端口 0 (OS 选) | 不支持 | OS 选随机 |
+| 多 IDE attach 同 host | 端口冲突 | 动态 port, OK |
+| detach 后再 attach | port 仍占用 (leak) | port 释放, OK |
+| Socks5 server 启失败 | binder 死挂 | host 端写 exception, IDE 端 readException 抛 IOException |
+
+### 12y+13c.4 - 副作用
+
+- IDE 端 Socks 路径的 `settings.shizuku.socksPort = 50000` 配置**真正生效**
+  (之前完全无效)
+- host 端 IdeShizukuSocksUserService.onBind 返真 binder (替代 noopBinder),
+  Shizuku 13+ binder 协议正确
+- 多 IDE attach 同一 host app 不再端口冲突
+- detach / release 真正释放 host 端 SOCKS5 server
+- 默认端口 39939 保持, 端到端默认行为不变
+
+### 12y+13c.5 - 限制
+
+- 沙箱无 gradle, 不能跑完整 build, 依赖 Phase 7 BuildTimeInjector 端到端验证
+- host 端 SOCKS5 server 走 `127.0.0.1:port` (host 进程 loopback), IDE 端
+  需走 `adb reverse` (Socks 路径依赖此假设)
+- Shizuku 14+ 走真 `transferFileDescriptor` 后, Socks 路径仍走 user service
+  (底层 fd transport 走 Shizuku 14+ 原生 API 替换, Phase 13d TODO)
+
+## 新增/修改文件 (Phase 12y + 13c)
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 增 | `core/app/.../shizuku/SocksControlTransact.kt` (setSocksPort/getSocksPort/stopSocks 静态方法) |
+| 改 | `core/app/.../impl/ShizukuConnection.kt` (import + 字段 + attachViaSocks 改 transact + detach/release 释放) |
+| 改 | `ide-debugger-host/.../IdeShizukuSocksUserService.kt` (onBind 返真 binder + 3 transact code + handleSetSocksPort/handleStopSocks) |
