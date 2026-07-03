@@ -1503,3 +1503,575 @@ CODE_STOP_SOCKS (3): 停 SOCKS5 server
 | 增 | `core/app/.../shizuku/SocksControlTransact.kt` (setSocksPort/getSocksPort/stopSocks 静态方法) |
 | 改 | `core/app/.../impl/ShizukuConnection.kt` (import + 字段 + attachViaSocks 改 transact + detach/release 释放) |
 | 改 | `ide-debugger-host/.../IdeShizukuSocksUserService.kt` (onBind 返真 binder + 3 transact code + handleSetSocksPort/handleStopSocks) |
+
+---
+
+# Phase 13d - Shizuku Binder 路径留 TODO 文档化 (commit `8f8288ab`)
+
+## 真问题
+
+`ShizukuConnection.attachViaBinder` 走 Shizuku binder IPC 推 JDWP fd, **Shizuku
+13+ 没真 `transferFileDescriptor`** (13.x 没暴露, 14+ 才实装), 当前 fallback
+走 `UserServiceArgs` + Socks (Phase 12y+13c 已修)。
+
+代码层 `attachViaBinder` 留有未完善 TODO, 当时是为了 Phase 12y+13c 之前 Binder
+路径能编译通过, 实际跑会失败。
+
+## 修法
+
+不改实现, 留清晰的 TODO 文档化:
+
+- `// TODO Phase 13d: Shizuku 14+ transferFileDescriptor 真路径`
+- `// 当 Shizuku 14 release 后, 走 BinderTransportService user service 直接 transferFileDescriptor`
+- `// 14+ 之前 fallback 走 Socks 路径 (Phase 12y+13c) 或 WifiAdb (Phase 13a)`
+- `// 详见 .claude/phase13d.md`
+
+## 副作用
+
+- 代码意图清晰, 后续维护者一看就懂 Binder 路径的限制
+- 编译通过, 端到端不影响 (走 Socks / WifiAdb fallback)
+
+## 限制
+
+- Shizuku 14+ 真路径要等 Shizuku 14 release 后实装
+- Phase 13d 后续 13l 跑测试 verify 时, 会 mock 测 fallback 路径
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/ShizukuConnection.kt` (`attachViaBinder` TODO 注释更新 + 文档化) |
+| 增 | `.claude/phase13d.md` (Phase 13d 详细 spec) |
+
+---
+
+# Phase 13e - InnetVmAdbConnection VM 慢启动 5s poll window (commit `364a794c`)
+
+## 真问题
+
+Innet VM 启动慢 (3-5s), `adb connect <host>:<port>` 立即返 OK, 但 `adb devices`
+要等 VM ADB daemon 起来后才列 device。如果 runPreConnectCheck 立即 `adb devices`,
+会假阳性列不上 → ConnectionError.DeviceNotFound 误报。
+
+## 修法
+
+`InnetVmAdbConnection.runPreConnectCheck` 加 **5s poll window**:
+
+```kotlin
+companion object {
+    const val VM_STARTUP_POLL_WINDOW_MS = 5_000L
+    const val VM_STARTUP_POLL_STEP_MS = 500L
+}
+
+// runPreConnectCheck:
+adbConnect(host, port)                              // 一次 connect
+repeat(10) {                                        // 10 × 500ms = 5s
+    Thread.sleep(VM_STARTUP_POLL_STEP_MS)
+    if (isVmInDevicesList(cfg)) return  // 找到了, 提前返
+}
+throw ConnectionError.DeviceNotFound(...)
+```
+
+新增 `isVmInDevicesList(cfg)` 私有方法, `adb devices` 输出 `Regex("\\s+")`
+split 拿 [0] serial + [1] state, 优先匹配 `cfg.adbSerial`, fallback 匹配
+`<host>:<port>`。
+
+## 副作用
+
+- Innet VM 启动慢场景: 不再误报 DeviceNotFound
+- VM 没启场景: 5s 后返 DeviceNotFound (明确错误)
+- VM 已启场景: 立即返 (200ms 内)
+
+## 限制
+
+- 5s 硬编码, 没暴露配置 (跟 13a Shizuku 4 子路径探测对齐, 不暴露 6 connection
+  的微调参数)
+- 没跑真机 e2e (沙箱无设备), Phase 10 验证
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/InnetVmAdbConnection.kt` (runPreConnectCheck 5s poll + isVmInDevicesList 私有方法 + 2 companion const) |
+
+---
+
+# Phase 13f - UsbLanConnection 多 transport 列解析 + unauthorized 友好错误 (commit `82d00a2f`)
+
+## 真问题
+
+`adb devices -l` 输出格式 Android 11+ 多了 transport-id 列:
+
+```
+<serial> <state> [<transport-id>]
+```
+
+旧代码 `split(" ")` 拿 [0]=serial, [1]=state, **Android 11+ 会把
+transport-id 错当 state** (例如 `device 1` 当作 state=`1` 而不是 `device`)。
+
+`unauthorized` 状态: 旧错误是 raw `"device unauthorized"`, 用户看不懂, 要
+给具体修复指引。
+
+## 修法
+
+`UsbLanConnection.runPreConnectCheck` 重写:
+
+```kotlin
+private inner class DeviceEntry(val serial: String, val state: String, val transportId: String?)
+
+// split Regex \s+, 拿 [0]=serial + [1]=state + [2]=transport-id
+val parts = line.trim().split(Regex("\\s+"))
+if (parts.size < 2) continue
+val entry = DeviceEntry(parts[0], parts[1], parts.getOrNull(2))
+
+// 状态友好错误
+when (entry.state) {
+    "unauthorized" -> throw ConnectionError.PermissionDenied(
+        "Tap 'Always allow from this computer' on the device's " +
+        "'Allow USB debugging' dialog, then re-try."
+    )
+    "offline" -> throw ConnectionError.IoFailure(
+        "Re-plug the USB cable or `adb disconnect && adb connect` for LAN."
+    )
+    "no permissions" -> throw ConnectionError.PermissionDenied(
+        "Check `adb kill-server && adb start-server` as root (udev rules on Linux)."
+    )
+}
+```
+
+## 副作用
+
+- Android 11+ device 列解析正确
+- unauthorized / offline / no permissions 给具体修复指引
+- LAN 模式 (无 transport-id) 兼容 (parts.size==2)
+- USB 模式 (有 transport-id) 兼容 (parts.size==3)
+
+## 限制
+
+- 没跑真机 e2e (沙箱无设备), Phase 10 验证
+- 错误提示只英文, 待 i18n (Phase 11 收尾)
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/UsbLanConnection.kt` (runPreConnectCheck 重写 + DeviceEntry inner class + 3 状态友好错误) |
+
+---
+
+# Phase 13g - InnetVmSocksConnection SOCKS5 错误细分 (commit `0a38de3d`)
+
+## 真问题
+
+`InnetVmSocksConnection.mapAttachError` / `mapConnectError` 之前只 catch
+`IOException` 返 `IoFailure`, 用户拿不到 SOCKS5 协议层具体原因:
+
+- SOCKS5 server 拒 (REP 0x01-0x08)
+- 网络不通 (REP 0x03/0x04)
+- TTL 过期 (REP 0x06)
+- 协议错 (VER / ATYP / domain too long)
+- JDWP 14 字节握手失败
+- socket timeout vs connect refused
+
+## 修法
+
+按 SOCKS5 RFC 1928 REP code + 协议错细分 8 个 ConnectionError 分支:
+
+| 触发条件 | ConnectionError |
+| -------- | --------------- |
+| `SocketTimeoutException` | `Timeout` |
+| `ConnectException` (SOCKS server 没起) | `NetworkUnreachable` |
+| SOCKS5 REP 0x05 Connection refused | `IoFailure` |
+| SOCKS5 REP 0x03 / 0x04 Network/Host unreachable | `NetworkUnreachable` |
+| SOCKS5 REP 0x06 TTL expired | `Timeout` |
+| SOCKS5 server returned method= 非 0x00 | `PermissionDenied` |
+| VER / ATYP / domain too long | `IoFailure` |
+| "Bad handshake" / "EOF during handshake" (JDWP 14 字节) | `JdwpHandshakeFailed` |
+| 其他 | `IoFailure` / `Timeout` |
+
+`Socks5Client` 走 `java.net.Socket`, 内部读 32 字节 header, 解析 VER/REP/RSV/ATYP/BND.ADDR/BND.PORT。
+
+## 副作用
+
+- 用户拿到具体 ConnectionError 类别, UI 层能针对性重试/提示
+- Socks 路径端到端排错变简单
+- 跟其他 4 connection mapXxxError 同款细分模式 (Phase 6 收齐)
+
+## 限制
+
+- SOCKS5 server 走 127.0.0.1:port 跨进程不通 (P12j 修的"端到端跑通"实际没真机验证)
+- 沙箱无设备 e2e, Phase 10 验证
+- 没加 SOCKS5 auth (RFC 1929) 支持, 当前假设无 auth
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/InnetVmSocksConnection.kt` (mapAttachError + mapConnectError 升级到 8 分支细分) |
+
+---
+
+# Phase 13h - AdbRunner / DefaultRootClient 抽公共 ProcessRunner (commit `9fa345a9`)
+
+## 真问题
+
+`AdbRunner` 和 `RootClient` 各自实现 ProcessBuilder 包装:
+
+- 同步 `run(cmd, timeoutMs)`: 各有 daemon thread (out/err) + CountDownLatch + destroyForcibly
+- 长生命周期 `startLive(cmd)`: 各有 stderr drain + destroyForcibly
+
+双份代码 ≈ 200 行, 容易漂移 (例如 root 路径忘了 stderr drain 会 kernel
+pipe buffer deadlock, adb 路径修了 root 没修)。
+
+## 修法
+
+新建 `core/app/.../process/ProcessRunner.kt` 公共类:
+
+```kotlin
+data class ProcessResult(val exitCode: Int, val stdout: String, val stderr: String) {
+    val isSuccess get() = exitCode == 0
+}
+
+data class LiveProcess(
+    val inputStream: InputStream,
+    val outputStream: OutputStream,
+    val errorStream: InputStream,
+    private val onClose: () -> Unit,
+) : Closeable {
+    override fun close() = onClose()
+}
+
+class ProcessRunner {
+    fun run(cmd: List<String>, timeoutMs: Long, redirectErrorStream: Boolean = true): ProcessResult
+    fun startLive(cmd: List<String>): LiveProcess
+}
+```
+
+- `run`: 3 daemon thread (out/err/wait) + CountDownLatch + destroyForcibly
+- `startLive`: 内部 stderr drain (防 kernel pipe buffer deadlock) + destroyForcibly + waitFor 2s 兜底
+- `LiveProcess` 内部用 `java.lang.Process` 引用, `close()` 触发 destroy
+
+`AdbRunner` / `DefaultRootClient` 改用 `ProcessRunner`:
+
+- `DefaultAdbRunner(processRunner: ProcessRunner = ProcessRunner())`
+- `DefaultRootClient(processRunner: ProcessRunner = ProcessRunner())`
+- 内部 `AdbResult.fromProcessResult(r)` 适配
+- `openJdwpStream` 走 `processRunner.startLive(listOf(suBin, "-c", "socat - UNIX-CONNECT:@jdwp"))`
+  拿 LiveProcess 喂 RootJdwpStream
+- 删 AdbRunner 的 import `ILogger` (之前已删, 重新加)
+- 删 RootClient 的 import `StandardCharsets` (不再用)
+
+## 副作用
+
+- 双份 200 行 → 1 份 ~100 行 + 2 个 thin wrapper
+- stderr drain 行为 2 个 connection 对齐 (修一个全部修)
+- 测试容易 (mock ProcessRunner)
+- 行为不变, 端到端兼容
+
+## 限制
+
+- `startLive` 当前 close 是 sync waitFor 2s, 长命令可能不等 (设计上 OK, 因为
+  RootJdwpStream / AdbForwardStream 走 EOF 触发)
+- 没加 process group (ProcessBuilder.directory(null)) 优化, 跨平台留默认
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 增 | `core/app/.../process/ProcessRunner.kt` (公共类 + ProcessResult + LiveProcess) |
+| 改 | `core/app/.../adb/AdbRunner.kt` (改用 ProcessRunner + DefaultAdbRunner 构造 + AdbResult.fromProcessResult) |
+| 改 | `core/app/.../root/RootClient.kt` (改用 ProcessRunner + DefaultRootClient 构造 + 删 execWithTimeout + 删 import) |
+
+---
+
+# Phase 13i - AidlSocketConnection startReadLoopFromSocket 去重 (commit `6a2c15ec`)
+
+## 真问题
+
+`AidlSocketConnection` 有 `startReadLoopFromSocket(sock: Socket)` thin wrapper
+内部 `startReadLoopFromStream(sock.getInputStream())`, 走 JdwpClient 后
+不调了 (Phase 12m), 变成死代码。
+
+## 修法
+
+- 删 `startReadLoopFromSocket(sock)`
+- 留 `startReadLoopFromStream(input)`
+- 注释说明 "thin wrapper for socket, current path: JdwpClient 接管 read loop,
+  留 startReadLoopFromStream for 兼容 / 测试"
+
+## 副作用
+
+- 删 10 行死代码
+- 行为不变 (走 JdwpClient)
+- 跟 Phase 5 其他 4 connection 对齐 (5 个 connection 都不再有 startReadLoop 死代码)
+
+## 限制
+
+- 无
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/AidlSocketConnection.kt` (删 startReadLoopFromSocket + 注释) |
+
+---
+
+# Phase 13j - HELLO 协议 process= 字段兼容 multi-process host (commit `0312d0b7`)
+
+## 真问题
+
+`ide-debugger-host` 的 `HostAttachAgentBootstrap` 走 `ContentProvider`
+自动 attach, ContentProvider 默认在主进程; 但如果 host app Manifest 配
+`android:process=":debug"`, ContentProvider 会跑在 `:debug` 进程。
+
+HELLO 协议只带 `pkg= + pid= + sdk=`, IDE 端不知道 host 跑在哪个 process,
+JDWP attach 跟 ContentProvider 进程对齐才能 attach 成功, 不对齐会失败
+(JDWP transport 默认 attach 调用方进程的 JDWP daemon)。
+
+## 修法
+
+**host 端** - HELLO 协议加 `process=<processName>` 字段:
+
+```java
+String processName = android.app.Application.getProcessName();
+if (processName == null || processName.isEmpty()) {
+    processName = ctx.getPackageName();
+}
+String hello = "HELLO pkg=" + ctx.getPackageName()
+        + " pid=" + android.os.Process.myPid()
+        + " process=" + processName
+        + " sdk=" + Build.VERSION.SDK_INT
+        + "\n";
+```
+
+**IDE 端** - `HostBridgeServer.HostHello` 加 `processName: String?` 字段,
+`parseHello` 解析 `process=`, 收到 HELLO 后 log warn:
+
+```kotlin
+if (hello.processName != null && hello.processName != hello.pkg) {
+    log.warn(
+        "HELLO from non-main process '{}' (pkg={} pid={}). " +
+        "ContentProvider is in :debug / :remote process; " +
+        "JDWP attach will fail. " +
+        "Fix host app Manifest: move ContentProvider declaration to default process.",
+        hello.processName, hello.pkg, hello.pid
+    )
+}
+```
+
+## 副作用
+
+- multi-process host app 场景: IDE 端能识别并 log warn
+- 单 process host app 场景: 行为不变 (processName == pkg, 跳过 warn)
+- HELLO 协议向后兼容 (旧 IDE 不解析 process= 字段忽略)
+
+## 限制
+
+- 当前只 log warn, 不 fail attach (用户可能不在意)
+- 后续 Phase 可加 attach-time check, 失败明确提示
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `ide-debugger-host/.../HostAttachAgentBootstrap.java` (HELLO 加 process= + Application.getProcessName) |
+| 改 | `core/app/.../host/HostBridgeServer.kt` (HostHello 加 processName + parseHello 解析 + 收到后 log warn) |
+
+---
+
+# Phase 13k - HELLO 协议 buildVersion= 字段用于诊断 (commit `d8fe3c08`)
+
+## 真问题
+
+HELLO 协议没有 host 端 build 版本信息, 出现问题 (例如 ContentProvider 跑在
+非主进程) 不知道用户用哪个 host build, 排错慢。
+
+之前想用 settings 跨进程传递 (host 端 ContentProvider 读 IDE settings), 实测
+发现 host 端 ContentProvider 不需要 IDE settings (retry 是 IDE 端跑), 加
+build version 字段用于诊断更直接。
+
+## 修法
+
+**host 端** - HELLO 协议加 `buildVersion=<v>` 字段 (Phase 13k 留 TODO 文档化,
+当前 hardcode `"v1"`):
+
+```java
+String buildVersionField = "v1"; // TODO Phase 13k: 实际 host app build version
+String hello = "HELLO pkg=" + ctx.getPackageName()
+        + " pid=" + android.os.Process.myPid()
+        + " process=" + processName
+        + " sdk=" + Build.VERSION.SDK_INT
+        + " buildVersion=" + buildVersionField
+        + "\n";
+```
+
+**IDE 端** - `HostBridgeServer.HostHello` 加 `buildVersion: String?` 字段,
+`parseHello` 解析 `buildVersion=`。
+
+## 副作用
+
+- HELLO 协议诊断信息更丰富
+- 后续 host build 升 v2, IDE 端 log 能区分
+- HELLO 协议向后兼容
+
+## 限制
+
+- 当前 buildVersion 字段 hardcode "v1", TODO 后续接 host app build config
+  (例如读 BuildConfig.VERSION_NAME)
+- IDE 端当前不强制校验 buildVersion, 仅 log 记录
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `ide-debugger-host/.../HostAttachAgentBootstrap.java` (HELLO 加 buildVersion= + TODO 注释) |
+| 改 | `core/app/.../host/HostBridgeServer.kt` (HostHello 加 buildVersion + parseHello 解析) |
+
+---
+
+# Phase 5 - 5 connection startReadLoop 死代码清理 (commit `805728f0`)
+
+## 真问题
+
+6 个 connection (AidlSocket / Shizuku / Root / InnetVmSocks / InnetVmAdb / UsbLan)
+其中 5 个 (除 AidlSocketConnection 留了 startReadLoopFromStream thin wrapper
+给 Phase 13i 处理) 各有 private `startReadLoop(sock)` 或 `startReadLoopFromStream(input)`,
+Phase 12m 之后 JdwpClient 接管 read loop, 这些方法不再调, 变成死代码。
+
+## 修法
+
+- AdbForwardConnection: 删 startReadLoop
+- ShizukuConnection: 删 startReadLoop + startReadLoopFromStream
+- RootConnection: 删 startReadLoop
+- InnetVmSocksConnection: 删 startReadLoop (P5 之前 P13g 已改 mapXxxError)
+- InnetVmAdbConnection: 删 startReadLoop
+- UsbLanConnection: 删 startReadLoop
+- AidlSocketConnection: Phase 13i 单独处理 (startReadLoopFromSocket thin wrapper)
+
+每个删法: 删方法 + 注释说明 "JdwpClient 接管 read loop"。
+
+## 副作用
+
+- 删 5 个 connection × ~10 行 = 50 行死代码
+- 行为不变 (走 JdwpClient)
+- IDE 端代码更清晰
+
+## 限制
+
+- 无
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/AdbForwardConnection.kt` (删 startReadLoop) |
+| 改 | `core/app/.../impl/ShizukuConnection.kt` (删 startReadLoop + startReadLoopFromStream) |
+| 改 | `core/app/.../impl/RootConnection.kt` (删 startReadLoop) |
+| 改 | `core/app/.../impl/InnetVmSocksConnection.kt` (删 startReadLoop) |
+| 改 | `core/app/.../impl/InnetVmAdbConnection.kt` (删 startReadLoop) |
+| 改 | `core/app/.../impl/UsbLanConnection.kt` (删 startReadLoop) |
+
+---
+
+# Phase 6 - 5 connection mapXxxError 同款细分模式收齐 (commit `264be3ed`)
+
+## 真问题
+
+5 个 connection (AdbForward / Shizuku / Root / AidlSocket / InnetVmSocks)
+的 `mapAttachError` / `mapConnectError` 实现风格各异:
+
+- InnetVmSocks: Phase 13g 升级到 8 分支细分
+- AdbForward / Shizuku / Root / AidlSocket: 旧版只 catch IOException → IoFailure,
+  没细分
+- ConnectionError enum 缺 `AddressInUse` / `DeviceNotFound`
+
+## 修法
+
+### ConnectionError enum 加 2 个
+
+```kotlin
+enum class ConnectionError(...) {
+    // ... 旧的 6 个
+    AddressInUse(retryable = false),       // 端口被占用, 重试无效
+    DeviceNotFound(retryable = true),      // 设备列表里没找到, 重试可能 OK
+    // ... 旧枚举
+}
+
+fun userMessage(): String = when (this) {
+    NetworkUnreachable -> "网络不可达, 请检查网络 / VM / device 状态"
+    AddressInUse -> "端口被占用, 请换端口或关掉占用进程"
+    DeviceNotFound -> "目标设备未找到, 请确认 adb devices 列出"
+    PermissionDenied -> "权限不足"
+    JdwpHandshakeFailed -> "JDWP 握手失败"
+    Timeout -> "超时"
+    IoFailure -> "IO 失败"
+    Unknown -> "未知错误"
+}
+```
+
+### 5 个 connection mapXxxError 升级
+
+| Connection | 新增分支 |
+| ---------- | -------- |
+| AdbForwardConnection | "address already in use" / "cannot bind" → AddressInUse; "device not found" → DeviceNotFound; "unauthorized" → PermissionDenied; ConnectException → NetworkUnreachable; SocketTimeoutException → Timeout |
+| ShizukuConnection | "shizuku" + "denied" / "permission" → PermissionDenied; "shizuku service not running" / "shizuku binder dead" → IoFailure; "transferFileDescriptor" → IoFailure (Phase 13d fallback); "SocksControl" → IoFailure (Phase 12y ISocksControl) |
+| RootConnection | "permission denied" / "not allowed" → PermissionDenied; "socat" + "not found" / "no jdwp socket" → IoFailure |
+| AidlSocketConnection | "EADDRINUSE" → AddressInUse; "invalid HELLO" → IoFailure |
+| InnetVmSocksConnection | Phase 13g 已升级 |
+
+## 副作用
+
+- 6 个 connection 错误细分模式统一
+- ConnectionError enum 收齐 8 个
+- UI 层拿到 ConnectionError 能针对性重试/提示
+- 行为向前兼容 (旧 catch 走 IoFailure fallback)
+
+## 限制
+
+- 错误匹配走 `message.contains()` substring, 不精确匹配 (后续可改 enum sealed class)
+- 没跑真机 e2e 验证 8 个错误分支, Phase 10 验证
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../connection/ConnectionError.kt` (加 AddressInUse + DeviceNotFound + userMessage 中文) |
+| 改 | `core/app/.../impl/AdbForwardConnection.kt` (mapConnectError + mapAttachError 升级) |
+| 改 | `core/app/.../impl/ShizukuConnection.kt` (mapXxxError 升级) |
+| 改 | `core/app/.../impl/RootConnection.kt` (mapXxxError 升级) |
+| 改 | `core/app/.../impl/AidlSocketConnection.kt` (mapXxxError 升级) |
+
+---
+
+# Phase 8 - 子项目 11 部署检查表 review (commit `d90c4f1c`)
+
+## 真问题
+
+`docs/superpowers/specs/2026-07-02-subproject-11-deployment-checklist.md` 是
+子项目 11 部署检查表, 跟 Phase 12x ~ Phase 13k 11 个新 phase 同步要 review。
+
+## 修法
+
+加 3 个新章节:
+
+- §9 Phase 13a-13k 验证 (9.1 ~ 9.9): 11 个 phase 验证步骤
+- §10 Phase 5/6 refactor 验证: 死代码清理 + mapXxxError 收齐 验证步骤
+- §11 限制与待办 (Phase 7 / 10 / 13l + Shizuku 14+): 4 个未完成项
+
+## 副作用
+
+- 部署检查表跟代码同步
+- 后续 Phase 7 / 10 / 13l 验证有 checklist
+
+## 限制
+
+- 沙箱无 gh CLI 不能直接 PATCH PR
+- 部署检查表 review 是文档, 端到端验证仍需 Phase 7 (gradle) / Phase 10 (真机)
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `docs/superpowers/specs/2026-07-02-subproject-11-deployment-checklist.md` (§9-§11 追加) |
+
