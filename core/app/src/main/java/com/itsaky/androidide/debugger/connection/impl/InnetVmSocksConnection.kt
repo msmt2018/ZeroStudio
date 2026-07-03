@@ -214,23 +214,12 @@ class InnetVmSocksConnection(
 
     // ---- 私有 ----
 
-    private fun startReadLoop(sock: Socket) {
-        Thread({
-            try {
-                val input = sock.getInputStream()
-                val buf = ByteArray(8192)
-                while (!sock.isClosed) {
-                    val n = try { input.read(buf) } catch (e: IOException) { -1 }
-                    if (n <= 0) break
-                    val chunk = ByteArray(n)
-                    System.arraycopy(buf, 0, chunk, 0, n)
-                    incoming.tryEmit(chunk)
-                }
-            } catch (t: Throwable) {
-                log.debug("InnetVmSocksConnection: read loop ended: {}", t.message)
-            }
-        }, "InnetVmSocksConnection-read").apply { isDaemon = true; start() }
-    }
+    /**
+     * Phase 5 死代码清理: 之前留 startReadLoop(sock) 是给 onAttached 回调用,
+     * 跟 JdwpClient 内部 read 抢同一 input stream 导致字节重复 emit, Phase 12m
+     * 之后全部 connection 不再调 startReadLoop. 删, 留注释说明 JdwpClient
+     * 接管 socket 内部 read, BaseDebugConnection 子类不要再走 startReadLoop.
+     */
 
     /**
      * **Phase 13g 增强**: 之前 mapConnectError 一律 IOException -> IoFailure,

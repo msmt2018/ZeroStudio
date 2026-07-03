@@ -551,28 +551,17 @@ class ShizukuConnection(
 
     // ---- 私有 ----
 
-    private fun startReadLoop(sock: Socket) {
-        startReadLoopFromStream(sock.getInputStream())
-    }
-
-    private fun startReadLoopFromStream(input: java.io.InputStream) {
-        // 子项目 4: LocalSocket 路径下, attach() 后调 startReadLoopFromStream(localInput)
-        // 守护线程读 input, 把每段字节切到 flow 上
-        Thread({
-            try {
-                val buf = ByteArray(8192)
-                while (currentState() is ConnectionState.Attached) {
-                    val n = try { input.read(buf) } catch (e: IOException) { -1 }
-                    if (n <= 0) break
-                    val chunk = ByteArray(n)
-                    System.arraycopy(buf, 0, chunk, 0, n)
-                    incoming.tryEmit(chunk)
-                }
-            } catch (t: Throwable) {
-                log.debug("ShizukuConnection: read loop ended: {}", t.message)
-            }
-        }, "ShizukuConnection-read").apply { isDaemon = true; start() }
-    }
+    /**
+     * Phase 5 死代码清理: 之前留 startReadLoop(sock) 跟 startReadLoopFromStream(input)
+     * 给 attach 完成后调, 跟 JdwpClient 内部 read 抢同一 input stream 导致字节
+     * 重复 emit, Phase 12m 之后全部 connection 不再调. 删, 留注释说明
+     * JdwpClient 接管 socket 内部 read, BaseDebugConnection 子类不要再走
+     * startReadLoop.
+     *
+     * ShizukuConnection 的 incoming SharedFlow 仍保留 (receiveJdwp() 暴露给
+     * 上层 send/receive 路径用), 但没有上游 emit, 等于 dead flow, Phase 10
+     * e2e 测试时再决定要不要删.
+     */
 
     private fun mapConnectError(t: Throwable): ConnectionError = when (t) {
         is IOException -> ConnectionError.IoFailure(t)

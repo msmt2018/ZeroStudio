@@ -332,23 +332,16 @@ abstract class AdbForwardConnection(
 
     // ---- 私有 ----
 
-    private fun startReadLoop(sock: Socket) {
-        Thread({
-            try {
-                val input = sock.getInputStream()
-                val buf = ByteArray(8192)
-                while (!sock.isClosed) {
-                    val n = try { input.read(buf) } catch (e: IOException) { -1 }
-                    if (n <= 0) break
-                    val chunk = ByteArray(n)
-                    System.arraycopy(buf, 0, chunk, 0, n)
-                    incoming.tryEmit(chunk)
-                }
-            } catch (t: Throwable) {
-                log.debug("{}: read loop ended: {}", type, t.message)
-            }
-        }, "$type-read").apply { isDaemon = true; start() }
-    }
+    /**
+     * Phase 5 死代码清理: 之前留 startReadLoop(sock) 给 onAttached 回调用,
+     * 跟 JdwpClient 内部 read 抢同一 input stream 导致字节重复 emit, Phase 12m
+     * 之后全部 connection 不再调. 删, 留注释说明 JdwpClient 接管 socket 内部
+     * read, BaseDebugConnection 子类不要再走 startReadLoop.
+     *
+     * AdbForwardConnection 的 incoming SharedFlow 仍保留 (receiveJdwp() 暴露
+     * 给上层 send/receive 路径用), 但没有上游 emit, 等于 dead flow, Phase 10
+     * e2e 测试时再决定要不要删.
+     */
 
     protected open fun mapConnectError(t: Throwable): ConnectionError = when (t) {
         is IOException -> ConnectionError.IoFailure(t)
