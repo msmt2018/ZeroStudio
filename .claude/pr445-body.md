@@ -2485,5 +2485,94 @@ serverSocket, **adb forward 规则还留在 adb server 列表里**。
 (真机 e2e) / Phase 13l (SubPathCapability 测试) 沙箱无 gradle / 无设备 / 无
 test runner, 留 TODO 文档化等有环境的开发者补。
 
+---
+
+# Phase 20 续: UI 状态表现层 + 调试中间件核心 全面重构
+
+> 评估 + 补齐 Symbol & DWARF Manager + 重构行控件 + 重做 4 类断点 + 内存视图
+
+## 0. 评估结论
+
+### UI 状态表现层
+| 子层 | 评估 |
+|------|------|
+| Code Editor (sora-editor + BreakpointSidebar) | 基本可用, 缩放下偶发抖动 |
+| Breakpoint View (BreakpointListFragment + Manager) | 单源已立, 缺 Native 硬件断点列、4 类断点管理入口 |
+| Variables/Memory View (Variables/Watches/CallStack) | 局部实现, **没有 Memory View** ← Phase 20 补齐 |
+
+### 调试中间件核心 (用户重点)
+| 子层 | 评估 | Phase 20 |
+|------|------|----------|
+| JDI Front-End (Debugger + JdwpClient + EventRequest) | ✅ 较为完整 | 不动 |
+| Symbol & DWARF Manager | ❌ **0 实现** | ✅ **新增完整模块** |
+| DebugSession 状态机 | ✅ 完整 | 不动 |
+
+## 1. Symbol & DWARF Manager (新增模块) - 1a6d0e8b
+
+```
+ide-debugger/src/main/java/com/zerostudio/debugger/symbol/
+├── SourceNameMapper.java       — 统一门面 (3 类解析器优先级链)
+├── JavaR8MappingResolver.java  — R8/ProGuard mapping.txt 4 列解析
+└── DwarfSymbolResolver.java    — ELF .debug_info / .debug_line / .debug_aranges
+
+ide-debugger/src/main/java/com/zerostudio/debugger/api/
+├── MappedSourceLocation.java   — (raw, orig, source, kind) 不可变结果
+├── NativeAddress.java          — (module, address, offset, functionName) 三元组
+└── MemoryReadResult.java       — 内存读取结果
+```
+
+- `SourceNameMapper.mapJava(cls, method, field, src)` — 类名支持 `Lcom/example/A;` JNI 形式归一化
+- `SourceNameMapper.mapNative(addr)` — 无 DWARF 时返回 `NATIVE_UNKNOWN`, 不抛错
+- `Debugger.symbolMapper()` / `readMemoryAsync()` 暴露给 UI
+
+测试: 4 个测试类, 17 个用例 (4 大类覆盖)
+
+## 2. UI 重构 (0f59fcfc)
+
+### 新行控件 `BreakpointColumnView`
+- 镜像 sora-editor `EditorRenderer` 行号列设计 (缩放/滚动/内容变化/per-row separator)
+- 14 种状态圆点 (NORMAL/INVALID/VERIFIED/CONDITION/LOG/DISABLED/HIT/EXCEPTION/
+  FIELD_WATCHPOINT/METHOD/DEPENDENT/TEMPORARY + 2 新增)
+- 命中行水平高亮 (整行贯穿, 区别于单点图标)
+- 无障碍支持 (ACTION_CLICK + ACTION_LONG_CLICK)
+- `layoutToMatchLineColumn()` 自动对齐到行号列左侧, 缩放时重做
+
+### 高斯模糊半透明磨砂弹窗
+- `BreakpointTypePickerDialog` — 全屏 Dialog, `FLAG_BLUR_BEHIND` (API 31+), 4 大类 + 13 子类型
+- `BreakpointDetailDialog` — 动态 UI, 按 `BreakpointTypeCatalog.Entry` 切换:
+  element / condition / log / hit count / method entry-exit / watch access-mod /
+  exception caught-uncaught / dependent dropdown / inline offset / instance id
+- `bg_dialog_frosted_glass.xml` — 圆角 16dp, 渐变 + 高光描边
+
+### 4 类断点全量实现
+| 类 | 实现 |
+|----|------|
+| 第一类 (Gutter 5) | `BreakpointTypePickerDialog` → `BreakpointDetailDialog` |
+| 第二类 (Variables 2 + Instance 1) | `VariableContextMenu` 长按变量 |
+| 第三类 (Window 3) | `BreakpointListFragment` 顶栏新增 `+` 按钮 |
+| 第四类 (Browser 3) | 接口预留, Phase 21+ 接通 WebView |
+
+### 顺带修复 Bug
+- `BreakpointSidebar.onDraw` 越界 (firstVisibleRow=-1 → clamp 0)
+- `BreakpointTypePicker.dismiss` ghost anchor WindowLeaked (WeakReference 二次清理)
+- `BreakpointConditionDialog.applyChanges` 顺序错位 (`applyAdvancedOptions` 必须先于 `setCondition`)
+
+### Memory View (P-UI-2 评估缺口)
+- `MemoryFragment` + `fragment_memory.xml` — hex dump 16 字节/行
+- `Debugger.readMemoryAsync()` (Phase 21+ 真实 JDWP 接入, 当前 stub)
+
+## 3. 关键 Commit
+
+| Commit | 范围 | Files | +/– |
+|--------|------|-------|-----|
+| `1a6d0e8b` | phase20-sym-mgr | 11 | +1606 |
+| `0f59fcfc` | phase20-ui | 42 | +3155 / -148 |
+
+## 4. Phase 21+ 待办 (沙箱无环境)
+
+- DWARF 完整覆盖 (压缩段 / DWZ / split-dwarf)
+- 真实 JDWP 内存读取接通
+- WebView Chrome DevTools Protocol 桥接 (第四类断点)
+
 
 
