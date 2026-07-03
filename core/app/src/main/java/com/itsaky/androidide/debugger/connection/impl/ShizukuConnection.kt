@@ -343,10 +343,34 @@ class ShizukuConnection(
     }
 
     /**
-     * 子项目 4 - Binder 路径实装 (跟 InHostPlugin 走同款实现, 因 Shizuku 13+
-     * 限制, transferFileDescriptor 不可用, 走 user service + reverse-connect)。
+     * 子项目 4 - Binder 路径实装。
      *
-     * 唯一区别: transport 名字保留 Binder 供 UI 显示, 底层逻辑复用 InHostPlugin。
+     * **Phase 13d 限制 (留 TODO 文档化)**:
+     *   Shizuku 13+ 把 [rikka.shizuku.Shizuku.transferFileDescriptor] 设 package-private,
+     *   第三方 IDE 端不能直接调 ([ShizukuBinderClient.transferFileDescriptor] 抛
+     *   `UnsupportedOperationException`)。所以 Binder 路径走 fallback: 复用
+     *   [attachViaInHostPlugin] 同款实装 (走 `Shizuku.bindUserService` + host 端
+     *   `HostPluginService` reverse-connect 回 IDE `LocalServerSocket`)。
+     *
+     *   唯一区别: transport 名字保留 Binder 供 UI 显示 (跟 InHostPlugin 区分开),
+     *   底层逻辑复用 InHostPlugin。
+     *
+     * **Shizuku 14+ 真路径 TODO** (Phase 13d 后续):
+     *   1) host 端 user service (e.g. `BinderTransportService`) 跑 root 进程 attach
+     *      host app 的 JDWP agent, open `/proc/<host_pid>/fd/<jdwp_socket>` 拿 fd
+     *   2) host 端 user service 把 fd 写回 Parcel
+     *   3) IDE 端 `ShizukuBinderClient.transferFileDescriptor` 走 Shizuku 14+ 公共
+     *      API (如果官方开放) 拿回 ParcelFileDescriptor
+     *   4) `ShizukuFdTransporter.toSocket(pfd)` 包成 [com.itsaky.androidide.debugger.connection.shizuku.PfdSocket]
+     *   5) 走 JDWP 握手 + VM.Version
+     *
+     *   优先级: 14+ 走真 transferFileDescriptor, 13+ 继续走 InHostPlugin fallback。
+     *
+     * **SocksServiceUserService adapter** (Phase 13d 关联):
+     *   Socks 路径的 user service adapter (`IdeShizukuSocksUserService`) 已在
+     *   Phase 12y + 13c 合并实装 (走 `ISocksControl` binder transact 协议传 port
+     *   + detach 释放)。BInder 路径 14+ 真实现后, 同样需要
+     *   `BinderTransportService` user service (跟 Socks 路径 adapter 风格一致)。
      */
     private suspend fun attachViaBinder(): AttachInfo {
         // 跟 attachViaInHostPlugin 走同款实现
