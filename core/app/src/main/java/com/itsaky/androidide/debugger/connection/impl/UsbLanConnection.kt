@@ -63,6 +63,17 @@ class UsbLanConnection(
      *   - 没配 adbSerial: 任何一台 device 都行 (assertExitCode0 + stdout 含 "device")
      *   - 配了 adbSerial:   那台 serial 必须出现且状态是 "device" (非 "offline" / "unauthorized")
      *
+     * **Phase 13f 修复**:
+     *   1) Android 11+ `adb devices` 输出格式从 `<serial>\t<state>` 变成
+     *      `<serial> <state> <transport-id>` (3 列), 旧实现:
+     *      - endsWith("device") 在没配 adbSerial 路径能用 (transport-id 是数字, 不会
+     *        跟 "device" 冲突)
+     *      - 配 adbSerial 路径 `split(Regex("\\s+"))` 拿 parts[1] == "device" 已对,
+     *        但 parts.size 只判 >= 2, transport-id 列会被忽略
+     *      改成: 统一 split 拿 [0] serial + [1] state, 兼容 2 列 / 3 列
+     *   2) state == "unauthorized" / "offline" / "no permissions" 走特定 IOException
+     *      message (之前一律 generic error, 用户看不出 "请点 '允许 USB 调试'")
+     *
      * 失败抛 IOException 走 [AdbForwardConnection.connect] 的 retry。
      */
     @Throws(IOException::class)
@@ -82,25 +93,84 @@ class UsbLanConnection(
         if (deviceLines.isEmpty()) {
             throw IOException("adb devices: no devices attached (is the device connected via USB / LAN?)")
         }
+        // Phase 13f: 解析每行 [serial, state, transport-id?]
+        // 输出例:
+        //   Android <11:    "emulator-5554\tdevice"
+        //   Android >=11:   "emulator-5554 device 1"  (多 transport)
+        data class DeviceEntry(val serial: String, val state: String, val transportId: String?)
+        val entries = deviceLines.mapNotNull { line ->
+            val parts = line.split(Regex("\\s+"))
+            if (parts.size < 2) null else DeviceEntry(parts[0], parts[1], parts.getOrNull(2))
+        }
+
         if (targetSerial.isNullOrBlank()) {
             // 不指定 serial: 至少要有一台状态是 "device"
-            // adb devices 输出格式: "<serial>\t<state>[ ...]" (serial 跟 state 之间是 tab)
-            // 直接 endsWith("device") 即可 (state 一定是最后非空白部分)
-            val hasReady = deviceLines.any { it.endsWith("device") }
+            val hasReady = entries.any { it.state == "device" }
             if (!hasReady) {
-                throw IOException("adb devices: no device in 'device' state, found: $deviceLines")
+                // Phase 13f: 区分 unauthorized / offline / no permissions 走特定错误
+                val unauthorized = entries.firstOrNull { it.state == "unauthorized" }
+                if (unauthorized != null) {
+                    throw IOException(
+                        "adb devices: serial '${unauthorized.serial}' is 'unauthorized'. " +
+                            "Tap 'Always allow from this computer' on the device's 'Allow USB debugging' dialog, " +
+                            "then re-try."
+                    )
+                }
+                val offline = entries.firstOrNull { it.state == "offline" }
+                if (offline != null) {
+                    throw IOException(
+                        "adb devices: serial '${offline.serial}' is 'offline'. " +
+                            "Re-plug the USB cable or `adb disconnect && adb connect` for LAN."
+                    )
+                }
+                val noPerm = entries.firstOrNull { it.state == "no permissions" }
+                if (noPerm != null) {
+                    throw IOException(
+                        "adb devices: serial '${noPerm.serial}' is 'no permissions'. " +
+                            "Check `adb kill-server && adb start-server` as root (udev rules on Linux)."
+                    )
+                }
+                throw IOException(
+                    "adb devices: no device in 'device' state, found: ${entries.map { "${it.serial}=${it.state}" }}"
+                )
             }
-            log.info("UsbLanConnection: adb devices ok (no specific serial), {} device(s): {}", deviceLines.size, deviceLines)
+            log.info(
+                "UsbLanConnection: adb devices ok (no specific serial), {} device(s): {}",
+                entries.size,
+                entries.map { "${it.serial}=${it.state}" },
+            )
         } else {
             // 指定 serial: 找这台
-            val match = deviceLines.firstOrNull { it.startsWith(targetSerial) }
-                ?: throw IOException("adb devices: serial '$targetSerial' not in list, found: $deviceLines")
-            // 状态列在 serial 后 (tab-separated)
-            val parts = match.split(Regex("\\s+"))
-            if (parts.size < 2 || parts[1] != "device") {
-                throw IOException("adb devices: serial '$targetSerial' state is '${parts.getOrNull(1) ?: "?"}', expected 'device'")
+            val match = entries.firstOrNull { it.serial == targetSerial }
+                ?: throw IOException(
+                    "adb devices: serial '$targetSerial' not in list, found: " +
+                        entries.map { "${it.serial}=${it.state}" }
+                )
+            // Phase 13f: state 走特定错误
+            when (match.state) {
+                "device" -> {
+                    log.info(
+                        "UsbLanConnection: adb devices ok, serial '{}' is 'device' (transport={})",
+                        targetSerial, match.transportId ?: "default",
+                    )
+                }
+                "unauthorized" -> throw IOException(
+                    "adb devices: serial '$targetSerial' is 'unauthorized'. " +
+                        "Tap 'Always allow from this computer' on the device's 'Allow USB debugging' dialog, " +
+                        "then re-try."
+                )
+                "offline" -> throw IOException(
+                    "adb devices: serial '$targetSerial' is 'offline'. " +
+                        "Re-plug the USB cable or `adb disconnect && adb connect` for LAN."
+                )
+                "no permissions" -> throw IOException(
+                    "adb devices: serial '$targetSerial' is 'no permissions'. " +
+                        "Check `adb kill-server && adb start-server` as root (udev rules on Linux)."
+                )
+                else -> throw IOException(
+                    "adb devices: serial '$targetSerial' state is '${match.state}', expected 'device'"
+                )
             }
-            log.info("UsbLanConnection: adb devices ok, serial '{}' is 'device'", targetSerial)
         }
     }
 }
