@@ -203,8 +203,23 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
                 ide = HostAttachAgent.connectToIdeLocalServer(socketName, HostAttachAgent.CONNECT_TIMEOUT_MS_PUBLIC);
                 // 2) HELLO 头 (走 HostBridgeServer.parseHello 解析, Phase 12i EOF 安全
                 //    静默退出, 这边是 write 不会有 EOF 问题)
+                // Phase 13j: 加 process= 字段, 兼容 multi-process host app
+                //   (e.g. android:process=":debug"). ContentProvider 默认在主进程,
+                //   但部分 host app 在 Manifest 显式指定 :debug / :remote, 这时
+                //   HELLO 的 pid 跟 host app 主进程 pid 不一致, IDE 端拿这个 pid
+                //   去 attach 会 attach 到 :debug 进程 (没有主进程的 @jdwp socket).
+                //   process 字段让 IDE 端能识别 multi-process 并走 reject / 重新
+                //   scan 主进程 pid 路径 (Phase 13j 留 TODO 给 IDE 端处理, 当前
+                //   只 log warn 提示).
+                String processName = android.app.Application.getProcessName();
+                if (processName == null || processName.isEmpty()) {
+                    // Fallback: ContentProvider 跑在 host app 包名进程, ContentProvider
+                    // 进程名跟包名一致的概率最大, 但 multi-process 时不一致
+                    processName = ctx.getPackageName();
+                }
                 String hello = "HELLO pkg=" + ctx.getPackageName()
                         + " pid=" + android.os.Process.myPid()
+                        + " process=" + processName
                         + " sdk=" + Build.VERSION.SDK_INT + "\n";
                 ide.getOutputStream().write(hello.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 ide.getOutputStream().flush();

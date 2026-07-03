@@ -41,10 +41,18 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 收到的 host 端 HELLO 信息。
+ *
+ * Phase 13j: 加 [processName] 字段, 兼容 host app multi-process 场景
+ * (e.g. android:process=":debug"). ContentProvider 默认在主进程, 但部分
+ * host app Manifest 显式指定 :debug / :remote, HELLO 拿到的 pid 是
+ * ContentProvider 所在进程 pid, 不是 host app 主进程 pid. IDE 端拿这个
+ * pid attach 会 attach 到 :debug 进程 (没有 host app 主进程的 @jdwp
+ * socket), 走不通.
  */
 data class HostHello(
     val packageName: String,
     val pid: Int,
+    val processName: String? = null,
     val raw: String,
 )
 
@@ -209,6 +217,20 @@ class HostBridgeServer(
             activeConnections.put(conn)
             allConnections.add(conn)
             log.info("HostBridgeServer: received HELLO pkg={} pid={} id={}", hello.packageName, hello.pid, idGenerator.incrementAndGet())
+            // Phase 13j: 兼容 multi-process host app, process= 字段让 IDE 端
+            //   知道 HELLO 来自主进程还是 :debug / :remote. 跟 packageName 不
+            //   一致 = ContentProvider 跑在非主进程, 这时 HELLO 的 pid 可能是
+            //   :debug 进程, IDE 拿这个 pid attach JDWP 会失败 (attach 到的进程
+            //   没有 @jdwp socket). Phase 13j 留 TODO 给上层 (AppReadyAutoConnect)
+            //   处理: 走 reject + 提示用户在 Manifest 把 ContentProvider 挪回主进程.
+            if (hello.processName != null && hello.processName != hello.packageName) {
+                log.warn(
+                    "HostBridgeServer: HELLO from non-main process '{}' (pkg={} pid={}). " +
+                        "ContentProvider is in :debug / :remote process; JDWP attach will fail. " +
+                        "Fix host app Manifest: move ContentProvider declaration to default process.",
+                    hello.processName, hello.packageName, hello.pid,
+                )
+            }
             // 通知 listener (AppReadyAutoConnect)
             try {
                 listener?.invoke(conn)
@@ -223,22 +245,24 @@ class HostBridgeServer(
 
     private fun parseHello(raw: String): HostHello? {
         if (raw.isBlank()) return null
-        // 协议: "HELLO pkg=<pkg> pid=<pid> [extra=...]"
+        // 协议: "HELLO pkg=<pkg> pid=<pid> [process=<processName>] [sdk=<sdk>]"
         val trimmed = raw.trim()
         if (!trimmed.startsWith("HELLO ")) return null
         val parts = trimmed.substringAfter("HELLO ").split(Regex("\\s+"))
         var pkg: String? = null
         var pid: Int = 0
+        var process: String? = null
         for (p in parts) {
             val kv = p.split("=", limit = 2)
             if (kv.size != 2) continue
             when (kv[0]) {
                 "pkg" -> pkg = kv[1]
                 "pid" -> pid = kv[1].toIntOrNull() ?: 0
+                "process" -> process = kv[1]
             }
         }
         if (pkg.isNullOrBlank() || pid <= 0) return null
-        return HostHello(packageName = pkg, pid = pid, raw = raw)
+        return HostHello(packageName = pkg, pid = pid, processName = process, raw = raw)
     }
 
     companion object {
