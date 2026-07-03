@@ -76,12 +76,27 @@ interface ShizukuBinderClient {
      * 读 `intent.getIntExtra(EXTRA_SOCKS_PORT, DEFAULT_SOCKS_PORT)`, 之前 IDE 端
      * 改 `settings.shizuku.socksPort` 完全无效 (intent 没 extras, 永远默认 39939,
      * Socks 客户端连用户设的端口但 host listen 在 39939, 连接失败)。
+     *
+     * Phase 15: 返值从 [IBinder] 改 [UserServiceHandle] (含 ServiceConnection 引用),
+     * 之前只返 IBinder, caller 拿不到 ServiceConnection, 没法 unbind, host 端 user
+     * service 走完 attach 永远 leak。detach / release 现在能 unbind 了 (Phase 16)。
      */
     suspend fun bindUserService(
         componentName: ComponentName,
         processName: String,
         args: Bundle? = null,
-    ): IBinder
+    ): UserServiceHandle
+
+    /**
+     * 释放 user service: 走 `rikka.shizuku.Shizuku.unbindUserService(conn)`, 通知
+     * Shizuku 让 host 端 user service 走 onDestroy (释放 SOCKS5 server / LocalServerSocket
+     * / fd 等资源)。
+     *
+     * Phase 15: 之前 [ShizukuBinderClient] 没暴露 unbind 抽象, ShizukuConnection
+     * detach / release 漏 unbind, host 端 service leak (Socks 路径会留 SOCKS5 server
+     * 占端口, InHostPlugin 路径会留 LocalServerSocket 占 abstract namespace)。
+     */
+    fun unbindUserService(handle: UserServiceHandle)
 
     companion object {
         @JvmStatic
@@ -89,6 +104,15 @@ interface ShizukuBinderClient {
             DefaultShizukuBinderClient()
     }
 }
+
+/**
+ * Phase 15: [ShizukuBinderClient.bindUserService] 的返值, 含 [binder] (跟 host 端
+ * user service 通信) + [connection] (用于 unbind 时传给 Shizuku)。
+ */
+data class UserServiceHandle(
+    val binder: IBinder,
+    val connection: ServiceConnection,
+)
 
 /**
  * 默认生产实现。
@@ -154,7 +178,7 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
         componentName: ComponentName,
         processName: String,
         args: Bundle?,
-    ): IBinder = withContext(Dispatchers.IO) {
+    ): UserServiceHandle = withContext(Dispatchers.IO) {
         // 走 Shizuku.bindUserService, 阻塞等 onServiceConnected
         val latch = java.util.concurrent.CountDownLatch(1)
         val binderRef = arrayOfNulls<IBinder>(1)
@@ -185,15 +209,33 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
             if (!latch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
                 throw IOException("bindUserService timeout (10s)")
             }
-            binderRef[0] ?: throw IOException("bindUserService: binder is null")
+            val binder = binderRef[0] ?: throw IOException("bindUserService: binder is null")
+            // Phase 15: 返 UserServiceHandle (含 ServiceConnection 引用), 让 caller
+            //   在 detach / release 时能 unbind。注释掉的 finally 块删了, host 端
+            //   service 现在由 caller 生命周期管理 (attach 期间活, detach 释放)。
+            UserServiceHandle(binder = binder, connection = conn)
         } catch (re: RemoteException) {
+            // bind 失败, conn 已注册到 Shizuku 但 onServiceConnected 没调过, 安全 unbind
+            runCatching { Shizuku.unbindUserService(conn) }
             throw IOException("bindUserService failed: ${re.message}", re)
         } catch (se: SecurityException) {
+            runCatching { Shizuku.unbindUserService(conn) }
             throw IOException("bindUserService: security: ${se.message}", se)
-        } finally {
-            // 注意: 这里不 unbindService, 让 host 端 service 持续运行
-            // (detach 时再 unbind)
+        } catch (t: Throwable) {
+            // 任何 throw: 超时 / binder null / 其他
+            runCatching { Shizuku.unbindUserService(conn) }
+            throw t
         }
+    }
+
+    override fun unbindUserService(handle: UserServiceHandle) {
+        // 走 rikka.shizuku.Shizuku.unbindUserService, 通知 Shizuku 让 host 端
+        // user service 走 onDestroy。Phase 15 之前 caller 拿不到 conn, 这步
+        // 调不了, host 端 service 永远 leak。
+        runCatching { Shizuku.unbindUserService(handle.connection) }
+            .onFailure {
+                log.debug("unbindUserService: Shizuku.unbindUserService threw: {}", it.message)
+            }
     }
 }
 
@@ -209,11 +251,18 @@ class FakeShizukuBinderClient(
     private val bindUserServiceResult: IBinder? = null,
 ) : ShizukuBinderClient {
 
+    // Phase 15: 老签名 (IBinder) 内部 cache 一个 noop ServiceConnection, 让旧
+    //   测试 caller 不用改 (5 处: `bindUserServiceResult = mockBinder` 仍能用)。
+    private val noopConn: ServiceConnection = ServiceConnection { _, _ -> }
+    private var lastHandle: UserServiceHandle? = null
+
     var newProcessCallCount: Int = 0
         private set
     var transferFdCallCount: Int = 0
         private set
     var bindUserServiceCallCount: Int = 0
+        private set
+    var unbindUserServiceCallCount: Int = 0
         private set
     var lastCmd: Array<String>? = null
         private set
@@ -223,6 +272,9 @@ class FakeShizukuBinderClient(
         private set
     // Phase 12x: 跟踪 lastArgs 用于 test 验证 IDE 端传的 Bundle 正确
     var lastArgs: Bundle? = null
+        private set
+    // Phase 15: 最近一次 unbind 的 handle 引用 (供测试断言)
+    var lastUnbindHandle: UserServiceHandle? = null
         private set
 
     override suspend fun newProcess(
@@ -260,11 +312,21 @@ class FakeShizukuBinderClient(
         componentName: ComponentName,
         processName: String,
         args: Bundle?,
-    ): IBinder {
+    ): UserServiceHandle {
         bindUserServiceCallCount++
         lastComponentName = componentName
         lastProcessName = processName
         lastArgs = args
-        return bindUserServiceResult ?: throw IOException("FakeShizukuBinderClient: bindUserServiceResult is null")
+        val binder = bindUserServiceResult
+            ?: throw IOException("FakeShizukuBinderClient: bindUserServiceResult is null")
+        // Phase 15: 返 UserServiceHandle (binder + noop conn), unbind 走 noop。
+        val handle = UserServiceHandle(binder = binder, connection = noopConn)
+        lastHandle = handle
+        return handle
+    }
+
+    override fun unbindUserService(handle: UserServiceHandle) {
+        unbindUserServiceCallCount++
+        lastUnbindHandle = handle
     }
 }

@@ -604,9 +604,14 @@ class ShizukuConnectionTest {
             componentName = android.content.ComponentName("a", "b"),
             processName = "test.pkg",
         )
-        assertEquals(mockBinder, result)
+        // Phase 15: 返 UserServiceHandle, 拿 .binder 字段对比 mockBinder
+        assertEquals(mockBinder, result.binder)
         assertEquals(1, binder.bindUserServiceCallCount)
         assertEquals("test.pkg", binder.lastProcessName)
+        // Phase 15: 验证 unbind 计数 (noop)
+        assertEquals(0, binder.unbindUserServiceCallCount)
+        binder.unbindUserService(result)
+        assertEquals(1, binder.unbindUserServiceCallCount)
     }
 
     // ---- 内部辅助: 构造 VM.Version 响应包 ----

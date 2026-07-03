@@ -36,6 +36,8 @@ import com.itsaky.androidide.debugger.connection.shizuku.ShizukuSocksClient
 import com.itsaky.androidide.debugger.connection.shizuku.ShizukuSubPath
 import com.itsaky.androidide.debugger.connection.shizuku.ShizukuSubPathResolver
 import com.itsaky.androidide.debugger.connection.shizuku.SocksControlTransact
+import com.itsaky.androidide.debugger.connection.shizuku.UserServiceHandle
+import com.itsaky.androidide.debugger.connection.shizuku.probeHostPluginUsable
 import android.os.IBinder
 import com.itsaky.androidide.utils.ILogger
 import kotlinx.coroutines.Dispatchers
@@ -98,10 +100,37 @@ class ShizukuConnection(
         // 现在传 defaultShizukuSubPathCapabilities(serverApiVersion) 4 个
         // capability, Auto 模式按 WifiAdb / Binder / InHostPlugin / Socks 顺序探测。
         // serverApiVersion 走 lazy probe 后从 ShizukuStatus 取。
+        //
+        // Phase 16: 注入 hostPluginProbe (Phase 14 实装) 给 InHostPluginCapability +
+        //   SocksCapability, 不再走默认 placeholder `{ _ -> true }`。probe 走
+        //   `probeHostPluginUsable` 真 bind host 端 IdeShizukuSocksUserService
+        //   user service 1.5s timeout, host 没装 aar 立即返 false (InHostPlugin /
+        //   Socks 路径不可用, Auto 模式跳过)。
         val apiVersion = runCatching { probeImpl.probe().serverApiVersion }.getOrDefault(-1)
+        val hostPkg = target.packageName
         resolver ?: ShizukuSubPathResolver(
             probeImpl,
-            defaultShizukuSubPathCapabilities(serverApiVersion = apiVersion),
+            defaultShizukuSubPathCapabilities(
+                serverApiVersion = apiVersion,
+                hostPluginProbe = { _ ->
+                    if (hostPkg.isBlank()) {
+                        false
+                    } else {
+                        val probeComponent = android.content.ComponentName(
+                            hostPkg,
+                            "com.itsaky.androidide.zerostudio.ide.debugger.host.IdeShizukuSocksUserService",
+                        )
+                        // 1.5s timeout 探测 host 端 IdeShizukuSocksUserService 能否
+                        //   bind - 走得到代表 host 装了 aar, InHostPlugin (走 HostPluginService)
+                        //   跟 Socks 路径都依赖此 aar, 共享 probe 结果。
+                        probeHostPluginUsable(
+                            componentName = probeComponent,
+                            processName = hostPkg,
+                            timeoutMs = 1_500L,
+                        )
+                    }
+                },
+            ),
         )
     }
 
@@ -122,6 +151,12 @@ class ShizukuConnection(
     //   时调 socksControlTransact.stopSocks 释放 host 端 SOCKS5 server。
     @Volatile private var socksControlBinderRef: IBinder? = null
     private val socksControlTransact = SocksControlTransact()
+    // Phase 16: InHostPlugin / Socks / Binder (fallback) 路径下走 Shizuku.bindUserService
+    //   拉 host 端 user service 拿 handle, 存这里给 detach / release unbind。Phase 15
+    //   之前 caller 拿不到 ServiceConnection, host 端 user service 永远 leak (Socks
+    //   路径下会留 SOCKS5 server 占端口, InHostPlugin 路径下会留 LocalServerSocket 占
+    //   abstract namespace)。
+    @Volatile private var userServiceHandle: UserServiceHandle? = null
     private val sessionIdGenerator = AtomicLong(System.currentTimeMillis())
     private val incoming = MutableSharedFlow<ByteArray>(replay = 0, extraBufferCapacity = 64)
 
@@ -283,10 +318,13 @@ class ShizukuConnection(
             "com.itsaky.androidide.zerostudio.ide.debugger.host.HostPluginService",
         )
         // 1) 拉 user service
-        val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
-        if (binder == null || !binder.pingBinder()) {
+        // Phase 16: bindUserService 现在返 UserServiceHandle (含 binder + ServiceConnection),
+        //   ServiceConnection 存到 userServiceHandle 字段, detach / release 时 unbind。
+        val handle = binderImpl.bindUserService(hostPlugin, target.packageName)
+        if (handle.binder == null || !handle.binder.pingBinder()) {
             throw IOException("Shizuku InHostPlugin: user service binder dead")
         }
+        userServiceHandle = handle
         // 2) 起 IDE LocalServerSocket 等 host 反连
         //    Shizuku 反射加载 HostPluginService 时拿不到 IDE 端 timestamp,
         //    必须用约定名 (拼包名: "${INHOSTPLUGIN_SOCKET_NAME_PREFIX}-${target.packageName}"),
@@ -338,6 +376,12 @@ class ShizukuConnection(
         } catch (t: Throwable) {
             runCatching { server.close() }
             inHostPluginServer = null
+            // Phase 16: 失败路径 unbind handle, host 端 user service 别 leak
+            runCatching {
+                val h = userServiceHandle
+                userServiceHandle = null
+                if (h != null) binderImpl.unbindUserService(h)
+            }
             throw t
         }
     }
@@ -415,8 +459,11 @@ class ShizukuConnection(
         //   2) binder.transact(CODE_SET_SOCKS_PORT, port) 启 host 端 SOCKS5 server
         //   3) reply.readInt() 拿 actualPort (用户传 0 时 OS 选随机端口)
         //   4) Socks5Client 连 actualPort
-        val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
-        if (binder == null || !binder.pingBinder()) {
+        val handle = binderImpl.bindUserService(hostPlugin, target.packageName)
+        // Phase 16: bindUserService 返 UserServiceHandle, ServiceConnection 存到
+        //   userServiceHandle 字段, detach / release 时 unbind。handle.binder
+        //   单独拿出来用 (走 ISocksControl transact)。
+        if (handle.binder == null || !handle.binder.pingBinder()) {
             throw IOException("Shizuku Socks: user service binder dead")
         }
         val requestedSocksPort = settings.shizuku.socksPort
@@ -427,8 +474,9 @@ class ShizukuConnection(
                     "port (0 = OS picks random)."
             )
         }
-        val actualSocksPort = socksControlTransact.setSocksPort(binder, requestedSocksPort)
-        socksControlBinderRef = binder  // 留 detach 用 stopSocks
+        val actualSocksPort = socksControlTransact.setSocksPort(handle.binder, requestedSocksPort)
+        socksControlBinderRef = handle.binder  // 留 detach 用 stopSocks
+        userServiceHandle = handle              // 留 detach / release 用 unbindUserService
         // 2) SOCKS5 客户端连 host SOCKS5 server
         //    proxyAddr 必须用真 TCP 端口 (Socks5Client 走 java.net.Socket, 不支持
         //    abstract namespace)。实际端口由 host 端 binder 协议告知 (走 ISocksControl
@@ -456,6 +504,21 @@ class ShizukuConnection(
             )
         } catch (t: Throwable) {
             runCatching { sock.close() }
+            // Phase 16: Socks 路径下 sock.connect 失败, 已 bind host 端 user service
+            //   (host IdeShizukuSocksUserService 已启 SOCKS5 server 占端口), 要:
+            //   1) stopSocks 走 ISocksControl transact 停 SOCKS5 server
+            //   2) unbindUserService 释放 host 端 user service
+            // 顺序: 先 stopSocks 再 unbind (unbind 后 binder 失效 stopSocks 失败)。
+            runCatching {
+                val ref = socksControlBinderRef
+                socksControlBinderRef = null
+                if (ref != null) socksControlTransact.stopSocks(ref)
+            }
+            runCatching {
+                val h = userServiceHandle
+                userServiceHandle = null
+                if (h != null) binderImpl.unbindUserService(h)
+            }
             throw t
         }
     }
@@ -503,6 +566,17 @@ class ShizukuConnection(
             socksControlBinderRef = null
             socksControlTransact.stopSocks(ref)
         }
+        // Phase 16: unbind host 端 user service (InHostPlugin / Socks / Binder 路径),
+        //   之前 detach / release 漏 unbind, host 端 service 永远 leak (Socks 路径下
+        //   会留 SOCKS5 server 占端口, InHostPlugin 路径下会留 LocalServerSocket 占
+        //   abstract namespace)。bail out 在 stopSocks 之后, 顺序无所谓 (Socks 路径
+        //   两者都 unbind, InHostPlugin 路径只 unbind user service, Socks 路径
+        //   stopSocks + unbind 都要)。
+        runCatching {
+            val handle = userServiceHandle
+            userServiceHandle = null
+            if (handle != null) binderImpl.unbindUserService(handle)
+        }
         transitionTo(ConnectionState.Closed(null))
     }
 
@@ -540,6 +614,12 @@ class ShizukuConnection(
             val ref = socksControlBinderRef
             socksControlBinderRef = null
             socksControlTransact.stopSocks(ref)
+        }
+        // Phase 16: release 时也 unbind host 端 user service (兜底, 跟 detach 同款)。
+        runCatching {
+            val handle = userServiceHandle
+            userServiceHandle = null
+            if (handle != null) binderImpl.unbindUserService(handle)
         }
         localSocket = null
         localInput = null

@@ -2075,3 +2075,260 @@ fun userMessage(): String = when (this) {
 | ---- | ---- |
 | 改 | `docs/superpowers/specs/2026-07-02-subproject-11-deployment-checklist.md` (§9-§11 追加) |
 
+---
+
+# Phase 14 - HostPluginProbe 真探测 host app 装 aar (commit `XXX`)
+
+## 真问题
+
+`ShizukuSubPathCapabilities.InHostPluginCapability` / `SocksCapability` 的
+`hostPluginProbe` 走 placeholder `private val hostPluginProbe: (DebugTarget) -> Boolean = { _ -> true }`,
+Auto 模式不管 host 装没装 ide-debugger-host aar 都返 true 走 InHostPlugin / Socks,
+真 attach 时才失败, fallback WifiAdb 慢 (1-2s)。
+
+## 修法
+
+新建 `core/app/.../shizuku/HostPluginProbe.kt` 静态方法 `probeHostPluginUsable`:
+
+```kotlin
+suspend fun probeHostPluginUsable(
+    componentName: ComponentName,
+    processName: String,
+    timeoutMs: Long = 1_500L,
+): Boolean = withContext(Dispatchers.IO) {
+    val latch = CountDownLatch(1)
+    @Volatile var connected = false
+    val conn = ServiceConnection { _, _ ->
+        connected = true
+        latch.countDown()
+    }
+    try {
+        val builder = Shizuku.UserServiceArgs(componentName)
+            .processName(processName)
+            .daemon(false)
+            .debuggable(false)
+        Shizuku.bindUserService(builder, conn)
+        latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+    } catch (t: Throwable) {
+        return@withContext false
+    } finally {
+        // 立即 unbind, host 端 user service 不要留着 (Socks 路径下会启 SOCKS5 server
+        // 占用端口, 留到下次 attach 会冲突; InHostPlugin 路径下 user service 也别 leak)。
+        runCatching { Shizuku.unbindUserService(conn) }
+    }
+    connected
+}
+```
+
+走 `rikka.shizuku.Shizuku.bindUserService` 试 bind host 端 user service
+(`IdeShizukuSocksUserService`), 1.5s timeout, 拿 binder 立即 unbind。
+
+## 副作用
+
+- Auto 模式探测 InHostPlugin / Socks 路径时: 真知道 host 装没装 aar
+- host 没装 aar: 立即返 false, 跳过 InHostPlugin / Socks, 走 WifiAdb (不依赖 aar)
+- host 装了 aar: 1.5s 内返 true, 走 InHostPlugin / Socks
+- 探测完立即 unbind, host 端 user service 不 leak
+
+## 限制
+
+- 1.5s timeout 硬编码, 没暴露配置 (跟 Phase 13a Shizuku 4 子路径探测顺序对齐)
+- 没跑真机 e2e (沙箱无设备), Phase 10 验证
+
+## 新增文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 增 | `core/app/.../shizuku/HostPluginProbe.kt` (probeHostPluginUsable 静态方法) |
+
+---
+
+# Phase 15 - ShizukuBinderClient.bindUserService 返 UserServiceHandle + 加 unbindUserService (commit `XXX`)
+
+## 真问题
+
+`ShizukuBinderClient.bindUserService` 返 `IBinder`, caller (`ShizukuConnection.attachViaInHostPlugin` /
+`attachViaSocks`) 拿不到 `ServiceConnection` 引用, detach / release 时没法 unbind,
+host 端 user service 永远 leak:
+
+- Socks 路径: `IdeShizukuSocksUserService` 启的 SOCKS5 server 永远占端口, 下次 attach 端口冲突
+- InHostPlugin 路径: `HostPluginService` 留 abstract namespace socket, 下次 attach 卡住
+
+`DefaultShizukuBinderClient.bindUserService` 内部 `finally` 块注释 "这里不 unbindService, 让
+host 端 service 持续运行 (detach 时再 unbind)" — 但 detach 调不到, leak 真发生。
+
+## 修法
+
+新增 `data class UserServiceHandle(binder: IBinder, connection: ServiceConnection)`,
+`bindUserService` 返值改 `UserServiceHandle`, 加 `fun unbindUserService(handle: UserServiceHandle)`
+抽象方法。
+
+`DefaultShizukuBinderClient`:
+
+- `bindUserService` 内部 catch (RemoteException / SecurityException / 任何 throw) 加
+  `runCatching { Shizuku.unbindUserService(conn) }` (bind 失败时清理注册的 conn)
+- 返 `UserServiceHandle(binder = binder, connection = conn)`
+- `unbindUserService(handle)` 调 `rikka.shizuku.Shizuku.unbindUserService(handle.connection)`
+
+`FakeShizukuBinderClient` 兼容老测试 caller (`bindUserServiceResult = mockBinder` 传 IBinder):
+
+- 内部 cache `noopConn`, 返 `UserServiceHandle(mockBinder, noopConn)`
+- `unbindUserService` 走 noop, 累加 `unbindUserServiceCallCount` 供测试断言
+
+## 副作用
+
+- caller (Phase 16) 能 unbind host 端 user service, host 端 resource 释放
+- 老测试 caller 不需要改 (5 处 `bindUserServiceResult = mockBinder` 仍能用)
+- 新测试可断言 `unbindUserServiceCallCount`
+
+## 限制
+
+- 无
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../shizuku/ShizukuBinderClient.kt` (+UserServiceHandle +unbindUserService + DefaultShizukuBinderClient.bindUserService 改返 handle + catch 块 unbind + FakeShizukuBinderClient 兼容) |
+
+---
+
+# Phase 16 - ShizukuConnection attachVia* 存 handle + detach/release unbind + resolverImpl 注入 hostPluginProbe (commit `XXX`)
+
+## 真问题
+
+Phase 15 修了接口 (bindUserService 返 UserServiceHandle), 但 `ShizukuConnection` 三个问题:
+
+1. `attachViaInHostPlugin` / `attachViaSocks` 调 `bindUserService` 后把 `handle` 当 `IBinder` 用
+   (`binder.pingBinder()` / `socksControlTransact.setSocksPort(binder, port)`), 编译会过
+   但语义错 (用 UserServiceHandle 当 IBinder 传给 transact)
+2. `detach()` / `release()` 没调 `unbindUserService`, host 端 service 永远 leak
+3. `resolverImpl` 没传 `hostPluginProbe` 给 `defaultShizukuSubPathCapabilities`, 走默认
+   placeholder `{ _ -> true }`, Auto 模式探测 InHostPlugin / Socks 永远返 true (Phase 14
+   修了 probe, 但 caller 没接)
+
+## 修法
+
+### `attachViaInHostPlugin` 改 handle
+
+```kotlin
+val handle = binderImpl.bindUserService(hostPlugin, target.packageName)
+if (handle.binder == null || !handle.binder.pingBinder()) {
+    throw IOException("Shizuku InHostPlugin: user service binder dead")
+}
+userServiceHandle = handle
+// ... 后续用 handle.connection / .binder 都从 handle 拿
+```
+
+catch 块加 unbind (失败路径也释放):
+```kotlin
+} catch (t: Throwable) {
+    runCatching { server.close() }
+    inHostPluginServer = null
+    runCatching {
+        val h = userServiceHandle
+        userServiceHandle = null
+        if (h != null) binderImpl.unbindUserService(h)
+    }
+    throw t
+}
+```
+
+### `attachViaSocks` 改 handle
+
+```kotlin
+val handle = binderImpl.bindUserService(hostPlugin, target.packageName)
+if (handle.binder == null || !handle.binder.pingBinder()) {
+    throw IOException("Shizuku Socks: user service binder dead")
+}
+// ...
+val actualSocksPort = socksControlTransact.setSocksPort(handle.binder, requestedSocksPort)
+socksControlBinderRef = handle.binder
+userServiceHandle = handle
+```
+
+catch 块加 stopSocks + unbind (Socks 路径下 host 已启 SOCKS5 server):
+```kotlin
+} catch (t: Throwable) {
+    runCatching { sock.close() }
+    // 顺序: 先 stopSocks 再 unbind (unbind 后 binder 失效 stopSocks 失败)
+    runCatching {
+        val ref = socksControlBinderRef
+        socksControlBinderRef = null
+        if (ref != null) socksControlTransact.stopSocks(ref)
+    }
+    runCatching {
+        val h = userServiceHandle
+        userServiceHandle = null
+        if (h != null) binderImpl.unbindUserService(h)
+    }
+    throw t
+}
+```
+
+### `detach()` / `release()` 加 unbindUserService
+
+```kotlin
+// detach()
+runCatching {
+    val ref = socksControlBinderRef
+    socksControlBinderRef = null
+    socksControlTransact.stopSocks(ref)
+}
+// Phase 16: unbind host 端 user service (InHostPlugin / Socks / Binder 路径)
+runCatching {
+    val handle = userServiceHandle
+    userServiceHandle = null
+    if (handle != null) binderImpl.unbindUserService(handle)
+}
+```
+
+### `resolverImpl` 注入 hostPluginProbe
+
+```kotlin
+val hostPkg = target.packageName
+resolver ?: ShizukuSubPathResolver(
+    probeImpl,
+    defaultShizukuSubPathCapabilities(
+        serverApiVersion = apiVersion,
+        hostPluginProbe = { _ ->
+            if (hostPkg.isBlank()) {
+                false
+            } else {
+                val probeComponent = android.content.ComponentName(
+                    hostPkg,
+                    "com.itsaky.androidide.zerostudio.ide.debugger.host.IdeShizukuSocksUserService",
+                )
+                probeHostPluginUsable(
+                    componentName = probeComponent,
+                    processName = hostPkg,
+                    timeoutMs = 1_500L,
+                )
+            }
+        },
+    ),
+)
+```
+
+## 副作用
+
+- `attachViaInHostPlugin` / `attachViaSocks` 失败路径正确释放 host 端 resource
+- `detach()` / `release()` 真 unbind host 端 user service, 不再 leak
+- Auto 模式探测 InHostPlugin / Socks 走真 probe (Phase 14 实装)
+- host 没装 aar: Auto 模式跳过 InHostPlugin / Socks, 走 WifiAdb (1-2s 节省)
+- host 装了 aar: 1.5s 内返 true, 走 InHostPlugin / Socks
+
+## 限制
+
+- `attachViaInHostPlugin` 跟 `attachViaSocks` 共享 `userServiceHandle` 字段 (互斥, 同时只一个)
+- `attachViaBinder` 走 `attachViaInHostPlugin().let { ... }`, 共享同一个 `userServiceHandle`
+  (合理, Binder 14+ 走真 transferFileDescriptor 才有独立 service)
+
+## 新增/修改文件
+
+| 类型 | 路径 |
+| ---- | ---- |
+| 改 | `core/app/.../impl/ShizukuConnection.kt` (+userServiceHandle 字段 + resolverImpl 注入 hostPluginProbe + attachVia* 改 handle + catch 块 stopSocks/unbind + detach/release unbind) |
+| 改 | `core/app/src/test/.../ShizukuConnectionTest.kt` (FakeShizukuBinderClient.bindUserService 返值测试改 .binder + unbindUserServiceCallCount 断言) |
+
+
