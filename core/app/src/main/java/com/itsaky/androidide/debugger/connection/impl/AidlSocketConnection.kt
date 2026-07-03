@@ -414,14 +414,17 @@ class AidlSocketConnection(
 
     // ---- 私有 ----
 
-    private fun startReadLoopFromSocket(sock: Socket) {
-        startReadLoopFromStream(sock.getInputStream())
-    }
-
+    /**
+     * Phase 13i 去重: 之前两个同款 (startReadLoopFromSocket / startReadLoopFromStream),
+     * 第一个只是 thin wrapper 转发。Phase 12m 之后 TCP 路径不再调 startReadLoopFromSocket
+     * (JdwpClient 接管 socket), 只 LocalBridge 路径调 startReadLoopFromStream。删
+     * startReadLoopFromSocket, 留 startReadLoopFromStream 一个。
+     *
+     * 启动守护线程读 input, 把每段字节切到 flow 上; ConnectionBackedDebugger 会接
+     * 走这个 flow 但本身 JdwpClient 不再依赖 — 这里只服务于通过 sendJdwp/receiveJdwp
+     * 调用的上层。
+     */
     private fun startReadLoopFromStream(input: InputStream) {
-        // 用守护线程读 input, 把每段字节切到 flow 上;ConnectionBackedDebugger
-        // 会接走这个 flow 但本身 JdwpClient 不再依赖 — 这里只服务于通过
-        // sendJdwp/receiveJdwp 调用的上层。
         Thread({
             try {
                 val buf = ByteArray(8192)
