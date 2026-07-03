@@ -34,7 +34,9 @@ package com.itsaky.androidide.zerostudio.ide.debugger.host
 
 import android.app.Service
 import android.content.Intent
+import android.os.Binder
 import android.os.IBinder
+import android.os.Parcel
 import android.util.Log
 
 /**
@@ -80,27 +82,94 @@ class IdeShizukuSocksUserService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder {
-        Log.i(tag, "onBind: triggering HostSocksServer startup on default port")
-        // 启动 SOCKS5 server, listen 在 127.0.0.1:39939 (跟 IDE 端
-        // ShizukuConfig.socksPort = 39939 默认值保持一致, 端到端默认跑通)。
-        // Phase 12x 调研结论: Shizuku 13.1.5 的 [Shizuku.UserServiceArgs] 没有
-        // .args(Bundle) API, IDE 端改 settings.shizuku.socksPort 不能从
-        // onBind(Intent) extras 传进来 (intent 永远没 extras)。
-        // Phase 12y TODO: 实装 ISocksControl AIDL, host 端 onBind 返真 binder,
-        // IDE 端 attachViaSocks 拿 binder 后调 transact(CODE_SET_SOCKS_PORT, port)
-        // 走 binder 协议传 port 给 host 启动 SOCKS5 server 在 user-given port。
-        val requestedPort = intent?.getIntExtra(EXTRA_SOCKS_PORT, DEFAULT_SOCKS_PORT) ?: DEFAULT_SOCKS_PORT
-        val bindHost = intent?.getStringExtra(EXTRA_BIND_HOST) ?: DEFAULT_BIND_HOST
+        Log.i(tag, "onBind: returning ISocksControl binder (Phase 12y)")
+        // Phase 12y: 返真 binder (替代 noopBinder), 让 IDE 端 attachViaSocks
+        // 能走 binder.transact(CODE_SET_SOCKS_PORT, port) 传自定义 port 给 host
+        // (Shizuku 13.1.5 的 UserServiceArgs 没 .args(Bundle) API, 之前 port 永远默认
+        //  39939, 用户改 settings.shizuku.socksPort 完全无效)。
+        // Phase 13c 同步: detach 走 stopSocks, onUnbind / onDestroy 兜底 stop,
+        // 多个 IDE attach 同一 host app 不再永远占用 39939 (binder 协议动态调
+        //  setSocksPort, 每次调会 stop 上一个 server 再起新 server)。
+        return socksControlBinder
+    }
+
+    /**
+     * Phase 12y: ISocksControl 协议 — 走 Binder.onTransact 自定义, 不走 .aidl 编译
+     * (避免新增 aidl 依赖, 沙箱无 gradle 不能验)。协议:
+     *
+     *   - `setSocksPort(port: Int)`: 启 SOCKS5 server 在 127.0.0.1:port (port=0 时
+     *     OS 选随机端口), reply 写 int actualPort
+     *   - `getSocksPort() -> Int`: 返 actualPort, -1 表示 server 没启
+     *   - `stopSocks()`: 停 server
+     *
+     * Interface token 走本 FQN (跟 Aidl 协议 DESIGNATOR 等效), enforceInterface
+     * 防 IDE 端 binder 错连别的 user service。
+     */
+    private val socksControlBinder: IBinder = object : Binder() {
+        override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            return try {
+                when (code) {
+                    CODE_SET_SOCKS_PORT -> {
+                        data.enforceInterface(DESCRIPTOR)
+                        val requested = data.readInt()
+                        handleSetSocksPort(requested, reply)
+                        true
+                    }
+                    CODE_GET_SOCKS_PORT -> {
+                        data.enforceInterface(DESCRIPTOR)
+                        reply?.writeInt(actualSocksPort)
+                        true
+                    }
+                    CODE_STOP_SOCKS -> {
+                        data.enforceInterface(DESCRIPTOR)
+                        handleStopSocks(reply)
+                        true
+                    }
+                    else -> super.onTransact(code, data, reply, flags)
+                }
+            } catch (t: Throwable) {
+                Log.w(tag, "onTransact code=$code failed: ${t.message}", t)
+                reply?.writeException(t)
+                true
+            }
+        }
+    }
+
+    /**
+     * setSocksPort transact handler: 停老 server (如有), 启新 server 在 requested port。
+     * reply 写 int actualPort (requested == 0 时 OS 选随机端口, 写实际端口)。
+     */
+    private fun handleSetSocksPort(requested: Int, reply: Parcel?) {
+        if (requested != 0 && (requested < 1 || requested > 65535)) {
+            val ex = IllegalArgumentException("port out of range: $requested (1..65535 or 0 for OS pick)")
+            reply?.writeException(ex)
+            return
+        }
+        val bindHost = DEFAULT_BIND_HOST
+        runCatching { socksServer?.stop() }
+        socksServer = null
+        actualSocksPort = -1
         try {
             val server = HostSocksServer()
-            val port = server.startOnTcp(bindHost, requestedPort)
+            val actual = server.startOnTcp(bindHost, requested)
             socksServer = server
-            actualSocksPort = port
-            Log.i(tag, "Socks5 server started on $bindHost:$port")
+            actualSocksPort = actual
+            Log.i(tag, "Socks5 server started on $bindHost:$actual (requested=$requested)")
+            reply?.writeInt(actual)
         } catch (t: Throwable) {
-            Log.e(tag, "startOnTcp failed: ${t.message}", t)
+            Log.e(tag, "setSocksPort($requested) failed: ${t.message}", t)
+            reply?.writeException(t)
         }
-        return noopBinder
+    }
+
+    /**
+     * stopSocks transact handler: 停 server, 返 void (reply 写 noException)。
+     */
+    private fun handleStopSocks(reply: Parcel?) {
+        runCatching { socksServer?.stop() }
+        socksServer = null
+        actualSocksPort = -1
+        Log.i(tag, "Socks5 server stopped via stopSocks transact")
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -136,5 +205,12 @@ class IdeShizukuSocksUserService : Service() {
          */
         const val CLASS_NAME =
             "com.itsaky.androidide.zerostudio.ide.debugger.host.IdeShizukuSocksUserService"
+
+        // Phase 12y: ISocksControl binder transact codes
+        const val CODE_SET_SOCKS_PORT = 1
+        const val CODE_GET_SOCKS_PORT = 2
+        const val CODE_STOP_SOCKS = 3
+        const val DESCRIPTOR =
+            "com.itsaky.androidide.zerostudio.ide.debugger.host.IdeShizukuSocksUserService.ISocksControl"
     }
 }

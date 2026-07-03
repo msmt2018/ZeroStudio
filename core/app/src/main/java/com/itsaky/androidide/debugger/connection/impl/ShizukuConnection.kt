@@ -35,6 +35,8 @@ import com.itsaky.androidide.debugger.connection.shizuku.ShizukuProbe
 import com.itsaky.androidide.debugger.connection.shizuku.ShizukuSocksClient
 import com.itsaky.androidide.debugger.connection.shizuku.ShizukuSubPath
 import com.itsaky.androidide.debugger.connection.shizuku.ShizukuSubPathResolver
+import com.itsaky.androidide.debugger.connection.shizuku.SocksControlTransact
+import android.os.IBinder
 import com.itsaky.androidide.utils.ILogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -115,6 +117,11 @@ class ShizukuConnection(
     //   在 detach/release 时 close, 否则 abstract namespace 的 socket name 不会
     //   被释放, 下次 attach 会卡住或冲突。
     @Volatile private var inHostPluginServer: android.net.LocalServerSocket? = null
+    // Phase 12y + 13c: Socks 路径下走 ISocksControl binder transact 协议,
+    //   attachViaSocks 拿 binder 后保存到 socksControlBinderRef, detach / release
+    //   时调 socksControlTransact.stopSocks 释放 host 端 SOCKS5 server。
+    @Volatile private var socksControlBinderRef: IBinder? = null
+    private val socksControlTransact = SocksControlTransact()
     private val sessionIdGenerator = AtomicLong(System.currentTimeMillis())
     private val incoming = MutableSharedFlow<ByteArray>(replay = 0, extraBufferCapacity = 64)
 
@@ -378,33 +385,32 @@ class ShizukuConnection(
             target.packageName,
             "com.itsaky.androidide.zerostudio.ide.debugger.host.IdeShizukuSocksUserService",
         )
-        // Phase 12x: 之前 IDE 端改 settings.shizuku.socksPort 走 Bundle{port=...}
-        // 传 host, 失败 — Shizuku 13.1.5 没 .args(Bundle) API (内部 forAdd() Bundle
-        // 私有)。Phase 12x 改 class 路径 rikka.shizuku.api.UserServiceArgs ->
-        // rikka.shizuku.Shizuku.UserServiceArgs 修编译错误, args 参数被忽略。
-        // Phase 12y TODO: 实装 ISocksControl AIDL, host 端 user service onBind 返
-        // 真 binder, IDE 端 attachViaSocks 拿 binder 后调
-        // binder.transact(CODE_SET_SOCKS_PORT, ...) 传 port 给 host。
+        // Phase 12y: 走 binder transact 协议传 socksPort (替代 Phase 12x 的
+        // 走 Bundle args, Shizuku 13.1.5 没 .args(Bundle) API)。
+        //   1) bindUserService 拿 binder
+        //   2) binder.transact(CODE_SET_SOCKS_PORT, port) 启 host 端 SOCKS5 server
+        //   3) reply.readInt() 拿 actualPort (用户传 0 时 OS 选随机端口)
+        //   4) Socks5Client 连 actualPort
         val binder = binderImpl.bindUserService(hostPlugin, target.packageName)
         if (binder == null || !binder.pingBinder()) {
             throw IOException("Shizuku Socks: user service binder dead")
         }
-        // 2) SOCKS5 客户端连 host SOCKS5 server
-        //    proxyAddr 必须用真 TCP 端口 (Socks5Client 走 java.net.Socket, 不支持
-        //    abstract namespace)。默认 39939, 跟 host 端一致 (Phase 12j 修);
-        //    用户可改 settings.shizuku.socksPort 覆盖 (DebugConnectionPreferences
-        //    持久化 shizukuSocksPort)。Socks 路径的 host 端端口之前完全没渠道
-        //    告知 IDE, 这里固定默认端口 + prefs 覆盖两端一致。
-        val socksHost = settings.shizuku.socksHost.ifBlank { "127.0.0.1" }
-        val socksPort = settings.shizuku.socksPort
-        if (socksPort <= 0 || socksPort > 65535) {
+        val requestedSocksPort = settings.shizuku.socksPort
+        if (requestedSocksPort < 0 || requestedSocksPort > 65535) {
             throw IOException(
-                "Shizuku Socks: socksPort invalid (got $socksPort). " +
+                "Shizuku Socks: socksPort invalid (got $requestedSocksPort). " +
                     "Set shizukuSocksPort in DebugConnectionPreferences to a valid TCP " +
-                    "port (default 39939 matches host-side IdeShizukuSocksUserService.DEFAULT_SOCKS_PORT)."
+                    "port (0 = OS picks random)."
             )
         }
-        val proxyAddr = java.net.InetSocketAddress(socksHost, socksPort)
+        val actualSocksPort = socksControlTransact.setSocksPort(binder, requestedSocksPort)
+        socksControlBinderRef = binder  // 留 detach 用 stopSocks
+        // 2) SOCKS5 客户端连 host SOCKS5 server
+        //    proxyAddr 必须用真 TCP 端口 (Socks5Client 走 java.net.Socket, 不支持
+        //    abstract namespace)。实际端口由 host 端 binder 协议告知 (走 ISocksControl
+        //    setSocksPort transact)。
+        val socksHost = settings.shizuku.socksHost.ifBlank { "127.0.0.1" }
+        val proxyAddr = java.net.InetSocketAddress(socksHost, actualSocksPort)
         val sock = withContext(Dispatchers.IO) {
             socksImpl.connect(
                 proxyAddr = proxyAddr,
@@ -466,6 +472,13 @@ class ShizukuConnection(
         // LocalServerSocket 路径 (InHostPlugin)
         runCatching { inHostPluginServer?.close() }
         inHostPluginServer = null
+        // Phase 12y + 13c: Socks 路径下 stop host 端 SOCKS5 server (走 ISocksControl
+        //   binder transact, pingBinder 死了则静默跳过), 释放 socksControlBinderRef
+        runCatching {
+            val ref = socksControlBinderRef
+            socksControlBinderRef = null
+            socksControlTransact.stopSocks(ref)
+        }
         transitionTo(ConnectionState.Closed(null))
     }
 
@@ -496,6 +509,14 @@ class ShizukuConnection(
         runCatching { localSocket?.close() }
         runCatching { socket?.close() }
         runCatching { inHostPluginServer?.close() }
+        // Phase 12y + 13c: release 时也调 stopSocks 兜底 (跟 detach 一样, 但 release
+        //   不走 suspend, 调 sync stopSocks 即可)。socksControlTransact.stopSocks
+        //   内部已经跑 pingBinder 死了跳过。
+        runCatching {
+            val ref = socksControlBinderRef
+            socksControlBinderRef = null
+            socksControlTransact.stopSocks(ref)
+        }
         localSocket = null
         localInput = null
         localOutput = null
