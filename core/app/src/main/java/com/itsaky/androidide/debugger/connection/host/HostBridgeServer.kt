@@ -48,11 +48,17 @@ import java.util.concurrent.atomic.AtomicLong
  * ContentProvider 所在进程 pid, 不是 host app 主进程 pid. IDE 端拿这个
  * pid attach 会 attach 到 :debug 进程 (没有 host app 主进程的 @jdwp
  * socket), 走不通.
+ *
+ * Phase 13k: 加 [buildVersion] 字段, 跨进程拿 host 端 build version
+ * (e.g. "v1"). 当前只用于 log 诊断 (排查 host app 注入的 BuildTimeInjector
+ * 是不是用了不同 build version). 完整 settings 跨进程传递留 TODO 文档化
+ * (host 端 ContentProvider 不需要 IDE 端 settings, 见 P13k 注释).
  */
 data class HostHello(
     val packageName: String,
     val pid: Int,
     val processName: String? = null,
+    val buildVersion: String? = null,
     val raw: String,
 )
 
@@ -245,13 +251,14 @@ class HostBridgeServer(
 
     private fun parseHello(raw: String): HostHello? {
         if (raw.isBlank()) return null
-        // 协议: "HELLO pkg=<pkg> pid=<pid> [process=<processName>] [sdk=<sdk>]"
+        // 协议: "HELLO pkg=<pkg> pid=<pid> [process=<processName>] [sdk=<sdk>] [buildVersion=<v>]"
         val trimmed = raw.trim()
         if (!trimmed.startsWith("HELLO ")) return null
         val parts = trimmed.substringAfter("HELLO ").split(Regex("\\s+"))
         var pkg: String? = null
         var pid: Int = 0
         var process: String? = null
+        var buildVersion: String? = null
         for (p in parts) {
             val kv = p.split("=", limit = 2)
             if (kv.size != 2) continue
@@ -259,10 +266,17 @@ class HostBridgeServer(
                 "pkg" -> pkg = kv[1]
                 "pid" -> pid = kv[1].toIntOrNull() ?: 0
                 "process" -> process = kv[1]
+                "buildVersion" -> buildVersion = kv[1]
             }
         }
         if (pkg.isNullOrBlank() || pid <= 0) return null
-        return HostHello(packageName = pkg, pid = pid, processName = process, raw = raw)
+        return HostHello(
+            packageName = pkg,
+            pid = pid,
+            processName = process,
+            buildVersion = buildVersion,
+            raw = raw,
+        )
     }
 
     companion object {

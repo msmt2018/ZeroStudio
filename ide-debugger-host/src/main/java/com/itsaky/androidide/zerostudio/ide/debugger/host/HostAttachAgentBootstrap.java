@@ -217,10 +217,27 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
                     // 进程名跟包名一致的概率最大, 但 multi-process 时不一致
                     processName = ctx.getPackageName();
                 }
+                // Phase 13k 留 TODO 文档化: HELLO 协议扩展 settings= 字段的必要性:
+                //   设计上想跨进程传 IDE 端 settings (autoRetry / retryMaxAttempts /
+                //   retryInitialDelayMs) 给 host 端 ContentProvider, 让 host 端能
+                //   走跟 IDE 端对齐的 retry.
+                //
+                //   实测发现: host 端 ContentProvider 只做"反连 + bridge", 跟 retry
+                //   无关. retry 跑在 IDE 端 AidlSocketConnection 内部, 走 host app
+                //   LocalBridge 路径. host 端不需要 IDE settings, settings 是 IDE
+                //   端自己配置自己读, 不需要跨进程传递.
+                //
+                //   但 settings 字段有诊断价值 (IDE 端 log host 收到的 settings
+                //   跟 IDE 端配置对账, 排查 host app 注入的 BuildTimeInjector 是
+                //   不是用了不同 settings). Phase 13k 加一个最小 settings 字段
+                //   (走 buildVersion 一个, 不传所有 settings), 给 log 诊断用.
+                String buildVersionField = "v1";
                 String hello = "HELLO pkg=" + ctx.getPackageName()
                         + " pid=" + android.os.Process.myPid()
                         + " process=" + processName
-                        + " sdk=" + Build.VERSION.SDK_INT + "\n";
+                        + " sdk=" + Build.VERSION.SDK_INT
+                        + " buildVersion=" + buildVersionField
+                        + "\n";
                 ide.getOutputStream().write(hello.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 ide.getOutputStream().flush();
 
