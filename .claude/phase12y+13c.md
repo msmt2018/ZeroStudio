@@ -1,6 +1,6 @@
 # Phase 12y + 13c: Shizuku Socks 路径走 ISocksControl binder transact 协议 + lifecycle 完善
 
-**Commit**: (待 commit)
+**Commit**: `ba7a144b` (Phase 12y + 13c Socks 路径走 ISocksControl binder transact + lifecycle 完善)
 **日期**: 2026-07-03
 **类型**: 新功能 + lifecycle 修复
 **真问题**: 6 个 connection 路径中, Shizuku Socks 子路径的两个真问题合并实装

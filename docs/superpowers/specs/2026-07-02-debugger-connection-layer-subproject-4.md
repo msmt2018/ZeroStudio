@@ -1,6 +1,6 @@
 # 断点调试器连接层 - 子项目 4: Root
 
-> 状态: 设计 + 骨架实现
+> 状态: ✅ 完整实装 (Phase 17/18 commit `9f452a30` socat + leak 修, Phase 13h commit `9fa345a9` 抽公共 ProcessRunner)
 > 父设计: [2026-07-02-debugger-connection-layer-design.md](./2026-07-02-debugger-connection-layer-design.md)
 
 ## 1. 目标

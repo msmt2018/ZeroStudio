@@ -1,6 +1,6 @@
 # Phase 13d: ShizukuConnection.attachViaBinder 真实现 - 留 TODO 文档化限制
 
-**Commit**: (待 commit)
+**Commit**: `8f8288ab` (Phase 13d attachViaBinder 留 TODO 文档化 Shizuku 14+ 真路径)
 **日期**: 2026-07-03
 **类型**: 文档化限制 + TODO 留待 Shizuku 14+ 实装
 

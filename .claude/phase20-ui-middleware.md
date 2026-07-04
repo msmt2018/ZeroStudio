@@ -170,4 +170,4 @@ SourceNameMapper (统一接口, IDE 调用层)
 
 ---
 
-> 状态: 进行中
+> 状态: ✅ 完成 (Phase 20 UI 状态表现层 commit `0f59fcfc` + 调试中间件核心 commit `42c99a2c` + Phase 23 断点对话框重构 commit `4eca76b1` + Phase 23 续 commit `55fde337`)

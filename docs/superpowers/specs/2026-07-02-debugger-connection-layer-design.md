@@ -252,13 +252,13 @@ install → launch 之后用 `AppReadySignalWatcher` 等宿主 logcat 的
 | 子项目 | 内容 | 状态 |
 |--------|------|------|
 | 1. 抽象层（本文档） | 接口 + 状态机 + 注册中心 + 偏好 | **本 PR** |
-| 2. AIDL+Socket 实现 | 跟 AIDE ADRT 同思路，宿主内 stub 起 `LocalServerSocket` 反向连 | 待 PR |
-| 3. Shizuku 实现 | 4 子路径 A/B/C/D + `ShizukuBinderWrapper` | 待 PR |
-| 4. Root 实现 | `Runtime.exec("su -c ...")` + `/proc/net/unix` 探测 | 待 PR |
-| 5. 内网 VM (SOCKS5 代理) | SOCKS5 客户端 + jdwp-tunnel over proxy | 待 PR |
-| 6. 内网 VM (ADB 端口转发) | `adb connect host:port` + `adb forward` (虚拟机内 adbd) | 待 PR |
-| 7. USB / LAN ADB | `adb connect ip:port` + `adb forward` (物理设备 / 真机) | 待 PR |
-| 8. 断点注入生成器 | 构建期生成 `.kt` 写到宿主 dex + 同步到 stub | 待 PR |
+| 2. AIDL+Socket 实现 | 跟 AIDE ADRT 同思路，宿主内 stub 起 `LocalServerSocket` 反向连 | ✅ Phase 6 + 13i (`6a2c15ec`) |
+| 3. Shizuku 实现 | 4 子路径 A/B/C/D + `ShizukuBinderWrapper` + `SocksControlTransact` | ✅ Phase 12y + 13c (`ba7a144b`) + 13d (`8f8288ab`) + 14/15/16 (`13b42ed6`) |
+| 4. Root 实现 | `Runtime.exec("su -c ...")` + `/proc/net/unix` 探测 + socat | ✅ Phase 17/18 (`9f452a30`) + 13h (`9fa345a9`) |
+| 5. 内网 VM (SOCKS5 代理) | SOCKS5 客户端 + jdwp-tunnel over proxy | ✅ Phase 13g (`0a38de3d`) |
+| 6. 内网 VM (ADB 端口转发) | `adb connect host:port` + `adb forward` (虚拟机内 adbd) | ✅ Phase 13e (`364a794c`) |
+| 7. USB / LAN ADB | `adb connect ip:port` + `adb forward` (物理设备 / 真机) | ✅ Phase 13f (`82d00a2f`) |
+| 8. 断点注入生成器 | 构建期生成 `.kt` 写到宿主 dex + 同步到 stub | ✅ 子项目 10 (`5a18336c` + `af3fe75d`) |
 
 ## 9. 不在本 PR 范围
 
