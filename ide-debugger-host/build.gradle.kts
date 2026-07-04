@@ -39,7 +39,7 @@ dependencies {
   // AndroidX annotation / coroutines (host process may not have full IDE deps)
   compileOnly(libs.androidx.core.ktx)
   compileOnly(libs.androidx.annotation)
-  implementation(libs.kotlinx.coroutines.android)
+  implementation(libs.common.kotlin.coroutines.android)
 
   // unit tests
   testImplementation(libs.tests.junit)
