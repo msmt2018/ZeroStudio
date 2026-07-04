@@ -154,12 +154,18 @@ public final class SourceNameMapper {
     public interface SymbolResolver {
         default boolean supportsJava() { return false; }
         default boolean supportsNative() { return false; }
-        @Nullable MappedSourceLocation mapJava(
+        @Nullable
+        default MappedSourceLocation mapJava(
                 @NonNull String rawClass,
                 @Nullable String rawMethod,
                 @Nullable String rawField,
-                @Nullable SourceLocation src);
-        @Nullable MappedSourceLocation mapNative(@NonNull NativeAddress addr);
+                @Nullable SourceLocation src) {
+            return null;
+        }
+        @Nullable
+        default MappedSourceLocation mapNative(@NonNull NativeAddress addr) {
+            return null;
+        }
         default void clear() {}
     }
 

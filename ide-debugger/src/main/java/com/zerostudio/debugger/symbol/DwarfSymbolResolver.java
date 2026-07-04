@@ -199,7 +199,7 @@ public final class DwarfSymbolResolver implements SourceNameMapper.SymbolResolve
                 // 读 shstrtab
                 long shstrOff = e_shoff + (long) e_shstrndx * e_shentsize;
                 if (shstrOff + 40 > raw.length) return null;
-                buf.position(shstrOff + 16);
+                buf.position((int) (shstrOff + 16));
                 long shstrDataOff = is64 ? buf.getLong() : (buf.getInt() & 0xFFFFFFFFL);
                 int shstrDataSize = is64 ? (int) buf.getLong() : buf.getInt();
                 String shstr = new String(raw, (int) shstrDataOff, shstrDataSize, StandardCharsets.US_ASCII);
@@ -299,8 +299,8 @@ public final class DwarfSymbolResolver implements SourceNameMapper.SymbolResolve
                             if (at.name == 0x11 /*DW_AT_low_pc*/) lowPc = info.readAddressBySize(addrSize);
                             else if (at.name == 0x12 /*DW_AT_high_pc*/) {
                                 if (at.form == 0x1f /*DW_FORM_exprloc*/ || at.form == 0x18 /*DW_FORM_block1*/) {
-                                    int len = info.readULEB128();
-                                    info.skip(len);
+                                    long len = info.readULEB128();
+                                    info.skipBytes(len);
                                 } else highPc = info.readAddressBySize(addrSize);
                             }
                             else if (at.name == 0x03 /*DW_AT_name*/) {
@@ -386,11 +386,11 @@ public final class DwarfSymbolResolver implements SourceNameMapper.SymbolResolve
                             int op = lr.readUint8() & 0xFF;
                             if (op == 0) {
                                 // 扩展 opcode
-                                int len = lr.readULEB128();
+                                long len = lr.readULEB128();
                                 int sub = lr.readUint8() & 0xFF;
                                 if (sub == 1) { /* DW_LNE_end_sequence */ address = 0; line = 1; }
                                 else if (sub == 2) { /* DW_LNE_set_address */ address = lr.readAddressBySize(is64L ? 8 : 4); }
-                                else { lr.skip(len - 1); }
+                                else { lr.skipBytes(len - 1); }
                             } else if (op < opcodeBase) {
                                 // 标准 opcode
                                 switch (op) {
