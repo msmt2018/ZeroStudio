@@ -136,6 +136,7 @@ object HostAttachAgent {
      * @param timeoutMs total budget; 0 means "use default"
      */
     @Throws(IOException::class)
+    @JvmStatic
     fun connectToIdeLocalServer(name: String, timeoutMs: Long = CONNECT_TIMEOUT_MS): LocalSocket {
         val deadline = System.currentTimeMillis() + timeoutMs
         val addr = LocalSocketAddress(name, LocalSocketAddress.Namespace.ABSTRACT)
@@ -176,6 +177,7 @@ object HostAttachAgent {
      * 之类的命令。
      */
     @Throws(IOException::class)
+    @JvmStatic
     fun openLocalAbstractJdwpSocket(timeoutMs: Long = CONNECT_TIMEOUT_MS): LocalSocket {
         return connectToIdeLocalServer("jdwp", timeoutMs)
     }
