@@ -25,4 +25,11 @@
 
     <color name="debugger_bp_hit_count_label">#CE93D8</color>
     <color name="debugger_bp_hit_count_received_label">#90CAF9</color>
+
+    <!-- Phase 23 续: 命中次数徽章底色 (深色模式)— 颜色稍提亮,带白字在暗背景上保持对比。 -->
+    <color name="debugger_bp_hit_count_badge_default">#546E7A</color>
+    <color name="debugger_bp_hit_count_badge_hit">#EF5350</color>
+    <color name="debugger_bp_hit_count_badge_verified">#66BB6A</color>
+    <color name="debugger_bp_hit_count_badge_disabled">#9E9E9E</color>
+    <color name="debugger_bp_hit_count_badge_invalid">#FF5252</color>
 </resources>

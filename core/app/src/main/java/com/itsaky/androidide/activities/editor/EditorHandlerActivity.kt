@@ -599,10 +599,6 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     editorViewModel.addFile(file)
     editorViewModel.setCurrentFile(position, file)
 
-    // PR-D6: 挂断点侧边栏 + 设置点击 -> 弹类型选择器 (普通/条件/日志点)。
-    // 之前侧边栏的 onBreakpointClick 没有调用方,此 hook 补上。
-    attachBreakpointGutter(editor)
-
     updateTabs()
     // onFileLoaded(editor, file)
 
@@ -610,57 +606,14 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
   }
 
   /**
-   * PR-D6: 在文件打开后挂 BreakpointGutterManager + 设置点击 / 长按回调。
-   *  - 单击空行 -> {@link BreakpointTypePicker} 选类型后创建断点
-   *  - 长按已有断点 -> 弹上下文菜单 (toggle / 编辑 / 删除)
+   * Phase 23 续: 这是当前唯一的 attach 入口 (之前有一份 1-arg `attachBreakpointGutter(editor)`
+   * 在 line 617 是 PR-D6 留的, 跟这里签名不同导致两版并存并互相覆盖 listener — 修后保留
+   * 这一份 (2-arg view, file), openFile 入口只调一次。
+   *
+   * <p>这一行 hook 是修复"点击行号后断点类型选择弹窗不响应"的根本 —
+   * 之前 manager 内部已经有事件分发链路 (`setOnActionListener → sidebar → click`),
+   * 但 `setOnActionListener` 一直没人调用,事件链路在第一站就断了。
    */
-  private fun attachBreakpointGutter(editor: CodeEditorView) {
-    val codeEditor = editor.editor ?: return
-    val file = editor.file ?: return
-    val mgr = com.itsaky.androidide.debugger.view.BreakpointGutterManager
-        .attach(codeEditor, file.absolutePath)
-    mgr.setActionListener(object :
-        com.itsaky.androidide.debugger.view.BreakpointGutterManager.OnBreakpointActionListener {
-      override fun onBreakpointClick(f: String, line: Int) {
-        // 行号 = BreakpointSidebar 报上来的 0-based 行索引 (JDWP 与 line 内部一致)
-        val absFile = File(f)
-        val existing = com.itsaky.androidide.debugger.model.BreakpointManager
-            .getInstance().findAt(absFile.absolutePath, line)
-        if (existing != null) {
-          // 已存在 -> 切换 enable/disable。
-          com.itsaky.androidide.debugger.model.BreakpointManager
-              .getInstance().setEnabled(existing.id, !existing.isActive())
-          return
-        }
-        val picker = com.itsaky.androidide.debugger.view.BreakpointTypePicker(this@EditorHandlerActivity)
-        picker.showAtPosition(
-            content.editorContainer,
-            0,
-            0,
-            object : com.itsaky.androidide.debugger.view.BreakpointTypePicker.Callback {
-              override fun onTypePicked(type: com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type) {
-                when (type) {
-                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.NORMAL -> {
-                    com.itsaky.androidide.debugger.model.BreakpointManager
-                        .getInstance().toggle(absFile.absolutePath, line)
-                  }
-                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.CONDITION -> {
-                    promptCondition(absFile, line)
-                  }
-                  com.itsaky.androidide.debugger.view.BreakpointTypePicker.Type.LOGPOINT -> {
-                    promptLogMessage(absFile, line)
-                  }
-                }
-              }
-            })
-      }
-
-      override fun onBreakpointLongClick(bp: com.itsaky.androidide.debugger.model.IdeBreakpoint) {
-        showBreakpointContextMenu(bp)
-      }
-    })
-    mgr.showSidebar()
-  }
 
   /** PR-D6: 长按已有断点弹上下文菜单 (toggle / 编辑条件 / 编辑日志 / 删除) */
   private fun showBreakpointContextMenu(bp: com.itsaky.androidide.debugger.model.IdeBreakpoint) {
@@ -772,43 +725,59 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
             codeEditor,
             file.absolutePath,
         )
-    gutter.setActionListener(
+    // 修 Phase 23 续: 之前调 setActionListener 是错的, BreakpointGutterManager 实际
+    // 暴露的是 setOnActionListener。修对之后 listener 才会被 manager 记录,事件
+    // 链路才能跑通 (之前事件永远断在第一站)。
+    //
+    // Phase 23 续: listener 接口也升级到 3 方法版本 (onAddBreakpoint /
+    // onEditBreakpoint / onBreakpointLongClick), BreakpointGutterManager 内部
+    // 走统一接口 — 旧版 2 方法 (onBreakpointClick / onBreakpointLongClick) 不
+    // 再被调用。
+    gutter.setOnActionListener(
         object : com.itsaky.androidide.debugger.view.BreakpointGutterManager
             .OnBreakpointActionListener {
-          override fun onBreakpointClick(filePath: String, line: Int) {
-            // 旧式无坐标 API 兜底 — 退回到把弹窗锚定到整个 editor view。
-            com.itsaky.androidide.debugger.view.BreakpointTypePicker.show(
-                this@EditorHandlerActivity,
-                view,
-                filePath,
-                line,
-            )
-          }
-
-          override fun onBreakpointClick(
-              filePath: String,
+          override fun onAddBreakpoint(
+              f: String,
               line: Int,
+              entry: com.itsaky.androidide.debugger.model.BreakpointTypeCatalog.Entry,
               x: Float,
               y: Float,
           ) {
-            // 短按带点击位置 — 把弹窗锚定到具体行,而不是整个 editor 顶部。
-            // 1x1 ghost view 通过 (x, y) 摆到按住的行上,ListPopupWindow 锚定
-            // 到它,关闭后 OnDismissListener 移除 ghost,避免持续占用 View 树。
-            val parent = view.parent as? android.view.ViewGroup ?: view
-            com.itsaky.androidide.debugger.view.BreakpointTypePicker.showAtPosition(
-                this@EditorHandlerActivity,
-                parent,
-                x.toInt(),
-                y.toInt(),
-                filePath,
-                line,
-            )
+            // 用户在 gutter 点空白行,想加新断点。
+            //   1) LINE fast path:直接 toggle (即时反馈, 无 dialog)
+            //   2) BROWSER 拦截: needsInjector 入口 (DOM/XHR/EVENT) 暂未接 frida/xposed
+            //   3) 其它: 弹 BreakpointDetailDialog (Phase 22 引入的高斯模糊磨砂配置面板)
+            val bm = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+            if (entry === com.itsaky.androidide.debugger.model.BreakpointTypeCatalog.ENTRY_LINE) {
+              bm.toggle(f, line)
+              return
+            }
+            if (entry.needsInjector) {
+              com.itsaky.androidide.utils.flashInfo(
+                  "BROWSER 断点需要 frida/xposed 注入器, 暂未接入")
+              return
+            }
+            com.itsaky.androidide.debugger.view.BreakpointDetailDialog.showForNew(
+                this@EditorHandlerActivity, f, line, entry, null) {}
+          }
+
+          override fun onEditBreakpoint(
+              bp: com.itsaky.androidide.debugger.model.IdeBreakpoint,
+              x: Float,
+              y: Float,
+          ) {
+            // 短按已有断点 → 弹完整配置面板 (跟 Phase 22 一致)
+            com.itsaky.androidide.debugger.view.BreakpointDetailDialog.showForEdit(
+                this@EditorHandlerActivity, bp)
           }
 
           override fun onBreakpointLongClick(
               bp: com.itsaky.androidide.debugger.model.IdeBreakpoint,
+              x: Float,
+              y: Float,
           ) {
-            // 长按已有断点:弹条件/禁用/删除菜单
+            // 长按已有断点 → 弹 BreakpointConditionDialog (Phase 23 续, "从 gutter 快速编辑"
+            // 的最短路径)。支持 enable / 条件 / 日志 / 命中次数 / 高级 kind / dependent / 等。
             com.itsaky.androidide.debugger.BreakpointConditionDialog.showDialog(
                 supportFragmentManager,
                 bp.id,

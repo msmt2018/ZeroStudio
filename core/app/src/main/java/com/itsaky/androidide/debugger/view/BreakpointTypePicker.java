@@ -36,7 +36,11 @@ public final class BreakpointTypePicker {
     public enum Type {
         NORMAL(R.string.debugger_bp_picker_normal),
         CONDITION(R.string.debugger_bp_picker_condition),
-        LOGPOINT(R.string.debugger_bp_picker_logpoint);
+        LOGPOINT(R.string.debugger_bp_picker_logpoint),
+        // Phase 23 续: 高级类型入口 — 跳到 BreakpointTypePickerDialog (高斯模糊磨砂),
+        // 那是 Phase 22 引入的 4 类断点选择器, 支持 EXCEPTION / SYMBOLIC / WATCHPOINT /
+        // DEPENDENT 等高级类型。BreakpointTypePicker 自己只显示 3 个常用 + MORE。
+        MORE(R.string.debugger_bp_picker_more);
 
         @StringRes public final int labelRes;
         Type(@StringRes int r) { this.labelRes = r; }
@@ -75,6 +79,22 @@ public final class BreakpointTypePicker {
                     com.itsaky.androidide.debugger.model.BreakpointManager.getInstance();
             if (type == Type.NORMAL) {
                 manager.toggle(file, line);
+            } else if (type == Type.MORE) {
+                // Phase 23 续: 用户选 "More..." → 弹 BreakpointTypePickerDialog (高斯模糊磨砂),
+                // 那是 Phase 22 引入的 4 类断点选择器,支持 EXCEPTION / SYMBOLIC / WATCHPOINT
+                // / DEPENDENT 等高级类型。BreakpointTypePicker 自己只显示 3 个常用类型,
+                // 高级类型通过 MORE 入口跳转 — 这条路径保留给"在 gutter 弹快速选择 + 还想进
+                // 高级 dialog"的场景。
+                if (context instanceof androidx.fragment.app.FragmentActivity) {
+                    BreakpointTypePickerDialog.show(
+                            (androidx.fragment.app.FragmentActivity) context,
+                            file, line, x, y,
+                            (entry, f, l, x2, y2) -> {
+                                // BreakpointTypePickerDialog 内部已经走 BreakpointDetailDialog
+                                // (Phase 22). 这里只做日志,实际添加由 dialog 完成。
+                                ILogger.debug(TAG, "Forwarded to BreakpointTypePickerDialog: " + entry);
+                            });
+                }
             } else {
                 com.itsaky.androidide.debugger.model.IdeBreakpoint bp =
                         manager.findAt(file, line);

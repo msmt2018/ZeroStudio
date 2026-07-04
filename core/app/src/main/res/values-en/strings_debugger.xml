@@ -187,6 +187,8 @@
     <string name="debugger_bp_picker_normal">Normal breakpoint</string>
     <string name="debugger_bp_picker_condition">Conditional breakpoint</string>
     <string name="debugger_bp_picker_logpoint">Logpoint</string>
+    <!-- Phase 23 续: 高级类型入口 — 跳到 Phase 22 引入的 BreakpointTypePickerDialog (frosted glass) -->
+    <string name="debugger_bp_picker_more">More types…</string>
 
     <!-- PR-D6: Variable set-value dialog -->
     <string name="debugger_var_set_value_title">Set value of %1$s</string>

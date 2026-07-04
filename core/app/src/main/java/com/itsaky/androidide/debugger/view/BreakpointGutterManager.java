@@ -88,7 +88,7 @@ public final class BreakpointGutterManager {
 
     public static void refreshAll() {
         for (BreakpointGutterManager m : attached.values()) {
-            if (m.column != null) m.column.refresh();
+            m.refresh();
         }
     }
 
@@ -98,11 +98,25 @@ public final class BreakpointGutterManager {
     }
 
     @NonNull private final CodeEditor editor;
-    @Nullable private BreakpointColumnView column;
+    @Nullable private View column;  // BreakpointColumnView 或 BreakpointSidebar (按 useLegacySidebar 切换)
     @Nullable private OnBreakpointActionListener actionListener;
     @NonNull private String fileCanonical;
     private final List<SubscriptionReceipt<?>> subscriptions = new ArrayList<>();
     @Nullable private DebugSessionState.Listener sessionListener;
+
+    /**
+     * Phase 23 续: 设 true 用 {@link BreakpointSidebar} 替代默认的
+     * {@link BreakpointColumnView}。两边事件 dispatch 接口保持兼容,
+     * IDE 端 listener 无感。Phase 24 可加设置项 + 持久化偏好。
+     *
+     * <p>区别:
+     * <ul>
+     *   <li>BreakpointColumnView: 简洁, 跟 sora-editor 行号列 1:1 对齐, 性能更好
+     *   <li>BreakpointSidebar: 早期版本, 自定义 View 覆盖在 gutter 区域, 视觉差异
+     *       更细 (DISABLED 斜线、CONDITION 菱形等), a11y (AccessibilityNodeInfo) 更强
+     * </ul>
+     */
+    public static boolean useLegacySidebar = false;
 
     private BreakpointGutterManager(@NonNull CodeEditor editor, @NonNull String file) {
         this.editor = editor;
@@ -113,26 +127,68 @@ public final class BreakpointGutterManager {
         this.actionListener = l;
     }
 
+    // 兼容旧 import (PR-D4 之前用 setOnBreakpointClickListener, Phase 22 改用 setOnActionListener,
+    // 这里保留 alias 让两个 API 都能用,跟 BreakpointSidebar.setOnBreakpointClickListener 区分)
+    public void setOnBreakpointClickListener(@Nullable OnBreakpointActionListener l) {
+        setOnActionListener(l);
+    }
+
     public void rebindFile(@NonNull String newFile) {
         this.fileCanonical = BreakpointManager.normalize(newFile);
-        if (column != null) column.rebindFile(newFile);
+        if (column instanceof BreakpointColumnView) {
+            ((BreakpointColumnView) column).rebindFile(newFile);
+        } else if (column instanceof BreakpointSidebar) {
+            ((BreakpointSidebar) column).rebindFile(newFile);
+        }
     }
 
     public void refresh() {
-        if (column != null) column.refresh();
+        if (column == null) return;
+        if (column instanceof BreakpointColumnView) {
+            ((BreakpointColumnView) column).refresh();
+        } else if (column instanceof BreakpointSidebar) {
+            ((BreakpointSidebar) column).refresh();
+        }
     }
 
     public void show() {
         if (column != null) return;
         if (!(editor.getParent() instanceof ViewGroup)) return;
         ViewGroup parent = (ViewGroup) editor.getParent();
-        // 移除旧 column
+        // 移除旧 column (避免重复挂)
         for (int i = 0; i < parent.getChildCount(); i++) {
             View c = parent.getChildAt(i);
-            if (c instanceof BreakpointColumnView) {
+            if (c instanceof BreakpointColumnView || c instanceof BreakpointSidebar) {
                 parent.removeView(c);
             }
         }
+        // Phase 23 续: 根据 useLegacySidebar flag 选择 gutter View
+        if (useLegacySidebar) {
+            attachLegacySidebar(parent);
+        } else {
+            attachColumnView(parent);
+        }
+        subscribeEditorEvents();
+        subscribeSessionState();
+        // BreakpointColumnView 需要 layoutToMatchLineColumn; BreakpointSidebar 不需要
+        if (column instanceof BreakpointColumnView) {
+            ((BreakpointColumnView) column).layoutToMatchLineColumn();
+        }
+        if (column instanceof BreakpointColumnView) {
+            ((BreakpointColumnView) column).refresh();
+        } else if (column instanceof BreakpointSidebar) {
+            ((BreakpointSidebar) column).refresh();
+        }
+    }
+
+    /**
+     * Phase 23 续: 挂载默认 BreakpointColumnView。事件流:
+     *  1) BreakpointColumnView 内 GestureDetector 派发 onBreakpointClick / onBreakpointExistingClick / onBreakpointLongClick
+     *  2) 包装层: onBreakpointClick 默认弹 BreakpointTypePickerDialog (高斯模糊磨砂)
+     *  3) picker 选择后, 回调 (entry, file, line, x, y) → 转发给 IDE 端 actionListener.onAddBreakpoint
+     *  4) 其它两个直接转发给 actionListener.onEditBreakpoint / onBreakpointLongClick
+     */
+    private void attachColumnView(@NonNull ViewGroup parent) {
         BreakpointColumnView v = new BreakpointColumnView(editor.getContext());
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -173,10 +229,57 @@ public final class BreakpointGutterManager {
             }
         });
         this.column = v;
-        subscribeEditorEvents();
-        subscribeSessionState();
-        v.layoutToMatchLineColumn();
-        v.refresh();
+    }
+
+    /**
+     * Phase 23 续: 挂载早期版 BreakpointSidebar。事件流:
+     *  1) BreakpointSidebar 内 GestureDetector 派发 onBreakpointClick (空白行) /
+     *     onBreakpointExistingClick (已有断点) / onBreakpointLongClick
+     *  2) 包装层: 同样默认弹 BreakpointTypePickerDialog (4 类断点选择), 选中后转发给 IDE 端 listener
+     *  3) onBreakpointExistingClick 走 IDE 端的 onEditBreakpoint (弹 BreakpointDetailDialog)
+     *  4) onBreakpointLongClick 走 IDE 端的 onBreakpointLongClick (弹 BreakpointContextMenu)
+     *
+     * <p>跟 BreakpointColumnView 的事件流一致, IDE 端 listener 接口完全不变。
+     */
+    private void attachLegacySidebar(@NonNull ViewGroup parent) {
+        BreakpointSidebar v = new BreakpointSidebar(editor.getContext());
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                (int) (28 * editor.getResources().getDisplayMetrics().density),
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        lp.gravity = android.view.Gravity.START;
+        v.setLayoutParams(lp);
+        parent.addView(v);
+        v.bind(editor, fileCanonical);
+        v.setOnBreakpointClickListener(new BreakpointSidebar.OnBreakpointClickListener() {
+            @Override
+            public void onBreakpointClick(@NonNull String file, int line,
+                                          float screenX, float screenY) {
+                if (actionListener == null) return;
+                FragmentActivity activity = findActivity(editor);
+                if (activity == null) return;
+                BreakpointTypePickerDialog.show(activity, file, line, screenX, screenY,
+                        (entry, f, l, x, y) -> {
+                            if (actionListener != null) {
+                                actionListener.onAddBreakpoint(f, l, entry, x, y);
+                            }
+                        });
+            }
+            @Override
+            public void onBreakpointExistingClick(@NonNull IdeBreakpoint bp,
+                                                  float screenX, float screenY) {
+                if (actionListener != null) {
+                    actionListener.onEditBreakpoint(bp, screenX, screenY);
+                }
+            }
+            @Override
+            public void onBreakpointLongClick(@NonNull IdeBreakpoint bp,
+                                              float screenX, float screenY) {
+                if (actionListener != null) {
+                    actionListener.onBreakpointLongClick(bp, screenX, screenY);
+                }
+            }
+        });
+        this.column = v;
     }
 
     public void hide() {
@@ -184,7 +287,11 @@ public final class BreakpointGutterManager {
         if (column.getParent() instanceof ViewGroup) {
             ((ViewGroup) column.getParent()).removeView(column);
         }
-        column.unbind();
+        if (column instanceof BreakpointColumnView) {
+            ((BreakpointColumnView) column).unbind();
+        } else if (column instanceof BreakpointSidebar) {
+            ((BreakpointSidebar) column).unbind();
+        }
         column = null;
     }
 
@@ -199,9 +306,11 @@ public final class BreakpointGutterManager {
         try {
             SubscriptionReceipt<?> r1 = editor.subscribeEvent(ScrollEvent.class,
                     (event, sub) -> {
-                        if (column != null) {
-                            column.layoutToMatchLineColumn();
-                            column.refresh();
+                        if (column instanceof BreakpointColumnView) {
+                            ((BreakpointColumnView) column).layoutToMatchLineColumn();
+                            ((BreakpointColumnView) column).refresh();
+                        } else if (column instanceof BreakpointSidebar) {
+                            ((BreakpointSidebar) column).refresh();
                         }
                     });
             if (r1 != null) subscriptions.add(r1);
@@ -209,7 +318,11 @@ public final class BreakpointGutterManager {
         try {
             SubscriptionReceipt<?> r2 = editor.subscribeEvent(ContentChangeEvent.class,
                     (event, sub) -> {
-                        if (column != null) column.refresh();
+                        if (column instanceof BreakpointColumnView) {
+                            ((BreakpointColumnView) column).refresh();
+                        } else if (column instanceof BreakpointSidebar) {
+                            ((BreakpointSidebar) column).refresh();
+                        }
                     });
             if (r2 != null) subscriptions.add(r2);
         } catch (Throwable ignored) {}
@@ -226,7 +339,11 @@ public final class BreakpointGutterManager {
         try {
             DebugSessionState st = DebuggerController.getInstance().sessionState();
             sessionListener = s -> {
-                if (column != null) column.refresh();
+                if (column instanceof BreakpointColumnView) {
+                    ((BreakpointColumnView) column).refresh();
+                } else if (column instanceof BreakpointSidebar) {
+                    ((BreakpointSidebar) column).refresh();
+                }
             };
             st.addListener(sessionListener);
         } catch (Throwable ignored) {}

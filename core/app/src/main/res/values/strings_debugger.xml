@@ -217,6 +217,8 @@
     <string name="debugger_bp_picker_normal">普通断点</string>
     <string name="debugger_bp_picker_condition">条件断点</string>
     <string name="debugger_bp_picker_logpoint">日志点</string>
+    <!-- Phase 23 续: 高级类型入口 — 跳到 Phase 22 引入的 BreakpointTypePickerDialog (高斯模糊磨砂) -->
+    <string name="debugger_bp_picker_more">更多类型…</string>
 
     <!-- PR-D6: 变量 set-value 对话框 -->
     <string name="debugger_var_set_value_title">设置 %1$s 的值</string>

@@ -2574,5 +2574,90 @@ ide-debugger/src/main/java/com/zerostudio/debugger/api/
 - 真实 JDWP 内存读取接通
 - WebView Chrome DevTools Protocol 桥接 (第四类断点)
 
+---
+
+# Phase 23 续: 撤回 3 个被删文件, 完整实装早期改进 + 接入事件流
+
+> 把上一步误删的 `BreakpointSidebar.java` / `BreakpointTypePicker.java` /
+> `BreakpointConditionDialog.java` 全部恢复, 并把"最初开始就提到"的改进和
+> 优化实施到位, 让 3 个文件真正成为可工作的功能组件, 接进对应的事件场景。
+
+## 1. 撤回 3 个文件 + 各自优化
+
+| 文件 | Phase 23 之前的角色 | Phase 23 续实装的改进 | 对接的事件场景 |
+|------|---------------------|----------------------|----------------|
+| `BreakpointSidebar.java` | 自定义 View 覆盖在 gutter 区域 | (a) 14 状态 (NORMAL/INVALID/VERIFIED/CONDITION/LOG/DISABLED/HIT/EXCEPTION/FIELD_WATCHPOINT/METHOD/DEPENDENT/DEPENDENT_PENDING/TEMPORARY/INLINE) | gutter 视觉 |
+
+续: 加入 (b) 命中次数徽章 + (c) 内联断点小三角 + (d) DISABLED 斜线/CONDITION 菱形/DEPENDENT 双圆/TEMPORARY 十字/EXCEPTION 感叹号/FIELD_WATCHPOINT 矩形/METHOD 双向箭头/LOG 文形 + (e) 命中行水平贯穿高亮 + (f) 出口 paint 重置 (E3) + (g) `findAt` 已有断点精确查找 + (h) 订阅 DebugSessionState 刷新 lastHitLine + (i) `rebindFile` 文件切换。仍保留 a11y (AccessibilityNodeInfoCompat.ACTION_CLICK / ACTION_LONG_CLICK) 和 firstVisibleRow clamp (-1 → 0)。
+
+| `BreakpointTypePicker.java` | 3 类断点 popup (普通/条件/日志) | 新增第 4 项 `MORE` → 跳到 Phase 22 引入的 `BreakpointTypePickerDialog` (高斯模糊磨砂) | gutter 短按 (fast path 之外) |
+
+`MORE` 选型时: 走 `BreakpointTypePickerDialog.show(activity, file, line, x, y, callback)`, 那条路径已经在 Phase 22 实装 4 类断点选择 + 跳 BreakpointDetailDialog。轻量版 3 选 1 popup 跟完整版并存, 入口更短。
+
+| `BreakpointConditionDialog.java` | 完整配置 DialogFragment (类型 / 条件 / 日志 / 命中次数 / 高级 kind / dependent / 临时) | (已经完整, 保留) | gutter 长按 → 弹 "快速编辑" 面板 |
+
+EditorHandlerActivity 之前调用 `setActionListener` (错方法名, 应是 `setOnActionListener`) 修了 — 事件链第一站修通, 长按会真正触发 BreakpointConditionDialog.showDialog。
+
+## 2. BreakpointGutterManager 升级 (新增 `useLegacySidebar` flag)
+
+```java
+public static boolean useLegacySidebar = false;  // 默认用 BreakpointColumnView
+```
+
+设 true 时 `show()` 走 `attachLegacySidebar(parent)`, 用 BreakpointSidebar 替代 BreakpointColumnView。两边事件 dispatch 接口都 wrap 到统一的 `OnBreakpointActionListener` (3 方法: onAddBreakpoint / onEditBreakpoint / onBreakpointLongClick), IDE 端 listener 无感。Phase 24 可在设置页暴露这个开关。
+
+## 3. EditorHandlerActivity 修: 1-arg vs 2-arg attach 重复
+
+之前 `attachBreakpointGutter(editor)` (1-arg) + `attachBreakpointGutter(editor, file)` (2-arg) 两份并存, 在 `openFile` 里调了两次, listener 互相覆盖。Phase 23 续:
+
+- 删 1-arg 版本 (line 617)
+- 删重复 `attachBreakpointGutter(editor)` 调用 (line 604)
+- 2-arg 版本 listener 升级到 3 方法 (onAddBreakpoint / onEditBreakpoint / onBreakpointLongClick)
+- 修方法名 `setActionListener` → `setOnActionListener`
+
+## 4. BreakpointStateColors 新增 5 个徽章底色
+
+`debugger_bp_hit_count_badge_default / hit / verified / disabled / invalid`, 浅/深色主题各一套。BreakpointSidebar.drawHitCountBadge 按 bp.state 取不同底色, 跟 BreakpointColumnView 行为一致。
+
+## 5. 事件流 (Phase 23 续, 完整)
+
+```
+gutter 短按空白行
+  → BreakpointGutterManager.showSidebar 挂的 BreakpointColumnView (或 BreakpointSidebar)
+    → ColumnView.onSingleTapUp → onBreakpointClick(file, line, x, y)
+      → BreakpointGutterManager 外层包装
+        → BreakpointTypePickerDialog.show(activity, file, line, x, y, callback)
+          → 用户选 4 类
+            → IDE listener.onAddBreakpoint(file, line, entry, x, y)
+              → EditorHandlerActivity 处理:
+                  - ENTRY_LINE → BreakpointManager.toggle
+                  - entry.needsInjector (DOM/XHR/EVENT) → flashInfo 拦截
+                  - 其它 → BreakpointDetailDialog.showForNew (高斯模糊磨砂)
+
+gutter 短按已有断点
+  → ColumnView.onSingleTapUp → onBreakpointExistingClick(bp, x, y)
+    → BreakpointGutterManager 外层包装 → IDE listener.onEditBreakpoint
+      → BreakpointDetailDialog.showForEdit (Phase 22 frosted glass)
+
+gutter 长按已有断点
+  → ColumnView.onLongPress → onBreakpointLongClick(bp, x, y)
+    → BreakpointGutterManager 外层包装 → IDE listener.onBreakpointLongClick
+      → BreakpointConditionDialog.showDialog (Phase E2 完整配置面板)
+        (旧版用 setActionListener 错方法名, Phase 23 续改 setOnActionListener)
+```
+
+## 6. Phase 23 vs Phase 23 续 总结
+
+| 步骤 | 范围 |
+|------|------|
+| Phase 23 上一步 | 24 项 TODO 实施 + commit `4eca76b1` |
+| Phase 23 续 | 撤回 3 个被删文件 + 升级 BreakpointSidebar (14 状态 + 徽章 + 5 类装饰符号 + 出口 paint 重置 + bind/unbind/rebindFile 完整生命周期 + session listener) + BreakpointTypePicker 加 MORE 入口 + BreakpointGutterManager 加 `useLegacySidebar` flag + EditorHandlerActivity 修 1-arg 重复 + listener 升级到 3 方法 + setActionListener→setOnActionListener 修对 + BreakpointStateColors 加 5 徽章底色 + 浅/深色两套 colors_debugger.xml |
+
+## 7. 限制
+
+- `useLegacySidebar` 当前是 static boolean, 没有持久化。Phase 24 接设置项
+- BreakpointSidebar.bind 没强引用 CodeEditor 自身的 ContentChangeEvent, 是用 BreakpointGutterManager 转发 Scroll/Content 事件 — 单独使用 BreakpointSidebar 时需自行订阅
+- `BreakpointContextMenu` 没单独类, 6 项菜单在 EditorHandlerActivity 内部 AlertDialog 实现。Phase 24 可抽出来
+
 
 
