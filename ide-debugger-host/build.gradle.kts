@@ -1,7 +1,10 @@
 import com.itsaky.androidide.build.config.BuildConfig
 import com.itsaky.androidide.plugins.NoDesugarPlugin
 
-plugins { id("com.android.library") }
+plugins {
+  id("com.android.library")
+  id("org.jetbrains.kotlin.android")
+}
 
 apply { plugin(NoDesugarPlugin::class.java) }
 
