@@ -33,7 +33,7 @@ import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.tabs.TabLayout.Tab
 import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
-import com.itsaky.androidide.fragments.editor.EditorFragmentTabRegistrar
+import com.itsaky.androidide.utils.EditorFragmentTabRegistrar
 import com.itsaky.androidide.resources.R
 import com.blankj.utilcode.util.ImageUtils
 import com.itsaky.androidide.R.string

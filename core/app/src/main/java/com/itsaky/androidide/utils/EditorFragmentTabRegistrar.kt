@@ -1,5 +1,7 @@
-package com.itsaky.androidide.fragments.editor
+package com.itsaky.androidide.utils
 
+import com.itsaky.androidide.fragments.editor.FragmentTabEntry
+import com.itsaky.androidide.fragments.editor.FragmentTabRegistry
 import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
 import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
 import com.itsaky.androidide.resources.R
