@@ -1,0 +1,57 @@
+package android.zero.studio.termux.ui.screens.terminal
+
+import android.os.Environment
+import androidx.compose.runtime.mutableStateOf
+import android.zero.studio.termux.libcommons.application
+import android.zero.studio.termux.libcommons.archDir
+import android.zero.studio.termux.libcommons.child
+import android.zero.studio.termux.settings.Settings
+import android.zero.studio.termux.model.WorkingMode
+import android.zero.studio.termux.App
+import java.io.File
+
+object Rootfs {
+    val reTerminal = application!!.filesDir
+
+    init {
+        if (reTerminal.exists().not()){
+            reTerminal.mkdirs()
+        }
+    }
+
+    var isDownloaded = mutableStateOf(isFilesDownloaded())
+
+    fun requiresRootfs(workingMode: Int = Settings.working_Mode): Boolean {
+        return workingMode != WorkingMode.ANDROID
+    }
+
+    private fun rootfsFileName(workingMode: Int): String {
+        return when (workingMode) {
+            WorkingMode.ARCH,
+            WorkingMode.ARCH_ROOT -> "arch.tar.gz"
+            else -> "alpine.tar.gz"
+        }
+    }
+
+    fun isFilesDownloaded(workingMode: Int = Settings.working_Mode): Boolean{
+        if (!requiresRootfs(workingMode)) {
+            return true
+        }
+        val baseReady = reTerminal.exists() &&
+                reTerminal.child("proot").exists() &&
+                reTerminal.child("libtalloc.so.2").exists()
+
+        if (!baseReady) {
+            return false
+        }
+
+        if (workingMode == WorkingMode.ARCH || workingMode == WorkingMode.ARCH_ROOT) {
+            val archBase = archDir()
+            val marker = archBase.parentFile!!.child(".termix-arch-installed")
+            val hasEtc = archBase.child("etc").exists() || archBase.child("root").child("etc").exists()
+            return marker.exists() && hasEtc
+        }
+
+        return reTerminal.child(rootfsFileName(workingMode)).exists()
+    }
+}

@@ -1,17 +1,17 @@
 # Terminal Session Tabs ProGuard Rules
 
 # Keep tab-related classes
--keep class android.zero.studio.terminal.view.** { *; }
--keepclassmembers class android.zero.studio.terminal.view.** { *; }
+-keep class android.zero.studio.termux.view.** { *; }
+-keepclassmembers class android.zero.studio.termux.view.** { *; }
 
 # Keep data classes
--keep class android.zero.studio.terminal.view.TerminalSessionTab { *; }
+-keep class android.zero.studio.termux.view.TerminalSessionTab { *; }
 
 # Keep listener interfaces
--keep interface android.zero.studio.terminal.view.TerminalTabEventListener { *; }
+-keep interface android.zero.studio.termux.view.TerminalTabEventListener { *; }
 
 # Keep view holders
--keep class android.zero.studio.terminal.view.TerminalSessionTabAdapter$** { *; }
+-keep class android.zero.studio.termux.view.TerminalSessionTabAdapter$** { *; }
 
 # Material Design
 -keep class com.google.android.material.** { *; }

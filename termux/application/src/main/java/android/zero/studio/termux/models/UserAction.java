@@ -1,0 +1,16 @@
+package android.zero.studio.termux.models;
+
+public enum UserAction {
+  REPORT_ISSUE_FROM_TRANSCRIPT("report issue from transcript");
+
+  private final String name;
+
+  UserAction(final String name) {
+    this.name = name;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+}

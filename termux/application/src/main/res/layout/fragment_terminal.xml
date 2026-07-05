@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.zero.studio.terminal.TermuxActivityRootView xmlns:android="http://schemas.android.com/apk/res/android"
+<android.zero.studio.termux.TermuxActivityRootView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/activity_termux_root_view"
@@ -18,7 +18,7 @@
             android:layout_height="match_parent"
             android:paddingBottom="24dp">
 
-            <android.zero.studio.terminal.ui.tabs.TerminalSessionTabsView
+            <android.zero.studio.termux.ui.tabs.TerminalSessionTabsView
                 android:id="@+id/terminal_tabs_view"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -100,4 +100,4 @@
         android:visibility="gone"
         android:background="@android:color/transparent" />
 
-</android.zero.studio.terminal.TermuxActivityRootView>
+</android.zero.studio.termux.TermuxActivityRootView>

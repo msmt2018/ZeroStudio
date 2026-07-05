@@ -36,7 +36,7 @@ import com.itsaky.androidide.fragments.output.IDELogFragment;
 import com.itsaky.androidide.fragments.toolbox.EditorToolboxFragment;
 // import com.itsaky.androidide.app.MatrixApmPanelFragment;
 import com.itsaky.androidide.BuildConfig;
-import android.zero.studio.terminal.TermuxFragment;
+import android.zero.studio.termux.TermuxFragment;
 import com.itsaky.androidide.resources.R;
 import com.itsaky.androidide.utils.EditorToolboxActions;
 import java.util.ArrayList;

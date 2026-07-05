@@ -40,7 +40,7 @@
       android:configChanges="orientation|screenSize|smallestScreenSize|density|screenLayout|keyboard|keyboardHidden|navigation"
       android:exported="true"
       android:launchMode="singleTask"
-      android:name="android.zero.studio.terminal.TermuxActivity"
+      android:name="android.zero.studio.termux.TermuxActivity"
       android:resizeableActivity="true" />
 
     <activity
@@ -85,11 +85,11 @@
       android:name=".app.TermuxService" />
     <service
       android:exported="false"
-      android:name="android.zero.studio.terminal.TermuxService" />
+      android:name="android.zero.studio.termux.TermuxService" />
     <activity
       android:excludeFromRecents="true"
       android:exported="false"
-      android:name="android.zero.studio.terminal.api.file.FileReceiverActivity"
+      android:name="android.zero.studio.termux.api.file.FileReceiverActivity"
       android:noHistory="true"
       android:resizeableActivity="true"
       android:taskAffinity="${TERMUX_PACKAGE_NAME}.filereceiver" />
