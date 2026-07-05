@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/images/icon.webp" alt="ZeroStudio" width="80" height="80"/>
+  <img src="./docs/images/icons.png" alt="ZeroStudio" width="80" height="80"/>
 </p>
 
 <h2 align="center"><b>ZeroStudio</b></h2>
@@ -40,7 +40,7 @@
     - [x] Java
     - [x] XML
     - [x] Kotlin
-    - [x] lua 
+    - [ ] lua 
     - [ ] cmake 
     - [ ] c/c++/obj-c/obj-c++
     - [ ] web （html，css...)

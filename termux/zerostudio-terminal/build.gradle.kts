@@ -1,97 +1,66 @@
-@file:Suppress("UnstableApiUsage")
-
-import com.itsaky.androidide.build.config.BuildConfig
-import com.itsaky.androidide.plugins.TerminalBootstrapPackagesPlugin
+import java.io.ByteArrayOutputStream
 
 plugins {
-  id("com.android.library")
-  id("kotlin-android")
+    alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.kotlinAndroid)
+    alias(libs.plugins.compose.compiler)
 }
 
-apply { plugin(TerminalBootstrapPackagesPlugin::class.java) }
-
-val packageVariant =
-    System.getenv("TERMUX_PACKAGE_VARIANT") ?: "apt-android-7" // Default: "apt-android-7"
-
 android {
-  namespace = "com.termux"
-  ndkVersion = BuildConfig.ndkVersion
+    namespace = "android.zero.studio.terminal"
+    android.buildFeatures.buildConfig = true
+    compileSdk = 36
 
-  defaultConfig {
-    buildConfigField(
-        "String",
-        "TERMUX_PACKAGE_VARIANT",
-        "\"" + packageVariant + "\"",
-    ) // Used by TermuxApplication class
-
-    manifestPlaceholders["TERMUX_PACKAGE_NAME"] = BuildConfig.packageName
-    manifestPlaceholders["TERMUX_APP_NAME"] = "AndroidIDE"
-
-    externalNativeBuild { cmake { arguments += "-DPROJECT_BUILD_DIR=${project.buildDir}" } }
-    externalNativeBuild {
-      ndkBuild {
-        cFlags(
-            "-std=c11",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-Os",
-            "-fno-stack-protector",
-            "-Wl,--gc-sections",
-        )
-      }
+    defaultConfig {
+        minSdk = 24
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles("consumer-rules.pro")
     }
-  }
 
-  externalNativeBuild {
-    ndkBuild { path = file("src/main/cpp/Android.mk") }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 
-    lint.disable += "ProtectedPermissions"
+    buildFeatures {
+        viewBinding = true
+        compose = true
+    }
 
-    testOptions { unitTests { isIncludeAndroidResources = true } }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.15"
+    }
 
-    packaging.jniLibs.useLegacyPackaging = true
-  }
+
 }
 
 dependencies {
-  implementation(libs.androidx.annotation)
-  implementation(libs.androidx.core)
-  implementation(libs.androidx.drawer)
-  implementation(libs.androidx.preference)
-  implementation(libs.androidx.viewpager)
-  implementation(libs.google.material)
-  implementation(libs.google.guava)
-  implementation(libs.common.markwon.core)
-  implementation(libs.common.markwon.extStrikethrough)
-  implementation(libs.common.markwon.linkify)
-  implementation(libs.common.markwon.recycler)
+    api(libs.appcompat)
+    api(libs.material)
+    api(libs.constraintlayout)
+    api(libs.navigation.fragment)
+    api(libs.navigation.ui)
+    api(libs.navigation.fragment.ktx)
+    api(libs.navigation.ui.ktx)
+    api(libs.activity)
+    api(libs.lifecycle.viewmodel.ktx)
+    api(libs.lifecycle.runtime.ktx)
+    api(libs.activity.compose)
+    api(platform(libs.compose.bom))
+    api(libs.ui)
+    api(libs.ui.graphics)
+    api(libs.material3)
+    api(libs.navigation.compose)
+    api(project(":core:terminal-view"))
+    api(project(":core:terminal-emulator"))
+    api(libs.utilcode)
+    api(libs.okhttp)
+    api(libs.anrwatchdog)
+    api(libs.androidx.material.icons.core)
+    api(libs.androidx.palette)
+    api(libs.accompanist.systemuicontroller)
 
-  api(projects.core.common)
-  api(projects.core.resources)
-  implementation(projects.core.projects)
-  implementation(projects.termux.view)
-  implementation(projects.termux.shared)
-  api(projects.utilities.preferences)
-  // implementation(projects.core.actions)
-  implementation(project(":core:actions"))
-
-  implementation("com.google.android.material:material:1.12.0")
-
-  implementation("androidx.recyclerview:recyclerview:1.3.2")
-  implementation("androidx.recyclerview:recyclerview-selection:1.1.0")
-  // 协程与生命周期
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-  implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
-
-  implementation("androidx.core:core-ktx:1.13.1")
-  implementation("androidx.appcompat:appcompat:1.7.0")
-  implementation("androidx.core:core-animation:1.0.0")
-  implementation("androidx.compose.material3:material3-window-size-class:1.3.0")
-
-  implementation("androidx.interpolator:interpolator:1.0.0")
-
-  testImplementation(projects.testing.unitTest)
 }
-
-tasks.register("versionName") { doLast { print(project.rootProject.version) } }

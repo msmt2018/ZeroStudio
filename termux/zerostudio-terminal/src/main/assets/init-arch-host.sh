@@ -1,0 +1,121 @@
+#!/system/bin/sh
+set -e
+
+ARCH_DIR=$PREFIX/local/arch
+ARCH_ROOTFS=$ARCH_DIR
+ARCH_READY_MARKER=$PREFIX/local/.termix-arch-installed
+PROOT_BIN=$PREFIX/local/bin/proot
+LIB_DIR=$PREFIX/local/lib
+
+resolve_guest_hostname() {
+    if [ -r "$ARCH_ROOTFS/etc/hostname" ]; then
+        IFS= read -r guest_name < "$ARCH_ROOTFS/etc/hostname" || true
+        guest_name=${guest_name%%[[:space:]]*}
+        if [ -n "$guest_name" ]; then
+            printf '%s' "$guest_name"
+            return 0
+        fi
+    fi
+
+    printf '%s' "arch"
+}
+
+TERMIX_HOST_TTY=$(tty 2>/dev/null || true)
+case "$TERMIX_HOST_TTY" in
+    ""|"not a tty"*)
+        TERMIX_HOST_TTY=
+        ;;
+esac
+
+mkdir -p "$ARCH_DIR"
+mkdir -p "$PREFIX/local/bin"
+mkdir -p "$LIB_DIR"
+
+[ ! -e "$PROOT_BIN" ] && cp "$PREFIX/files/proot" "$PROOT_BIN"
+chmod +x "$PROOT_BIN"
+chmod +x "$PREFIX/local/bin/init-arch" 2>/dev/null || true
+
+for sofile in "$PREFIX/files/"*.so.2; do
+    dest="$LIB_DIR/$(basename "$sofile")"
+    [ ! -e "$dest" ] && cp "$sofile" "$dest"
+done
+
+if [ ! -f "$ARCH_READY_MARKER" ] || { [ ! -d "$ARCH_DIR/etc" ] && [ ! -d "$ARCH_DIR/root/etc" ]; }; then
+    echo "Arch rootfs is not installed. Open Termix downloader to install Arch Linux."
+    exit 1
+fi
+
+if [ ! -d "$ARCH_DIR/etc" ] && [ -d "$ARCH_DIR/root/etc" ]; then
+    ARCH_ROOTFS=$ARCH_DIR/root
+fi
+
+if [ ! -d "$ARCH_ROOTFS/etc" ]; then
+    echo "Arch rootfs extraction failed: missing '$ARCH_ROOTFS/etc'"
+    exit 1
+fi
+
+GUEST_HOSTNAME=$(resolve_guest_hostname)
+
+ARGS="--kill-on-exit"
+ARGS="$ARGS -w /"
+
+for system_mnt in /apex /odm /product /system /system_ext /vendor \
+ /linkerconfig/ld.config.txt \
+ /linkerconfig/com.android.art/ld.config.txt \
+ /plat_property_contexts /property_contexts; do
+
+ if [ -e "$system_mnt" ]; then
+  system_mnt=$(realpath "$system_mnt")
+  ARGS="$ARGS -b ${system_mnt}"
+ fi
+done
+unset system_mnt
+
+ARGS="$ARGS -b /sdcard"
+ARGS="$ARGS -b /storage"
+ARGS="$ARGS -b /dev"
+ARGS="$ARGS -b /data"
+ARGS="$ARGS -b /dev/urandom:/dev/random"
+ARGS="$ARGS -b /proc"
+ARGS="$ARGS -b $PREFIX"
+ARGS="$ARGS -b $PREFIX/local/stat:/proc/stat"
+ARGS="$ARGS -b $PREFIX/local/vmstat:/proc/vmstat"
+
+if [ -e "/proc/self/fd" ]; then
+  ARGS="$ARGS -b /proc/self/fd:/dev/fd"
+fi
+
+if [ -e "/proc/self/fd/0" ]; then
+  ARGS="$ARGS -b /proc/self/fd/0:/dev/stdin"
+fi
+
+if [ -e "/proc/self/fd/1" ]; then
+  ARGS="$ARGS -b /proc/self/fd/1:/dev/stdout"
+fi
+
+if [ -e "/proc/self/fd/2" ]; then
+  ARGS="$ARGS -b /proc/self/fd/2:/dev/stderr"
+fi
+
+ARGS="$ARGS -b $PREFIX"
+ARGS="$ARGS -b /sys"
+
+if [ ! -d "$ARCH_ROOTFS/tmp" ]; then
+ mkdir -p "$ARCH_ROOTFS/tmp"
+ chmod 1777 "$ARCH_ROOTFS/tmp"
+fi
+ARGS="$ARGS -b $ARCH_ROOTFS/tmp:/dev/shm"
+
+ARGS="$ARGS -r $ARCH_ROOTFS"
+ARGS="$ARGS -0"
+ARGS="$ARGS --link2symlink"
+ARGS="$ARGS --sysvipc"
+ARGS="$ARGS -L"
+
+export TERMIX_GUEST_HOSTNAME="$GUEST_HOSTNAME"
+
+if [ -n "$TERMIX_HOST_TTY" ]; then
+    exec "$LINKER" "$PROOT_BIN" $ARGS env TERMIX_HOST_TTY="$TERMIX_HOST_TTY" TERMIX_GUEST_HOSTNAME="$TERMIX_GUEST_HOSTNAME" sh "$PREFIX/local/bin/init-arch" "$@"
+fi
+
+exec "$LINKER" "$PROOT_BIN" $ARGS env TERMIX_GUEST_HOSTNAME="$TERMIX_GUEST_HOSTNAME" sh "$PREFIX/local/bin/init-arch" "$@"

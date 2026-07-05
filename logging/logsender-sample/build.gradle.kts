@@ -15,9 +15,14 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
   id("com.android.application")
 }
+
+
 
 android {
   namespace = "${BuildConfig.packageName}.logsender.sample"
@@ -31,7 +36,8 @@ android {
 
 dependencies {
 
-  implementation(projects.logsender)
+  implementation(projects.logging.logger)
+  implementation(projects.logging.logsender)
 
   implementation(libs.androidx.appcompat)
   implementation(libs.androidx.constraintlayout)
