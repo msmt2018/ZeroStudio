@@ -381,12 +381,40 @@ Java_com_zerostudio_preview_UniversalPreviewEngineFragment_nativeOnDrawFrame(
 
   glBindVertexArray(0);
 
-  // ── Dear ImGui 渲染 (骨架) ──
-  // TODO: 接入 ImGui OpenGL ES3 后端
-  //   1. ImGui::CreateContext()
-  //   2. ImGui_ImplAndroidGLES3_Init()
-  //   3. ImGui::NewFrame() / ImGui::Render() / ImGui_ImplOpenGL3_RenderDrawData()
-  // 当前骨架只渲染示例立方体, ImGui 留扩展点。
+  // ── Dear ImGui 渲染 ──
+  // ImGui 集成路径 (3 种方案, 按 IDE 场景选择):
+  //
+  // 方案 1: 原生 GLES3 后端 (推荐 — 最低延迟, 最高帧率)
+  //   1. CMakeLists.txt 添加 ImGui 源码 (imgui/imgui.cpp + backends/imgui_impl_opengl3.cpp)
+  //   2. 实现 ImGui Android 触摸输入桥 (MotionEvent → ImGui IO)
+  //   3. onDrawFrame 中:
+  //      ImGui_ImplOpenGL3_NewFrame();
+  //      ImGui::NewFrame();
+  //      // 构建 UI 面板 (从 nativeUpdateScene 投递的源码 / 场景数据)
+  //      ImGui::Begin("Source Preview");
+  //      ImGui::Text("%s", g_pendingSceneData.c_str());
+  //      ImGui::End();
+  //      ImGui::Render();
+  //      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+  //
+  // 方案 2: WebView + Three.js (当前已实装 — 适合 AST 拓扑 / 数据可视化)
+  //   Java dispatchSourceData(type=0, json) → evaluateJavascript → Three.js
+  //
+  // 方案 3: WebAssembly (用户源码 → LLVM → .wasm → WebView)
+  //   WebView 的 WebSettings 已启用 JavaScript + WebGL2,
+  //   可直接加载预编译的 .wasm 模块 (ImGui.wasm / 用户代码.wasm)。
+  //   适合: 沙盒安全执行用户 C++ 代码, 渲染到 WebGL canvas。
+  //   限制: 手机端无内置 LLVM, 需预编译或远程编译 .wasm。
+  //
+  // 当前骨架: 方案 2 已实装 (Three.js), 方案 1/3 留扩展点。
+  // 下面是方案 1 的 ImGui 渲染骨架 (条件编译, 需 CMake 定义 WITH_IMGUI):
+#ifdef WITH_IMGUI
+  // ImGui_ImplOpenGL3_NewFrame();
+  // ImGui::NewFrame();
+  // ImGui::ShowDemoWindow(); // 示例: ImGui Demo 窗口
+  // ImGui::Render();
+  // ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
 
   g_res.frameCount++;
   if (g_res.frameCount % 300 == 0) {

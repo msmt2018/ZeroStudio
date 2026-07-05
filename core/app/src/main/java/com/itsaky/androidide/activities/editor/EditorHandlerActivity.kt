@@ -36,6 +36,7 @@ import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
 import com.itsaky.androidide.fragments.editor.FragmentTabEntry
 import com.itsaky.androidide.fragments.editor.FragmentTabRegistry
 import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
+import com.zerostudio.preview.UniversalPreviewEngineFragment
 import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
 import com.itsaky.androidide.resources.R
 import com.blankj.utilcode.util.ImageUtils
@@ -171,6 +172,21 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
         // arguments. 这里仅供 tab 创建时 fallback 预览, 真实打开后会用
         // newInstance(filePath) 覆盖.
         fragmentFactory = { ImagePreviewFragment() },
+      )
+    )
+
+    // C/C++ 3D/2D 通用预览 —— 双核架构 (WebView + Three.js / GLSurfaceView +
+    // JNI C++ NDK). 文件后缀命中 UniversalPreviewEngineFragment.SUPPORTED_EXTENSIONS
+    // (c / cpp / h / glsl / cu 等) 时 editor 在 tab 栏给出 "Universal Preview" 入口.
+    FragmentTabRegistry.register(
+      FragmentTabEntry(
+        id = "universal_preview",
+        title = UniversalPreviewEngineFragment.TAB_TITLE,
+        iconRes = R.drawable.ic_code,
+        fragmentClass = UniversalPreviewEngineFragment::class.java,
+        fileExtensions = UniversalPreviewEngineFragment.SUPPORTED_EXTENSIONS,
+        order = 120,
+        fragmentFactory = { UniversalPreviewEngineFragment() },
       )
     )
   }

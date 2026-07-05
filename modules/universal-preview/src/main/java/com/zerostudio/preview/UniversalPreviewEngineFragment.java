@@ -47,6 +47,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import java.io.File;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.EGLContext;
@@ -82,6 +87,35 @@ public class UniversalPreviewEngineFragment extends Fragment {
   /** dispatchSourceData type=1: 动态 / C++ 原生渲染 / ImGui → NDK */
   public static final int DATA_NATIVE_SCENE = 1;
 
+  /** Fragment arguments key: 文件路径 */
+  public static final String ARG_FILE_PATH = "file_path";
+
+  /** Tab 标题 */
+  public static final String TAB_TITLE = "Universal Preview";
+
+  /**
+   * 支持的文件后缀 (小写, 不含 `.`)。
+   *
+   * <p>覆盖 C/C++ 源码 + GLSL 着色器, 用于:
+   * <ul>
+   *   <li>AST 解析 / 代码拓扑图 (Web 核)
+   *   <li>算法轨迹可视化 (NDK 核)
+   *   <li>3D 模型渲染 (NDK 核)
+   *   <li>Dear ImGui 界面 (NDK 核)
+   * </ul>
+   */
+  public static final Set<String> SUPPORTED_EXTENSIONS = new HashSet<>(Arrays.asList(
+      // C/C++ 源码
+      "c", "cpp", "cc", "cxx", "c++",
+      "h", "hpp", "hxx", "h++", "hh",
+      // CUDA
+      "cu", "cuh",
+      // GLSL 着色器
+      "glsl", "frag", "vert", "comp", "geom", "tesc", "tese",
+      // Objective-C (AST 拓扑)
+      "m", "mm"
+  ));
+
   // ── 视图 ──────────────────────────────────────────────────
   private FrameLayout rootContainer;
   private WebView coreWebView;
@@ -93,6 +127,23 @@ public class UniversalPreviewEngineFragment extends Fragment {
   /** native 库是否已加载成功 */
   private static volatile boolean nativeLibLoaded = false;
 
+  /** 当前预览的文件路径 (从 arguments 读取) */
+  @Nullable private String filePath;
+
+  /**
+   * 工厂: 按文件路径创建 fragment。
+   *
+   * @param filePath 绝对路径, C/C++/GLSL 源码文件
+   */
+  @NonNull
+  public static UniversalPreviewEngineFragment newInstance(@NonNull String filePath) {
+    UniversalPreviewEngineFragment fragment = new UniversalPreviewEngineFragment();
+    Bundle args = new Bundle();
+    args.putString(ARG_FILE_PATH, filePath);
+    fragment.setArguments(args);
+    return fragment;
+  }
+
   // ═══════════════════════════════════════════════════════════
   //  生命周期
   // ═══════════════════════════════════════════════════════════
@@ -103,6 +154,12 @@ public class UniversalPreviewEngineFragment extends Fragment {
       @NonNull LayoutInflater inflater,
       @Nullable ViewGroup container,
       @Nullable Bundle savedInstanceState) {
+
+    // ── 读取文件路径 ──
+    Bundle args = getArguments();
+    if (args != null) {
+      filePath = args.getString(ARG_FILE_PATH);
+    }
 
     // ── 动态构建 FrameLayout 根布局 ──
     // 不用 XML 布局, 避免模块间资源依赖; 全部代码构建。
@@ -133,6 +190,78 @@ public class UniversalPreviewEngineFragment extends Fragment {
     // nativeInit 需要在 EGL 上下文就绪后调 (由 GLSurfaceView.Renderer
     // 的 onSurfaceCreated 回调触发, 不在这里直接调)。
     loadNativeEngine();
+
+    // ── 如果有文件路径, 投递源码到双核 ──
+    if (filePath != null && !filePath.isEmpty()) {
+      dispatchFile(filePath);
+    }
+  }
+
+  /**
+   * 读取文件内容并投递到双核引擎。
+   *
+   * <p>C/C++ 源码同时投递给:
+   * <ul>
+   *   <li>Web 核 (type=0): 源码文本作为 JSON payload, Three.js 做 AST 拓扑
+   *   <li>NDK 核 (type=1): 源码文本投递给 native, C++ 侧可解析 / 编译 / 渲染
+   * </ul>
+   */
+  private void dispatchFile(@NonNull String path) {
+    File file = new File(path);
+    if (!file.exists() || !file.canRead()) {
+      Log.w(TAG, "dispatchFile: 文件不可读 " + path);
+      return;
+    }
+
+    // 读取文件内容 (同步, 文件通常不大; 大文件可改异步)
+    StringBuilder sb = new StringBuilder();
+    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+        new java.io.FileReader(file))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        sb.append(line).append('\n');
+      }
+    } catch (java.io.IOException e) {
+      Log.e(TAG, "dispatchFile: 读取失败", e);
+      return;
+    }
+
+    String sourceCode = sb.toString();
+
+    // 投递给 Web 核 (AST 拓扑可视化)
+    // 用 JSON 包裹源码, Three.js 侧解析
+    String jsonPayload = "{\"type\":\"source\",\"source\":"
+        + quoteJsonString(sourceCode)
+        + ",\"file\":\"" + quoteJsonString(file.getName()) + "\"}";
+    dispatchSourceData(DATA_STATIC_AST, jsonPayload);
+
+    // 投递给 NDK 核 (C++ 原生渲染 / ImGui)
+    dispatchSourceData(DATA_NATIVE_SCENE, sourceCode);
+
+    Log.d(TAG, "dispatchFile: 已投递 " + file.getName()
+        + " (" + sourceCode.length() + " chars)");
+  }
+
+  /** 简易 JSON 字符串转义 */
+  private static String quoteJsonString(String s) {
+    StringBuilder out = new StringBuilder("\"");
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      switch (c) {
+        case '"':  out.append("\\\""); break;
+        case '\\': out.append("\\\\"); break;
+        case '\n': out.append("\\n");  break;
+        case '\r': out.append("\\r");  break;
+        case '\t': out.append("\\t");  break;
+        default:
+          if (c < 0x20) {
+            out.append(String.format("\\u%04x", (int) c));
+          } else {
+            out.append(c);
+          }
+      }
+    }
+    return out.append('"').toString();
   }
 
   @Override

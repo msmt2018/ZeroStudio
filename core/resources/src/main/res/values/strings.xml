@@ -343,6 +343,10 @@
     <string name="title_preview_layout">Preview Layout</string>
     <string name="title_markdown_preview">Markdown Preview</string>
     <string name="desc_markdown_preview">Preview Markdown file with rich content support</string>
+    <string name="title_image_preview">Image Preview</string>
+    <string name="desc_image_preview">Preview image files (PNG / JPG / SVG / WebP / vector drawable)</string>
+    <string name="title_universal_preview">Universal Preview</string>
+    <string name="desc_universal_preview">3D/2D graphics preview for C/C++ source (AST topology / Three.js / ImGui)</string>
      <string name="title_viewaction_delete">Delete</string>
      <string name="msg_yesno_def_title">Please confirm</string>
      <string name="msg_yesno_def_message">Are you sure?</string>
