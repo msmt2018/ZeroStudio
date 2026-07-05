@@ -33,11 +33,7 @@ import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.tabs.TabLayout.Tab
 import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
-import com.itsaky.androidide.fragments.editor.FragmentTabEntry
-import com.itsaky.androidide.fragments.editor.FragmentTabRegistry
-import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
-import com.zerostudio.preview.UniversalPreviewEngineFragment
-import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
+import com.itsaky.androidide.fragments.editor.EditorFragmentTabRegistrar
 import com.itsaky.androidide.resources.R
 import com.blankj.utilcode.util.ImageUtils
 import com.itsaky.androidide.R.string
@@ -113,7 +109,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     private set
 
   init {
-    registerFragmentTabs()
+    EditorFragmentTabRegistrar.registerAll()
   }
 
   override fun doOpenFile(file: File, selection: Range?) {
@@ -130,65 +126,6 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
 
   override fun provideEditorAt(index: Int): CodeEditorView? {
     return getEditorAtIndex(index)
-  }
-
-  /**
-   * Registers fragment tabs with the FragmentTabRegistry.
-   * This is called during initialization to register available fragment tabs.
-   */
-  private fun registerFragmentTabs() {
-    // Only register once
-    if (FragmentTabRegistry.isRegistered("markdown_preview")) {
-      return
-    }
-
-    // Markdown 预览
-    FragmentTabRegistry.register(
-      FragmentTabEntry(
-        id = "markdown_preview",
-        title = "Markdown Preview",
-        iconRes = R.drawable.ic_markdown_preview,
-        fragmentClass = MarkdownPreviewFragment::class.java,
-        fileExtensions = MarkdownPreviewFragment.SUPPORTED_EXTENSIONS,
-        order = 100,
-        fragmentFactory = { MarkdownPreviewFragment() }
-      )
-    )
-
-    // 图片预览 —— Android XML vector / SVG / 常见位图 (PNG / JPG / WebP /
-    // GIF / HEIC / BMP / AVIF / ICO / TIFF). 通过 FragmentTabRegistry 注册,
-    // 文件后缀命中 ImagePreviewFragment.SUPPORTED_FORMATS 时 editor 在 tab 栏
-    // 给出 "Image Preview" 入口.
-    FragmentTabRegistry.register(
-      FragmentTabEntry(
-        id = "image_preview",
-        title = ImagePreviewFragment.TAB_TITLE,
-        iconRes = R.drawable.ic_file_type_image,
-        fragmentClass = ImagePreviewFragment::class.java,
-        fileExtensions = ImagePreviewFragment.SUPPORTED_FORMATS,
-        order = 110,
-        // factory 不传 filePath: 真正的路径在 EditorFragmentTabManager
-        // 打开 tab 时通过 ImagePreviewFragment.newInstance(filePath) 注入到
-        // arguments. 这里仅供 tab 创建时 fallback 预览, 真实打开后会用
-        // newInstance(filePath) 覆盖.
-        fragmentFactory = { ImagePreviewFragment() },
-      )
-    )
-
-    // C/C++ 3D/2D 通用预览 —— 双核架构 (WebView + Three.js / GLSurfaceView +
-    // JNI C++ NDK). 文件后缀命中 UniversalPreviewEngineFragment.SUPPORTED_EXTENSIONS
-    // (c / cpp / h / glsl / cu 等) 时 editor 在 tab 栏给出 "Universal Preview" 入口.
-    FragmentTabRegistry.register(
-      FragmentTabEntry(
-        id = "universal_preview",
-        title = UniversalPreviewEngineFragment.TAB_TITLE,
-        iconRes = R.drawable.ic_code,
-        fragmentClass = UniversalPreviewEngineFragment::class.java,
-        fileExtensions = UniversalPreviewEngineFragment.SUPPORTED_EXTENSIONS,
-        order = 120,
-        fragmentFactory = { UniversalPreviewEngineFragment() },
-      )
-    )
   }
 
   /** Handles both file editor tabs and lifecycle-backed fragment tabs in the same TabLayout. */
