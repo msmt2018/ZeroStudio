@@ -61,6 +61,12 @@ private fun localIdeArtifact(artifact: String): File? {
         "logsender" -> "logsender.aar"
         "ide-log-plugin" -> "ide-log-plugin-1.0.0.aar"
         "ide-debugger" -> "ide-debugger.aar"
+        // 子项目 9d: host ADRT AAR (HostAttachAgent / HostSocksServer / etc.)
+        // 之前漏写这个 case, IDE 端没有 Maven 远端环境时
+        //   IdeDebuggerInitScriptPlugin 注入会跑 create(io.github.mohammed-baqer-null:ide-debugger-host:VERSION)
+        //   然后 Maven 远端解析失败, host app build fail.
+        // Phase 12o 修: 加 case, 走本地 aar (跟 ide-log-plugin 一致).
+        "ide-debugger-host" -> "ide-debugger-host-1.0.0.aar"
         else -> return null
       }
   return listOf(

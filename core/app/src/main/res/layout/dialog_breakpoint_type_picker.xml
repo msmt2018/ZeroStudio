@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点类型选择器弹窗布局 (Phase 20)
+  高斯模糊磨砂半透明效果
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:maxWidth="520dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_dialog_frosted_glass"
+        android:padding="20dp">
+
+        <!-- 标题 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debugger_bp_type_picker_title"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textColor="#F0FFFFFF"
+            android:fontFamily="sans-serif-medium"/>
+
+        <TextView
+            android:id="@+id/bptp_location"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="#A0FFFFFF"
+            android:fontFamily="monospace"
+            tools:text="MainActivity.kt : 27"
+            xmlns:tools="http://schemas.android.com/tools"/>
+
+        <!-- 滚动列表 -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:maxHeight="520dp"
+            android:scrollbars="vertical">
+
+            <LinearLayout
+                android:id="@+id/bptp_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:divider="@android:color/transparent"
+                android:dividerPadding="4dp"
+                android:showDividers="middle"/>
+        </ScrollView>
+
+        <!-- 取消按钮 -->
+        <TextView
+            android:id="@+id/bptp_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginTop="12dp"
+            android:padding="10dp"
+            android:text="@android:string/cancel"
+            android:textColor="#80FFFFFF"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"/>
+    </LinearLayout>
+</FrameLayout>

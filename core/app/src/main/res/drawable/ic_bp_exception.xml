@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 异常断点图标
+  圆点 + 感叹号
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFAB40"
+        android:pathData="M12,7 C9.24,7 7,9.24 7,12 C7,14.76 9.24,17 12,17 C14.76,17 17,14.76 17,12 C17,9.24 14.76,7 12,7 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M11,9 L13,9 L13,13 L11,13 Z M11,14 L13,14 L13,15 L11,15 Z"/>
+</vector>

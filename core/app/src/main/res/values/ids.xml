@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 自定义视图 ID
+  不需要视图直接引用,但 Java 代码会用 R.id.xxx 引用。
+-->
+<resources>
+    <!-- Phase 20: Variables 面板右键菜单项 ID -->
+    <item name="debugger_var_ctx_watch_mod" type="id"/>
+    <item name="debugger_var_ctx_watch_acc" type="id"/>
+    <item name="debugger_var_ctx_instance_filter" type="id"/>
+</resources>

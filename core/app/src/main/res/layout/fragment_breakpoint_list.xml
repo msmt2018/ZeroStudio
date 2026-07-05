@@ -51,6 +51,17 @@
             android:layout_height="wrap_content"
             android:text="@string/debugger_action_bp_clear"
             android:minWidth="0dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bp_action_add_special"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="+"
+            android:textSize="22sp"
+            android:contentDescription="@string/debugger_bp_add_special"
+            android:minWidth="48dp"
+            android:minHeight="48dp"/>
     </LinearLayout>
 
     <FrameLayout

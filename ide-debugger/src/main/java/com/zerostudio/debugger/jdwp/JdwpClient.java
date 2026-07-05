@@ -73,6 +73,40 @@ public class JdwpClient {
         Socket s = new Socket();
         s.connect(new InetSocketAddress(host, port), HANDSHAKE_TIMEOUT_MS);
         s.setTcpNoDelay(true);
+        connectInternal(s, host, port);
+    }
+
+    /**
+     * Use a Socket that has already been connected by an external layer
+     * (e.g. {@code IDebugConnection.attachedSocket()} from the
+     * connection abstraction). The Socket is NOT closed by this method on
+     * failure; the caller owns it.
+     *
+     * <p>This is the integration point between the new connection layer
+     * (sub-project 1) and the existing JDWP client. The host/port params
+     * are used only for logging and {@link #host()}/{@link #port()}
+     * accessors; pass empty/0 if unknown.
+     *
+     * <p>{@code setTcpNoDelay} is best-effort: if the underlying socket
+     * does not support it (e.g. Android {@code LocalSocket} passed through
+     * a {@code Socket} adapter, or some test fakes), the call is logged
+     * and ignored rather than aborting the connection.
+     */
+    public void connect(@NonNull Socket socket, @Nullable String host, int port)
+            throws IOException {
+        try {
+            socket.setTcpNoDelay(true);
+        } catch (Throwable t) {
+            // LocalSocket / test fakes may not support TcpNoDelay. Not fatal
+            // for JDWP correctness — the protocol uses length-prefixed
+            // framing so Nagle batching does not break anything.
+            Log.d(TAG, "setTcpNoDelay not supported by socket: " + t.getMessage());
+        }
+        connectInternal(socket, host == null ? "" : host, port);
+    }
+
+    private void connectInternal(@NonNull Socket s, @NonNull String host, int port)
+            throws IOException {
         try {
             performHandshake(s);
         } catch (IOException e) {

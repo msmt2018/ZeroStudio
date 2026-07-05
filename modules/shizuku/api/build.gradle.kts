@@ -6,8 +6,8 @@ android {
 }
 
 dependencies {
-  api(projects.buildInfo)
-  api(projects.subprojects.shizukuAidl)
-  api(projects.subprojects.shizukuShared)
+  api(projects.utilities.buildInfo)
+  api(projects.modules.shizuku.aidl)
+  api(projects.modules.shizuku.shared)
   implementation(libs.androidx.annotation)
 }

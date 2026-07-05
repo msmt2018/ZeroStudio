@@ -22,4 +22,13 @@
     <!-- 命中次数/已命中次数标签: 浅色主题下用稍深的强调色 -->
     <color name="debugger_bp_hit_count_label">#7B1FA2</color>
     <color name="debugger_bp_hit_count_received_label">#1565C0</color>
+
+    <!-- Phase 23 续: 命中次数徽章底色 (BreakpointSidebar 圆角药丸)。
+         状态感知: HIT 红 / VERIFIED 绿 / DISABLED 灰 / INVALID 暗红 / 默认深灰。
+         颜色比 bp 圆点稍深,因为带白字在浅色背景上更易读。 -->
+    <color name="debugger_bp_hit_count_badge_default">#37474F</color>
+    <color name="debugger_bp_hit_count_badge_hit">#C62828</color>
+    <color name="debugger_bp_hit_count_badge_verified">#2E7D32</color>
+    <color name="debugger_bp_hit_count_badge_disabled">#616161</color>
+    <color name="debugger_bp_hit_count_badge_invalid">#8E0000</color>
 </resources>

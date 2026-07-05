@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点类型分类头部 (Phase 20)
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1AFFFFFF" />
+    <corners
+        android:topLeftRadius="8dp"
+        android:topRightRadius="8dp" />
+</shape>

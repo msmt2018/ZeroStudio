@@ -36,7 +36,11 @@ public final class BreakpointTypePicker {
     public enum Type {
         NORMAL(R.string.debugger_bp_picker_normal),
         CONDITION(R.string.debugger_bp_picker_condition),
-        LOGPOINT(R.string.debugger_bp_picker_logpoint);
+        LOGPOINT(R.string.debugger_bp_picker_logpoint),
+        // Phase 23 续: 高级类型入口 — 跳到 BreakpointTypePickerDialog (高斯模糊磨砂),
+        // 那是 Phase 22 引入的 4 类断点选择器, 支持 EXCEPTION / SYMBOLIC / WATCHPOINT /
+        // DEPENDENT 等高级类型。BreakpointTypePicker 自己只显示 3 个常用 + MORE。
+        MORE(R.string.debugger_bp_picker_more);
 
         @StringRes public final int labelRes;
         Type(@StringRes int r) { this.labelRes = r; }
@@ -75,6 +79,22 @@ public final class BreakpointTypePicker {
                     com.itsaky.androidide.debugger.model.BreakpointManager.getInstance();
             if (type == Type.NORMAL) {
                 manager.toggle(file, line);
+            } else if (type == Type.MORE) {
+                // Phase 23 续: 用户选 "More..." → 弹 BreakpointTypePickerDialog (高斯模糊磨砂),
+                // 那是 Phase 22 引入的 4 类断点选择器,支持 EXCEPTION / SYMBOLIC / WATCHPOINT
+                // / DEPENDENT 等高级类型。BreakpointTypePicker 自己只显示 3 个常用类型,
+                // 高级类型通过 MORE 入口跳转 — 这条路径保留给"在 gutter 弹快速选择 + 还想进
+                // 高级 dialog"的场景。
+                if (context instanceof androidx.fragment.app.FragmentActivity) {
+                    BreakpointTypePickerDialog.show(
+                            (androidx.fragment.app.FragmentActivity) context,
+                            file, line, x, y,
+                            (entry, f, l, x2, y2) -> {
+                                // BreakpointTypePickerDialog 内部已经走 BreakpointDetailDialog
+                                // (Phase 22). 这里只做日志,实际添加由 dialog 完成。
+                                ILogger.debug(TAG, "Forwarded to BreakpointTypePickerDialog: " + entry);
+                            });
+                }
             } else {
                 com.itsaky.androidide.debugger.model.IdeBreakpoint bp =
                         manager.findAt(file, line);
@@ -162,6 +182,9 @@ public final class BreakpointTypePicker {
                         p.leftMargin = x;
                         p.topMargin = y;
                         ghost.setLayoutParams(p);
+                        // Phase 20: 用 WeakReference 跟踪,onDismiss 时一定清理,
+                        // 避免 Activity 销毁后 ghost 仍在 root 上导致 WindowLeaked。
+                        ghost.setTag(new java.lang.ref.WeakReference<>(root));
                         root.addView(ghost);
                     }
                 }
@@ -179,11 +202,22 @@ public final class BreakpointTypePicker {
 
     public void dismiss() {
         try { popup.dismiss(); } catch (Throwable ignored) {}
-        // 清理 ghost anchor
-        View ghost = popup.getAnchorView();
-        if (ghost != null && ghost.getParent() instanceof ViewGroup) {
-            try { ((ViewGroup) ghost.getParent()).removeView(ghost); } catch (Throwable ignored) {}
-        }
+        // 清理 ghost anchor — Phase 20: 即便 popup.dismiss 抛错也尝试清理。
+        try {
+            View ghost = popup.getAnchorView();
+            if (ghost != null && ghost.getParent() instanceof ViewGroup) {
+                try { ((ViewGroup) ghost.getParent()).removeView(ghost); } catch (Throwable ignored) {}
+            } else if (ghost != null) {
+                // Phase 20: 从 tag 拿 root 引用,二次清理
+                Object tag = ghost.getTag();
+                if (tag instanceof java.lang.ref.WeakReference) {
+                    Object root = ((java.lang.ref.WeakReference<?>) tag).get();
+                    if (root instanceof ViewGroup) {
+                        try { ((ViewGroup) root).removeView(ghost); } catch (Throwable ignored) {}
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
         currentCb = null;
     }
 

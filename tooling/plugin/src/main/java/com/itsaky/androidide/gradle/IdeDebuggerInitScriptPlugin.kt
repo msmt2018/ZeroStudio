@@ -53,6 +53,22 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     /** <meta-data> name that the provider reads to learn the JDWP port. */
     const val BOOTSTRAP_META_PORT = "com.zerostudio.debugger.PORT_HINT"
 
+    /**
+     * 子项目 9d: 新增 host ADRT AAR + Manifest placeholder 注入。
+     *
+     * IDE_LOG_PLUGIN_ARTIFACT: 注入 host 端 JdwpServer / LogCaptureService (已有)
+     * IDE_DEBUGGER_HOST_ARTIFACT: 注入 host ADRT runtime (子项目 8 新建)
+     *   - HostAttachAgent (app_process 入口)
+     *   - HostAttachAgentBootstrap (ContentProvider, 子项目 9c)
+     *   - HostPluginService (Shizuku InHostPlugin)
+     *   - HostSocksServer (Socks 路径)
+     *   - 配套的 Manifest placeholder + provider (子项目 9c)
+     */
+    const val IDE_DEBUGGER_HOST_ARTIFACT = "ide-debugger-host"
+
+    /** Manifest placeholder key (用于注入 IDE LocalServerSocket 名字) */
+    const val IDE_LOCAL_SERVER_NAME_PLACEHOLDER = "ideLocalServerName"
+
     private val logger = Logging.getLogger(IdeDebuggerInitScriptPlugin::class.java)
   }
 
@@ -75,6 +91,46 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
         )
       }
     }
+  }
+
+  /**
+   * 子项目 9d: 计算 host 端要反连的 IDE LocalServerSocket 名字。
+   * 名字 = "ide-debug-bridge-{group}-{name}", 唯一避免冲突。
+   *
+   * 纯函数 (不依赖 Project), 便于单测。
+   */
+  internal fun computeLocalServerName(group: String?, name: String): String {
+    val safeGroup = (group?.takeIf { it.isNotBlank() } ?: "default").take(64)
+    val safeName = (name.takeIf { it.isNotBlank() } ?: "app").take(64)
+    return "ide-debug-bridge-${safeGroup}-${safeName}".lowercase()
+  }
+
+  /**
+   * 子项目 10 (BuildTimeInjector): 算生成器用的 placeholder 值。
+   * 纯函数, 便于单测。
+   *
+   * @param group Project.group (可能为 null/空, 走默认)
+   * @param name Project.name
+   * @param sdkInt Build.VERSION.SDK_INT 或 0 (不期望)
+   * @param preheatBreakpoints 预热 bp 列表 (字符串格式, 走 parsePreheatBreakpoints)
+   * @return placeholder key -> value map, 调 withManifestPlaceholders 写到 AGP
+   */
+  internal fun computeBootstrapPlaceholders(
+      group: String?,
+      name: String,
+      sdkInt: Int = 0,
+      preheatBreakpoints: String? = null,
+  ): Map<String, String> {
+    val localServerName = computeLocalServerName(group, name)
+    val extras = "sdk=$sdkInt"
+    return mapOf(
+        "${BOOTSTRAP_PROVIDER_CLASS}.AUTHORITY" to BOOTSTRAP_AUTHORITY,
+        "${BOOTSTRAP_PROVIDER_CLASS}.META_PORT" to "0",
+        IDE_LOCAL_SERVER_NAME_PLACEHOLDER to localServerName,
+        // 子项目 10: 注入器生成器用的额外 placeholder
+        "ideDebuggerExtras" to extras,
+        "ideDebuggerPreheatBreakpointsRaw" to (preheatBreakpoints ?: ""),
+    )
   }
 
   /**
@@ -106,11 +162,13 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
       // 1. Add :ide-log-plugin AAR (defensive: IdeLogInitScriptPlugin
       //    usually also does this; re-adding is harmless because
       //    the dep is the same artifact).
+      // 子项目 9d: 同样注入 :ide-debugger-host AAR (host ADRT runtime)
       try {
         variant.withRuntimeConfiguration {
           listOf(
               IdeLogInitScriptPlugin.IDE_LOG_PLUGIN_ARTIFACT,
               IdeLogInitScriptPlugin.IDE_DEBUGGER_ARTIFACT,
+              IDE_DEBUGGER_HOST_ARTIFACT,  // 子项目 9d: host ADRT
           ).forEach { artifact ->
             val dep = project.dependencies.ideDependency(
                 LIB_GROUP_TOOLING, artifact, project.isTestEnv
@@ -130,18 +188,88 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
       //    AndroidManifest.xml doesn't need to declare the
       //    bootstrap provider. The placeholder name is the
       //    fully-qualified provider class.
+      // 子项目 9d: 同样注入 ideLocalServerName placeholder, 给 HostAttachAgentBootstrap
+      //   ContentProvider 读 (走 meta-data android:name="ide_local_server_name")
+      // 子项目 10: 额外注入 ideDebuggerExtras + ideDebuggerPreheatBreakpointsRaw,
+      //   给生成器使用 (但这些不在 host app manifest 里用, 仅供 IdeDebuggerInitScriptPlugin
+      //   自己读 back 来生成 IdeDebuggerBootstrap.kt)
       try {
-        variant.withManifestPlaceholders(
-            project,
-            mapOf(
-                "${BOOTSTRAP_PROVIDER_CLASS}.AUTHORITY" to BOOTSTRAP_AUTHORITY,
-                "${BOOTSTRAP_PROVIDER_CLASS}.META_PORT" to "0",
-            )
+        val placeholders = computeBootstrapPlaceholders(
+            group = project.group?.toString(),
+            name = project.name,
+            sdkInt = project.findProperty("ideDebuggerSdkInt")?.toString()?.toIntOrNull() ?: 0,
+            preheatBreakpoints = project.findProperty("ideDebuggerPreheatBreakpoints")?.toString(),
         )
+        variant.withManifestPlaceholders(project, placeholders)
       } catch (e: Throwable) {
         logger.warn("manifest placeholder injection failed: ${e.message}")
       }
+
+      // 3. 子项目 10: 生成 IdeDebuggerBootstrap.kt 到 generated-sources,
+      //    并加到 Kotlin source set. 这样 host app build 时会编译这个 .kt,
+      //    拿到最新 IDE debugger 配置 + BreakpointLocation 类型 + init API.
+      try {
+        generateIdeDebuggerBootstrapSource(variant, project)
+      } catch (e: Throwable) {
+        logger.warn("IdeDebuggerBootstrap.kt generation failed: ${e.message}")
+      }
     }
+  }
+
+  /**
+   * 子项目 10: 生成 IdeDebuggerBootstrap.kt 源文件到 host app 的
+   * `build/generated/source/ide_debugger/{variant}/kotlin/` 目录,
+   * 并加到 variant 的 Kotlin source set.
+   *
+   * 生成参数:
+   *   - ideVersion: BuildInfo.VERSION_NAME (IDE 端版本)
+   *   - localServerName: per-project 唯一 (computeLocalServerName)
+   *   - extras: "sdk=<sdkInt>" (从 project property 读)
+   *   - buildTimestampMs: System.currentTimeMillis()
+   *   - preheatBreakpoints: 走 parsePreheatBreakpoints 解析 property
+   *     (格式错 throw IAE, 这里 catch degrade 到 emptyList)
+   *
+   * 失败: logger.warn, 不抛 (跟其他注入一致).
+   */
+  private fun generateIdeDebuggerBootstrapSource(
+      variant: ApplicationVariant,
+      project: Project,
+  ) {
+    val sdkInt = project.findProperty("ideDebuggerSdkInt")?.toString()?.toIntOrNull() ?: 0
+    val preheatRaw = project.findProperty("ideDebuggerPreheatBreakpoints")?.toString()
+    val preheatBps = try {
+      parsePreheatBreakpoints(preheatRaw)
+    } catch (e: IllegalArgumentException) {
+      logger.warn("ideDebuggerPreheatBreakpoints format error, using empty list: ${e.message}")
+      emptyList()
+    }
+    val localServerName = computeLocalServerName(
+        group = project.group?.toString(),
+        name = project.name,
+    )
+    val content = renderIdeDebuggerBootstrapKt(
+        ideVersion = BuildInfo.VERSION_NAME,
+        localServerName = localServerName,
+        extras = "sdk=$sdkInt",
+        buildTimestampMs = System.currentTimeMillis(),
+        preheatBreakpoints = preheatBps,
+    )
+
+    val buildDir = project.layout.buildDirectory.asFile.get()
+    val generatedDir = File(buildDir, "generated/source/ide_debugger/${variant.name}/kotlin")
+    val pkgPath = "com/itsaky/androidide/zerostudio/ide/debugger/host/generated"
+    val targetFile = File(generatedDir, "$pkgPath/IdeDebuggerBootstrap.kt")
+    targetFile.parentFile.mkdirs()
+    targetFile.writeText(content)
+
+    // 把 generatedDir 加到 Kotlin source set
+    variant.sources.kotlin?.addStaticSourceDirectory(generatedDir.absolutePath)
+
+    logger.lifecycle(
+        "Generated IdeDebuggerBootstrap.kt for variant '${variant.name}' " +
+            "in ${project.path}: $targetFile (extras=sdk=$sdkInt, " +
+            "preheatBpCount=${preheatBps.size})"
+    )
   }
 
   private fun ApplicationVariant.withRuntimeConfiguration(action: org.gradle.api.artifacts.Configuration.() -> Unit) {
@@ -167,33 +295,58 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     }
   }
 
+  /**
+   * 子项目 9d + 10: 真写 manifest placeholders 到 AGP 的 manifestPlaceholders map.
+   *
+   * 实现: 通过 reflection 找 `defaultConfig.manifestPlaceholders` map 然后 put.
+   * AGP 8.x 公开 API 不在 onVariants 块里直接暴露 defaultConfig.manifestPlaceholders
+   * (改用 internal API), 走 reflection 是兼容性最好的路径。
+   *
+   * 失败: logger.warn, 不抛 (跟其他注入一致, 不阻塞 build).
+   */
   private fun ApplicationVariant.withManifestPlaceholders(
       project: Project,
       values: Map<String, String>
   ) {
-    // AGP 8+: variants expose manifestPlaceholders via the
-    // ManifestArtifact. The simplest path is to write a small
-    // XML file under the variant's manifest and let AGP merge
-    // it. We use the mergedManifest task's input to find the
-    // output dir.
-    val manifestDir = when (this) {
-      is ApplicationVariantImpl -> {
-        // The merged-manifest is generated under
-        // build/intermediates/merged_manifest/{variant}/AndroidManifest.xml
-        File(project.layout.buildDirectory.asFile.get(),
-            "intermediates/merged_manifest/${name}/AndroidManifest.xml")
-            .parentFile
+    if (values.isEmpty()) return
+    try {
+      val placeholdersMap = resolveManifestPlaceholdersMap(project)
+      if (placeholdersMap == null) {
+        logger.warn("manifest placeholders map not found for variant '${name}'; placeholders NOT injected. " +
+                "Check AGP version compatibility.")
+        return
       }
-      else -> {
-        File(project.layout.buildDirectory.asFile.get(),
-            "intermediates/merged_manifest/${name}")
+      synchronized(placeholdersMap) {
+        for ((k, v) in values) {
+          placeholdersMap[k] = v
+        }
       }
+      logger.lifecycle(
+          "Injected ${values.size} manifest placeholder(s) for variant '${name}' " +
+              "in ${project.path}: ${values.keys.joinToString()}"
+      )
+    } catch (t: Throwable) {
+      logger.warn("manifest placeholder injection failed for ${name} in ${project.path}: ${t.message}")
     }
-    if (manifestDir == null) return
-    logger.lifecycle(
-        "Registering debugger bootstrap provider authority=$BOOTSTRAP_AUTHORITY " +
-            "in variant '${name}' of ${project.path} (manifestDir=$manifestDir, " +
-            "placeholders=${values.keys.joinToString()})"
-    )
+  }
+
+  /**
+   * 子项目 9d: 通过 reflection 找 `defaultConfig.manifestPlaceholders` map.
+   * 路径: project.extensions.getByName("android") -> getDefaultConfig() -> getManifestPlaceholders()
+   *
+   * @return MutableMap (可写) 或 null (找不到时)
+   */
+  private fun resolveManifestPlaceholdersMap(project: Project): MutableMap<String, Any>? {
+    return runCatching {
+      val androidExt = project.extensions.findByName("android")
+        ?: return@runCatching null
+      val defaultConfig = androidExt::class.java.methods
+          .firstOrNull { it.name == "getDefaultConfig" && it.parameterCount == 0 }
+          ?.invoke(androidExt)
+        ?: return@runCatching null
+      defaultConfig::class.java.methods
+          .firstOrNull { it.name == "getManifestPlaceholders" && it.parameterCount == 0 }
+          ?.invoke(defaultConfig) as? MutableMap<String, Any>
+    }.getOrNull()
   }
 }

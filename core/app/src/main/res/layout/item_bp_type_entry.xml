@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 断点类型单项 (Phase 20)
+  含: 图标 + 标题 + 描述
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="10dp"
+    android:gravity="center_vertical"
+    android:background="@drawable/bg_bp_type_item"
+    android:clickable="true"
+    android:focusable="true">
+
+    <ImageView
+        android:id="@+id/bptpe_icon"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:padding="6dp"
+        android:tint="#FFAB40"
+        tools:src="@drawable/ic_bp_line"
+        xmlns:tools="http://schemas.android.com/tools"
+        android:contentDescription="@null"/>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="14dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/bptpe_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceTitleSmall"
+            android:textColor="#F0FFFFFF"
+            tools:text="普通行断点"
+            xmlns:tools="http://schemas.android.com/tools"/>
+
+        <TextView
+            android:id="@+id/bptpe_desc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="#A0FFFFFF"
+            tools:text="程序运行到这一行代码之前暂停"
+            xmlns:tools="http://schemas.android.com/tools"/>
+    </LinearLayout>
+</LinearLayout>

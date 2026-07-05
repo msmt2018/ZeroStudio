@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 实例过滤器图标
+  圆点 + 内嵌 @ 符号
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFAB40"
+        android:pathData="M12,7 C9.24,7 7,9.24 7,12 C7,14.76 9.24,17 12,17 C14.76,17 17,14.76 17,12 C17,9.24 14.76,7 12,7 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M11.5,9.5 C10.7,9.5 10,10 10,11 L11,11 C11,10.7 11.2,10.5 11.5,10.5 C11.8,10.5 12,10.7 12,11 L12,11.4 C11.6,11.5 11.2,11.7 11.2,12.3 L11.2,12.7 L12.2,12.7 L12.2,12.3 C12.2,12 12.5,11.9 12.7,11.9 L13,11.9 L13,11 C13,10 12.3,9.5 11.5,9.5 Z M11,13.4 L12,13.4 L12,14.4 L11,14.4 Z"/>
+</vector>

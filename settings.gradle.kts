@@ -177,6 +177,7 @@ include(
 
     ":ide-decompiler",
     ":ide-debugger",
+    ":ide-debugger-host",
     ":ide-log-plugin",
     ":ide-language",
 
@@ -245,6 +246,12 @@ include(
     ":modules:zero-mcp-server",
     ":modules:zero-regular-preview",
     ":modules:zero-onboarding-guide",
+    // Shizuku 客户端 API: 子项目 3 断点调试连接层用
+    // (只依赖 api 模块, 不依赖 manager / server 等独立 app 模块;
+    //  api 内部依赖 :modules:shizuku:aidl 和 :modules:shizuku:shared)
+    ":modules:shizuku:aidl",
+    ":modules:shizuku:shared",
+    ":modules:shizuku:api",
 
 )
 

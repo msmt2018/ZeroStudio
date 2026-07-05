@@ -55,4 +55,25 @@ public final class BreakpointStateColors {
     public static int hitCountReceivedLabelColor(@NonNull Context context) {
         return ContextCompat.getColor(context, R.color.debugger_bp_hit_count_received_label);
     }
+
+    /**
+     * Phase 23 续: 命中次数徽章的底色,按 bp.state 区分。
+     * - HIT → 警告红 (跟断点圆点色一致)
+     * - VERIFIED → 绿色 (命中过、且无状态错)
+     * - DISABLED → 暗灰 (不应该再被命中,但用户能看到历史次数)
+     * - 其它 → 中性深灰
+     */
+    @ColorInt
+    public static int hitCountBadgeBackgroundForState(@NonNull Context context,
+                                                      @NonNull IdeBreakpoint.State state) {
+        @ColorRes int res;
+        switch (state) {
+            case HIT:       res = R.color.debugger_bp_hit_count_badge_hit; break;
+            case VERIFIED:  res = R.color.debugger_bp_hit_count_badge_verified; break;
+            case DISABLED:  res = R.color.debugger_bp_hit_count_badge_disabled; break;
+            case INVALID:   res = R.color.debugger_bp_hit_count_badge_invalid; break;
+            default:        res = R.color.debugger_bp_hit_count_badge_default;
+        }
+        return ContextCompat.getColor(context, res);
+    }
 }

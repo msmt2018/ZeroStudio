@@ -32,6 +32,7 @@ import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.DebugSessionState;
 import com.itsaky.androidide.debugger.DebuggerController;
 import com.itsaky.androidide.debugger.adapter.VariablesAdapter;
+import com.itsaky.androidide.debugger.view.VariableContextMenu;
 import com.itsaky.androidide.utils.ILogger;
 import com.itsaky.androidide.utils.FlashbarActivityUtilsKt;
 import com.zerostudio.debugger.api.StackFrameInfo;
@@ -67,7 +68,29 @@ public class VariablesFragment extends Fragment
 
         adapter = new VariablesAdapter();
         // PR-D6: 长按 -> 弹 "set value" 对话框 (仅 primitive + String)。
-        adapter.setListener(v -> showSetValueDialog(v));
+        adapter.setListener(new VariablesAdapter.Listener() {
+            @Override public void onItemClick(@NonNull VariableInfo v) {
+                showSetValueDialog(v);
+            }
+            @Override public void onVariableLongClick(@NonNull VariableInfo v) {
+                // Phase 20: 长按 -> 弹出"第二类断点"右键菜单 (Watchpoint + Instance Filter + Set Value)
+                if (getView() == null) return;
+                // 找到点击位置对应的 item view 作为 anchor
+                View anchor = getView();
+                try {
+                    int[] loc = new int[2];
+                    anchor.getLocationOnScreen(loc);
+                    View child = list.findChildViewUnder(0, 0);
+                    if (child != null) {
+                        int[] cloc = new int[2];
+                        child.getLocationOnScreen(cloc);
+                        // 简化:用 list 自身作为 anchor,popup 仍会贴在点击行附近
+                        anchor = list;
+                    }
+                } catch (Throwable ignored) {}
+                VariableContextMenu.show(requireActivity(), anchor, v);
+            }
+        });
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
         list.setAdapter(adapter);
 

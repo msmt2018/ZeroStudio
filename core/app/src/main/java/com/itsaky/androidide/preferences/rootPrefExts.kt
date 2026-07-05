@@ -44,6 +44,7 @@ class ConfigurationPreferences(
 
     addPreference(ProjectSettingPreferencesScreen())
     addPreference(BuildAndRunPreferences())
+    addPreference(DebuggerPreferences())
     addPreference(SdkManagerPreference())
     addPreference(TermuxPreferences())
   }

@@ -391,18 +391,10 @@ public class BreakpointConditionDialog extends DialogFragment {
             mgr.setEnabled(bp.id, enabledSwitch.isChecked());
         }
         int checked = typeGroup.getCheckedRadioButtonId();
-        // 1. 条件 / 日志消息
-        if (checked == R.id.bcd_type_condition) {
-            mgr.setCondition(bp.id, textOf(conditionInput));
-            mgr.setLogMessage(bp.id, null);
-        } else if (checked == R.id.bcd_type_logpoint) {
-            mgr.setLogMessage(bp.id, textOf(logInput));
-            mgr.setCondition(bp.id, null);
-        } else {
-            mgr.setCondition(bp.id, null);
-            mgr.setLogMessage(bp.id, null);
-        }
-        // 2. 高级断点配置
+        // 1. 高级断点配置 (Phase 20: 先 set kind + element + dependent, 再 set condition / log / hit count)
+        // 修复:applyAdvancedOptions 必须最先调用,否则 setCondition 内部的 reinstallOnDebugger
+        // 会用旧的 elementName 走 JDWP,Backend 端 JDI FieldWatch 设置会使用空 class 名称,导致
+        // "Field is not present" 错误。修后顺序: kind → condition → log → hit count → enabled(已先)。
         IdeBreakpoint.Kind kind;
         switch (advancedKindSpinner.getSelectedItemPosition()) {
             case 1: kind = IdeBreakpoint.Kind.EXCEPTION; break;
@@ -417,7 +409,17 @@ public class BreakpointConditionDialog extends DialogFragment {
                 methodEntryCheck.isChecked(), methodExitCheck.isChecked(),
                 exceptionCaughtCheck.isChecked(), exceptionUncaughtCheck.isChecked(),
                 dep, textOf(elementInput));
-
+        // 2. 条件 / 日志消息
+        if (checked == R.id.bcd_type_condition) {
+            mgr.setCondition(bp.id, textOf(conditionInput));
+            mgr.setLogMessage(bp.id, null);
+        } else if (checked == R.id.bcd_type_logpoint) {
+            mgr.setLogMessage(bp.id, textOf(logInput));
+            mgr.setCondition(bp.id, null);
+        } else {
+            mgr.setCondition(bp.id, null);
+            mgr.setLogMessage(bp.id, null);
+        }
         // 3. 命中次数
         int pos = hitCountModeSpinner.getSelectedItemPosition();
         Breakpoint.HitCountMode mode;

@@ -210,6 +210,77 @@ public final class DebuggerController
         }
     }
 
+    /**
+     * 新连接层入口 (子项目 1): 通过 IDebugConnection 抽象层 + 工厂
+     * 走 resolve -> connect -> attach 全流程,失败抛 ConnectionError
+     * 但不连 UI 线程(在 bgExecutor 上跑)。
+     *
+     * <p>失败时不会破坏现有 [debugger] 字段,只是记日志 + flash。
+     * 成功时把新 attach 的 Debugger 写到 [debugger] 字段,后续的
+     * resume/stepOver/runToCursor 全部走现有路径。
+     *
+     * @param target 当前打开的工程的 (packageName, mainActivity, debuggable)
+     */
+    public void connectVia(@NonNull com.itsaky.androidide.debugger.connection.DebugTarget target) {
+        bgExecutor().execute(() -> {
+            com.itsaky.androidide.debugger.connection.IDebugConnection conn = null;
+            try {
+                com.itsaky.androidide.debugger.connection.DebugConnectionSettings settings =
+                        com.itsaky.androidide.debugger.connection.DebugConnectionPreferences.load();
+                conn = com.itsaky.androidide.debugger.connection.DebugConnectionRegistry
+                        .createForActive(target, settings);
+                ILogger.ROOT.info(TAG + ": connectVia type=" + conn.getType()
+                        + " pkg=" + target.getPackageName());
+
+                kotlin.Result<com.itsaky.androidide.debugger.connection.AttachInfo> r =
+                        com.itsaky.androidide.debugger.connection.DebugConnectionKotlinBridge
+                                .runConnectVia(conn);
+
+                if (r.isSuccess()) {
+                    com.itsaky.androidide.debugger.connection.AttachInfo info =
+                            r.getOrNull();
+                    com.itsaky.androidide.debugger.connection.ConnectionBackedDebugger adapter =
+                            new com.itsaky.androidide.debugger.connection.ConnectionBackedDebugger(conn);
+                    com.zerostudio.debugger.api.Debugger newDbg = adapter.getDebugger();
+                    if (newDbg != null) {
+                        this.debugger = newDbg;
+                        newDbg.addListener(this);
+                        subscribeLogpointBus(newDbg);
+                        BreakpointManager.getInstance().bindDebugger(newDbg);
+                        new Thread(() -> {
+                            try { newDbg.waitForVmStart(30_000L); } catch (Throwable ignored) {}
+                        }, "jdwp-wait-vmstart").start();
+                        ILogger.ROOT.info(TAG + ": connectVia attached pid=" + info.getPid());
+                        postMain(() -> {
+                            if (attachedActivity != null) {
+                                FlashbarActivityUtilsKt.flashInfo(attachedActivity,
+                                        "调试器已连接 (新连接层, type=" + conn.getType() + ")");
+                            }
+                        });
+                    }
+                } else {
+                    Throwable err = r.exceptionOrNull();
+                    ILogger.ROOT.warn(TAG + ": connectVia failed: "
+                            + (err == null ? "unknown" : err.getMessage()));
+                    postMain(() -> {
+                        if (attachedActivity != null) {
+                            FlashbarActivityUtilsKt.flashInfo(attachedActivity,
+                                    "新连接层连接失败: " + (err == null ? "未知" : err.getMessage()));
+                        }
+                    });
+                }
+            } catch (Throwable t) {
+                ILogger.ROOT.error(TAG + ": connectVia threw: " + t.getMessage(), t);
+                postMain(() -> {
+                    if (attachedActivity != null) {
+                        FlashbarActivityUtilsKt.flashInfo(attachedActivity,
+                                "新连接层异常: " + t.getMessage());
+                    }
+                });
+            }
+        });
+    }
+
     public void disconnect() {
         if (debugger == null) return;
         try { debugger.disconnect(); } catch (Throwable ignored) {}
