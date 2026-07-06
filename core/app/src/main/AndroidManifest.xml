@@ -8,6 +8,11 @@
      <uses-permission android:name="android.permission.VIBRATE" />
      <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+     <!-- 音频后台播放服务 (AudioPlaybackService, Media3 MediaSessionService) -->
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
      <permission
           android:name="com.itsaky.androidide.permission.BIND_LOG_SERVICE"
           android:protectionLevel="normal" />
@@ -142,6 +147,18 @@
                android:name=".services.sdk.SdkManagerService"
                android:foregroundServiceType="dataSync"
                android:exported="false" />
+
+          <!-- 音频后台播放服务 (Media3 MediaSessionService) -->
+          <!-- 接收系统 MediaButton / 接管锁屏通知 / 自动管理前台通知 -->
+          <service
+               android:name=".fragments.editor.audio.AudioPlaybackService"
+               android:exported="false"
+               android:foregroundServiceType="mediaPlayback">
+               <intent-filter>
+                    <action android:name="androidx.media3.session.MediaSessionService" />
+                    <action android:name="com.itsaky.androidide.audio.START_PLAYBACK" />
+               </intent-filter>
+          </service>
 
           <profileable
                android:shell="true"

@@ -347,6 +347,10 @@
     <string name="desc_image_preview">Preview image files (PNG / JPG / SVG / WebP / vector drawable)</string>
     <string name="title_universal_preview">Universal Preview</string>
     <string name="desc_universal_preview">3D/2D graphics preview for C/C++ source (AST topology / Three.js / ImGui)</string>
+    <string name="title_audio_preview">Audio Preview</string>
+    <string name="desc_audio_preview">Preview audio files (MP3 / WAV / FLAC / OGG / AAC / M4A / Opus) with frosted glass controls</string>
+    <string name="title_video_preview">Video Preview</string>
+    <string name="desc_video_preview">Preview video files (MP4 / MKV / WebM / AVI / MOV) with frosted glass controls</string>
      <string name="title_viewaction_delete">Delete</string>
      <string name="msg_yesno_def_title">Please confirm</string>
      <string name="msg_yesno_def_message">Are you sure?</string>

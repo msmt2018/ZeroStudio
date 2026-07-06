@@ -208,6 +208,17 @@ dependencies {
 
   // UI/UX
   implementation(libs.bundles.compose) // androidx compose
+  // 磨砂玻璃 (Frosted glass) - 音频/视频预览 fragment 控件
+  implementation(libs.haze)
+  implementation(libs.haze.blur)
+  implementation(libs.haze.blur.materials)
+
+  // Media3 - 音频/视频预览 fragment 播放引擎
+  implementation(libs.androidx.media3.exoplayer)
+  implementation(libs.androidx.media3.ui)
+  implementation(libs.androidx.media3.session)
+  implementation(libs.androidx.media3.datasource)
+  implementation(libs.androidx.media3.extractor)
   // androidx.compose.runtime.livedata.observeAsState (used by MarkdownPreviewFragment)
   implementation(libs.androidx.compose.runtime.livedata)
   implementation(libs.androidx.core.ktx)

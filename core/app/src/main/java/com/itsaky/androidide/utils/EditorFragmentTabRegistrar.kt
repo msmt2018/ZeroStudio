@@ -2,8 +2,10 @@ package com.itsaky.androidide.utils
 
 import com.itsaky.androidide.fragments.editor.FragmentTabEntry
 import com.itsaky.androidide.fragments.editor.FragmentTabRegistry
+import com.itsaky.androidide.fragments.editor.audio.AudioPreviewFragment
 import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
 import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
+import com.itsaky.androidide.fragments.editor.video.VideoPreviewFragment
 import com.itsaky.androidide.resources.R
 import com.zerostudio.preview.UniversalPreviewEngineFragment
 
@@ -30,6 +32,12 @@ object EditorFragmentTabRegistrar {
   /** C/C++ 3D/2D 通用预览 tab 的 id */
   const val UNIVERSAL_PREVIEW = "universal_preview"
 
+  /** 音频预览 tab 的 id */
+  const val AUDIO_PREVIEW = "audio_preview"
+
+  /** 视频预览 tab 的 id */
+  const val VIDEO_PREVIEW = "video_preview"
+
   /**
    * 注册全部编辑器 Fragment Tab。
    *
@@ -45,6 +53,8 @@ object EditorFragmentTabRegistrar {
     registerMarkdownPreview()
     registerImagePreview()
     registerUniversalPreview()
+    registerAudioPreview()
+    registerVideoPreview()
   }
 
   // ── Markdown 预览 ──────────────────────────────────────────
@@ -105,6 +115,52 @@ object EditorFragmentTabRegistrar {
         fileExtensions = UniversalPreviewEngineFragment.SUPPORTED_EXTENSIONS,
         order = 120,
         fragmentFactory = { UniversalPreviewEngineFragment() },
+      )
+    )
+  }
+
+  // ── 音频预览 ────────────────────────────────────────────────
+
+  /**
+   * Media3 ExoPlayer + Compose 磨砂玻璃控件。
+   * 支持 14 种音频格式 (mp3 / wav / ogg / flac / aac / m4a / opus / mid / midi /
+   * amr / pcm / aiff / ape / wma), 含频谱可视化 + LRC 歌词同步 + 均衡器。
+   * 文件后缀命中 [AudioPreviewFragment.SUPPORTED_EXTENSIONS] 时 editor 在 tab 栏
+   * 给出 "Audio Preview" 入口。
+   */
+  private fun registerAudioPreview() {
+    FragmentTabRegistry.register(
+      FragmentTabEntry(
+        id = AUDIO_PREVIEW,
+        title = AudioPreviewFragment.TAB_TITLE,
+        iconRes = R.drawable.ic_file_type_image, // 暂时复用图片图标, 后续可换专用音频图标
+        fragmentClass = AudioPreviewFragment::class.java,
+        fileExtensions = AudioPreviewFragment.SUPPORTED_EXTENSIONS,
+        order = 130,
+        fragmentFactory = { AudioPreviewFragment() },
+      )
+    )
+  }
+
+  // ── 视频预览 ────────────────────────────────────────────────
+
+  /**
+   * Media3 ExoPlayer + PlayerView + Compose 磨砂玻璃控件 overlay。
+   * 支持 15 种视频格式 (mp4 / mkv / webm / avi / mov / 3gp / mpg / mpeg / ts /
+   * m2ts / flv / wmv / m4v / vob / ogv), 含手势控制 + 字幕 + 截图。
+   * 文件后缀命中 [VideoPreviewFragment.SUPPORTED_EXTENSIONS] 时 editor 在 tab 栏
+   * 给出 "Video Preview" 入口。
+   */
+  private fun registerVideoPreview() {
+    FragmentTabRegistry.register(
+      FragmentTabEntry(
+        id = VIDEO_PREVIEW,
+        title = VideoPreviewFragment.TAB_TITLE,
+        iconRes = R.drawable.ic_file_type_image, // 暂时复用图片图标, 后续可换专用视频图标
+        fragmentClass = VideoPreviewFragment::class.java,
+        fileExtensions = VideoPreviewFragment.SUPPORTED_EXTENSIONS,
+        order = 140,
+        fragmentFactory = { VideoPreviewFragment() },
       )
     )
   }

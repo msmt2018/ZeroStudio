@@ -33,7 +33,9 @@ import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
 import com.itsaky.androidide.events.FileContextMenuItemClickEvent
 import com.itsaky.androidide.events.ListProjectFilesRequestEvent
 import com.itsaky.androidide.file.FileValidator
+import com.itsaky.androidide.fragments.editor.audio.AudioPreviewFragment
 import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
+import com.itsaky.androidide.fragments.editor.video.VideoPreviewFragment
 import com.itsaky.androidide.fragments.sheets.OptionsListFragment
 import com.itsaky.androidide.models.SheetOption
 import com.itsaky.androidide.utils.ApkInstaller
@@ -110,6 +112,38 @@ class FileTreeActionHandler : BaseEventHandler() {
       // tab 没注册 (理论不会, 走不到这里) → fall through 到普通 openFile
     }
 
+    // === 音频预览路由 ===
+    // 文件后缀命中 AudioPreviewFragment.SUPPORTED_EXTENSIONS (mp3 / wav / ogg /
+    // flac / aac / m4a / opus / mid / midi / amr / pcm / aiff / ape / wma) 时,
+    // 直接在 IDE 内的 Audio Preview tab 里打开.
+    if (isSupportedAudioFile(event.file)) {
+      val ext = event.file.extension.lowercase()
+      val tabId = context.fragmentTabManager?.openFileTab(
+        filePath = event.file.absolutePath,
+        fileExtension = ext,
+      )
+      if (tabId != null) {
+        log.info("Opened audio preview tab {} for {}", tabId, event.file)
+        return
+      }
+    }
+
+    // === 视频预览路由 ===
+    // 文件后缀命中 VideoPreviewFragment.SUPPORTED_EXTENSIONS (mp4 / mkv / webm /
+    // avi / mov / 3gp / mpg / mpeg / ts / m2ts / flv / wmv / m4v / vob / ogv) 时,
+    // 直接在 IDE 内的 Video Preview tab 里打开.
+    if (isSupportedVideoFile(event.file)) {
+      val ext = event.file.extension.lowercase()
+      val tabId = context.fragmentTabManager?.openFileTab(
+        filePath = event.file.absolutePath,
+        fileExtension = ext,
+      )
+      if (tabId != null) {
+        log.info("Opened video preview tab {} for {}", tabId, event.file)
+        return
+      }
+    }
+
     context.openFile(event.file)
   }
 
@@ -124,6 +158,18 @@ class FileTreeActionHandler : BaseEventHandler() {
     if (ext.isEmpty() || ext !in ImagePreviewFragment.SUPPORTED_FORMATS) return false
     if (ext == "xml") return FileValidator.isLikelyAndroidVector(file)
     return true
+  }
+
+  /** 判断给定文件是否应该走 [AudioPreviewFragment] (仅扩展名匹配). */
+  private fun isSupportedAudioFile(file: File): Boolean {
+    val ext = file.extension.lowercase()
+    return ext.isNotEmpty() && ext in AudioPreviewFragment.SUPPORTED_EXTENSIONS
+  }
+
+  /** 判断给定文件是否应该走 [VideoPreviewFragment] (仅扩展名匹配). */
+  private fun isSupportedVideoFile(file: File): Boolean {
+    val ext = file.extension.lowercase()
+    return ext.isNotEmpty() && ext in VideoPreviewFragment.SUPPORTED_EXTENSIONS
   }
 
   @Suppress("UNCHECKED_CAST")

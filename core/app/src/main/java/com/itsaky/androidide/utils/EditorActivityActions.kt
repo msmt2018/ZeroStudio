@@ -45,6 +45,8 @@ import com.itsaky.androidide.actions.etc.ReloadColorSchemesAction
 import com.itsaky.androidide.actions.etc.markdown.MarkdownPreviewAction
 import com.itsaky.androidide.actions.etc.image.ImagePreviewAction
 import com.itsaky.androidide.actions.etc.universal.UniversalPreviewAction
+import com.itsaky.androidide.actions.etc.audio.AudioPreviewAction
+import com.itsaky.androidide.actions.etc.video.VideoPreviewAction
 import com.itsaky.androidide.actions.file.CloseAllFilesAction
 import com.itsaky.androidide.actions.file.CloseFileAction
 import com.itsaky.androidide.actions.file.CloseOtherFilesAction
@@ -92,6 +94,8 @@ class EditorActivityActions {
       registry.registerAction(MarkdownPreviewAction(context, order++))
       registry.registerAction(ImagePreviewAction(context, order++))
       registry.registerAction(UniversalPreviewAction(context, order++))
+      registry.registerAction(AudioPreviewAction(context, order++))
+      registry.registerAction(VideoPreviewAction(context, order++))
       registry.registerAction(FindActionMenu(context, order++))
       registry.registerAction(ProjectSyncAction(context, order++))
       registry.registerAction(ReloadColorSchemesAction(context, order++))
