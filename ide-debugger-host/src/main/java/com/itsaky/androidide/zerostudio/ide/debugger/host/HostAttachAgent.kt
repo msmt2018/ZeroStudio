@@ -280,7 +280,7 @@ object HostAttachAgent {
         return ide to jdwp
     }
 
-    private fun exitProcess(code: ExitCode) {
+    private fun exitProcess(code: ExitCode): Nothing {
         kotlin.system.exitProcess(code.code)
     }
 }

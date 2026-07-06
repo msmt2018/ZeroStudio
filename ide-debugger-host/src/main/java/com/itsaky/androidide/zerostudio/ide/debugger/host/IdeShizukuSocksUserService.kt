@@ -71,10 +71,7 @@ class IdeShizukuSocksUserService : Service() {
      * 跟 [HostPluginService] 同样的修复 (Phase 12c), 之前实现返回 null + 注释说
      * "返回 null 也行" 是错的, 改 noopBinder 保持一致。
      */
-    private val noopBinder: IBinder = object : IBinder {
-        // 空实现: Shizuku / IDE 只调 pingBinder(), Binder 基类自带 transact
-        // PING_TRANSACTION 返回 true 的实现, 无需 override
-    }
+    private val noopBinder: IBinder = Binder()
 
     override fun onCreate() {
         super.onCreate()
@@ -129,7 +126,7 @@ class IdeShizukuSocksUserService : Service() {
                 }
             } catch (t: Throwable) {
                 Log.w(tag, "onTransact code=$code failed: ${t.message}", t)
-                reply?.writeException(t)
+                reply?.writeException(t as? Exception ?: RuntimeException(t))
                 true
             }
         }
@@ -158,7 +155,7 @@ class IdeShizukuSocksUserService : Service() {
             reply?.writeInt(actual)
         } catch (t: Throwable) {
             Log.e(tag, "setSocksPort($requested) failed: ${t.message}", t)
-            reply?.writeException(t)
+            reply?.writeException(t as? Exception ?: RuntimeException(t))
         }
     }
 

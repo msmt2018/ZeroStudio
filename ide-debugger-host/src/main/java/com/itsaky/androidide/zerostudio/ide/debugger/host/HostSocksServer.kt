@@ -49,6 +49,8 @@ class HostSocksServer {
     @Volatile private var abstractServer: LocalServerSocket? = null
     @Volatile private var tcpServer: ServerSocket? = null
     @Volatile private var acceptThread: Thread? = null
+    /** stop() 时置 true, accept loop 据此区分 "被 stop 关闭" (预期) 与 "异常退出" (需 log). */
+    @Volatile private var stopped = false
 
     /**
      * 防止 [startOnAbstract] / [startOnTcp] 二次启动泄漏前一个 server socket;
@@ -66,13 +68,14 @@ class HostSocksServer {
         if (!running.compareAndSet(false, true)) {
             throw IllegalStateException("HostSocksServer already started; call stop() first")
         }
+        stopped = false
         try {
             val lss = LocalServerSocket(name)
             abstractServer = lss
             log("listening on abstract=$name")
             acceptThread = thread(name = "HostSocksServer-abstract", isDaemon = false) {
                 try {
-                    while (!lss.isClosed) {
+                    while (!stopped) {
                         val client = lss.accept()
                         thread(name = "HostSocksServer-handler-${name}", isDaemon = true) {
                             try {
@@ -85,7 +88,7 @@ class HostSocksServer {
                         }
                     }
                 } catch (t: Throwable) {
-                    if (!lss.isClosed) log("abstract accept loop ended: ${t.message}")
+                    if (!stopped) log("abstract accept loop ended: ${t.message}")
                 } finally {
                     running.set(false)
                 }
@@ -108,6 +111,7 @@ class HostSocksServer {
         if (!running.compareAndSet(false, true)) {
             throw IllegalStateException("HostSocksServer already started; call stop() first")
         }
+        stopped = false
         try {
             val addr: SocketAddress = java.net.InetSocketAddress(host, port)
             val ss = ServerSocket()
@@ -147,6 +151,7 @@ class HostSocksServer {
      * handler thread 是 daemon, JVM exit 自动 kill; 这里不等 handler 收尾。
      */
     fun stop() {
+        stopped = true
         runCatching { abstractServer?.close() }
         runCatching { tcpServer?.close() }
         abstractServer = null

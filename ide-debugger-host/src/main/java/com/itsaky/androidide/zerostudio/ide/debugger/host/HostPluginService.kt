@@ -28,6 +28,7 @@
 package com.itsaky.androidide.zerostudio.ide.debugger.host
 
 import android.net.LocalSocket
+import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 
@@ -52,10 +53,7 @@ class HostPluginService : android.app.Service() {
      *     会抛 "binder is null")
      *   - 之前实现返回 null, 导致 IDE 端 throw 死循环, 修复返回 noop Binder
      */
-    private val noopBinder: IBinder = object : IBinder {
-        // 空实现: IDE 端只调 pingBinder() 验活性, Binder 基类自带实现
-        // (transact PING_TRANSACTION 返回 true)
-    }
+    private val noopBinder: IBinder = Binder()
 
     override fun onBind(intent: android.content.Intent?): IBinder {
         // 启动 reverse-conn thread, 桥接 IDE LocalServerSocket <-> host JDWP
