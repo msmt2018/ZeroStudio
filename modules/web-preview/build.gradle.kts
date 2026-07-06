@@ -73,7 +73,7 @@ dependencies {
   implementation(projects.termux.shared)
 
   // SLF4J — 日志
-  implementation(libs.slf4j.api)
+  implementation(libs.tooling.slf4j)
 
   testImplementation(libs.tests.junit)
 }

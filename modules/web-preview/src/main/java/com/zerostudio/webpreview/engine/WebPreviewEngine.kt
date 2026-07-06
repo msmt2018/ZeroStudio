@@ -290,6 +290,7 @@ private fun applyDeviceProfile(webView: WebView, profile: com.zerostudio.webprev
     }
 }
 
+@Suppress("DEPRECATION")  // FORCE_DARK 在 androidx.webkit 1.6.0+ 弃用, 但 1.17.0-alpha03 仍保留
 private fun applyDarkMode(settings: WebSettings, darkMode: Boolean) {
     try {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
