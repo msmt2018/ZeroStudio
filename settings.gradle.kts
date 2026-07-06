@@ -176,11 +176,11 @@ include(
     ":event:eventbus-events",
 
     ":debugger:ide-decompiler",
-    ":debugger:ide-debugger",
-    ":debugger:ide-debugger-host",
-    ":debugger:ide-log-plugin",
+    ":debugger:Breakpoint-debugger:ide-debugger",
+    ":debugger:Breakpoint-debugger:ide-debugger-host",
+    ":debugger:log-runtime:ide-log-plugin",
     ":debugger:ide-language",
-    ":debugger:logwire",
+    ":debugger:log-runtime:logwire",
 
     ":java:javac-services",
     ":java:lsp",

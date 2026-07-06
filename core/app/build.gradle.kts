@@ -257,7 +257,7 @@ dependencies {
   implementation(projects.tooling.api)
  
   implementation(projects.tooling.pluginConfig)
-  implementation(projects.debugger.logwire)
+  implementation(projects.debugger.logRuntime.logwire)
   implementation(projects.utilities.buildInfo)
   implementation(projects.utilities.lookup)
   implementation(projects.utilities.flashbar)
@@ -272,7 +272,7 @@ dependencies {
   implementation(projects.event.eventbus)
   implementation(projects.event.eventbusAndroid)
   implementation(projects.event.eventbusEvents)
-  implementation(projects.debugger.ideDebugger)
+  implementation(projects.debugger.breakpointDebugger.ideDebugger)
   implementation(projects.modules.mtDataFilesProvider)
   implementation(projects.modules.deviceCompat)
   implementation(projects.modules.zeroSymbolInputView)
