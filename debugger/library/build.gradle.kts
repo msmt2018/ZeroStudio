@@ -22,13 +22,13 @@ val runtimeArtifacts = listOf(
         "androidide-plugin.jar",
     ),
     RuntimeArtifact(
-        ":ide-debugger",
+        ":debugger:ide-debugger",
         "assembleRelease",
         "outputs/aar/ide-debugger-release.aar",
         "ide-debugger.aar",
     ),
     RuntimeArtifact(
-        ":ide-log-plugin",
+        ":debugger:ide-log-plugin",
         "assembleRelease",
         "outputs/aar/ide-log-plugin-release.aar",
         "ide-log-plugin-1.0.0.aar",
