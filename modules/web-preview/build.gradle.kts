@@ -18,6 +18,7 @@ import com.itsaky.androidide.build.config.BuildConfig
 plugins {
   id("com.android.library")
   id("org.jetbrains.kotlin.android")
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 
 android {
@@ -45,10 +46,6 @@ android {
   buildFeatures {
     viewBinding = false
     compose = true
-  }
-
-  composeOptions {
-    kotlinCompilerExtensionVersion = "1.5.15"
   }
 }
 
