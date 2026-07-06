@@ -294,6 +294,7 @@ dependencies {
   implementation(projects.modules.composePreview)
   implementation(projects.modules.colorpicker)
   implementation(projects.modules.universalPreview)
+  implementation(projects.modules.webPreview)
   implementation(libs.common.soraLanguageTextmate)
 
   // Shizuku 客户端 API (子项目 3 断点调试连接层用)

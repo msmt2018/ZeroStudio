@@ -6,6 +6,7 @@ import com.itsaky.androidide.fragments.editor.audio.AudioPreviewFragment
 import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
 import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
 import com.itsaky.androidide.fragments.editor.video.VideoPreviewFragment
+import com.itsaky.androidide.fragments.editor.web.WebPreviewFragment
 import com.itsaky.androidide.resources.R
 import com.zerostudio.preview.UniversalPreviewEngineFragment
 
@@ -38,6 +39,9 @@ object EditorFragmentTabRegistrar {
   /** 视频预览 tab 的 id */
   const val VIDEO_PREVIEW = "video_preview"
 
+  /** Web 预览 tab 的 id */
+  const val WEB_PREVIEW = "web_preview"
+
   /**
    * 注册全部编辑器 Fragment Tab。
    *
@@ -55,6 +59,7 @@ object EditorFragmentTabRegistrar {
     registerUniversalPreview()
     registerAudioPreview()
     registerVideoPreview()
+    registerWebPreview()
   }
 
   // ── Markdown 预览 ──────────────────────────────────────────
@@ -161,6 +166,36 @@ object EditorFragmentTabRegistrar {
         fileExtensions = VideoPreviewFragment.SUPPORTED_EXTENSIONS,
         order = 140,
         fragmentFactory = { VideoPreviewFragment() },
+      )
+    )
+  }
+
+  // ── Web 预览 ────────────────────────────────────────────────
+
+  /**
+   * androidx.webkit WebView + Compose 磨砂玻璃控件 + Chrome DevTools。
+   * 支持 html / htm 静态文件预览, 以及通过工具栏地址栏输入 URL / 底部后端
+   * 控制栏启动 Termux 中的 node/python/php 运行时来预览本地 dev server。
+   *
+   * DevTools 采用三段式桥接:
+   *   1. 被调试 WebView setWebContentsDebuggingEnabled(true) → 暴露 CDP unix socket
+   *   2. LocalSocketForwarder 把 abstract socket 转发到 localhost:9222 TCP
+   *   3. 第二个 WebView 加载 chrome-devtools-frontend.appspot.com 的 DevTools 前端
+   *
+   * 设备切换: UA + viewport 真实重渲染, 11 档预置设备
+   * (iPhone SE/14/14 Pro Max, Pixel 7/7 Pro, Galaxy S23, iPad Mini/Pro 11,
+   * Desktop 1080p/4K, MacBook Air)。
+   */
+  private fun registerWebPreview() {
+    FragmentTabRegistry.register(
+      FragmentTabEntry(
+        id = WEB_PREVIEW,
+        title = WebPreviewFragment.TAB_TITLE,
+        iconRes = R.drawable.ic_file_type_image, // 暂时复用图片图标, 后续可换专用 web 图标
+        fragmentClass = WebPreviewFragment::class.java,
+        fileExtensions = WebPreviewFragment.SUPPORTED_EXTENSIONS,
+        order = 150,
+        fragmentFactory = { WebPreviewFragment() },
       )
     )
   }

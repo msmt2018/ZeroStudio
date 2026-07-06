@@ -36,6 +36,7 @@ import com.itsaky.androidide.file.FileValidator
 import com.itsaky.androidide.fragments.editor.audio.AudioPreviewFragment
 import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
 import com.itsaky.androidide.fragments.editor.video.VideoPreviewFragment
+import com.itsaky.androidide.fragments.editor.web.WebPreviewFragment
 import com.itsaky.androidide.fragments.sheets.OptionsListFragment
 import com.itsaky.androidide.models.SheetOption
 import com.itsaky.androidide.utils.ApkInstaller
@@ -144,6 +145,23 @@ class FileTreeActionHandler : BaseEventHandler() {
       }
     }
 
+    // === Web 预览路由 ===
+    // 文件后缀命中 WebPreviewFragment.SUPPORTED_EXTENSIONS (html / htm) 时,
+    // 直接在 IDE 内的 Web Preview tab 里打开. 其他 web 场景 (Vue/React 构建
+    // 产物 / dev server / Node.js 后端) 由用户在 Web Preview 工具栏内手动输入
+    // URL 或启动后端控制栏进入, 不走文件扩展名匹配.
+    if (isSupportedWebFile(event.file)) {
+      val ext = event.file.extension.lowercase()
+      val tabId = context.fragmentTabManager?.openFileTab(
+        filePath = event.file.absolutePath,
+        fileExtension = ext,
+      )
+      if (tabId != null) {
+        log.info("Opened web preview tab {} for {}", tabId, event.file)
+        return
+      }
+    }
+
     context.openFile(event.file)
   }
 
@@ -170,6 +188,12 @@ class FileTreeActionHandler : BaseEventHandler() {
   private fun isSupportedVideoFile(file: File): Boolean {
     val ext = file.extension.lowercase()
     return ext.isNotEmpty() && ext in VideoPreviewFragment.SUPPORTED_EXTENSIONS
+  }
+
+  /** 判断给定文件是否应该走 [WebPreviewFragment] (仅扩展名匹配 html / htm). */
+  private fun isSupportedWebFile(file: File): Boolean {
+    val ext = file.extension.lowercase()
+    return ext.isNotEmpty() && ext in WebPreviewFragment.SUPPORTED_EXTENSIONS
   }
 
   @Suppress("UNCHECKED_CAST")

@@ -55,6 +55,7 @@ browser = "1.10.0"
 media3 = "1.10.0"
 cameraCore = "1.6.1"
 paging = "3.5.0"
+androidxWebkit = "1.17.0-alpha03"
 nav2 = "2.9.8"
 nav3Core = "1.1.1"
 profileinstaller = "1.4.1"
@@ -319,6 +320,7 @@ androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "medi
 androidx-media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
 androidx-media3-datasource = { module = "androidx.media3:media3-datasource", version.ref = "media3" }
 androidx-media3-extractor = { module = "androidx.media3:media3-extractor", version.ref = "media3" }
+androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWebkit" }
 androidx-multidex = { module = "androidx.multidex:multidex", version.ref = "multidexVersion" }
 
 
