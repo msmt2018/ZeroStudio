@@ -37,6 +37,7 @@ import com.itsaky.androidide.debugger.connection.shizuku.ShizukuSubPath
 import com.itsaky.androidide.debugger.connection.shizuku.ShizukuSubPathResolver
 import com.itsaky.androidide.debugger.connection.shizuku.SocksControlTransact
 import com.itsaky.androidide.debugger.connection.shizuku.UserServiceHandle
+import com.itsaky.androidide.debugger.connection.shizuku.defaultShizukuSubPathCapabilities
 import com.itsaky.androidide.debugger.connection.shizuku.probeHostPluginUsable
 import android.os.IBinder
 import com.itsaky.androidide.utils.ILogger

@@ -31,9 +31,10 @@ import java.io.DataOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import org.slf4j.Logger
 
 class Socks5Client(
-    private val log = ILogger.ROOT,
+    private val log: Logger = ILogger.ROOT,
 ) {
 
     /**

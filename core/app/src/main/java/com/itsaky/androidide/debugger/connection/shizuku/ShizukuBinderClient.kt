@@ -259,7 +259,10 @@ class FakeShizukuBinderClient(
 
     // Phase 15: 老签名 (IBinder) 内部 cache 一个 noop ServiceConnection, 让旧
     //   测试 caller 不用改 (5 处: `bindUserServiceResult = mockBinder` 仍能用)。
-    private val noopConn: ServiceConnection = ServiceConnection { _, _ -> }
+    private val noopConn: ServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: android.content.ComponentName?, service: IBinder?) {}
+        override fun onServiceDisconnected(name: android.content.ComponentName?) {}
+    }
     private var lastHandle: UserServiceHandle? = null
 
     var newProcessCallCount: Int = 0
