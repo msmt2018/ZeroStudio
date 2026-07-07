@@ -282,11 +282,11 @@ private fun applyDeviceProfile(webView: WebView, profile: com.zerostudio.webprev
     }
     // viewport 尺寸通过 setInitialScale + useWideViewPort 控制
     // 真实视口尺寸由 WebView 容器决定, 这里只设 UA + 缩放策略
-    if (profile.viewportWidth > 0) {
-        // 注入 viewport meta (在 onPageFinished 时注入更可靠, 但这里先设 initialScale)
+    // 注: setInitialScale 是 WebView 的方法, 不是 WebSettings 的
+    if (profile.viewportWidth > 0 && webView.width > 0) {
         val density = webView.context.resources.displayMetrics.density
         val scale = (profile.viewportWidth * density / webView.width.toFloat()).coerceIn(0.1f, 10f)
-        if (webView.width > 0) settings.setInitialScale((scale * 100).toInt())
+        webView.setInitialScale((scale * 100).toInt())
     }
 }
 
