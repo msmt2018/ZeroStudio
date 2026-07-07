@@ -160,6 +160,57 @@ public class TSLanguage extends TSNativeObject {
   }
 
   /**
+   * 获取语言自身报告的名称。
+   *
+   * <p>这是 v15 新增的 C API {@code ts_language_name} 的包装。对于旧版本（v14 及以下）的语言，
+   * 可能返回 {@code null}。
+   *
+   * @return 语言名称，若语言未提供则返回 {@code null}。
+   */
+  public String getLanguageName() {
+    checkAccess();
+    return Native.name(getNativeObject());
+  }
+
+  /**
+   * 获取语言的版本元数据。
+   *
+   * <p>返回一个长度为 3 的 {@code int} 数组，依次为 {@code [major, minor, patch]}。
+   * 对于旧版本（v14 及以下）的语言，返回 {@code null}。
+   *
+   * @return 版本元数据数组，若语言未提供则返回 {@code null}。
+   */
+  public int[] getMetadata() {
+    checkAccess();
+    return Native.metadata(getNativeObject());
+  }
+
+  /**
+   * 获取语言中所有超类型（supertype）的符号 id 列表。
+   *
+   * <p>对于旧版本（v14 及以下）的语言，返回空数组。
+   *
+   * @return 超类型符号 id 数组。
+   */
+  public int[] getSupertypes() {
+    checkAccess();
+    return Native.supertypes(getNativeObject());
+  }
+
+  /**
+   * 获取指定超类型下的所有子类型（subtype）符号 id 列表。
+   *
+   * <p>对于旧版本（v14 及以下）的语言，返回空数组。
+   *
+   * @param supertype 超类型符号 id。
+   * @return 子类型符号 id 数组。
+   */
+  public int[] getSubtypes(int supertype) {
+    checkAccess();
+    return Native.subtypes(getNativeObject(), supertype);
+  }
+
+  /**
    * Returns whether this language is external i.e. loaded with
    * {@link TSLanguage#loadLanguage(String, String)}.
    *
@@ -290,5 +341,17 @@ public class TSLanguage extends TSNativeObject {
 
     @FastNative
     public static native short nextState(long pointer, short stateId, short symbol);
+
+    @FastNative
+    static native String name(long ptr);
+
+    @FastNative
+    static native int[] metadata(long ptr);  // [major, minor, patch]
+
+    @FastNative
+    static native int[] supertypes(long ptr);  // 符号 id 数组
+
+    @FastNative
+    static native int[] subtypes(long ptr, int supertype);  // 符号 id 数组
   }
 }

@@ -282,6 +282,26 @@ public class TSNode extends TSNativeObject {
   }
 
   /**
+   * 获取当前节点下包含指定后代节点的最小子节点。
+   *
+   * @param descendant 后代节点。
+   * @return 包含该后代的子节点。
+   */
+  public TSNode childWithDescendant(TSNode descendant) {
+    return Native.childWithDescendant(this, descendant);
+  }
+
+  /**
+   * 获取指定命名子节点的字段名。
+   *
+   * @param namedChildIndex 命名子节点的索引。
+   * @return 字段名或 <code>null</code>。
+   */
+  public String fieldNameForNamedChild(int namedChildIndex) {
+    return Native.fieldNameForNamedChild(this, namedChildIndex);
+  }
+
+  /**
    * Get the child for the given field id.
    *
    * @param fieldId The field id.
@@ -656,6 +676,12 @@ public class TSNode extends TSNativeObject {
 
     @FastNative
     static native String getFieldNameForChild(TSNode self, int childIndex);
+
+    @FastNative
+    static native TSNode childWithDescendant(TSNode self, TSNode descendant);
+
+    @FastNative
+    static native String fieldNameForNamedChild(TSNode self, int namedChildIndex);
 
     @FastNative
     static native TSNode getChildByFieldId(TSNode self, int fieldId);

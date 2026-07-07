@@ -168,6 +168,77 @@ static jshort TSLanguage_nextState(JNIEnv *env,
                                          symbol);
 }
 
+// 获取语言自身报告的名称（v15 新增，v14 及以下语言可能返回 NULL）
+static jstring TSLanguage_name(JNIEnv *env, jclass self, jlong ptr) {
+  req_nnp(env, ptr);
+  const char *name = ts_language_name((TSLanguage *) ptr);
+  if (name == nullptr) {
+    return nullptr;
+  }
+  return env->NewStringUTF(name);
+}
+
+// 获取语言版本元数据 [major, minor, patch]（v14 及以下语言返回 NULL）
+static jintArray TSLanguage_metadata(JNIEnv *env, jclass self, jlong ptr) {
+  req_nnp(env, ptr);
+  const TSLanguageMetadata *metadata = ts_language_metadata((TSLanguage *) ptr);
+  if (metadata == nullptr) {
+    return nullptr;
+  }
+  jint values[3] = {(jint) metadata->major_version,
+                    (jint) metadata->minor_version,
+                    (jint) metadata->patch_version};
+  jintArray result = env->NewIntArray(3);
+  req_nnp(env, result, "metadata jintArray");
+  env->SetIntArrayRegion(result, 0, 3, values);
+  return result;
+}
+
+// 获取所有超类型符号 id（v14 及以下语言返回空数组）
+static jintArray TSLanguage_supertypes(JNIEnv *env, jclass self, jlong ptr) {
+  req_nnp(env, ptr);
+  uint32_t length = 0;
+  const TSSymbol *supertypes =
+      ts_language_supertypes((TSLanguage *) ptr, &length);
+  if (supertypes == nullptr || length == 0) {
+    return env->NewIntArray(0);
+  }
+  jintArray result = env->NewIntArray((jsize) length);
+  req_nnp(env, result, "supertypes jintArray");
+  // TSSymbol 为 uint16_t，需逐个转入 jint 数组
+  jint *buf = new jint[length];
+  for (uint32_t i = 0; i < length; i++) {
+    buf[i] = (jint) supertypes[i];
+  }
+  env->SetIntArrayRegion(result, 0, (jsize) length, buf);
+  delete[] buf;
+  return result;
+}
+
+// 获取指定超类型的子类型符号 id（v14 及以下语言返回空数组）
+static jintArray TSLanguage_subtypes(JNIEnv *env,
+                                     jclass self,
+                                     jlong ptr,
+                                     jint supertype) {
+  req_nnp(env, ptr);
+  uint32_t length = 0;
+  const TSSymbol *subtypes = ts_language_subtypes((TSLanguage *) ptr,
+                                                  (TSSymbol) supertype,
+                                                  &length);
+  if (subtypes == nullptr || length == 0) {
+    return env->NewIntArray(0);
+  }
+  jintArray result = env->NewIntArray((jsize) length);
+  req_nnp(env, result, "subtypes jintArray");
+  jint *buf = new jint[length];
+  for (uint32_t i = 0; i < length; i++) {
+    buf[i] = (jint) subtypes[i];
+  }
+  env->SetIntArrayRegion(result, 0, (jsize) length, buf);
+  delete[] buf;
+  return result;
+}
+
 void TSLanguage_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSLanguage_Native_symCount, TSLanguage_symCount);
   SET_JNI_METHOD(methods, TSLanguage_Native_fldCount, TSLanguage_fldCount);
@@ -181,4 +252,8 @@ void TSLanguage_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSLanguage_Native_dlclose, TSLanguage_dlclose);
   SET_JNI_METHOD(methods, TSLanguage_Native_stateCount, TSLanguage_stateCount);
   SET_JNI_METHOD(methods, TSLanguage_Native_nextState, TSLanguage_nextState);
+  SET_JNI_METHOD(methods, TSLanguage_Native_name, TSLanguage_name);
+  SET_JNI_METHOD(methods, TSLanguage_Native_metadata, TSLanguage_metadata);
+  SET_JNI_METHOD(methods, TSLanguage_Native_supertypes, TSLanguage_supertypes);
+  SET_JNI_METHOD(methods, TSLanguage_Native_subtypes, TSLanguage_subtypes);
 }

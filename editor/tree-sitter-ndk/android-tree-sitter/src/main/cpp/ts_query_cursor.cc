@@ -92,6 +92,59 @@ static jobject TSQueryCursor_nextMatch(JNIEnv *env, jclass self, jlong cursor) {
   return _marshalMatch(env, m);
 }
 
+// v15 新增 API：获取下一个 capture（用于高亮）
+static jobject TSQueryCursor_nextCapture(JNIEnv *env,
+                                          jclass self,
+                                          jlong cursor,
+                                          jintArray captureIndexOut) {
+  req_nnp(env, cursor);
+  TSQueryMatch m;
+  uint32_t capture_index;
+  bool b = ts_query_cursor_next_capture((TSQueryCursor *) cursor, &m, &capture_index);
+  if (!b) {
+    return nullptr;
+  }
+  // 写出 capture_index 到 out 参数
+  if (captureIndexOut != nullptr) {
+    jint ci = (jint) capture_index;
+    env->SetIntArrayRegion(captureIndexOut, 0, 1, &ci);
+  }
+  return _marshalMatch(env, m);
+}
+
+// v15 新增 API：设置全包含式 byte 范围
+static jboolean TSQueryCursor_setContainingByteRange(JNIEnv *env,
+                                                     jclass self,
+                                                     jlong cursor,
+                                                     jint startByte,
+                                                     jint endByte) {
+  req_nnp(env, cursor);
+  return (jboolean) ts_query_cursor_set_containing_byte_range(
+      (TSQueryCursor *) cursor, startByte, endByte);
+}
+
+// v15 新增 API：设置全包含式 point 范围
+static jboolean TSQueryCursor_setContainingPointRange(JNIEnv *env,
+                                                      jclass self,
+                                                      jlong cursor,
+                                                      jobject start,
+                                                      jobject end) {
+  req_nnp(env, cursor);
+  return (jboolean) ts_query_cursor_set_containing_point_range(
+      (TSQueryCursor *) cursor,
+      _unmarshalPoint(env, start),
+      _unmarshalPoint(env, end));
+}
+
+// v15 新增 API：限制 pattern 根节点搜索起始深度
+static void TSQueryCursor_setMaxStartDepth(JNIEnv *env,
+                                           jclass self,
+                                           jlong cursor,
+                                           jint maxStartDepth) {
+  req_nnp(env, cursor);
+  ts_query_cursor_set_max_start_depth((TSQueryCursor *) cursor, maxStartDepth);
+}
+
 static void
 TSQueryCursor_removeMatch(JNIEnv *env, jclass self, jlong cursor, jint id) {
   req_nnp(env, cursor);
@@ -112,5 +165,12 @@ void TSQueryCursor_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSQueryCursor_Native_setPointRange,
                  TSQueryCursor_setPointRange);
   SET_JNI_METHOD(methods, TSQueryCursor_Native_nextMatch, TSQueryCursor_nextMatch);
+  SET_JNI_METHOD(methods, TSQueryCursor_Native_nextCapture, TSQueryCursor_nextCapture);
+  SET_JNI_METHOD(methods, TSQueryCursor_Native_setContainingByteRange,
+                 TSQueryCursor_setContainingByteRange);
+  SET_JNI_METHOD(methods, TSQueryCursor_Native_setContainingPointRange,
+                 TSQueryCursor_setContainingPointRange);
+  SET_JNI_METHOD(methods, TSQueryCursor_Native_setMaxStartDepth,
+                 TSQueryCursor_setMaxStartDepth);
   SET_JNI_METHOD(methods, TSQueryCursor_Native_removeMatch, TSQueryCursor_removeMatch);
 }

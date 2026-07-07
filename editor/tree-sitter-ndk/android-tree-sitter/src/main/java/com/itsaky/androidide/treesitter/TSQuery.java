@@ -107,6 +107,20 @@ public class TSQuery extends TSNativeObject {
     return Native.startByteForPattern(getNativeObject(), pattern);
   }
 
+  /**
+   * 获取指定 pattern 在 query 源码中结束的字节偏移。
+   *
+   * <p>当通过拼接多个 query 的源码字符串来组合 query 时，此方法很有用。
+   *
+   * @param pattern pattern 索引。
+   * @return 结束字节偏移。
+   */
+  public int getEndByteForPattern(int pattern) {
+    checkAccess();
+    validatePatternIndex(pattern);
+    return Native.endByteForPattern(getNativeObject(), pattern);
+  }
+
   public TSQueryPredicateStep[] getPredicatesForPattern(int pattern) {
     checkAccess();
     validatePatternIndex(pattern);
@@ -130,6 +144,19 @@ public class TSQuery extends TSNativeObject {
     return Native.patternGuaranteedAtStep(getNativeObject(), offset);
   }
 
+  /**
+   * 禁用指定 pattern。
+   *
+   * <p>这会阻止该 pattern 匹配，并移除与该 pattern 相关的大部分开销。目前无法撤销。
+   *
+   * @param pattern pattern 索引。
+   */
+  public void disablePattern(int pattern) {
+    checkAccess();
+    validatePatternIndex(pattern);
+    Native.disablePattern(getNativeObject(), pattern);
+  }
+
   public String getCaptureNameForId(int id) {
     checkAccess();
     return Native.captureNameForId(getNativeObject(), id);
@@ -144,6 +171,20 @@ public class TSQuery extends TSNativeObject {
     checkAccess();
     validatePatternIndex(pattern);
     return TSQuantifier.forId(Native.captureQuantifierForId(getNativeObject(), pattern, capture));
+  }
+
+  /**
+   * 创建当前 query 的副本。
+   *
+   * <p>返回一个新的 {@link TSQuery} 实例，其底层指向一个独立拷贝的 native query 对象。
+   * 调用者需自行管理返回对象的生命周期（使用完毕后调用 {@link #close()}）。
+   *
+   * @return 当前 query 的副本。
+   */
+  public TSQuery copy() {
+    checkAccess();
+    final long pointer = Native.copy(getNativeObject());
+    return TSObjectFactoryProvider.getFactory().createQuery(pointer);
   }
 
   @Override
@@ -292,5 +333,14 @@ public class TSQuery extends TSNativeObject {
 
     @FastNative
     static native int captureQuantifierForId(long query, int pattern, int capture);
+
+    @FastNative
+    static native long copy(long query);
+
+    @FastNative
+    static native int endByteForPattern(long query, int patternIndex);
+
+    @FastNative
+    static native void disablePattern(long query, int patternIndex);
   }
 }

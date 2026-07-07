@@ -22,12 +22,16 @@ project("android-tree-sitter")
 
 set(PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../..)
 
-# Include common configuration
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../../../cmake/common-config.cmake)
+# 【v15 重做】tree-sitter 0.27.0 完整 C 源码已内嵌到 src/main/cpp/tree-sitter/
+# 不再依赖外部 tree-sitter-lib / tree-sitter 目录, 模块自包含。
+# common-config.cmake 仍提供 TS_INCLUDES 给各语言子模块用 (指向本模块内嵌源码)。
+set(TS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tree-sitter")
 
-# android-tree-sitter uses some internal APIs
-# headers for those are located in the tree-sitter sources
-include_directories("${TS_DIR}/lib/src")
+# tree-sitter 核心头文件
+# include/tree_sitter/api.h — 公共 API
+# src/parser.h — 内部实现头 (JNI 层 ts_node.cc 用到 subtree.h)
+include_directories("${TS_DIR}/include")
+include_directories("${TS_DIR}/src")
 
 # Set visibility to hidden by default
 SET(CMAKE_CXX_FLAGS "-fvisibility=hidden")
@@ -35,10 +39,10 @@ SET(CMAKE_CXX_FLAGS "-fvisibility=hidden")
 # add android-tree-sitter library
 add_library(android-tree-sitter SHARED
 
-        # tree-sitter-sources
-        "${TS_DIR}/lib/src/lib.c"
+        # tree-sitter 0.27.0 核心源码 (amalgamation 单文件编译)
+        "${TS_DIR}/src/lib.c"
 
-        # android-tree-sitter sources
+        # android-tree-sitter JNI 绑定层
         main.cc
         ts.cc
         ts_cursor.cc

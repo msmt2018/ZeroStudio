@@ -36,6 +36,14 @@ static jobject TSNode_getParent(JNIEnv *env, jclass klass, jobject self) {
   return _marshalNode(env, ts_node_parent(_unmarshalNode(env, self)));
 }
 
+// 获取当前节点下包含指定后代节点的最小子节点
+static jobject
+TSNode_childWithDescendant(JNIEnv *env, jclass clazz, jobject self, jobject descendant) {
+  return _marshalNode(env,
+                      ts_node_child_with_descendant(_unmarshalNode(env, self),
+                                                     _unmarshalNode(env, descendant)));
+}
+
 static jint TSNode_getChildCount(JNIEnv *env, jclass clazz, jobject self) {
   return (jint) ts_node_child_count(_unmarshalNode(env, self));
 }
@@ -79,6 +87,21 @@ static jstring TSNode_getFieldNameForChild(JNIEnv *env,
                                            jint index) {
   const char *fieldName =
       ts_node_field_name_for_child(_unmarshalNode(env, self), index);
+  if (fieldName == nullptr) {
+    return nullptr;
+  }
+
+  jstring result = env->NewStringUTF(fieldName);
+  return result;
+}
+
+// 获取指定命名子节点的字段名
+static jstring TSNode_fieldNameForNamedChild(JNIEnv *env,
+                                             jclass clazz,
+                                             jobject self,
+                                             jint index) {
+  const char *fieldName =
+      ts_node_field_name_for_named_child(_unmarshalNode(env, self), index);
   if (fieldName == nullptr) {
     return nullptr;
   }
@@ -302,11 +325,14 @@ static jlong TSNode_getLanguage(JNIEnv *env, jclass clazz, jobject self) {
 void TSNode_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSNode_Native_canAccess, TSNode_canAccess);
   SET_JNI_METHOD(methods, TSNode_Native_getParent, TSNode_getParent);
+  SET_JNI_METHOD(methods, TSNode_Native_childWithDescendant, TSNode_childWithDescendant);
   SET_JNI_METHOD(methods, TSNode_Native_getChildAt, TSNode_getChildAt);
   SET_JNI_METHOD(methods, TSNode_Native_getNamedChildAt, TSNode_getNamedChildAt);
   SET_JNI_METHOD(methods, TSNode_Native_getChildByFieldName, TSNode_getChildByFieldName);
   SET_JNI_METHOD(methods, TSNode_Native_getFieldNameForChild,
                  TSNode_getFieldNameForChild);
+  SET_JNI_METHOD(methods, TSNode_Native_fieldNameForNamedChild,
+                 TSNode_fieldNameForNamedChild);
   SET_JNI_METHOD(methods, TSNode_Native_getChildByFieldId, TSNode_getChildByFieldId);
   SET_JNI_METHOD(methods, TSNode_Native_getNextSibling, TSNode_getNextSibling);
   SET_JNI_METHOD(methods, TSNode_Native_getPreviousSibling, TSNode_getPreviousSibling);

@@ -179,6 +179,30 @@ static jint TSQuery_captureQuantifierForId(JNIEnv *env,
   return query_quantifier_id(env, quantifier);
 }
 
+// 创建 query 的副本，返回新 query 的指针（v15 新增）
+static jlong TSQuery_copy(JNIEnv *env, jclass self, jlong query) {
+  req_nnp(env, query);
+  return (jlong) ts_query_copy((TSQuery *) query);
+}
+
+// 获取指定 pattern 在 query 源码中结束的字节偏移（v15 新增）
+static jint TSQuery_endByteForPattern(JNIEnv *env,
+                                      jclass self,
+                                      jlong query,
+                                      jint pattern) {
+  req_nnp(env, query);
+  return (jint) ts_query_end_byte_for_pattern((TSQuery *) query, pattern);
+}
+
+// 禁用指定 pattern，阻止其匹配（v15 新增）
+static void TSQuery_disablePattern(JNIEnv *env,
+                                   jclass self,
+                                   jlong query,
+                                   jint pattern) {
+  req_nnp(env, query);
+  ts_query_disable_pattern((TSQuery *) query, pattern);
+}
+
 int query_quantifier_id(JNIEnv *env, TSQuantifier quantifier) {
   switch (quantifier) {
     case TSQuantifierZero:
@@ -215,4 +239,9 @@ void TSQuery_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSQuery_Native_stringValueForId, TSQuery_stringValueForId);
   SET_JNI_METHOD(methods, TSQuery_Native_captureQuantifierForId,
                  TSQuery_captureQuantifierForId);
+  SET_JNI_METHOD(methods, TSQuery_Native_copy, TSQuery_copy);
+  SET_JNI_METHOD(methods, TSQuery_Native_endByteForPattern,
+                 TSQuery_endByteForPattern);
+  SET_JNI_METHOD(methods, TSQuery_Native_disablePattern,
+                 TSQuery_disablePattern);
 }

@@ -16,9 +16,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # parser.c: Tree-sitter 生成的语法解析代码
 # scanner.c: 手写的外部扫描器代码
 # tree-sitter-aidl.cpp: JNI 绑定代码
-# ${TS_DIR}/lib/src/lib.c: Tree-sitter 核心运行时代码
+# ${TS_DIR}/src/lib.c: Tree-sitter 核心运行时代码
 add_library(${CMAKE_PROJECT_NAME} SHARED
-        "${TS_DIR}/lib/src/lib.c"
+        "${TS_DIR}/src/lib.c"
         parser.c
 #        scanner.c
         tree-sitter-aidl.cpp

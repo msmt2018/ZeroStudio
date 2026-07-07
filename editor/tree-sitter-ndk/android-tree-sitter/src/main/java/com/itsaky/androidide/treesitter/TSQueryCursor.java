@@ -268,6 +268,56 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
     Native.removeMatch(getNativeObject(), id);
   }
 
+  /**
+   * 获取下一个 capture（用于高亮）。这是 v15 新增的 API。
+   *
+   * <p>调用方可通过传入长度为 1 的 {@code captureIndexOut} 数组接收 capture 索引。
+   *
+   * @param captureIndexOut 长度为 1 的 int 数组，用于输出 capture_index；可为 {@code null}。
+   * @return 下一个 {@link TSQueryMatch}，若没有更多 capture 则返回 {@code null}。
+   */
+  public TSQueryMatch nextCapture(int[] captureIndexOut) {
+    checkAccess();
+    checkExecuted("nextCapture");
+    return Native.nextCapture(getNativeObject(), captureIndexOut);
+  }
+
+  /**
+   * 设置全包含式 byte 范围。只有完全落在 {@code [startByte, endByte)} 内的节点才会被查询。
+   * 这是 v15 新增的 API。
+   *
+   * @param startByte 起始字节偏移（包含）。
+   * @param endByte 结束字节偏移（不包含）。
+   * @return 范围是否合法。
+   */
+  public boolean setContainingByteRange(int startByte, int endByte) {
+    checkAccess();
+    return Native.setContainingByteRange(getNativeObject(), startByte, endByte);
+  }
+
+  /**
+   * 设置全包含式 point 范围。只有完全落在 {@code [start, end)} 内的节点才会被查询。
+   * 这是 v15 新增的 API。
+   *
+   * @param start 起始 point（包含）。
+   * @param end 结束 point（不包含）。
+   * @return 范围是否合法。
+   */
+  public boolean setContainingPointRange(TSPoint start, TSPoint end) {
+    checkAccess();
+    return Native.setContainingPointRange(getNativeObject(), start, end);
+  }
+
+  /**
+   * 限制 pattern 根节点搜索的起始深度。这是 v15 新增的 API。
+   *
+   * @param maxStartDepth 最大起始深度。
+   */
+  public void setMaxStartDepth(int maxStartDepth) {
+    checkAccess();
+    Native.setMaxStartDepth(getNativeObject(), maxStartDepth);
+  }
+
   @Override
   public void close() {
     isExecuted = false;
@@ -316,6 +366,22 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
 
     @FastNative
     static native TSQueryMatch nextMatch(long cursor);
+
+    // v15 新增 API：获取下一个 capture（用于高亮）
+    @FastNative
+    static native TSQueryMatch nextCapture(long cursor, int[] captureIndexOut);
+
+    // v15 新增 API：设置全包含式 byte 范围
+    @FastNative
+    static native boolean setContainingByteRange(long cursor, int startByte, int endByte);
+
+    // v15 新增 API：设置全包含式 point 范围
+    @FastNative
+    static native boolean setContainingPointRange(long cursor, TSPoint start, TSPoint end);
+
+    // v15 新增 API：限制 pattern 根节点搜索起始深度
+    @FastNative
+    static native void setMaxStartDepth(long cursor, int maxStartDepth);
 
     @FastNative
     static native void removeMatch(long cursor, int id);
