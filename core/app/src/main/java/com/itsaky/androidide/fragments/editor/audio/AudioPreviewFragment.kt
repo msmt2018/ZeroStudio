@@ -658,7 +658,7 @@ private fun EqualizerBandSlider(
         ) {
             FrostedSlider(
                 value = currentValue,
-                onValueChange = { onLevelChange(it.toShort()) },
+                onValueChange = { onLevelChange(it.toInt().toShort()) },
                 valueRange = valueRange,
                 enabled = enabled,
                 modifier = Modifier

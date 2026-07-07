@@ -109,9 +109,9 @@ class PfdSocket(private val pfd: ParcelFileDescriptor) : Socket() {
 
     // 下面这些 JdwpClient 不调用, 留 throw 让调试时知道出了问题
     override fun getChannel(): SocketChannel = throw UnsupportedOperationException("PfdSocket: no channel")
-    override fun <T : SocketOption<*>?> getOption(name: SocketOption<T>?): T =
+    override fun <T> getOption(name: SocketOption<T>): T =
         throw UnsupportedOperationException("PfdSocket: getOption")
-    override fun <T : SocketOption<*>?> setOption(name: SocketOption<T>?, value: T?): Socket =
+    override fun <T> setOption(name: SocketOption<T>, value: T): Socket =
         throw UnsupportedOperationException("PfdSocket: setOption")
 
     private fun ensureOpen() {

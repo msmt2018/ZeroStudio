@@ -230,6 +230,7 @@ private fun WebPreviewScreen(
     var backendStatus by remember { mutableStateOf<String?>(null) }
     var backendCommand by remember { mutableStateOf("node server.js") }
     var backendPort by remember { mutableStateOf("3000") }
+    var currentSession by remember { mutableStateOf<RuntimeSession?>(null) }
 
     var urlInput by remember { mutableStateOf(state.currentUrl) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
@@ -343,6 +344,7 @@ private fun WebPreviewScreen(
                                 val session = withContext(Dispatchers.IO) {
                                     backendRuntime.startService(workDir, backendCommand, port)
                                 }
+                                currentSession = session
                                 onBackendSessionChange(session)
                                 val url = session.toLocalUrl()
                                 backendStatus = "Running → $url"
@@ -355,7 +357,8 @@ private fun WebPreviewScreen(
                         }
                     },
                     onStop = {
-                        backendSession?.stop()
+                        currentSession?.stop()
+                        currentSession = null
                         onBackendSessionChange(null)
                         backendRunning = false
                         backendStatus = "已停止"

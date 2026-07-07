@@ -215,7 +215,7 @@ class VideoPreviewFragment : Fragment() {
         super.onDestroyView()
         // 恢复亮度跟随系统
         activity?.window?.attributes = activity?.window?.attributes?.apply {
-            brightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         }
         activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         controller?.release()
@@ -343,7 +343,7 @@ private fun VideoPreviewScreen(
             override fun onBrightnessChange(brightness: Float) {
                 controller.setBrightness(brightness)
                 (context as? Activity)?.window?.attributes = context.window?.attributes?.apply {
-                    this.brightness = brightness
+                    this.screenBrightness = brightness
                 }
             }
             override fun onVolumeChange(volume: Float) = controller.setVolume(volume)
@@ -365,7 +365,7 @@ private fun VideoPreviewScreen(
             }
             override fun getInitialBrightness(): Float {
                 val lp = (context as? Activity)?.window?.attributes
-                return lp?.brightness?.takeIf { it > 0 } ?: 0.5f
+                return lp?.screenBrightness?.takeIf { it > 0 } ?: 0.5f
             }
             override fun getInitialVolume(): Float = state.volume
             override fun getInitialPositionMs(): Long = state.positionMs

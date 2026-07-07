@@ -22,6 +22,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -120,7 +121,7 @@ class VideoGestureHandler {
         var dragStartY by remember { mutableFloatStateOf(0f) }
         var dragStartX by remember { mutableFloatStateOf(0f) }
         var lastDragX by remember { mutableFloatStateOf(0f) }
-        var activeZone by remember { GestureZone.SEEK }
+        var activeZone by remember { mutableStateOf(GestureZone.SEEK) }
         var initialBrightness by remember { mutableFloatStateOf(-1f) }
         var initialVolume by remember { mutableFloatStateOf(1f) }
 

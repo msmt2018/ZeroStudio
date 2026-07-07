@@ -33,7 +33,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 
 class Socks5Client(
-    private val log: ILogger = ILogger.ROOT,
+    private val log = ILogger.ROOT,
 ) {
 
     /**

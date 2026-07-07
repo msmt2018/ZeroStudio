@@ -22,6 +22,7 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
@@ -134,7 +135,7 @@ class VideoPlaybackController(private val context: Context) {
                     )
                 }
 
-                override fun onTracksChanged() {
+                override fun onTracksChanged(tracks: Tracks) {
                     refreshSubtitleTracks()
                 }
             })

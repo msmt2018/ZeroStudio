@@ -10,11 +10,11 @@ package com.itsaky.androidide.debugger.connection
 
 data class DebugTarget(
     val packageName: String,
-    val mainActivity: String,
+    val mainActivity: String? = null,
     val debuggable: Boolean = true,
 ) {
     init {
         require(packageName.isNotBlank()) { "packageName must not be blank" }
-        require(mainActivity.isNotBlank()) { "mainActivity must not be blank" }
+        require(mainActivity == null || mainActivity.isNotBlank()) { "mainActivity must not be blank if non-null" }
     }
 }

@@ -112,6 +112,7 @@ interface ShizukuBinderClient {
 data class UserServiceHandle(
     val binder: IBinder,
     val connection: ServiceConnection,
+    val args: Shizuku.UserServiceArgs? = null,
 )
 
 /**
@@ -132,7 +133,7 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
 
     override suspend fun checkPermission(permission: String): Int = withContext(Dispatchers.IO) {
         try {
-            Shizuku.checkPermission(permission)
+            Shizuku.checkRemotePermission(permission)
         } catch (re: RemoteException) {
             throw IOException("Shizuku.checkPermission failed: ${re.message}", re)
         } catch (se: SecurityException) {
@@ -182,10 +183,18 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
         // 走 Shizuku.bindUserService, 阻塞等 onServiceConnected
         val latch = java.util.concurrent.CountDownLatch(1)
         val binderRef = arrayOfNulls<IBinder>(1)
-        val conn = ServiceConnection { _, service ->
-            binderRef[0] = service
-            latch.countDown()
+        val conn = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                binderRef[0] = service
+                latch.countDown()
+            }
+            override fun onServiceDisconnected(name: ComponentName?) {
+            }
         }
+        val builder = rikka.shizuku.Shizuku.UserServiceArgs(componentName)
+            .processNameSuffix(processName)
+            .daemon(false)
+            .debuggable(false)
         try {
             // Phase 12x (修订): Shizuku 13.1.5 的 [Shizuku.UserServiceArgs] 是
             //   Shizuku 的内部类 (不在 rikka.shizuku.api 包), 且**没有** .args(Bundle)
@@ -195,10 +204,6 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
             // 修法: 走 rikka.shizuku.Shizuku.UserServiceArgs 正确路径, args 参数
             //   保留接口 (后续 Phase 12y 走 binder transact 协议替代), 但当前
             //   args 参数被忽略 (Shizuku 13.1.5 没 API 接收)。
-            val builder = rikka.shizuku.Shizuku.UserServiceArgs(componentName)
-                .processName(processName)
-                .daemon(false)
-                .debuggable(false)
             // args 暂不传给 Shizuku 13.1.5 (没 API), 走 binder transact 替代
             //   详细见 Phase 12y TODO: 实现 ISocksControl AIDL + transact
             if (args != null) {
@@ -213,17 +218,17 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
             // Phase 15: 返 UserServiceHandle (含 ServiceConnection 引用), 让 caller
             //   在 detach / release 时能 unbind。注释掉的 finally 块删了, host 端
             //   service 现在由 caller 生命周期管理 (attach 期间活, detach 释放)。
-            UserServiceHandle(binder = binder, connection = conn)
+            UserServiceHandle(binder = binder, connection = conn, args = builder)
         } catch (re: RemoteException) {
             // bind 失败, conn 已注册到 Shizuku 但 onServiceConnected 没调过, 安全 unbind
-            runCatching { Shizuku.unbindUserService(conn) }
+            runCatching { Shizuku.unbindUserService(builder, conn, true) }
             throw IOException("bindUserService failed: ${re.message}", re)
         } catch (se: SecurityException) {
-            runCatching { Shizuku.unbindUserService(conn) }
+            runCatching { Shizuku.unbindUserService(builder, conn, true) }
             throw IOException("bindUserService: security: ${se.message}", se)
         } catch (t: Throwable) {
             // 任何 throw: 超时 / binder null / 其他
-            runCatching { Shizuku.unbindUserService(conn) }
+            runCatching { Shizuku.unbindUserService(builder, conn, true) }
             throw t
         }
     }
@@ -232,7 +237,8 @@ class DefaultShizukuBinderClient : ShizukuBinderClient {
         // 走 rikka.shizuku.Shizuku.unbindUserService, 通知 Shizuku 让 host 端
         // user service 走 onDestroy。Phase 15 之前 caller 拿不到 conn, 这步
         // 调不了, host 端 service 永远 leak。
-        runCatching { Shizuku.unbindUserService(handle.connection) }
+        val args = handle.args ?: return
+        runCatching { Shizuku.unbindUserService(args, handle.connection, true) }
             .onFailure {
                 log.debug("unbindUserService: Shizuku.unbindUserService threw: {}", it.message)
             }

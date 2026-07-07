@@ -67,7 +67,7 @@ class ShizukuConnection(
 
     /**
      * InHostPlugin 路径下等 host 端 reverse-connect 的超时。
-     * server.receive() 是阻塞且无 timeout API, 必须用 coroutine withTimeoutOrNull
+     * server.accept() 是阻塞且无 timeout API, 必须用 coroutine withTimeoutOrNull
      * 保护, 否则 host 端 user service 启动后但 reverse-connect 失败时 IDE 端会
      * 无限阻塞。
      */
@@ -112,7 +112,7 @@ class ShizukuConnection(
             probeImpl,
             defaultShizukuSubPathCapabilities(
                 serverApiVersion = apiVersion,
-                hostPluginProbe = { _ ->
+                hostPluginProbe = { _: DebugTarget ->
                     if (hostPkg.isBlank()) {
                         false
                     } else {
@@ -123,11 +123,16 @@ class ShizukuConnection(
                         // 1.5s timeout 探测 host 端 IdeShizukuSocksUserService 能否
                         //   bind - 走得到代表 host 装了 aar, InHostPlugin (走 HostPluginService)
                         //   跟 Socks 路径都依赖此 aar, 共享 probe 结果。
-                        probeHostPluginUsable(
-                            componentName = probeComponent,
-                            processName = hostPkg,
-                            timeoutMs = 1_500L,
-                        )
+                        // 注: hostPluginProbe 签名是 (DebugTarget) -> Boolean (非 suspend),
+                        //   probeHostPluginUsable 是 suspend, 走 runBlocking 同步桥接 (capability
+                        //   probeUsable 本身就是同步调用, 阻塞 resolver 调用线程)。
+                        kotlinx.coroutines.runBlocking {
+                            probeHostPluginUsable(
+                                componentName = probeComponent,
+                                processName = hostPkg,
+                                timeoutMs = 1_500L,
+                            )
+                        }
                     }
                 },
             ),
@@ -341,15 +346,15 @@ class ShizukuConnection(
         val server = android.net.LocalServerSocket(serverName)
         inHostPluginServer = server
         try {
-            // 3) accept with timeout: server.receive() 是阻塞且无 timeout API,
-            //    用 withTimeoutOrNull + 异步 receive 来加超时保护, 否则 host
+            // 3) accept with timeout: server.accept() 是阻塞且无 timeout API,
+            //    用 withTimeoutOrNull + 异步 accept 来加超时保护, 否则 host
             //    一旦不反连 IDE 端会无限阻塞。
             val client = withContext(Dispatchers.IO) {
                 kotlinx.coroutines.withTimeoutOrNull(INHOSTPLUGIN_ACCEPT_TIMEOUT_MS) {
                     try {
-                        server.receive()
+                        server.accept()
                     } catch (t: Throwable) {
-                        log.warn("Shizuku InHostPlugin: receive() failed: {}", t.message)
+                        log.warn("Shizuku InHostPlugin: accept() failed: {}", t.message)
                         null
                     }
                 }

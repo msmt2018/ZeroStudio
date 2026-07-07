@@ -73,7 +73,7 @@ class IntentHostLauncher : AidlHostLauncher {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         }
-        effectiveIntent.putExtra(EXTRA_PORT, port)
+        effectiveIntent.putExtra(AidlHostLauncher.EXTRA_PORT, port)
         effectiveIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
         return try {

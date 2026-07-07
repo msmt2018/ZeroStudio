@@ -46,7 +46,7 @@ class AudioVisualizer(audioSessionId: Int) {
         runCatching {
             visualizer = Visualizer(audioSessionId).also { viz ->
                 viz.captureSize = Visualizer.getCaptureSizeRange()[1]
-                viz.setDataListener(
+                viz.setDataCaptureListener(
                     object : Visualizer.OnDataCaptureListener {
                         override fun onWaveFormDataCapture(
                             visualizer: Visualizer?,

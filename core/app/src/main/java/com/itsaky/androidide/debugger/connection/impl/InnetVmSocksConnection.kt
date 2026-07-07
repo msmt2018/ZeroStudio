@@ -84,7 +84,7 @@ class InnetVmSocksConnection(
                 }
             }.onFailure { log.debug("resolve: probe {} failed: {}", addr, it.message) }
         }
-        return attempt.onSuccess {
+        return if (attempt.isSuccess) {
             proxyAddr = addr
             transitionTo(ConnectionState.Connecting)
             Result.success(
@@ -94,8 +94,10 @@ class InnetVmSocksConnection(
                     requiresHostRunning = false,
                 )
             )
-        }.onFailure { t ->
+        } else {
+            val t = attempt.exceptionOrNull()!!
             transitionTo(ConnectionState.Closed(mapConnectError(t)))
+            Result.failure(t)
         }
     }
 

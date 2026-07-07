@@ -53,7 +53,7 @@ private class DebuggerConnectionTypeChoice(
         .map { type ->
           PreferenceChoices.Entry(
               label = type.displayName,
-              `is` = type == current,
+              _isChecked = type == current,
               data = type,
           )
         }
@@ -147,7 +147,7 @@ private class ShizukuSubPathChoice(
         .map { p ->
           PreferenceChoices.Entry(
               label = p.name,
-              `is` = p == current,
+              _isChecked = p == current,
               data = p,
           )
         }

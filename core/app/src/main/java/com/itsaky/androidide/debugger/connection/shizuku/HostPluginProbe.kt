@@ -22,6 +22,7 @@ package com.itsaky.androidide.debugger.connection.shizuku
 
 import android.content.ComponentName
 import android.content.ServiceConnection
+import android.os.IBinder
 import com.itsaky.androidide.utils.ILogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -47,18 +48,22 @@ suspend fun probeHostPluginUsable(
 ): Boolean = withContext(Dispatchers.IO) {
     val log = ILogger.ROOT
     val latch = CountDownLatch(1)
-    @Volatile var connected = false
-    val conn = ServiceConnection { _, _ ->
-        connected = true
-        latch.countDown()
+    var connected = false
+    val conn = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            connected = true
+            latch.countDown()
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+        }
     }
+    val builder = Shizuku.UserServiceArgs(componentName)
+        .processNameSuffix(processName)
+        .daemon(false)
+        .debuggable(false)
     try {
         // 跟 ShizukuBinderClient.DefaultShizukuBinderClient.bindUserService 走同款
         // UserServiceArgs 配置 (Shizuku 13.1.5 内部类)。
-        val builder = Shizuku.UserServiceArgs(componentName)
-            .processName(processName)
-            .daemon(false)
-            .debuggable(false)
         Shizuku.bindUserService(builder, conn)
         val got = latch.await(timeoutMs, TimeUnit.MILLISECONDS)
         if (!got) {
@@ -73,7 +78,7 @@ suspend fun probeHostPluginUsable(
     } finally {
         // 立即 unbind, host 端 user service 不要留着 (Socks 路径下会启 SOCKS5 server
         // 占用端口, 留到下次 attach 会冲突; InHostPlugin 路径下 user service 也别 leak)。
-        runCatching { Shizuku.unbindUserService(conn) }
+        runCatching { Shizuku.unbindUserService(builder, conn, true) }
             .onFailure { log.debug("probeHostPluginUsable: unbind failed: {}", it.message) }
     }
     connected

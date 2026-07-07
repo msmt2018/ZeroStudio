@@ -705,7 +705,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
               bm.toggle(f, line)
               return
             }
-            if (entry.needsInjector) {
+            if (entry.category == com.itsaky.androidide.debugger.model.BreakpointTypeCatalog.Category.BROWSER) {
               com.itsaky.androidide.utils.flashInfo(
                   "BROWSER 断点需要 frida/xposed 注入器, 暂未接入")
               return
@@ -720,8 +720,8 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
               y: Float,
           ) {
             // 短按已有断点 → 弹完整配置面板 (跟 Phase 22 一致)
-            com.itsaky.androidide.debugger.view.BreakpointDetailDialog.showForEdit(
-                this@EditorHandlerActivity, bp)
+            com.itsaky.androidide.debugger.view.BreakpointDetailDialog.showForExisting(
+                this@EditorHandlerActivity, bp.id) {}
           }
 
           override fun onBreakpointLongClick(
@@ -738,7 +738,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
           }
         }
     )
-    gutter.showSidebar()
+    gutter.show()
   }
 
   override fun findIndexOfEditorByFile(file: File?): Int {
