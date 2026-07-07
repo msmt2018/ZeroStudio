@@ -24,6 +24,7 @@ import java.io.File
 import java.net.URI
 import org.gradle.StartParameter
 import org.gradle.api.Plugin
+import org.gradle.api.Project
 import org.gradle.api.artifacts.ExternalModuleDependency
 import org.gradle.api.artifacts.dsl.RepositoryHandler
 import org.gradle.api.initialization.Settings
