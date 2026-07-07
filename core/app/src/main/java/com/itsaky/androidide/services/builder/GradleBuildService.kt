@@ -297,12 +297,28 @@ class GradleBuildService :
       val pluginDirPath = getLoggerPluginDir().absolutePath.replace("\\", "\\\\")
       initScript.writeText(
           """
-            allprojects {
-                repositories {
-                    flatDir {
-                        dirs "$pluginDirPath"
+            // 【修复】flatDir 必须注册到 settings 级别的
+            // dependencyResolutionManagement, 而不是 allprojects { repositories {} }
+            // (project 级别)。当用户工程的 settings.gradle.kts 设置了
+            // repositoriesMode = FAIL_ON_PROJECT_REPOS 或 PREFER_SETTINGS 时,
+            // 在 allprojects 里加 flatDir 会导致整个 build 挂掉:
+            //   "Build was configured to prefer settings repositories over
+            //    project repositories but repository 'flatDir' was added by
+            //    initialization script"
+            // beforeSettings 在 settings.gradle 求值之前运行, 此时
+            // dependencyResolutionManagement 已经可以访问, 添加的 flatDir
+            // 会被所有子项目共享, 且不受 repositoriesMode 限制。
+            beforeSettings { settings ->
+                settings.dependencyResolutionManagement {
+                    repositories {
+                        flatDir {
+                            dirs "$pluginDirPath"
+                        }
                     }
                 }
+            }
+
+            allprojects {
                 afterEvaluate {
                     if (plugins.hasPlugin('com.android.application') ||
                         plugins.hasPlugin('com.android.library')) {
