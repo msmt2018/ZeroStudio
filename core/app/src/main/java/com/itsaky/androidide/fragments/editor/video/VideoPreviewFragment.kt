@@ -97,6 +97,7 @@ import com.itsaky.androidide.fragments.editor.components.FrostedIconButton
 import com.itsaky.androidide.fragments.editor.components.FrostedSlider
 import com.itsaky.androidide.fragments.editor.components.FrostedText
 import com.itsaky.androidide.fragments.editor.components.FrostedToggleIconButton
+import com.itsaky.androidide.ui.SymbolInputVisibilityManager
 import com.itsaky.androidide.ui.compose.LocalDarkMode
 import com.itsaky.androidide.ui.compose.ProvideDarkMode
 import java.io.File
@@ -211,8 +212,25 @@ class VideoPreviewFragment : Fragment() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        SymbolInputVisibilityManager.hideForPreview()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SymbolInputVisibilityManager.showFromPreview()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (hidden) SymbolInputVisibilityManager.showFromPreview()
+        else SymbolInputVisibilityManager.hideForPreview()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
+        SymbolInputVisibilityManager.showFromPreview()
         // 恢复亮度跟随系统
         activity?.window?.attributes = activity?.window?.attributes?.apply {
             screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
@@ -584,9 +602,9 @@ private fun VideoControlBar(
     FrostedGlass(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
+            .padding(9.dp),
         cornerRadius = 24.dp,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 7.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 进度条
@@ -619,7 +637,7 @@ private fun VideoControlBar(
                     contentDescription = "Repeat",
                     active = repeatActive,
                     onClick = onRepeat,
-                    size = 36.dp,
+                    size = 28.dp,
                 )
 
                 // 中: 上一首 / 播放 / 下一首
@@ -627,19 +645,19 @@ private fun VideoControlBar(
                     icon = Icons.Filled.SkipPrevious,
                     contentDescription = "Previous",
                     onClick = onPrevious,
-                    size = 36.dp,
+                    size = 28.dp,
                 )
                 FrostedIconButton(
                     icon = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = if (state.isPlaying) "Pause" else "Play",
                     onClick = onPlayPause,
-                    size = 44.dp,
+                    size = 32.dp,
                 )
                 FrostedIconButton(
                     icon = Icons.Filled.SkipNext,
                     contentDescription = "Next",
                     onClick = onNext,
-                    size = 36.dp,
+                    size = 28.dp,
                 )
 
                 // 右: 倍速 / 音量 / 字幕
@@ -647,20 +665,20 @@ private fun VideoControlBar(
                     icon = Icons.Filled.Speed,
                     contentDescription = "Playback speed",
                     onClick = onSpeed,
-                    size = 36.dp,
+                    size = 28.dp,
                 )
                 FrostedIconButton(
                     icon = Icons.Filled.VolumeUp,
                     contentDescription = "Volume",
                     onClick = { /* 由手势控制, 这里仅显示 */ },
-                    size = 36.dp,
+                    size = 28.dp,
                 )
                 FrostedToggleIconButton(
                     icon = Icons.Filled.Subtitles,
                     contentDescription = "Subtitles",
                     active = subtitleActive,
                     onClick = onToggleSubtitles,
-                    size = 36.dp,
+                    size = 28.dp,
                 )
             }
 

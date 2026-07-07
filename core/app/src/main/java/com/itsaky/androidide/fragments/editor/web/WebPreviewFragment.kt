@@ -82,6 +82,7 @@ import com.itsaky.androidide.fragments.editor.components.FrostedGlass
 import com.itsaky.androidide.fragments.editor.components.FrostedIconButton
 import com.itsaky.androidide.fragments.editor.components.FrostedText
 import com.itsaky.androidide.fragments.editor.components.FrostedToggleIconButton
+import com.itsaky.androidide.ui.SymbolInputVisibilityManager
 import com.itsaky.androidide.ui.compose.ProvideDarkMode
 import com.zerostudio.webpreview.backend.BackendRuntime
 import com.zerostudio.webpreview.backend.RuntimeSession
@@ -193,8 +194,25 @@ class WebPreviewFragment : Fragment() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        SymbolInputVisibilityManager.hideForPreview()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SymbolInputVisibilityManager.showFromPreview()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (hidden) SymbolInputVisibilityManager.showFromPreview()
+        else SymbolInputVisibilityManager.hideForPreview()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
+        SymbolInputVisibilityManager.showFromPreview()
         devToolsBridge?.stop()
         backendSession?.stop()
         backendSession = null

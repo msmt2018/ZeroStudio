@@ -102,6 +102,7 @@ import com.itsaky.androidide.fragments.editor.components.FrostedIconButton
 import com.itsaky.androidide.fragments.editor.components.FrostedSlider
 import com.itsaky.androidide.fragments.editor.components.FrostedText
 import com.itsaky.androidide.fragments.editor.components.FrostedToggleIconButton
+import com.itsaky.androidide.ui.SymbolInputVisibilityManager
 import com.itsaky.androidide.ui.compose.LocalDarkMode
 import com.itsaky.androidide.ui.compose.ProvideDarkMode
 import java.io.File
@@ -213,8 +214,25 @@ class AudioPreviewFragment : Fragment() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        SymbolInputVisibilityManager.hideForPreview()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SymbolInputVisibilityManager.showFromPreview()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (hidden) SymbolInputVisibilityManager.showFromPreview()
+        else SymbolInputVisibilityManager.hideForPreview()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
+        SymbolInputVisibilityManager.showFromPreview()
         controller?.release()
         controller = null
     }
@@ -708,9 +726,9 @@ private fun FrostedControlBar(
     FrostedGlass(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
+            .padding(9.dp),
         cornerRadius = 28.dp,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 错误信息
@@ -754,14 +772,14 @@ private fun FrostedControlBar(
                         contentDescription = "Repeat",
                         active = repeatActive,
                         onClick = onRepeat,
-                        size = 36.dp,
+                        size = 28.dp,
                     )
                     FrostedToggleIconButton(
                         icon = Icons.Filled.Shuffle,
                         contentDescription = "Shuffle",
                         active = state.shuffleMode,
                         onClick = onShuffle,
-                        size = 36.dp,
+                        size = 28.dp,
                     )
                 }
 
@@ -771,19 +789,19 @@ private fun FrostedControlBar(
                         icon = Icons.Filled.SkipPrevious,
                         contentDescription = "Previous",
                         onClick = onPrevious,
-                        size = 36.dp,
+                        size = 28.dp,
                     )
                     FrostedIconButton(
                         icon = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (state.isPlaying) "Pause" else "Play",
                         onClick = onPlayPause,
-                        size = 44.dp,
+                        size = 32.dp,
                     )
                     FrostedIconButton(
                         icon = Icons.Filled.SkipNext,
                         contentDescription = "Next",
                         onClick = onNext,
-                        size = 36.dp,
+                        size = 28.dp,
                     )
                 }
 
@@ -793,21 +811,21 @@ private fun FrostedControlBar(
                         icon = Icons.Filled.Speed,
                         contentDescription = "Playback speed",
                         onClick = onSpeed,
-                        size = 36.dp,
+                        size = 28.dp,
                     )
                     FrostedToggleIconButton(
                         icon = Icons.Filled.Lyrics,
                         contentDescription = "Lyrics",
                         active = showLyrics,
                         onClick = onToggleLyrics,
-                        size = 36.dp,
+                        size = 28.dp,
                     )
                     FrostedToggleIconButton(
                         icon = Icons.Filled.Equalizer,
                         contentDescription = "Equalizer",
                         active = showEqualizer,
                         onClick = onToggleEqualizer,
-                        size = 36.dp,
+                        size = 28.dp,
                     )
                 }
             }
