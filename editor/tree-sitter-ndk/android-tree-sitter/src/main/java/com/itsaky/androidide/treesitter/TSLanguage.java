@@ -251,6 +251,12 @@ public class TSLanguage extends TSNativeObject {
 
   @Override
   public void close() {
+    // 先调用 ts_language_delete（在 dlclose 之前，确保语言指针仍有效）
+    // 对内嵌语言为空操作，对 wasm 语言减少引用计数
+    if (getNativeObject() != 0) {
+      Native.delete(getNativeObject());
+    }
+
     if (isExternal()) {
       Native.dlclose(getLibHandle());
       setLibHandle(0);
@@ -264,12 +270,8 @@ public class TSLanguage extends TSNativeObject {
 
   @Override
   protected void closeNativeObj() {
-    // 0.27 使用 ts_language_delete 管理语言引用计数
-    // 对于内嵌语言（静态分配），ts_language_delete 是空操作
-    // 对于 wasm 语言，ts_language_delete 减少引用计数
-    if (getNativeObject() != 0) {
-      Native.delete(getNativeObject());
-    }
+    // ts_language_delete 已在 close() 中提前调用，这里设为空操作
+    // 避免对已 dlclose 的语言指针再次调用 ts_language_delete
   }
 
   /**

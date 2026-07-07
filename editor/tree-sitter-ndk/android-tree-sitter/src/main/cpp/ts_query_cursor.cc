@@ -104,8 +104,8 @@ static jobject TSQueryCursor_nextCapture(JNIEnv *env,
   if (!b) {
     return nullptr;
   }
-  // 写出 capture_index 到 out 参数
-  if (captureIndexOut != nullptr) {
+  // 写出 capture_index 到 out 参数（检查数组长度避免越界）
+  if (captureIndexOut != nullptr && env->GetArrayLength(captureIndexOut) >= 1) {
     jint ci = (jint) capture_index;
     env->SetIntArrayRegion(captureIndexOut, 0, 1, &ci);
   }
