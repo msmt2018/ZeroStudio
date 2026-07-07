@@ -134,6 +134,43 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
   }
 
   /**
+   * Start running the given query on the given node, with a progress callback for cancellation.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_query_cursor_exec_with_options}.
+   * The progress callback is invoked periodically during iteration (via {@link #nextMatch()} or
+   * {@link #nextCapture(int[])}), reporting the current byte offset. If the callback returns
+   * {@code true}, the query is cancelled.
+   *
+   * <p>If {@code progressCallback} is {@code null}, this behaves identically to
+   * {@link #exec(TSQuery, TSNode)}.
+   *
+   * @param query            the query to execute.
+   * @param node             the root node to query on.
+   * @param progressCallback the progress callback, or {@code null} for no callback.
+   */
+  public void execWithOptions(TSQuery query, TSNode node, TSQueryProgressCallback progressCallback) {
+    Objects.requireNonNull(node, "TSNode cannot be null");
+    checkAccess();
+    if (query == null || !query.canAccess()) {
+      throw new IllegalArgumentException("Cannot execute invalid query");
+    }
+    if (!node.canAccess() || !node.getTree().canAccess() ||
+      (!isAllowChangedNodes() && node.hasChanges())) {
+      String msg = "Cannot execute query on invalid node. node=" + node + " node.canAccess=" +
+        node.canAccess() + " node.tree.canAccess=" + node.getTree().canAccess() +
+        " node.hasChanges=" + node.hasChanges() + " isAllowChangedNodes=" + isAllowChangedNodes();
+
+      throw new IllegalArgumentException(msg);
+    }
+
+    Native.execWithOptions(getNativeObject(), query.getNativeObject(), node, progressCallback);
+
+    isExecuted = true;
+    targetNode = node;
+    execQuery = query;
+  }
+
+  /**
    * @noinspection NullableProblems
    */
   @Override
@@ -340,6 +377,10 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
   public void close() {
     isExecuted = false;
     targetNode = null;
+    // 释放 progress callback GlobalRef（如果在 execWithOptions 中设置过）
+    if (canAccess()) {
+      Native.releaseProgressCallback(getNativeObject());
+    }
     super.close();
   }
 
@@ -366,6 +407,15 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
 
     @FastNative
     static native void exec(long cursor, long query, TSNode node);
+
+    // tree-sitter 0.27 API：带 progress_callback 的 exec（用于查询取消）
+    @FastNative
+    static native void execWithOptions(long cursor, long query, TSNode node,
+        TSQueryProgressCallback progressCallback);
+
+    // 释放 execWithOptions 设置的 progress callback GlobalRef
+    @FastNative
+    static native void releaseProgressCallback(long cursor);
 
     @FastNative
     static native boolean exceededMatchLimit(long cursor);
