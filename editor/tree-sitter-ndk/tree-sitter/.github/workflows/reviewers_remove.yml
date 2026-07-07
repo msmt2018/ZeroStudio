@@ -1,0 +1,31 @@
+name: Remove Reviewers
+
+on:
+  pull_request_target:
+    types: [converted_to_draft, closed]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  remove-reviewers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove reviewers
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const requestedReviewers = await github.rest.pulls.listRequestedReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const reviewers = requestedReviewers.data.users.map((e) => e.login);
+
+            github.rest.pulls.removeRequestedReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              reviewers: reviewers,
+            });
