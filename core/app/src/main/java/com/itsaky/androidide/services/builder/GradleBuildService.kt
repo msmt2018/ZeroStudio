@@ -333,10 +333,14 @@ class GradleBuildService :
                             // 旧 AIDL 日志转发链 (LogSender + LogSenderInstaller +
                             // LogSenderService)。Bug fix: 之前这个 AAR 没被注入
                             // 任何宿主 App,导致 AppLogFragment 完全收不到 host 日志。
-                            implementation name: 'logsender'
+                            // 【修复】ensureLoggerPluginArtifacts 解压出的是 .aar 文件,
+                            // flatDir resolver 默认只找 .jar, 必须显式 ext: 'aar'
+                            // 才能解析到 logsender.aar。否则报:
+                            //   "Could not find :logsender:. Searched in: .../logsender.jar"
+                            implementation name: 'logsender', ext: 'aar'
                             // 新 JDWP/LogCapture 链 (PR-1 之后)。
-                            implementation name: 'ide-log-plugin-1.0.0'
-                            implementation name: 'ide-debugger'
+                            implementation name: 'ide-log-plugin-1.0.0', ext: 'aar'
+                            implementation name: 'ide-debugger', ext: 'aar'
                             coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
                         }
                     }
