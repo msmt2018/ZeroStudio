@@ -262,10 +262,11 @@ public final class DebuggerController
                         try { newDbg.waitForVmStart(30_000L); } catch (Throwable ignored) {}
                     }, "jdwp-wait-vmstart").start();
                     ILogger.ROOT.info(TAG + ": connectVia attached pid=" + info.getPid());
+                    final com.itsaky.androidide.debugger.connection.IDebugConnection connRef = conn;
                     postMain(() -> {
                         if (attachedActivity != null) {
                             FlashbarActivityUtilsKt.flashInfo(attachedActivity,
-                                    "调试器已连接 (新连接层, type=" + conn.getType() + ")");
+                                    "调试器已连接 (新连接层, type=" + connRef.getType() + ")");
                         }
                     });
                 }
