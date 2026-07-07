@@ -80,10 +80,14 @@ class IDEEditorRenderer(
      * 当行号 pinned 时, 行号区域起点 = 0; 否则 = -offsetX。
      */
     fun getBreakpointColumnLeft(): Float {
-        val lnRegionStart = if (editorRef.isLineNumberPinned && !editorRef.wordwrap) {
+        // 注意: CodeEditor.wordwrap 字段是 private, getter 是 isWordwrap()。
+        // Kotlin 属性访问 .wordwrap 会尝试访问 private 字段而编译失败,
+        // 必须显式调用 .isWordwrap() 方法。
+        // 另外 getOffsetX()/getRowHeight() 返回 int, 需 toFloat() 参与浮点运算。
+        val lnRegionStart = if (editorRef.isLineNumberPinned && !editorRef.isWordwrap()) {
             0f
         } else {
-            -editorRef.offsetX
+            -editorRef.offsetX.toFloat()
         }
         return Math.max(0f, lnRegionStart - bpColumnWidth)
     }
@@ -199,14 +203,15 @@ class IDEEditorRenderer(
         left: Float,
         right: Float,
     ) {
-        val rowHeight = editorRef.rowHeight
+        // getRowHeight() 返回 int, 转 Float 以保证后续浮点运算 (tmpRect.set 需要 Float)
+        val rowHeight = editorRef.rowHeight.toFloat()
         if (rowHeight <= 0f) return
         val firstRow = Math.max(0, editorRef.firstVisibleRow)
         if (line < firstRow) return
 
         val top = (line - firstRow) * rowHeight
         val bottom = top + rowHeight
-        if (bottom < 0 || top > editorRef.height) return
+        if (bottom < 0f || top > editorRef.height) return
 
         // 1. 整行淡色背景 (8% 透明橙)
         hitLinePaint.color = 0x22FF6F00
