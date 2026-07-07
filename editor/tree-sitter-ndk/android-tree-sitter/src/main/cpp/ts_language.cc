@@ -92,7 +92,8 @@ static jint TSLanguage_symType(JNIEnv *env, jclass self, jlong ptr, jint sym) {
 
 static jint TSLanguage_langVer(JNIEnv *env, jclass self, jlong ptr) {
   req_nnp(env, ptr);
-  return (jint) ts_language_version((TSLanguage *) ptr);
+  // 0.27 中 ts_language_version 被重命名为 ts_language_abi_version
+  return (jint) ts_language_abi_version((TSLanguage *) ptr);
 }
 
 static jlongArray TSLanguage_loadLanguage(JNIEnv *env,
@@ -246,6 +247,20 @@ static jboolean TSLanguage_isWasm(JNIEnv *env, jclass self, jlong ptr) {
   return (jboolean) ts_language_is_wasm((TSLanguage *) ptr);
 }
 
+// 创建语言的另一个引用（0.27 新增，用于 wasm 语言引用计数管理）
+static jlong TSLanguage_copy(JNIEnv *env, jclass self, jlong ptr) {
+  req_nnp(env, ptr);
+  return (jlong) ts_language_copy((TSLanguage *) ptr);
+}
+
+// 删除语言引用（0.27 新增）
+// 对于内嵌语言（静态分配），ts_language_delete 是空操作
+// 对于 wasm 语言，ts_language_delete 减少引用计数
+static void TSLanguage_delete(JNIEnv *env, jclass self, jlong ptr) {
+  req_nnp(env, ptr);
+  ts_language_delete((TSLanguage *) ptr);
+}
+
 void TSLanguage_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSLanguage_Native_symCount, TSLanguage_symCount);
   SET_JNI_METHOD(methods, TSLanguage_Native_fldCount, TSLanguage_fldCount);
@@ -264,4 +279,6 @@ void TSLanguage_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSLanguage_Native_supertypes, TSLanguage_supertypes);
   SET_JNI_METHOD(methods, TSLanguage_Native_subtypes, TSLanguage_subtypes);
   SET_JNI_METHOD(methods, TSLanguage_Native_isWasm, TSLanguage_isWasm);
+  SET_JNI_METHOD(methods, TSLanguage_Native_copy, TSLanguage_copy);
+  SET_JNI_METHOD(methods, TSLanguage_Native_delete, TSLanguage_delete);
 }

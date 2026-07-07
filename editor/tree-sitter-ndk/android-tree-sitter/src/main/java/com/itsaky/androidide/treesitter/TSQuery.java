@@ -21,6 +21,8 @@ import android.text.TextUtils;
 import com.itsaky.androidide.treesitter.annotations.GenerateNativeHeaders;
 import com.itsaky.androidide.treesitter.util.TSObjectFactoryProvider;
 import dalvik.annotation.optimization.FastNative;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 public class TSQuery extends TSNativeObject {
 
@@ -155,6 +157,20 @@ public class TSQuery extends TSNativeObject {
     checkAccess();
     validatePatternIndex(pattern);
     Native.disablePattern(getNativeObject(), pattern);
+  }
+
+  /**
+   * 禁用指定名称的 capture。
+   *
+   * <p>这会阻止该 capture 在查询结果中出现。目前无法撤销。
+   *
+   * @param captureName capture 名称。
+   */
+  public void disableCapture(String captureName) {
+    checkAccess();
+    Objects.requireNonNull(captureName, "capture name cannot be null");
+    final var bytes = captureName.getBytes(StandardCharsets.UTF_8);
+    Native.disableCapture(getNativeObject(), bytes, bytes.length);
   }
 
   public String getCaptureNameForId(int id) {
@@ -342,5 +358,8 @@ public class TSQuery extends TSNativeObject {
 
     @FastNative
     static native void disablePattern(long query, int patternIndex);
+
+    @FastNative
+    static native void disableCapture(long query, byte[] name, int length);
   }
 }

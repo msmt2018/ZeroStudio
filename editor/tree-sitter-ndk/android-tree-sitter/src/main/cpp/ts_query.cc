@@ -203,6 +203,21 @@ static void TSQuery_disablePattern(JNIEnv *env,
   ts_query_disable_pattern((TSQuery *) query, pattern);
 }
 
+// 禁用指定名称的 capture，阻止其在查询结果中出现
+static void TSQuery_disableCapture(JNIEnv *env,
+                                   jclass self,
+                                   jlong query,
+                                   jbyteArray name,
+                                   jint length) {
+  req_nnp(env, query);
+  req_nnp(env, name, "capture name");
+  jbyte *nm = env->GetByteArrayElements(name, nullptr);
+  ts_query_disable_capture((TSQuery *) query,
+                           reinterpret_cast<const char *>(nm),
+                           (uint32_t) length);
+  env->ReleaseByteArrayElements(name, nm, JNI_ABORT);
+}
+
 int query_quantifier_id(JNIEnv *env, TSQuantifier quantifier) {
   switch (quantifier) {
     case TSQuantifierZero:
@@ -244,4 +259,6 @@ void TSQuery_Native__SetJniMethods(JNINativeMethod *methods, int count) {
                  TSQuery_endByteForPattern);
   SET_JNI_METHOD(methods, TSQuery_Native_disablePattern,
                  TSQuery_disablePattern);
+  SET_JNI_METHOD(methods, TSQuery_Native_disableCapture,
+                 TSQuery_disableCapture);
 }

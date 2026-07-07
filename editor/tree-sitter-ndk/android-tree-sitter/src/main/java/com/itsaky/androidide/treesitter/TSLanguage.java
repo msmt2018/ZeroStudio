@@ -232,6 +232,23 @@ public class TSLanguage extends TSNativeObject {
     return getLibHandle() != 0;
   }
 
+  /**
+   * 创建此语言的另一个引用。
+   *
+   * <p>对于 wasm 语言，这会增加引用计数。返回的 {@link TSLanguage} 与原实例共享底层资源，
+   * 关闭其中一个不会影响另一个。
+   *
+   * @return 新的语言引用。
+   */
+  public TSLanguage copy() {
+    checkAccess();
+    final long ptr = Native.copy(getNativeObject());
+    if (ptr == 0) {
+      return null;
+    }
+    return TSLanguage.create(name, ptr);
+  }
+
   @Override
   public void close() {
     if (isExternal()) {
@@ -247,7 +264,12 @@ public class TSLanguage extends TSNativeObject {
 
   @Override
   protected void closeNativeObj() {
-    // no-op
+    // 0.27 使用 ts_language_delete 管理语言引用计数
+    // 对于内嵌语言（静态分配），ts_language_delete 是空操作
+    // 对于 wasm 语言，ts_language_delete 减少引用计数
+    if (getNativeObject() != 0) {
+      Native.delete(getNativeObject());
+    }
   }
 
   /**
@@ -369,5 +391,13 @@ public class TSLanguage extends TSNativeObject {
     // 检查语言是否来自 wasm 模块（ts_language_is_wasm 总是可用，有 dummy 实现）
     @FastNative
     static native boolean isWasm(long ptr);
+
+    // 创建语言的另一个引用（wasm 语言会增加引用计数）
+    @FastNative
+    static native long copy(long ptr);
+
+    // 删除语言引用（wasm 语言会减少引用计数，内嵌语言为空操作）
+    @FastNative
+    static native void delete(long ptr);
   }
 }
