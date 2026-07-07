@@ -377,12 +377,13 @@ public class UniversalPreviewEngineFragment extends Fragment {
     coreWebView.setWebChromeClient(
         new WebChromeClient() {
           @Override
-          public void onConsoleMessage(
+          public boolean onConsoleMessage(
               android.webkit.ConsoleMessage consoleMessage) {
             Log.d(
                 "UniversalPreview/JS",
                 consoleMessage.message() + " (" + consoleMessage.sourceId()
                     + ":" + consoleMessage.lineNumber() + ")");
+            return true;
           }
         });
 
