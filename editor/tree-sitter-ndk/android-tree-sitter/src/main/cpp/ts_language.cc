@@ -239,6 +239,13 @@ static jintArray TSLanguage_subtypes(JNIEnv *env,
   return result;
 }
 
+// 检查语言是否来自 wasm 模块
+// ts_language_is_wasm 在 wasm_store.c 的 #else 部分有 dummy 实现，总是安全调用
+static jboolean TSLanguage_isWasm(JNIEnv *env, jclass self, jlong ptr) {
+  req_nnp(env, ptr);
+  return (jboolean) ts_language_is_wasm((TSLanguage *) ptr);
+}
+
 void TSLanguage_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSLanguage_Native_symCount, TSLanguage_symCount);
   SET_JNI_METHOD(methods, TSLanguage_Native_fldCount, TSLanguage_fldCount);
@@ -256,4 +263,5 @@ void TSLanguage_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSLanguage_Native_metadata, TSLanguage_metadata);
   SET_JNI_METHOD(methods, TSLanguage_Native_supertypes, TSLanguage_supertypes);
   SET_JNI_METHOD(methods, TSLanguage_Native_subtypes, TSLanguage_subtypes);
+  SET_JNI_METHOD(methods, TSLanguage_Native_isWasm, TSLanguage_isWasm);
 }

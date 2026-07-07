@@ -335,6 +335,30 @@ public class TSParser extends TSNativeObject {
     Native.delete(getNativeObject());
   }
 
+  /**
+   * 为此 parser 分配 {@link TSWasmStore}。Parser 必须分配了 wasm store 才能使用 wasm 语言。
+   *
+   * @param store wasm store，可为 {@code null}（清除当前 store）。
+   */
+  public void setWasmStore(TSWasmStore store) {
+    checkAccess();
+    Native.setWasmStore(getNativeObject(), store == null ? 0 : store.getNativeObject());
+  }
+
+  /**
+   * 移除并返回此 parser 当前的 {@link TSWasmStore}。
+   *
+   * @return 被移除的 wasm store，如果 parser 没有则返回 {@code null}。
+   */
+  public TSWasmStore takeWasmStore() {
+    checkAccess();
+    final long ptr = Native.takeWasmStore(getNativeObject());
+    if (ptr == 0) {
+      return null;
+    }
+    return new TSWasmStore(ptr);
+  }
+
   private void throwIfParseNotCancelled() {
     if (isParsing() && !isCancellationRequested()) {
       throw new ParseInProgressException(
@@ -405,5 +429,13 @@ public class TSParser extends TSNativeObject {
 
     @FastNative
     static native boolean requestCancellation(long parser);
+
+    // wasm store 管理（ts_parser_set_wasm_store / ts_parser_take_wasm_store 总是可用，
+    // 即使未启用 TREE_SITTER_FEATURE_WASM，parser.c 中有完整实现）
+    @FastNative
+    static native void setWasmStore(long parser, long store);
+
+    @FastNative
+    static native long takeWasmStore(long parser);
   }
 }

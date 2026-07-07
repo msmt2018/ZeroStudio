@@ -211,6 +211,18 @@ public class TSLanguage extends TSNativeObject {
   }
 
   /**
+   * 检查此语言是否来自 WebAssembly 模块。
+   *
+   * <p>如果是 wasm 语言，则使用它的 {@link TSParser} 必须分配了 {@link TSWasmStore}。
+   *
+   * @return 如果是 wasm 语言则返回 {@code true}，否则返回 {@code false}。
+   */
+  public boolean isWasm() {
+    checkAccess();
+    return Native.isWasm(getNativeObject());
+  }
+
+  /**
    * Returns whether this language is external i.e. loaded with
    * {@link TSLanguage#loadLanguage(String, String)}.
    *
@@ -353,5 +365,9 @@ public class TSLanguage extends TSNativeObject {
 
     @FastNative
     static native int[] subtypes(long ptr, int supertype);  // 符号 id 数组
+
+    // 检查语言是否来自 wasm 模块（ts_language_is_wasm 总是可用，有 dummy 实现）
+    @FastNative
+    static native boolean isWasm(long ptr);
   }
 }

@@ -287,6 +287,26 @@ TSParser_requestCancellation(
   return true;
 }
 
+// 为 parser 分配 wasm store
+// ts_parser_set_wasm_store 在 parser.c 中总有实现（不依赖 TREE_SITTER_FEATURE_WASM）
+static void
+TSParser_setWasmStore(JNIEnv *env, jclass clazz, jlong parser, jlong store) {
+  req_nnp(env, parser);
+  auto *parserInternal = (TSParserInternal *) parser;
+  ts_parser_set_wasm_store(parserInternal->parser,
+                           store == 0 ? nullptr : (TSWasmStore *) store);
+}
+
+// 移除并返回 parser 当前的 wasm store
+// ts_parser_take_wasm_store 在 parser.c 中总有实现（不依赖 TREE_SITTER_FEATURE_WASM）
+static jlong
+TSParser_takeWasmStore(JNIEnv *env, jclass clazz, jlong parser) {
+  req_nnp(env, parser);
+  auto *parserInternal = (TSParserInternal *) parser;
+  TSWasmStore *store = ts_parser_take_wasm_store(parserInternal->parser);
+  return (jlong) store;
+}
+
 void TSParser_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSParser_Native_newParser, TSParser_newParser);
   SET_JNI_METHOD(methods, TSParser_Native_delete, TSParser_delete);
@@ -300,4 +320,6 @@ void TSParser_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSParser_Native_parse, TSParser_parse);
   SET_JNI_METHOD(methods, TSParser_Native_requestCancellation,
                  TSParser_requestCancellation);
+  SET_JNI_METHOD(methods, TSParser_Native_setWasmStore, TSParser_setWasmStore);
+  SET_JNI_METHOD(methods, TSParser_Native_takeWasmStore, TSParser_takeWasmStore);
 }
