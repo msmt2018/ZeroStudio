@@ -20,7 +20,6 @@ package com.itsaky.androidide.fragments.editor.image
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.Log
@@ -85,8 +84,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import coil3.ImageLoader
+import coil3.asDrawable
 import coil3.decode.BitmapFactoryDecoder
-import coil3.decode.ImageDecoderDecoder
 import coil3.gif.GifDecoder
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -914,19 +913,22 @@ private suspend fun decodeSvg(ctx: Context, file: File): LoadedImage {
  * 走 Coil 3.x 默认 decoder, 异步在 IO 线程. 解码得到 [Drawable] 后渲染到
  * [Bitmap].
  *
- * **关键**: 必须显式注册 [ImageDecoderDecoder] / [BitmapFactoryDecoder] /
- * [GifDecoder], 不能依赖 ServiceLoader 自动发现 —— Android 模块在某些
+ * **关键**: 必须显式注册 [BitmapFactoryDecoder] / [GifDecoder],
+ * 不能依赖 ServiceLoader 自动发现 —— Android 模块在某些
  * 打包配置下 (R8 / 资源合并 / META-INF services 被裁剪) ServiceLoader
  * 会丢, 导致 PNG / JPG 等位图解码直接返回 ErrorResult, 表现为"无法预览".
  * 这与 [decodeSvg] 显式注册 [SvgDecoder] 的防御性做法一致.
+ *
+ * 注: Coil 3.x 已移除 ImageDecoderDecoder, BitmapFactoryDecoder 在 API 28+
+ * 内部自动走 ImageDecoder (支持 HEIC / AVIF / 动图), 低版本 fallback 到
+ * BitmapFactory, 无需手动分支.
  */
 private suspend fun decodeRaster(ctx: Context, file: File): LoadedImage {
     val mime = guessMimeByExt(file)
     val loader = ImageLoader.Builder(ctx)
         .components {
-            // API 28+ 优先用 ImageDecoder (支持 HEIC / AVIF / 动图);
-            // 低版本 fallback 到 BitmapFactoryDecoder.
-            add(ImageDecoderDecoder.Factory())
+            // Coil 3.x: BitmapFactoryDecoder 是唯一标准 raster decoder,
+            // API 28+ 内部用 ImageDecoder, 低版本用 BitmapFactory.
             add(BitmapFactoryDecoder.Factory())
             // GIF 动图 —— 仅渲染首帧到位图 (drawableToBitmap 静态渲染).
             add(GifDecoder.Factory())
@@ -945,33 +947,20 @@ private suspend fun decodeRaster(ctx: Context, file: File): LoadedImage {
 }
 
 /**
- * 把 Coil 3.x 的 [coil3.Image] 转成 Android [Drawable]. Coil 3.x 在 Android
- * 平台上的实现是 `coil3.android.AndroidImage`, 暴露一个 `drawable: Drawable`
- * 属性. 反射拿不到时 fallback 到 `Bitmap` 字段.
+ * 把 Coil 3.x 的 [coil3.Image] 转成 Android [Drawable].
  *
- * 优先走 `AndroidImage` 类型检查 (public API, 不受混淆 / 字段改名影响),
- * 反射仅作为对未知 [coil3.Image] 实现的兜底.
+ * Coil 3.x 用 multiplatform 的 [coil3.Image] 接口替代了 Android [Drawable]。
+ * 官方 public API 是 [coil3.asDrawable] 扩展函数 (在 coil-core 中),
+ * 内部实现 (coil3.android.AndroidImage) 不是公开 API, 不应直接引用。
+ *
+ * 这里直接调用 `image.asDrawable(resources)`, 不再依赖反射兜底 ——
+ * asDrawable 是 Coil 3.x 升级文档明确推荐的互操作 API。
  */
 private fun coilImageToDrawable(
     result: SuccessResult,
     ctx: Context,
 ): Drawable {
-    val image = result.image
-    // 快速路径: Coil 3.x 在 Android 上的标准实现.
-    if (image is coil3.android.AndroidImage) {
-        return image.drawable
-    }
-    // 兜底: 对未知 Image 实现反射取 Drawable / Bitmap 字段.
-    val cls = image::class.java
-    for (f in cls.declaredFields) {
-        f.isAccessible = true
-        val v = f.get(image) ?: continue
-        if (v is Drawable) return v
-        if (v is Bitmap) return BitmapDrawable(ctx.resources, v)
-    }
-    throw IllegalStateException(
-        "Cannot extract drawable from coil3.Image of type ${cls.name}",
-    )
+    return result.image.asDrawable(ctx.resources)
 }
 
 /**
