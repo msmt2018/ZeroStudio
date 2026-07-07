@@ -16,6 +16,7 @@
 
 package com.itsaky.androidide.debugger.view;
 
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
@@ -338,11 +339,14 @@ public final class BreakpointGutterManager {
     private void subscribeSessionState() {
         try {
             DebugSessionState st = DebuggerController.getInstance().sessionState();
-            sessionListener = s -> {
-                if (column instanceof BreakpointColumnView) {
-                    ((BreakpointColumnView) column).refresh();
-                } else if (column instanceof BreakpointSidebar) {
-                    ((BreakpointSidebar) column).refresh();
+            sessionListener = new DebugSessionState.Listener() {
+                @Override
+                public void onStateChanged(@NonNull DebugSessionState s) {
+                    if (column instanceof BreakpointColumnView) {
+                        ((BreakpointColumnView) column).refresh();
+                    } else if (column instanceof BreakpointSidebar) {
+                        ((BreakpointSidebar) column).refresh();
+                    }
                 }
             };
             st.addListener(sessionListener);

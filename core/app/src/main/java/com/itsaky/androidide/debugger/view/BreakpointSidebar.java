@@ -318,8 +318,7 @@ public class BreakpointSidebar extends View {
             canvas.drawLine(cx, cy + r * 0.5f, cx - r * 0.5f, cy, outlinePaint);
             canvas.drawLine(cx - r * 0.5f, cy, cx, cy - r * 0.5f, outlinePaint);
         }
-        if (bp.state == IdeBreakpoint.State.DEPENDENT
-                || bp.state == IdeBreakpoint.State.DEPENDENT_PENDING) {
+        if (bp.state == IdeBreakpoint.State.DEPENDENT) {
             outlinePaint.setColor(Color.WHITE);
             outlinePaint.setStrokeWidth(dp(1.2f));
             canvas.drawLine(cx - r * 0.55f, cy, cx + r * 0.55f, cy, outlinePaint);

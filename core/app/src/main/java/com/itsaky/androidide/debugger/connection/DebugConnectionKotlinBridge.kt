@@ -14,12 +14,23 @@ object DebugConnectionKotlinBridge {
 
     /**
      * 阻塞地跑 ConnectionBackedDebugger.run(),给 Java 调用方用。
-     * @return 成功: AttachInfo;失败: ConnectionError 包在 RuntimeException 里
+     *
+     * Java 调用方无法方便地使用 Kotlin [Result], 因此这个 Java 友好版本
+     * 直接返回 [AttachInfo], 失败时抛 [RuntimeException] (cause = 原始异常)。
+     *
+     * Kotlin 调用方应直接用 [ConnectionBackedDebugger.run] 获取 [Result]。
+     *
+     * @return 成功的 AttachInfo
+     * @throws RuntimeException 连接失败时抛出, cause 为原始异常
      */
     @JvmStatic
+    @Throws(RuntimeException::class)
     fun runConnectVia(
         conn: IDebugConnection,
-    ): Result<AttachInfo> = runBlocking { ConnectionBackedDebugger(conn).run() }
+    ): AttachInfo {
+        val result: Result<AttachInfo> = runBlocking { ConnectionBackedDebugger(conn).run() }
+        return result.getOrThrow()
+    }
 
     /**
      * 阻塞地跑 ConnectionBackedDebugger.shutdown(),给 Java 调用方用。

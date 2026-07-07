@@ -226,46 +226,46 @@ public final class DebuggerController
             com.itsaky.androidide.debugger.connection.IDebugConnection conn = null;
             try {
                 com.itsaky.androidide.debugger.connection.DebugConnectionSettings settings =
-                        com.itsaky.androidide.debugger.connection.DebugConnectionPreferences.load();
-                conn = com.itsaky.androidide.debugger.connection.DebugConnectionRegistry
+                        com.itsaky.androidide.debugger.connection.DebugConnectionPreferences.INSTANCE.load();
+                conn = com.itsaky.androidide.debugger.connection.DebugConnectionRegistry.INSTANCE
                         .createForActive(target, settings);
                 ILogger.ROOT.info(TAG + ": connectVia type=" + conn.getType()
                         + " pkg=" + target.getPackageName());
 
-                kotlin.Result<com.itsaky.androidide.debugger.connection.AttachInfo> r =
-                        com.itsaky.androidide.debugger.connection.DebugConnectionKotlinBridge
-                                .runConnectVia(conn);
-
-                if (r.isSuccess()) {
-                    com.itsaky.androidide.debugger.connection.AttachInfo info =
-                            r.getOrNull();
-                    com.itsaky.androidide.debugger.connection.ConnectionBackedDebugger adapter =
-                            new com.itsaky.androidide.debugger.connection.ConnectionBackedDebugger(conn);
-                    com.zerostudio.debugger.api.Debugger newDbg = adapter.getDebugger();
-                    if (newDbg != null) {
-                        this.debugger = newDbg;
-                        newDbg.addListener(this);
-                        subscribeLogpointBus(newDbg);
-                        BreakpointManager.getInstance().bindDebugger(newDbg);
-                        new Thread(() -> {
-                            try { newDbg.waitForVmStart(30_000L); } catch (Throwable ignored) {}
-                        }, "jdwp-wait-vmstart").start();
-                        ILogger.ROOT.info(TAG + ": connectVia attached pid=" + info.getPid());
-                        postMain(() -> {
-                            if (attachedActivity != null) {
-                                FlashbarActivityUtilsKt.flashInfo(attachedActivity,
-                                        "调试器已连接 (新连接层, type=" + conn.getType() + ")");
-                            }
-                        });
-                    }
-                } else {
-                    Throwable err = r.exceptionOrNull();
+                // Kotlin Result 在 Java 中无法直接调用 isSuccess/getOrNull/exceptionOrNull,
+                // runConnectVia 失败时会抛 RuntimeException, 用 try-catch 捕获。
+                com.itsaky.androidide.debugger.connection.AttachInfo info;
+                try {
+                    info = com.itsaky.androidide.debugger.connection.DebugConnectionKotlinBridge
+                            .runConnectVia(conn);
+                } catch (Throwable connectErr) {
                     ILogger.ROOT.warn(TAG + ": connectVia failed: "
-                            + (err == null ? "unknown" : err.getMessage()));
+                            + (connectErr == null ? "unknown" : connectErr.getMessage()));
                     postMain(() -> {
                         if (attachedActivity != null) {
                             FlashbarActivityUtilsKt.flashInfo(attachedActivity,
-                                    "新连接层连接失败: " + (err == null ? "未知" : err.getMessage()));
+                                    "新连接层连接失败: "
+                                            + (connectErr == null ? "未知" : connectErr.getMessage()));
+                        }
+                    });
+                    return;
+                }
+                com.itsaky.androidide.debugger.connection.ConnectionBackedDebugger adapter =
+                        new com.itsaky.androidide.debugger.connection.ConnectionBackedDebugger(conn);
+                com.zerostudio.debugger.api.Debugger newDbg = adapter.getDebugger();
+                if (newDbg != null) {
+                    this.debugger = newDbg;
+                    newDbg.addListener(this);
+                    subscribeLogpointBus(newDbg);
+                    BreakpointManager.getInstance().bindDebugger(newDbg);
+                    new Thread(() -> {
+                        try { newDbg.waitForVmStart(30_000L); } catch (Throwable ignored) {}
+                    }, "jdwp-wait-vmstart").start();
+                    ILogger.ROOT.info(TAG + ": connectVia attached pid=" + info.getPid());
+                    postMain(() -> {
+                        if (attachedActivity != null) {
+                            FlashbarActivityUtilsKt.flashInfo(attachedActivity,
+                                    "调试器已连接 (新连接层, type=" + conn.getType() + ")");
                         }
                     });
                 }
