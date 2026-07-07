@@ -271,6 +271,12 @@ TSPoint _unmarshalPoint(JNIEnv *env, jobject javaObject) {
   };
 }
 
+// 将 TSPoint 写回已存在的 Java TSPoint 对象（原地更新）
+void _marshalPointToExisting(JNIEnv *env, jobject javaObject, TSPoint point) {
+  env->SetIntField(javaObject, pointRowField, (jint) point.row);
+  env->SetIntField(javaObject, pointColumnField, (jint) point.column);
+}
+
 // TSInputEdit
 TSInputEdit _unmarshalInputEdit(JNIEnv *env, jobject inputEdit) {
   return (TSInputEdit) {
@@ -332,6 +338,24 @@ TSRange _unmarshalRange(JNIEnv *env, jobject javaObject) {
           env, env->GetObjectField(javaObject, rangeClassEndPointField)),
       (uint32_t) env->GetIntField(javaObject, rangeClassStartByteField),
       (uint32_t) env->GetIntField(javaObject, rangeClassEndByteField)};
+}
+
+// 将 TSRange 写回已存在的 Java TSRange 对象（原地更新）
+void _marshalRangeToExisting(JNIEnv *env, jobject javaObject, TSRange range) {
+  env->SetIntField(javaObject, rangeClassStartByteField, (jint) range.start_byte);
+  env->SetIntField(javaObject, rangeClassEndByteField, (jint) range.end_byte);
+
+  // startPoint 和 endPoint 是 TSPoint 对象，需要写回其 row/column 字段
+  jobject start_point = env->GetObjectField(javaObject, rangeClassStartPointField);
+  if (start_point != nullptr) {
+    _marshalPointToExisting(env, start_point, range.start_point);
+    env->DeleteLocalRef(start_point);
+  }
+  jobject end_point = env->GetObjectField(javaObject, rangeClassEndPointField);
+  if (end_point != nullptr) {
+    _marshalPointToExisting(env, end_point, range.end_point);
+    env->DeleteLocalRef(end_point);
+  }
 }
 
 jobjectArray createRangeArr(JNIEnv *env, jint size) {

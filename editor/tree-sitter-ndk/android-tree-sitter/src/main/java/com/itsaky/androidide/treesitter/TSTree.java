@@ -126,6 +126,26 @@ public class TSTree extends TSNativeObject {
     return TSLanguageCache.get(langPtr);
   }
 
+  /**
+   * Write a DOT graph describing the syntax tree to the given file descriptor.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_tree_print_dot_graph}.
+   * The graph is formatted in the DOT language, you may want to pipe it to a {@code dot(1)}
+   * process in order to generate SVG output.
+   *
+   * <p>On Android, {@code java.io.FileDescriptor} 可以通过 {@link java.io.FileOutputStream#getFD()}
+   * 或 {@link java.io.FileInputStream#getFD()} 获取，然后通过
+   * {@link sun.misc.SharedSecrets}（或 Android 的 {@code android.system.Os}）拿到底层 int fd。
+   * 一个更简单的方式是直接传入 {@link java.io.FileDescriptor} 并由 native 层反射读取 {@code descriptor}
+   * 字段；本方法直接接受 int fd 以避免反射。
+   *
+   * @param fileDescriptor 已打开的可写文件描述符。传入负数会关闭调试输出。
+   */
+  public void printDotGraph(int fileDescriptor) {
+    checkAccess();
+    Native.printDotGraph(getNativeObject(), fileDescriptor);
+  }
+
   @GenerateNativeHeaders(fileName = "tree")
   private static class Native {
 
@@ -152,5 +172,8 @@ public class TSTree extends TSNativeObject {
 
     @FastNative
     static native TSRange[] includedRanges(long nativeObject);
+
+    @FastNative
+    static native void printDotGraph(long tree, int fileDescriptor);
   }
 }

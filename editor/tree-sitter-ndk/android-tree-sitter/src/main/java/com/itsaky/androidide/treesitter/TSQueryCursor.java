@@ -204,14 +204,32 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
     Native.setMatchLimit(getNativeObject(), newLimit);
   }
 
-  public void setByteRange(int start, int end) {
+  /**
+   * Set the range of bytes in which a query will be executed.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_query_cursor_set_byte_range}.
+   *
+   * @param start 起始字节偏移（包含）。
+   * @param end   结束字节偏移（不包含）。
+   * @return 范围是否合法（{@code start <= end} 时为 {@code true}）。
+   */
+  public boolean setByteRange(int start, int end) {
     checkAccess();
-    Native.setByteRange(getNativeObject(), start, end);
+    return Native.setByteRange(getNativeObject(), start, end);
   }
 
-  public void setPointRange(TSPoint start, TSPoint end) {
+  /**
+   * Set the range of points in which a query will be executed.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_query_cursor_set_point_range}.
+   *
+   * @param start 起始 point（包含）。
+   * @param end   结束 point（不包含）。
+   * @return 范围是否合法。
+   */
+  public boolean setPointRange(TSPoint start, TSPoint end) {
     checkAccess();
-    Native.setPointRange(getNativeObject(), start, end);
+    return Native.setPointRange(getNativeObject(), start, end);
   }
 
   public TSQueryMatch nextMatch() {
@@ -359,10 +377,10 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
     static native int getMatchLimit(long cursor);
 
     @FastNative
-    static native void setByteRange(long cursor, int start, int end);
+    static native boolean setByteRange(long cursor, int start, int end);
 
     @FastNative
-    static native void setPointRange(long cursor, TSPoint start, TSPoint end);
+    static native boolean setPointRange(long cursor, TSPoint start, TSPoint end);
 
     @FastNative
     static native TSQueryMatch nextMatch(long cursor);

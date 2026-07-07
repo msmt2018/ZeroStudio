@@ -119,7 +119,7 @@ public class TSTreeCursor extends TSNativeObject {
    * This returns the index of the child node if one was found, and returns -1 if no such child was
    * found.
    */
-  public boolean gotoFirstChildForPoint(TSPoint point) {
+  public long gotoFirstChildForPoint(TSPoint point) {
     checkAccess();
     return Native.gotoFirstChildForPoint(getNativeObject(), point);
   }
@@ -262,7 +262,7 @@ public class TSTreeCursor extends TSNativeObject {
     static native long gotoFirstChildForByte(long pointer, int byteIndex);
 
     @FastNative
-    static native boolean gotoFirstChildForPoint(long pointer, TSPoint point);
+    static native long gotoFirstChildForPoint(long pointer, TSPoint point);
 
     @FastNative
     static native boolean gotoLastChild(long pointer);

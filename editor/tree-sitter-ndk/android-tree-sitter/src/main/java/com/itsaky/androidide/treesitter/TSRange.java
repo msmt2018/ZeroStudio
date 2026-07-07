@@ -61,6 +61,17 @@ public class TSRange {
     return endPoint;
   }
 
+  /**
+   * 根据编辑操作更新此 range，使其与编辑后的源代码保持同步。
+   *
+   * <p>这是 tree-sitter 0.27 {@code ts_range_edit} 的包装。此方法会原地修改此 range。
+   *
+   * @param edit 编辑操作。
+   */
+  public void edit(TSInputEdit edit) {
+    TSUtils.rangeEdit(this, edit);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {

@@ -19,6 +19,7 @@
 #include <chrono>
 #include <mutex>
 #include <iostream>
+#include <unordered_map>
 
 #include "utf16str/UTF16String.h"
 #include "utils/ts_obj_utils.h"
@@ -27,6 +28,183 @@
 #include "ts__log.h"
 
 #include "ts_parser.h"
+
+// ============================================================================
+// Logger 反向回调实现
+//
+// tree-sitter 0.27 的 TSLogger 是一个 C 结构体，包含 payload 指针和函数指针：
+//   typedef struct TSLogger {
+//     void *payload;
+//     void (*log)(void *payload, TSLogType log_type, const char *buffer);
+//   } TSLogger;
+//
+// 为了让 Java 端能注册 TSLogger 回调，我们在 native 层：
+//   1. 维护一个 parser pointer -> Java TSLogger GlobalRef 的映射
+//   2. 提供 java_logger_callback 作为 C 函数指针，从映射中取出 Java 对象并回调
+//   3. 缓存 JavaVM 用于在解析线程上 attach（同步 parseString 场景下其实当前线程已有 JNIEnv）
+//   4. 缓存 TSLogger 接口类 + log 方法 ID，以及 TSLogType 枚举常量
+// ============================================================================
+
+static JavaVM *g_jvm = nullptr;
+static std::mutex g_logger_mutex;
+
+// parser pointer -> Java TSLogger GlobalRef
+static std::unordered_map<jlong, jobject> g_logger_refs;
+
+// 缓存的 Java 类/方法/字段
+static jclass g_logger_class = nullptr;        // com/itsaky/androidide/treesitter/TSLogger
+static jmethodID g_logger_log_method = nullptr; // TSLogger.log(TSLogType, String)
+static jclass g_logtype_class = nullptr;       // com/itsaky/androidide/treesitter/TSLogType
+static jobject g_logtype_parse = nullptr;      // TSLogType.PARSE (GlobalRef)
+static jobject g_logtype_lex = nullptr;        // TSLogType.LEX   (GlobalRef)
+static bool g_logger_cache_inited = false;
+
+// 初始化 logger 缓存（必须在 Java 线程上调用，带 env）
+static void ensure_logger_cache(JNIEnv *env) {
+  if (g_logger_cache_inited) {
+    return;
+  }
+
+  // TSLogger 接口类
+  jclass logger_local = env->FindClass("com/itsaky/androidide/treesitter/TSLogger");
+  if (logger_local == nullptr) {
+    LOGE("TSParser", "Failed to find TSLogger class");
+    env->ExceptionClear();
+    return;
+  }
+  g_logger_class = (jclass) env->NewGlobalRef(logger_local);
+  env->DeleteLocalRef(logger_local);
+  g_logger_log_method = env->GetMethodID(g_logger_class, "log",
+                                         "(Lcom/itsaky/androidide/treesitter/TSLogType;Ljava/lang/String;)V");
+  if (g_logger_log_method == nullptr) {
+    LOGE("TSParser", "Failed to find TSLogger.log method");
+    env->ExceptionClear();
+    return;
+  }
+
+  // TSLogType 枚举类 + PARSE/LEX 静态字段
+  jclass logtype_local = env->FindClass("com/itsaky/androidide/treesitter/TSLogType");
+  if (logtype_local == nullptr) {
+    LOGE("TSParser", "Failed to find TSLogType class");
+    env->ExceptionClear();
+    return;
+  }
+  g_logtype_class = (jclass) env->NewGlobalRef(logtype_local);
+  env->DeleteLocalRef(logtype_local);
+
+  jfieldID parse_field = env->GetStaticFieldID(g_logtype_class, "PARSE",
+                                               "Lcom/itsaky/androidide/treesitter/TSLogType;");
+  jfieldID lex_field = env->GetStaticFieldID(g_logtype_class, "LEX",
+                                             "Lcom/itsaky/androidide/treesitter/TSLogType;");
+  if (parse_field == nullptr || lex_field == nullptr) {
+    LOGE("TSParser", "Failed to find TSLogType enum constants");
+    env->ExceptionClear();
+    return;
+  }
+  jobject parse_local = env->GetStaticObjectField(g_logtype_class, parse_field);
+  jobject lex_local = env->GetStaticObjectField(g_logtype_class, lex_field);
+  g_logtype_parse = env->NewGlobalRef(parse_local);
+  g_logtype_lex = env->NewGlobalRef(lex_local);
+  env->DeleteLocalRef(parse_local);
+  env->DeleteLocalRef(lex_local);
+
+  g_logger_cache_inited = true;
+}
+
+// 获取 JNIEnv，必要时 attach 当前线程
+// 通过 *out_attached 返回是否需要后续 DetachCurrentThread
+static JNIEnv *get_jni_env_for_logger(bool *out_attached) {
+  if (g_jvm == nullptr) {
+    *out_attached = false;
+    return nullptr;
+  }
+  JNIEnv *env = nullptr;
+  jint rc = g_jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
+  if (rc == JNI_EDETACHED) {
+    if (g_jvm->AttachCurrentThread(&env, nullptr) != JNI_OK) {
+      *out_attached = false;
+      return nullptr;
+    }
+    *out_attached = true;
+  } else if (rc != JNI_OK) {
+    *out_attached = false;
+    return nullptr;
+  } else {
+    *out_attached = false;
+  }
+  return env;
+}
+
+// tree-sitter 调用的 log 回调
+// payload 存储的是 parser pointer (jlong)，用于从 map 查找 Java TSLogger
+static void java_logger_callback(void *payload, TSLogType log_type, const char *buffer) {
+  if (payload == nullptr) {
+    return;
+  }
+  jlong parser_key = (jlong) reinterpret_cast<intptr_t>(payload);
+
+  jobject logger_ref = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(g_logger_mutex);
+    auto it = g_logger_refs.find(parser_key);
+    if (it == g_logger_refs.end()) {
+      return;
+    }
+    logger_ref = it->second;
+  }
+  if (logger_ref == nullptr) {
+    return;
+  }
+
+  bool attached = false;
+  JNIEnv *env = get_jni_env_for_logger(&attached);
+  if (env == nullptr) {
+    LOGE("TSParser", "logger callback: failed to obtain JNIEnv");
+    return;
+  }
+
+  if (!g_logger_cache_inited) {
+    ensure_logger_cache(env);
+  }
+  if (g_logger_class == nullptr || g_logger_log_method == nullptr) {
+    if (attached) {
+      g_jvm->DetachCurrentThread();
+    }
+    return;
+  }
+
+  jobject log_type_obj = (log_type == TSLogTypeLex) ? g_logtype_lex : g_logtype_parse;
+  jstring buffer_obj = env->NewStringUTF(buffer == nullptr ? "" : buffer);
+
+  env->CallVoidMethod(logger_ref, g_logger_log_method, log_type_obj, buffer_obj);
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+  }
+
+  env->DeleteLocalRef(buffer_obj);
+
+  if (attached) {
+    g_jvm->DetachCurrentThread();
+  }
+}
+
+// 清理指定 parser 的 logger GlobalRef（在 delete 或 setLogger 时调用）
+static void release_logger_ref(jlong parser_key) {
+  std::lock_guard<std::mutex> lock(g_logger_mutex);
+  auto it = g_logger_refs.find(parser_key);
+  if (it == g_logger_refs.end()) {
+    return;
+  }
+  if (g_jvm != nullptr && it->second != nullptr) {
+    JNIEnv *env = nullptr;
+    if (g_jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_OK) {
+      env->DeleteGlobalRef(it->second);
+    }
+  }
+  g_logger_refs.erase(it);
+}
 
 // tree-sitter 0.27 移除了 ts_parser_set_cancellation_flag 和 ts_parser_set_timeout_micros
 // 取消和超时现在通过 ts_parser_parse_with_options + TSParseOptions.progress_callback 实现
@@ -196,6 +374,10 @@ class TSParserInternal {
 static jlong
 TSParser_newParser(JNIEnv *env,
                    jclass self) {
+  // 初始化 JavaVM 缓存，供 logger 回调使用（在解析线程上获取 JNIEnv）
+  if (g_jvm == nullptr) {
+    env->GetJavaVM(&g_jvm);
+  }
   auto parser = new TSParserInternal;
   return (jlong) parser;
 }
@@ -205,6 +387,16 @@ TSParser_delete(JNIEnv *env,
                 jclass self,
                 jlong parser_ptr) {
   req_nnp(env, parser_ptr);
+
+  // 先清除 logger，避免 parser 析构后回调访问悬垂指针
+  TSParser *ts_parser = ((TSParserInternal *) parser_ptr)->getParser(env);
+  if (ts_parser != nullptr) {
+    TSLogger empty_logger;
+    empty_logger.payload = nullptr;
+    empty_logger.log = nullptr;
+    ts_parser_set_logger(ts_parser, empty_logger);
+  }
+  release_logger_ref(parser_ptr);
 
   auto parser = (TSParserInternal *) parser_ptr;
   delete parser;
@@ -398,6 +590,67 @@ TSParser_takeWasmStore(JNIEnv *env, jclass clazz, jlong parser) {
   return (jlong) store;
 }
 
+// ts_parser_print_dot_graphs：将解析过程的 DOT 调试图写入指定的文件描述符。
+// 这是 tree-sitter 0.27 的调试 API，传入负数 fd 会关闭输出。
+static void
+TSParser_printDotGraphs(JNIEnv *env, jclass clazz, jlong parser,
+                        jint file_descriptor) {
+  req_nnp(env, parser);
+  auto *parserInternal = (TSParserInternal *) parser;
+  ts_parser_print_dot_graphs(parserInternal->getParser(env),
+                             (int) file_descriptor);
+}
+
+// ts_parser_set_logger：设置 parser 的日志回调
+// logger 为 null 时清除当前 logger
+static void
+TSParser_setLogger(JNIEnv *env, jclass clazz, jlong parser, jobject logger) {
+  req_nnp(env, parser);
+  auto *parserInternal = (TSParserInternal *) parser;
+  TSParser *ts_parser = parserInternal->getParser(env);
+  if (ts_parser == nullptr) {
+    return;
+  }
+
+  // 初始化缓存（即使 logger 为 null 也初始化，便于后续 getLogger 不需要懒加载）
+  ensure_logger_cache(env);
+
+  // 释放之前可能存在的 logger GlobalRef
+  release_logger_ref(parser);
+
+  TSLogger c_logger;
+  if (logger == nullptr) {
+    c_logger.payload = nullptr;
+    c_logger.log = nullptr;
+  } else {
+    // 持有 Java TSLogger 的 GlobalRef，key 用 parser pointer
+    jobject global_ref = env->NewGlobalRef(logger);
+    {
+      std::lock_guard<std::mutex> lock(g_logger_mutex);
+      g_logger_refs[parser] = global_ref;
+    }
+    // payload 存储 parser pointer，回调时用它查找 Java logger
+    c_logger.payload = reinterpret_cast<void *>(static_cast<intptr_t>(parser));
+    c_logger.log = java_logger_callback;
+  }
+  ts_parser_set_logger(ts_parser, c_logger);
+}
+
+// ts_parser_logger：获取 parser 当前的日志回调
+// 返回之前 setLogger 时传入的 Java TSLogger 对象（或 null）
+static jobject
+TSParser_getLogger(JNIEnv *env, jclass clazz, jlong parser) {
+  req_nnp(env, parser);
+
+  std::lock_guard<std::mutex> lock(g_logger_mutex);
+  auto it = g_logger_refs.find(parser);
+  if (it == g_logger_refs.end() || it->second == nullptr) {
+    return nullptr;
+  }
+  // 返回局部引用副本
+  return env->NewLocalRef(it->second);
+}
+
 void TSParser_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSParser_Native_newParser, TSParser_newParser);
   SET_JNI_METHOD(methods, TSParser_Native_delete, TSParser_delete);
@@ -413,4 +666,7 @@ void TSParser_Native__SetJniMethods(JNINativeMethod *methods, int count) {
                  TSParser_requestCancellation);
   SET_JNI_METHOD(methods, TSParser_Native_setWasmStore, TSParser_setWasmStore);
   SET_JNI_METHOD(methods, TSParser_Native_takeWasmStore, TSParser_takeWasmStore);
+  SET_JNI_METHOD(methods, TSParser_Native_printDotGraphs, TSParser_printDotGraphs);
+  SET_JNI_METHOD(methods, TSParser_Native_setLogger, TSParser_setLogger);
+  SET_JNI_METHOD(methods, TSParser_Native_getLogger, TSParser_getLogger);
 }

@@ -58,6 +58,7 @@ add_library(android-tree-sitter SHARED
         ts_query.cc
         ts_query_cursor.cc
         ts_tree.cc
+        ts_utils.cc
         ts_wasm_store.cc
         utf16str/JavaUTF16String.cpp
         utf16str/JavaUTF16StringFactory.cpp

@@ -89,15 +89,15 @@ static jlong TreeCursor_gotoFirstChildForByte(JNIEnv *env,
 }
 
 
-static jboolean TreeCursor_gotoFirstChildForPoint(JNIEnv *env,
+static jlong TreeCursor_gotoFirstChildForPoint(JNIEnv *env,
                                        jclass clazz,
                                        jlong pointer,
                                        jobject point) {
   req_nnp(env, pointer);
-  return (jboolean) ts_tree_cursor_goto_first_child_for_point((TSTreeCursor *) pointer,
-                                                              _unmarshalPoint(
-                                                                  env,
-                                                                  point));
+  // 0.27 的 ts_tree_cursor_goto_first_child_for_point 返回 int64_t 子节点索引，
+  // -1 表示未找到。与 gotoFirstChildForByte 保持一致返回 long。
+  return (jlong) ts_tree_cursor_goto_first_child_for_point((TSTreeCursor *) pointer,
+                                                           _unmarshalPoint(env, point));
 }
 
 

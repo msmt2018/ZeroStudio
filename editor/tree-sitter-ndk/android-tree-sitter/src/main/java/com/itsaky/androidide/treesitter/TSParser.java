@@ -359,6 +359,47 @@ public class TSParser extends TSNativeObject {
     return new TSWasmStore(ptr);
   }
 
+  /**
+   * Set the file descriptor to which the parser should write debugging graphs during parsing.
+   * The graphs are formatted in the DOT language. You may want to pipe these graphs directly
+   * to a {@code dot(1)} process in order to generate SVG output. You can turn off this logging
+   * by passing a negative number.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_parser_print_dot_graphs}.
+   *
+   * @param fileDescriptor 已打开的可写文件描述符。传入负数会关闭调试输出。
+   */
+  public void printDotGraphs(int fileDescriptor) {
+    checkAccess();
+    Native.printDotGraphs(getNativeObject(), fileDescriptor);
+  }
+
+  /**
+   * Set the logger for this parser. The parser will call the logger during parsing.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_parser_set_logger}. The parser
+   * does not take ownership over the logger payload; if a logger was previously assigned, the
+   * caller is responsible for releasing any resources owned by the previous logger.
+   *
+   * <p>Passing {@code null} clears the current logger.
+   *
+   * @param logger the logger, or {@code null} to clear.
+   */
+  public void setLogger(TSLogger logger) {
+    checkAccess();
+    Native.setLogger(getNativeObject(), logger);
+  }
+
+  /**
+   * Get the parser's current logger.
+   *
+   * @return the current logger, or {@code null} if no logger is set.
+   */
+  public TSLogger getLogger() {
+    checkAccess();
+    return Native.getLogger(getNativeObject());
+  }
+
   private void throwIfParseNotCancelled() {
     if (isParsing() && !isCancellationRequested()) {
       throw new ParseInProgressException(
@@ -437,5 +478,17 @@ public class TSParser extends TSNativeObject {
 
     @FastNative
     static native long takeWasmStore(long parser);
+
+    // ts_parser_print_dot_graphs：将解析过程的 DOT 调试图写入文件描述符
+    @FastNative
+    static native void printDotGraphs(long parser, int fileDescriptor);
+
+    // ts_parser_set_logger / ts_parser_logger：日志回调
+    // logger 为 null 时清除当前 logger
+    @FastNative
+    static native void setLogger(long parser, TSLogger logger);
+
+    @FastNative
+    static native TSLogger getLogger(long parser);
   }
 }

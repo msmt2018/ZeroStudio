@@ -61,6 +61,29 @@ public class TreeSitter {
     return sMinCompatLangVer;
   }
 
+  // ==========================================================================
+  // 关于 ts_set_allocator（不暴露 Java 绑定的设计决策）
+  // ==========================================================================
+  //
+  // tree-sitter 0.27 的 ts_set_allocator 接受 4 个 C 函数指针用于全局替换内存分配器：
+  //   void ts_set_allocator(void *(*new_malloc)(size_t),
+  //                         void *(*new_calloc)(size_t, size_t),
+  //                         void *(*new_realloc)(void *, size_t),
+  //                         void (*new_free)(void *));
+  //
+  // android-tree-sitter 刻意不为此 API 提供 Java 绑定，原因如下：
+  //
+  // 1. Java 无法直接传递函数指针，需要 native trampoline 反向调用 Java。
+  // 2. JNI 调用 Java 方法时会创建局部引用、可能触发 JVM 内部内存分配；
+  //    若 Java 端 allocator 实现又依赖 tree-sitter 内存，将导致无限递归/死锁。
+  // 3. ts_set_allocator 是全局的，必须在所有 tree-sitter 对象创建前调用，
+  //    Android 应用无法保证此初始化时机约束。
+  // 4. JVM 已统一管理内存，对 Java/Android 应用而言替换 allocator 无实际价值，
+  //    反而引入性能开销和稳定性风险。
+  //
+  // 如有自定义内存分配需求，建议在 native 层直接调用 ts_set_allocator，
+  // 不经过 JNI。
+
   @GenerateNativeHeaders(fileName = "meta")
   private static final class Native {
 

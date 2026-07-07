@@ -62,24 +62,28 @@ TSQueryCursor_getMatchLimit(JNIEnv *env, jclass self, jlong cursor) {
   return (jint) ts_query_cursor_match_limit((TSQueryCursor *) cursor);
 }
 
-static void TSQueryCursor_setByteRange(JNIEnv *env,
+static jboolean TSQueryCursor_setByteRange(JNIEnv *env,
                                        jclass self,
                                        jlong cursor,
                                        jint start,
                                        jint end) {
   req_nnp(env, cursor);
-  ts_query_cursor_set_byte_range((TSQueryCursor *) cursor, start, end);
+  // 0.27 的 ts_query_cursor_set_byte_range 返回 bool，表示范围是否合法
+  return (jboolean) ts_query_cursor_set_byte_range((TSQueryCursor *) cursor,
+                                                    (uint32_t) start,
+                                                    (uint32_t) end);
 }
 
-static void TSQueryCursor_setPointRange(JNIEnv *env,
+static jboolean TSQueryCursor_setPointRange(JNIEnv *env,
                                         jclass self,
                                         jlong cursor,
                                         jobject start,
                                         jobject end) {
   req_nnp(env, cursor);
-  ts_query_cursor_set_point_range((TSQueryCursor *) cursor,
-                                  _unmarshalPoint(env, start),
-                                  _unmarshalPoint(env, end));
+  // 0.27 的 ts_query_cursor_set_point_range 返回 bool，表示范围是否合法
+  return (jboolean) ts_query_cursor_set_point_range((TSQueryCursor *) cursor,
+                                                     _unmarshalPoint(env, start),
+                                                     _unmarshalPoint(env, end));
 }
 
 static jobject TSQueryCursor_nextMatch(JNIEnv *env, jclass self, jlong cursor) {
