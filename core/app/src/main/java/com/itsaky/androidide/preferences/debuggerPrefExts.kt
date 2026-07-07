@@ -51,7 +51,10 @@ private class DebuggerConnectionTypeChoice(
 
   override fun getEntries(preference: Preference): Array<PreferenceChoices.Entry> {
     val current = DebugConnectionPreferences.activeType
+    // ALL 列表初始化存在竞态 (见 ConnectionType.fromId 注释),
+    // filterNotNull 防御 it 为 null 导致的 NPE
     return ConnectionType.ALL
+        .filterNotNull()
         .map { type ->
           PreferenceChoices.Entry(
               label = type.displayName,
