@@ -27,6 +27,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -34,26 +35,41 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Opacity
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RotateRight
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -69,12 +85,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import coil3.ImageLoader
+import coil3.decode.BitmapFactoryDecoder
+import coil3.decode.ImageDecoderDecoder
+import coil3.gif.GifDecoder
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.svg.SvgDecoder
 import com.itsaky.androidide.file.FileValidator
 import com.itsaky.androidide.file.MimeTypeConstants
 import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
+import com.itsaky.androidide.onboarding.effects.frostedGlass
+import com.itsaky.androidide.ui.SymbolInputVisibilityManager
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -182,12 +203,66 @@ class ImagePreviewFragment : Fragment() {
             }
         }
     }
+
+    // === Bug 5.1: 进入图片预览时隐藏符号输入控件, 退出时恢复 ===
+    // 图片预览 fragment 底部原本会被 AdvancedSymbolInputView 遮挡, 这里在
+    // 可见性变化时通过 SymbolInputVisibilityManager 把符号输入控件 + header
+    // 状态栏 + 分隔线全部 GONE, 只保留 EdgeSnapBubbleView 在屏幕可见区域.
+    // 上滑气泡时 EditorBottomSheet.drawerDragListener 会调用 showFromPreview() 恢复.
+
+    override fun onResume() {
+        super.onResume()
+        SymbolInputVisibilityManager.hideForPreview()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SymbolInputVisibilityManager.showFromPreview()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (hidden) {
+            SymbolInputVisibilityManager.showFromPreview()
+        } else {
+            SymbolInputVisibilityManager.hideForPreview()
+        }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        SymbolInputVisibilityManager.showFromPreview()
+    }
 }
 
 // region 顶层 Composable
 
+/** 预览背景模式. */
+private enum class BackgroundMode(val label: String) {
+    CHECKER("Checker"),
+    WHITE("White"),
+    BLACK("Black"),
+    GRAY("Gray");
+
+    fun next(): BackgroundMode = when (this) {
+        CHECKER -> WHITE
+        WHITE -> BLACK
+        BLACK -> GRAY
+        GRAY -> CHECKER
+    }
+}
+
+/** 画布适应模式 (映射到 Compose [ContentScale]). */
+private enum class FitMode(val label: String, val contentScale: ContentScale) {
+    FIT("Fit", ContentScale.Fit),
+    FILL("Fill", ContentScale.FillBounds),
+    CROP("Crop", ContentScale.Crop),
+    NONE("None", ContentScale.None),
+}
+
 /**
- * 顶层 Compose 屏 —— 异步读图 + 缩放/平移 + 错误/加载状态.
+ * 顶层 Compose 屏 —— 异步读图 + 缩放/平移 + 错误/加载状态 + 工具栏
+ * (背景色切换 / 透明度滑块 / 文件信息 / Canvas 帆布设置).
  */
 @Composable
 private fun ImagePreviewScreen(filePath: String?) {
@@ -212,18 +287,81 @@ private fun ImagePreviewScreen(filePath: String?) {
         )
     }
 
+    // === 工具栏状态 ===
+    var backgroundMode by remember { mutableStateOf(BackgroundMode.CHECKER) }
+    var opacity by remember { mutableFloatStateOf(1f) }
+    var rotation by remember { mutableFloatStateOf(0f) }
+    var fitMode by remember { mutableStateOf(FitMode.FIT) }
+    var showInfo by remember { mutableStateOf(false) }
+    var showCanvas by remember { mutableStateOf(false) }
+    var showOpacity by remember { mutableStateOf(false) }
+
+    fun closeAllPanels() {
+        showInfo = false
+        showCanvas = false
+        showOpacity = false
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E))) {
-        TopStatusBar(file = file, state = state)
+        TopToolbar(
+            file = file,
+            state = state,
+            backgroundMode = backgroundMode,
+            onCycleBackground = { backgroundMode = backgroundMode.next() },
+            onToggleOpacity = {
+                val wasOpen = showOpacity
+                closeAllPanels()
+                showOpacity = !wasOpen
+            },
+            onToggleInfo = {
+                val wasOpen = showInfo
+                closeAllPanels()
+                showInfo = !wasOpen
+            },
+            onToggleCanvas = {
+                val wasOpen = showCanvas
+                closeAllPanels()
+                showCanvas = !wasOpen
+            },
+        )
         Box(
-            modifier = Modifier.fillMaxSize().background(Color(0xFF121212)),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
+            // 1. 背景层 (白/黑/灰/透明棋盘)
+            PreviewBackground(backgroundMode, Modifier.fillMaxSize())
+            // 2. 图片层
             when (val s = state) {
                 ImageUiState.Loading -> CircularProgressIndicator(color = Color.White)
                 is ImageUiState.Error -> ErrorState(message = s.message)
                 is ImageUiState.Loaded -> ZoomableImage(
                     bitmap = s.bitmap,
+                    alpha = opacity,
+                    rotation = rotation,
+                    fitMode = fitMode,
                     modifier = Modifier.fillMaxSize(),
+                )
+            }
+            // 3. 浮动设置面板 (frosted glass 风格)
+            if (showOpacity) {
+                OpacitySliderPanel(
+                    opacity = opacity,
+                    onOpacityChange = { opacity = it },
+                )
+            }
+            if (showInfo) {
+                FileInfoPanel(file = file, state = state)
+            }
+            if (showCanvas) {
+                CanvasSettingsPanel(
+                    rotation = rotation,
+                    onRotationChange = { rotation = it },
+                    fitMode = fitMode,
+                    onFitModeChange = { fitMode = it },
+                    onReset = {
+                        rotation = 0f
+                        fitMode = FitMode.FIT
+                    },
                 )
             }
         }
@@ -231,42 +369,117 @@ private fun ImagePreviewScreen(filePath: String?) {
 }
 
 /**
- * 顶部状态条 —— 文件名 / 大小 / 尺寸 / mime.
+ * 顶部工具栏 —— 文件名 / 大小 + 工具按钮 (背景色 / 透明度 / 文件信息 / Canvas).
  */
 @Composable
-private fun TopStatusBar(file: File, state: ImageUiState) {
+private fun TopToolbar(
+    file: File,
+    state: ImageUiState,
+    backgroundMode: BackgroundMode,
+    onCycleBackground: () -> Unit,
+    onToggleOpacity: () -> Unit,
+    onToggleInfo: () -> Unit,
+    onToggleCanvas: () -> Unit,
+) {
     val sizeText = remember(file) { humanReadableSize(file.length()) }
-    val dimensionText = when (val s = state) {
-        is ImageUiState.Loaded -> "${s.bitmap.width} x ${s.bitmap.height}"
-        else -> "—"
-    }
-    val mimeText = when (state) {
-        is ImageUiState.Loaded -> (state as ImageUiState.Loaded).mime
-        else -> guessMimeByExt(file)
-    }
     Surface(
         color = Color(0xFF252526),
         contentColor = Color(0xFFCCCCCC),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(
+        androidx.compose.foundation.layout.Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = file.name,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = Color(0xFFEEEEEE),
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = "$sizeText   |   $dimensionText   |   $mimeText",
-                fontSize = 11.sp,
-                color = Color(0xFF9CDCFE),
-                fontFamily = FontFamily.Monospace,
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = file.name,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = Color(0xFFEEEEEE),
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = sizeText,
+                    fontSize = 11.sp,
+                    color = Color(0xFF9CDCFE),
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            IconButton(onClick = onCycleBackground) {
+                Icon(
+                    imageVector = Icons.Outlined.Palette,
+                    contentDescription = "Background: ${backgroundMode.label}",
+                    tint = Color(0xFFCCCCCC),
+                )
+            }
+            IconButton(onClick = onToggleOpacity) {
+                Icon(
+                    imageVector = Icons.Outlined.Opacity,
+                    contentDescription = "Opacity",
+                    tint = Color(0xFFCCCCCC),
+                )
+            }
+            IconButton(onClick = onToggleInfo) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = "File info",
+                    tint = Color(0xFFCCCCCC),
+                )
+            }
+            IconButton(onClick = onToggleCanvas) {
+                Icon(
+                    imageVector = Icons.Outlined.Tune,
+                    contentDescription = "Canvas settings",
+                    tint = Color(0xFFCCCCCC),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 预览背景层. CHECKER 模式绘制透明棋盘, 其余纯色填充.
+ */
+@Composable
+private fun PreviewBackground(mode: BackgroundMode, modifier: Modifier = Modifier) {
+    when (mode) {
+        BackgroundMode.CHECKER -> CheckerboardBackground(modifier)
+        BackgroundMode.WHITE -> Box(modifier.background(Color.White))
+        BackgroundMode.BLACK -> Box(modifier.background(Color.Black))
+        BackgroundMode.GRAY -> Box(modifier.background(Color(0xFF808080)))
+    }
+}
+
+/**
+ * 透明棋盘背景 —— 8x8 dp 交替灰白格子, 用于检视带 alpha 通道的图片.
+ */
+@Composable
+private fun CheckerboardBackground(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cell = 16.dp.toPx()
+        val w = size.width
+        val h = size.height
+        var y = 0f
+        var row = 0
+        while (y < h) {
+            var x = 0f
+            var col = 0
+            while (x < w) {
+                if ((row + col) % 2 == 0) {
+                    drawRect(
+                        color = Color(0xFFE0E0E0),
+                        topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                        size = androidx.compose.ui.geometry.Size(cell, cell),
+                    )
+                }
+                x += cell
+                col++
+            }
+            y += cell
+            row++
         }
     }
 }
@@ -299,16 +512,20 @@ private fun ErrorState(message: String) {
 }
 
 /**
- * 缩放 + 平移的图片视图.
+ * 缩放 + 平移 + 旋转的图片视图.
  *
  * - 双指捏合: 缩放 (0.1x ~ 10x).
  * - 单指拖动: 平移.
  * - 双击: 还原 (scale=1, offset=0).
+ * - [alpha] / [rotation] / [fitMode] 由顶部工具栏面板控制.
  */
 @Composable
 private fun ZoomableImage(
     bitmap: Bitmap,
     modifier: Modifier = Modifier,
+    alpha: Float = 1f,
+    rotation: Float = 0f,
+    fitMode: FitMode = FitMode.FIT,
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -337,17 +554,229 @@ private fun ZoomableImage(
         Image(
             painter = BitmapPainter(bitmap.asImageBitmap()),
             contentDescription = null,
-            contentScale = ContentScale.Fit,
+            contentScale = fitMode.contentScale,
+            alpha = alpha,
             modifier = Modifier
                 .graphicsLayer(
                     scaleX = scale,
                     scaleY = scale,
                     translationX = offsetX,
                     translationY = offsetY,
+                    rotationZ = rotation,
                 ),
         )
     }
 }
+
+// region 浮动设置面板 (FrostedGlass 风格)
+
+/**
+ * 透明度滑块面板 —— 0% ~ 100%, 浮于顶部居中.
+ */
+@Composable
+private fun OpacitySliderPanel(
+    opacity: Float,
+    onOpacityChange: (Float) -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(9.dp)
+                .width(280.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .frostedGlass(
+                    shape = RoundedCornerShape(16.dp),
+                    tint = Color(0xFF2D2D30),
+                    alpha = 0.85f,
+                )
+                .padding(9.dp),
+        ) {
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.Opacity,
+                    contentDescription = null,
+                    tint = Color(0xFFCCCCCC),
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Opacity",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "${(opacity * 100).toInt()}%",
+                    color = Color(0xFF9CDCFE),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            Slider(
+                value = opacity,
+                onValueChange = onOpacityChange,
+                valueRange = 0f..1f,
+            )
+        }
+    }
+}
+
+/**
+ * 文件信息面板 —— 名称 / 大小 / 尺寸 / MIME / 路径, 浮于右上.
+ */
+@Composable
+private fun FileInfoPanel(file: File, state: ImageUiState) {
+    val sizeText = remember(file) { humanReadableSize(file.length()) }
+    val dimensionText = when (val s = state) {
+        is ImageUiState.Loaded -> "${s.bitmap.width} × ${s.bitmap.height} px"
+        else -> "—"
+    }
+    val mimeText = when (state) {
+        is ImageUiState.Loaded -> (state as ImageUiState.Loaded).mime
+        else -> guessMimeByExt(file)
+    }
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(9.dp)
+                .width(300.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .frostedGlass(
+                    shape = RoundedCornerShape(16.dp),
+                    tint = Color(0xFF2D2D30),
+                    alpha = 0.85f,
+                )
+                .padding(9.dp),
+        ) {
+            InfoRow(label = "Name", value = file.name)
+            InfoRow(label = "Size", value = sizeText)
+            InfoRow(label = "Dimensions", value = dimensionText)
+            InfoRow(label = "MIME", value = mimeText)
+            InfoRow(label = "Path", value = file.absolutePath)
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+    ) {
+        Text(
+            text = label,
+            color = Color(0xFF9CDCFE),
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.width(80.dp),
+        )
+        Text(
+            text = value,
+            color = Color(0xFFEEEEEE),
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * Canvas 帆布设置面板 —— 旋转角度 (0°~360°) + 适应模式 + 重置, 浮于右上.
+ */
+@Composable
+private fun CanvasSettingsPanel(
+    rotation: Float,
+    onRotationChange: (Float) -> Unit,
+    fitMode: FitMode,
+    onFitModeChange: (FitMode) -> Unit,
+    onReset: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(9.dp)
+                .width(300.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .frostedGlass(
+                    shape = RoundedCornerShape(16.dp),
+                    tint = Color(0xFF2D2D30),
+                    alpha = 0.85f,
+                )
+                .padding(9.dp),
+        ) {
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.RotateRight,
+                    contentDescription = null,
+                    tint = Color(0xFFCCCCCC),
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Rotation",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "${rotation.toInt()}°",
+                    color = Color(0xFF9CDCFE),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            Slider(
+                value = rotation,
+                onValueChange = onRotationChange,
+                valueRange = 0f..360f,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Fit Mode",
+                color = Color.White,
+                fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(4.dp))
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FitMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = fitMode == mode,
+                        onClick = { onFitModeChange(mode) },
+                        label = { Text(mode.label, fontSize = 11.sp) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(3.dp))
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(onClick = onReset) {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = "Reset",
+                        tint = Color(0xFFCCCCCC),
+                    )
+                }
+            }
+        }
+    }
+}
+
+// endregion
 
 // endregion
 
@@ -484,10 +913,25 @@ private suspend fun decodeSvg(ctx: Context, file: File): LoadedImage {
  * 解码位图 (PNG / JPG / WebP / GIF / HEIC / BMP / AVIF / ICO / TIFF ...) ——
  * 走 Coil 3.x 默认 decoder, 异步在 IO 线程. 解码得到 [Drawable] 后渲染到
  * [Bitmap].
+ *
+ * **关键**: 必须显式注册 [ImageDecoderDecoder] / [BitmapFactoryDecoder] /
+ * [GifDecoder], 不能依赖 ServiceLoader 自动发现 —— Android 模块在某些
+ * 打包配置下 (R8 / 资源合并 / META-INF services 被裁剪) ServiceLoader
+ * 会丢, 导致 PNG / JPG 等位图解码直接返回 ErrorResult, 表现为"无法预览".
+ * 这与 [decodeSvg] 显式注册 [SvgDecoder] 的防御性做法一致.
  */
 private suspend fun decodeRaster(ctx: Context, file: File): LoadedImage {
     val mime = guessMimeByExt(file)
-    val loader = ImageLoader.Builder(ctx).build()
+    val loader = ImageLoader.Builder(ctx)
+        .components {
+            // API 28+ 优先用 ImageDecoder (支持 HEIC / AVIF / 动图);
+            // 低版本 fallback 到 BitmapFactoryDecoder.
+            add(ImageDecoderDecoder.Factory())
+            add(BitmapFactoryDecoder.Factory())
+            // GIF 动图 —— 仅渲染首帧到位图 (drawableToBitmap 静态渲染).
+            add(GifDecoder.Factory())
+        }
+        .build()
     val req = ImageRequest.Builder(ctx)
         .data(file)
         .build()
@@ -505,15 +949,19 @@ private suspend fun decodeRaster(ctx: Context, file: File): LoadedImage {
  * 平台上的实现是 `coil3.android.AndroidImage`, 暴露一个 `drawable: Drawable`
  * 属性. 反射拿不到时 fallback 到 `Bitmap` 字段.
  *
- * 之所以不用 reflection-only 的 asImageBitmap: 反射对 Coil 内部类的字段名敏感
- * (不同 Coil 版本字段可能改名), 用 try-catch 包裹后实际能稳定工作的就是
- * `drawable` 字段.
+ * 优先走 `AndroidImage` 类型检查 (public API, 不受混淆 / 字段改名影响),
+ * 反射仅作为对未知 [coil3.Image] 实现的兜底.
  */
 private fun coilImageToDrawable(
     result: SuccessResult,
     ctx: Context,
 ): Drawable {
     val image = result.image
+    // 快速路径: Coil 3.x 在 Android 上的标准实现.
+    if (image is coil3.android.AndroidImage) {
+        return image.drawable
+    }
+    // 兜底: 对未知 Image 实现反射取 Drawable / Bitmap 字段.
     val cls = image::class.java
     for (f in cls.declaredFields) {
         f.isAccessible = true

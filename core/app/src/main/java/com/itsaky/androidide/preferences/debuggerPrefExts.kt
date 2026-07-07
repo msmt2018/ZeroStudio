@@ -9,11 +9,13 @@
 package com.itsaky.androidide.preferences
 
 import android.content.Context
+import androidx.fragment.app.FragmentActivity
 import androidx.preference.Preference
 import com.itsaky.androidide.R
 import com.itsaky.androidide.debugger.connection.ConnectionType
 import com.itsaky.androidide.debugger.connection.DebugConnectionPreferences
 import com.itsaky.androidide.debugger.connection.ShizukuConfig
+import com.itsaky.androidide.fragments.shizuku.ShizukuManagerFragment
 import kotlinx.parcelize.Parcelize
 
 /**
@@ -130,7 +132,38 @@ private class ShizukuOptionsGroup(
     override val children: List<IPreference> = mutableListOf(),
 ) : IPreferenceGroup() {
   init {
+    addPreference(ShizukuManagerEntry())
     addPreference(ShizukuSubPathChoice())
+  }
+}
+
+/**
+ * 「打开 Shizuku 管理器」入口: 点击后在 IDE 内打开
+ * [ShizukuManagerFragment], 显示状态 / 启动 / 授权 / 无线配对。
+ */
+@Parcelize
+private class ShizukuManagerEntry(
+    override val key: String = "idepref_debugger_shizuku_manager",
+    override val title: Int = R.string.idepref_debugger_shizuku_manager_title,
+    override val summary: Int? = R.string.idepref_debugger_shizuku_manager_summary,
+) : SimplePreference() {
+
+  override fun onPreferenceClick(preference: Preference): Boolean {
+    val ctx = preference.context
+    val activity = ctx as? FragmentActivity ?: return false
+    // 用 PreferencesActivity 布局里的 fragmentContainer, 保留 toolbar + 返回键导航
+    activity.supportFragmentManager
+        .beginTransaction()
+        .setCustomAnimations(
+            android.R.anim.fade_in,
+            android.R.anim.fade_out,
+            android.R.anim.fade_in,
+            android.R.anim.fade_out,
+        )
+        .replace(R.id.fragmentContainer, ShizukuManagerFragment())
+        .addToBackStack("shizuku_manager")
+        .commit()
+    return true
   }
 }
 

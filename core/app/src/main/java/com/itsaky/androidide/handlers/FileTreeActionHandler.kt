@@ -95,11 +95,16 @@ class FileTreeActionHandler : BaseEventHandler() {
     }
 
     // === 图片预览路由 ===
-    // 文件后缀命中 ImagePreviewFragment.SUPPORTED_FORMATS 时, 直接在 IDE
+    // 文件后缀命中 ImagePreviewFragment.RASTER_DECODER_FORMATS (PNG / JPG /
+    // WebP / GIF / HEIC / BMP / AVIF / ICO / TIFF 等位图) 时, 直接在 IDE
     // 内的 Image Preview tab 里打开, 不再走系统 Intent.ACTION_VIEW 调外部
-    // viewer (老逻辑会把用户切出 IDE). `.xml` 文件需要做 content sniff:
-    // layout / manifest / values 等 .xml 都不是 vector, 走 content 头 1KB
-    // 包含 "<vector" 才算 Android vector drawable, 避免误判.
+    // viewer (老逻辑会把用户切出 IDE).
+    //
+    // 注意: SVG / SVGZ / XML 矢量图 *不* 在这里直接打开预览 —— 它们先以
+    // 文本编辑器打开 (方便编辑源码), 用户需要预览渲染效果时通过编辑器
+    // 工具栏的 "Render As Image" action (ImagePreviewAction) 转换到
+    // ImagePreviewFragment tab. 这与 PreviewLayoutAction (布局 XML 先
+    // 编辑后预览) 的交互模式一致.
     if (isSupportedImageFile(event.file)) {
       val ext = event.file.extension.lowercase()
       val tabId = context.fragmentTabManager?.openFileTab(
@@ -166,16 +171,17 @@ class FileTreeActionHandler : BaseEventHandler() {
   }
 
   /**
-   * 判断给定文件是否应该走 [ImagePreviewFragment]. 规则:
-   *  - 扩展名在 [ImagePreviewFragment.SUPPORTED_FORMATS] 中
-   *  - 对 `.xml` 还要做 [FileValidator.isLikelyAndroidVector] content sniff,
-   *    排除 layout / manifest / values 等非 vector xml.
+   * 判断给定文件是否应该直接走 [ImagePreviewFragment] 预览 (而非文本编辑器).
+   *
+   * 规则: 仅位图格式 ([ImagePreviewFragment.RASTER_DECODER_FORMATS]) 直接
+   * 预览. SVG / SVGZ / Android XML vector 不在此列 —— 它们先以文本编辑器
+   * 打开, 用户通过 [com.itsaky.androidide.actions.etc.ImagePreviewAction]
+   * ("渲染为图像") 再切换到预览 tab.
    */
   private fun isSupportedImageFile(file: File): Boolean {
     val ext = file.extension.lowercase()
-    if (ext.isEmpty() || ext !in ImagePreviewFragment.SUPPORTED_FORMATS) return false
-    if (ext == "xml") return FileValidator.isLikelyAndroidVector(file)
-    return true
+    if (ext.isEmpty()) return false
+    return ext in ImagePreviewFragment.RASTER_DECODER_FORMATS
   }
 
   /** 判断给定文件是否应该走 [AudioPreviewFragment] (仅扩展名匹配). */

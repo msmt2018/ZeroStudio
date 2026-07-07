@@ -113,31 +113,33 @@ public class BreakpointTypePickerDialog extends DialogFragment {
         }
         if (file == null) file = "";
 
-        // 全屏透明 Dialog,内部用 frosted_glass 背景
+        // 透明 Dialog, 内部用 frosted_glass 背景。
+        // 关键修复 (Phase 24 bug): 窗口高度改为 WRAP_CONTENT, 避免覆盖整个编辑器;
+        // 移除 FLAG_BLUR_BEHIND (旧系统会触发全屏模糊), 改用 setDimAmount 即可。
         Dialog dialog = new Dialog(requireContext());
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         Window w = dialog.getWindow();
         if (w != null) {
             w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            // 宽度 MATCH_PARENT 让内部 LinearLayout 的 maxWidth 生效; 高度 WRAP_CONTENT
+            // 避免占满整屏
             w.setLayout(
                     WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT);
-            // 关键: BLUR_BEHIND 标志 (API 31+) 让系统对 Dialog 背后做高斯模糊
-            try {
-                w.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-            } catch (Throwable ignored) {
-                // 旧系统上没这个 flag
-            }
-            // 关闭默认 dim (毛玻璃自己来)
-            w.setDimAmount(0.35f);
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            // 用 dim 替代 blur, 避免 FLAG_BLUR_BEHIND 在某些系统上把整个窗口涂白
+            w.setDimAmount(0.5f);
             w.setGravity(Gravity.CENTER);
         }
         dialog.setCanceledOnTouchOutside(true);
 
-        // 加载布局
+        // 加载布局 — 用 contentView LayoutParams 强制宽度 MATCH_PARENT,
+        // 否则 inflate(null) 会让根 FrameLayout 退化为 WRAP_CONTENT,
+        // 进而导致内部 LinearLayout 中 weight=1 的文字列塌缩成 0 (只剩图标可见)。
         LayoutInflater inflater = LayoutInflater.from(requireContext());
         View root = inflater.inflate(R.layout.dialog_breakpoint_type_picker, null, false);
-        dialog.setContentView(root);
+        dialog.setContentView(root, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
         populate(root);
         return dialog;
     }

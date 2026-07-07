@@ -308,6 +308,8 @@
      <string name="idepref_debugger_aidl_listen_port_title">AIDL listen port (0 = random)</string>
      <string name="idepref_debugger_shizuku_sub_path_title">Shizuku sub-path</string>
      <string name="idepref_debugger_shizuku_sub_path_summary">Auto picks the first working strategy. Lock to one only for advanced use.</string>
+     <string name="idepref_debugger_shizuku_manager_title">打开 Shizuku 管理器</string>
+     <string name="idepref_debugger_shizuku_manager_summary">查看 Shizuku 状态, 启动 server, 授权 IDE, 配对无线 ADB 调试。</string>
      <string name="idepref_debugger_root_su_bin_title">su binary path</string>
      <string name="idepref_debugger_innet_socks_host_title">SOCKS5 host</string>
      <string name="idepref_debugger_innet_socks_port_title">SOCKS5 port</string>

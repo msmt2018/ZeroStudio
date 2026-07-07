@@ -118,6 +118,29 @@ class AdvancedSymbolInputView @JvmOverloads constructor(
     }
 
     /**
+     * 预览场景下隐藏符号输入控件 (推到屏幕外), 保留 EdgeSnapBubbleView 可见。
+     *
+     * 通过设置 visibility = GONE 让 floating_header_area 收缩, BottomSheet
+     * peekHeight 随之减小, 预览 fragment 底部不再被符号栏遮挡。
+     * 由 [com.itsaky.androidide.ui.SymbolInputVisibilityManager] 在进入预览
+     * fragment 时调用。
+     */
+    fun hideForPreview() {
+        if (visibility == GONE) return
+        heightAnimator?.cancel()
+        visibility = GONE
+    }
+
+    /**
+     * 从预览隐藏状态恢复符号输入控件到屏幕可见区域正常位置。
+     */
+    fun showFromPreview() {
+        if (visibility == VISIBLE) return
+        visibility = VISIBLE
+        requestLayout()
+    }
+
+    /**
      * 重新加载分组与样式配置，并刷新分页与指示器。
      */
     fun refreshData() {

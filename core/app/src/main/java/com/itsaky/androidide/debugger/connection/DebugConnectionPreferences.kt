@@ -75,7 +75,7 @@ object DebugConnectionPreferences {
      * 保证从旧版本升级上来的用户不会回到默认 AIDL socket。
      */
     var activeType: ConnectionType
-        get() = ConnectionType.fromIdCompat(prefManager.getString(ACTIVE_TYPE, null))
+        get() = ConnectionType.fromIdCompat(prefManager.getString(ACTIVE_TYPE, ConnectionType.AidlSocket.id))
         set(value) { prefManager.putString(ACTIVE_TYPE, value.id) }
 
     var autoRetry: Boolean

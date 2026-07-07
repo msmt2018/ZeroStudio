@@ -574,6 +574,9 @@ class EditorBottomSheet @JvmOverloads constructor(
   private val drawerTouchSlopPx by lazy {
       ViewConfiguration.get(context).scaledTouchSlop
   }
+  // Bug 5.1: 预览隐藏态下, 标记本次手势序列是否已经触发过上滑恢复符号输入控件,
+  // 防止 showFromPreview() 在同一手势里被多次调用.
+  private var previewSwipeRestoreConsumed = false
 
   /**
    * 抽屉拖拽监听器, 挂在顶部手势气泡上.
@@ -614,6 +617,9 @@ class EditorBottomSheet @JvmOverloads constructor(
               drawerDragInitialSheetTop = top
               drawerDragInitialTranslationY = translationY
               drawerDragActive = false
+              // Bug 5.1: 预览隐藏态下, 标记本次手势是否已经触发"上滑恢复符号输入控件".
+              // 用于保证 showFromPreview() 只调用一次, 后续 MOVE 继续走正常抽屉拖拽.
+              previewSwipeRestoreConsumed = false
               // requestDisallowInterceptTouchEvent 是 ViewParent 的方法, 不是 View 的.
               // 调用 v.parent 才能阻断 CoordinatorLayout/BottomSheetBehavior 的拦截.
               v.parent?.requestDisallowInterceptTouchEvent(true)
@@ -622,6 +628,40 @@ class EditorBottomSheet @JvmOverloads constructor(
           }
           MotionEvent.ACTION_MOVE -> {
               val deltaY = event.rawY - drawerDragInitialY
+
+              // === Bug 5.1: 预览隐藏态下的手势分流 ===
+              // 进入图片/Markdown 预览 fragment 时, SymbolInputVisibilityManager 已经
+              // 把符号输入控件 (以及 header_content_wrapper / header_divider) 隐藏,
+              // 屏幕只剩 EdgeSnapBubbleView 可见. 此时手势分两种:
+              //   1. 上滑 (deltaY < -touchSlop) -> 恢复符号输入控件到正常可见位置,
+              //      然后继续走正常抽屉拖拽, 让用户能顺势把抽屉拉起来.
+              //   2. 下滑 (deltaY > touchSlop)  -> 保持屏外 (默认位置), 消费事件
+              //      不让抽屉被进一步拉低 (本来就已经 COLLAPSED, 再拉没意义且会
+              //      让气泡脱离手指产生视觉错位).
+              if (SymbolInputVisibilityManager.previewHidden) {
+                  if (deltaY < -drawerTouchSlopPx) {
+                      // 上滑: 恢复符号输入控件. 只触发一次, 之后允许正常拖拽.
+                      if (!previewSwipeRestoreConsumed) {
+                          previewSwipeRestoreConsumed = true
+                          SymbolInputVisibilityManager.showFromPreview()
+                          // 恢复后, drawerDragInitialSheetTop 仍然是按下时的 top,
+                          // 但 peekHeight 已经因为符号栏重新可见而变大, 抽屉视觉
+                          // 位置会由 BottomSheetBehavior 下一帧重新对齐. 这里直接
+                          // 让本次手势结束, 不再继续 translationY 拖拽, 避免和
+                          // onLayoutChild 的重新定位打架产生跳变.
+                          v.parent?.requestDisallowInterceptTouchEvent(false)
+                          drawerDragActive = false
+                          return@OnTouchListener true
+                      }
+                  } else if (deltaY > drawerTouchSlopPx) {
+                      // 下滑: 保持屏外, 消费事件不让抽屉被拖动.
+                      return@OnTouchListener true
+                  }
+                  // 未越过 touchSlop 时也不消费, 让气泡自己处理点击.
+                  return@OnTouchListener false
+              }
+              // === 预览隐藏态分支结束 ===
+
               if (!drawerDragActive && kotlin.math.abs(deltaY) > drawerTouchSlopPx) {
                   drawerDragActive = true
                   // 不再设 behavior.state = STATE_DRAGGING (会被 BottomSheetBehavior
