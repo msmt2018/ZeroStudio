@@ -92,7 +92,7 @@ public final class BreakpointTypePicker {
                             (entry, f, l, x2, y2) -> {
                                 // BreakpointTypePickerDialog 内部已经走 BreakpointDetailDialog
                                 // (Phase 22). 这里只做日志,实际添加由 dialog 完成。
-                                ILogger.debug(TAG, "Forwarded to BreakpointTypePickerDialog: " + entry);
+                                ILogger.ROOT.debug(TAG + ": Forwarded to BreakpointTypePickerDialog: " + entry);
                             });
                 }
             } else {

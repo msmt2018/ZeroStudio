@@ -33,7 +33,10 @@ import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
 import com.itsaky.androidide.events.FileContextMenuItemClickEvent
 import com.itsaky.androidide.events.ListProjectFilesRequestEvent
 import com.itsaky.androidide.file.FileValidator
+import com.itsaky.androidide.fragments.editor.audio.AudioPreviewFragment
 import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
+import com.itsaky.androidide.fragments.editor.video.VideoPreviewFragment
+import com.itsaky.androidide.fragments.editor.web.WebPreviewFragment
 import com.itsaky.androidide.fragments.sheets.OptionsListFragment
 import com.itsaky.androidide.models.SheetOption
 import com.itsaky.androidide.utils.ApkInstaller
@@ -92,11 +95,16 @@ class FileTreeActionHandler : BaseEventHandler() {
     }
 
     // === 图片预览路由 ===
-    // 文件后缀命中 ImagePreviewFragment.SUPPORTED_FORMATS 时, 直接在 IDE
+    // 文件后缀命中 ImagePreviewFragment.RASTER_DECODER_FORMATS (PNG / JPG /
+    // WebP / GIF / HEIC / BMP / AVIF / ICO / TIFF 等位图) 时, 直接在 IDE
     // 内的 Image Preview tab 里打开, 不再走系统 Intent.ACTION_VIEW 调外部
-    // viewer (老逻辑会把用户切出 IDE). `.xml` 文件需要做 content sniff:
-    // layout / manifest / values 等 .xml 都不是 vector, 走 content 头 1KB
-    // 包含 "<vector" 才算 Android vector drawable, 避免误判.
+    // viewer (老逻辑会把用户切出 IDE).
+    //
+    // 注意: SVG / SVGZ / XML 矢量图 *不* 在这里直接打开预览 —— 它们先以
+    // 文本编辑器打开 (方便编辑源码), 用户需要预览渲染效果时通过编辑器
+    // 工具栏的 "Render As Image" action (ImagePreviewAction) 转换到
+    // ImagePreviewFragment tab. 这与 PreviewLayoutAction (布局 XML 先
+    // 编辑后预览) 的交互模式一致.
     if (isSupportedImageFile(event.file)) {
       val ext = event.file.extension.lowercase()
       val tabId = context.fragmentTabManager?.openFileTab(
@@ -110,20 +118,88 @@ class FileTreeActionHandler : BaseEventHandler() {
       // tab 没注册 (理论不会, 走不到这里) → fall through 到普通 openFile
     }
 
+    // === 音频预览路由 ===
+    // 文件后缀命中 AudioPreviewFragment.SUPPORTED_EXTENSIONS (mp3 / wav / ogg /
+    // flac / aac / m4a / opus / mid / midi / amr / pcm / aiff / ape / wma) 时,
+    // 直接在 IDE 内的 Audio Preview tab 里打开.
+    if (isSupportedAudioFile(event.file)) {
+      val ext = event.file.extension.lowercase()
+      val tabId = context.fragmentTabManager?.openFileTab(
+        filePath = event.file.absolutePath,
+        fileExtension = ext,
+      )
+      if (tabId != null) {
+        log.info("Opened audio preview tab {} for {}", tabId, event.file)
+        return
+      }
+    }
+
+    // === 视频预览路由 ===
+    // 文件后缀命中 VideoPreviewFragment.SUPPORTED_EXTENSIONS (mp4 / mkv / webm /
+    // avi / mov / 3gp / mpg / mpeg / ts / m2ts / flv / wmv / m4v / vob / ogv) 时,
+    // 直接在 IDE 内的 Video Preview tab 里打开.
+    if (isSupportedVideoFile(event.file)) {
+      val ext = event.file.extension.lowercase()
+      val tabId = context.fragmentTabManager?.openFileTab(
+        filePath = event.file.absolutePath,
+        fileExtension = ext,
+      )
+      if (tabId != null) {
+        log.info("Opened video preview tab {} for {}", tabId, event.file)
+        return
+      }
+    }
+
+    // === Web 预览路由 ===
+    // 文件后缀命中 WebPreviewFragment.SUPPORTED_EXTENSIONS (html / htm) 时,
+    // 直接在 IDE 内的 Web Preview tab 里打开. 其他 web 场景 (Vue/React 构建
+    // 产物 / dev server / Node.js 后端) 由用户在 Web Preview 工具栏内手动输入
+    // URL 或启动后端控制栏进入, 不走文件扩展名匹配.
+    if (isSupportedWebFile(event.file)) {
+      val ext = event.file.extension.lowercase()
+      val tabId = context.fragmentTabManager?.openFileTab(
+        filePath = event.file.absolutePath,
+        fileExtension = ext,
+      )
+      if (tabId != null) {
+        log.info("Opened web preview tab {} for {}", tabId, event.file)
+        return
+      }
+    }
+
     context.openFile(event.file)
   }
 
   /**
-   * 判断给定文件是否应该走 [ImagePreviewFragment]. 规则:
-   *  - 扩展名在 [ImagePreviewFragment.SUPPORTED_FORMATS] 中
-   *  - 对 `.xml` 还要做 [FileValidator.isLikelyAndroidVector] content sniff,
-   *    排除 layout / manifest / values 等非 vector xml.
+   * 判断给定文件是否应该直接走 [ImagePreviewFragment] 预览 (而非文本编辑器).
+   *
+   * 规则: 仅位图格式 ([ImagePreviewFragment.RASTER_DECODER_FORMATS]) 直接
+   * 预览. SVG / SVGZ / Android XML vector 不在此列 —— 它们先以文本编辑器
+   * 打开, 用户通过 [com.itsaky.androidide.actions.etc.ImagePreviewAction]
+   * ("渲染为图像") 再切换到预览 tab.
    */
   private fun isSupportedImageFile(file: File): Boolean {
     val ext = file.extension.lowercase()
-    if (ext.isEmpty() || ext !in ImagePreviewFragment.SUPPORTED_FORMATS) return false
-    if (ext == "xml") return FileValidator.isLikelyAndroidVector(file)
-    return true
+    if (ext.isEmpty()) return false
+    return ext in ImagePreviewFragment.RASTER_DECODER_FORMATS
+  }
+
+  /** 判断给定文件是否应该走 [AudioPreviewFragment] (仅扩展名匹配). */
+  private fun isSupportedAudioFile(file: File): Boolean {
+    val ext = file.extension.lowercase()
+    return ext.isNotEmpty() && ext in AudioPreviewFragment.SUPPORTED_EXTENSIONS
+  }
+
+  /** 判断给定文件是否应该走 [VideoPreviewFragment] (仅扩展名匹配). */
+  private fun isSupportedVideoFile(file: File): Boolean {
+    val ext = file.extension.lowercase()
+    return ext.isNotEmpty() && ext in VideoPreviewFragment.SUPPORTED_EXTENSIONS
+  }
+
+  /** 判断给定文件是否应该走 [WebPreviewFragment] (仅扩展名匹配 html / htm). */
+  private fun isSupportedWebFile(file: File): Boolean {
+    val ext = file.extension.lowercase()
+    return ext.isNotEmpty() && ext in WebPreviewFragment.SUPPORTED_EXTENSIONS
   }
 
   @Suppress("UNCHECKED_CAST")

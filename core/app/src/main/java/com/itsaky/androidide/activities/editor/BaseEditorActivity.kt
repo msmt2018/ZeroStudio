@@ -89,6 +89,7 @@ import com.itsaky.androidide.ui.CodeEditorView
 import com.itsaky.androidide.ui.ContentTranslatingDrawerLayout
 import com.itsaky.androidide.ui.EditorBottomSheetOnboardingController
 import com.itsaky.androidide.ui.SwipeRevealLayout
+import com.itsaky.androidide.ui.SymbolInputVisibilityManager
 import com.itsaky.androidide.utils.ActionMenuUtils.createMenu
 import com.itsaky.androidide.utils.ApkInstallationSessionCallback
 import com.itsaky.androidide.utils.DialogUtils.newMaterialDialogBuilder
@@ -327,6 +328,7 @@ abstract class BaseEditorActivity :
     optionsMenuInvalidator = null
     installationCallback?.destroy()
     installationCallback = null
+    SymbolInputVisibilityManager.unregister()
     if (isDestroying) {
       memoryUsageWatcher.stopWatching(true)
       memoryUsageWatcher.listener = null
@@ -948,6 +950,15 @@ abstract class BaseEditorActivity :
     // 启动底部抽屉的操作引导 (3 步教学: 抽屉 / 头部 / 符号输入).
     // 仅首次启动会显示, 之后由 SharedPreferences 持久化跳过.
     setupEditorBottomSheetOnboarding()
+
+    // Bug 5.1: 注册符号输入控件到 SymbolInputVisibilityManager,
+    // 预览 fragment (Image/Markdown) 进入时隐藏符号输入控件, 退出时恢复.
+    val bottomSheetBinding = content.bottomSheet.binding
+    SymbolInputVisibilityManager.register(
+        symbolInputView = bottomSheetBinding.externalSymbolInputView,
+        headerContentWrapper = bottomSheetBinding.headerContentWrapper,
+        headerDivider = bottomSheetBinding.headerDivider,
+    )
   }
 
   /**

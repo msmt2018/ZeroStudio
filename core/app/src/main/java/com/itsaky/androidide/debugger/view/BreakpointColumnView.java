@@ -285,20 +285,35 @@ public class BreakpointColumnView extends View {
      * 重做 layout 让 column 紧贴行号列左侧 (与 EditorRenderer 同步),
      * 宽度 = 行号列宽度 (measureLineNumber),高度 = MATCH_PARENT。
      * 在缩放 / 文本大小改变后,需要重做。
+     *
+     * <p>关键修复 (Phase 24 bug 修复):
+     * <ul>
+     *   <li>宽度严格使用 {@code measureLineNumber()}, 不再 fallback dp(36f) 过宽
+     *   <li>当 {@code lineNumberMarginLeft <= 0} (布局未完成/行号未启用) 时
+     *       设为 GONE, 避免占满整个编辑器区域
+     * </ul>
      */
     public void layoutToMatchLineColumn() {
         if (editor == null) return;
         ViewGroup.LayoutParams lp = getLayoutParams();
         if (!(lp instanceof FrameLayout.LayoutParams)) return;
         FrameLayout.LayoutParams flp = (FrameLayout.LayoutParams) lp;
+        float lineNumberStart = editor.getLineNumberMarginLeft();
         float lineColWidth = editor.measureLineNumber();
-        if (lineColWidth <= 0f) lineColWidth = dp(36f);
+        // 布局未完成 / 行号未启用: 隐藏, 避免占满编辑器区域
+        if (lineNumberStart <= 0f || lineColWidth <= 0f) {
+            flp.width = 0;
+            flp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+            flp.leftMargin = 0;
+            setLayoutParams(flp);
+            setVisibility(GONE);
+            return;
+        }
+        setVisibility(VISIBLE);
         flp.width = Math.round(lineColWidth);
         flp.height = ViewGroup.LayoutParams.MATCH_PARENT;
-        float lineNumberStart = editor.getLineNumberMarginLeft();
-        if (lineNumberStart <= 0) lineNumberStart = dp(4f);
-        // column 起点 = 行号起点 - column 宽度 - 间隙
-        float x = Math.max(0, lineNumberStart - flp.width - dp(2f));
+        // column 起点 = 行号起点 - column 宽度 - 间隙 (紧贴行号列左侧)
+        float x = Math.max(0f, lineNumberStart - flp.width - dp(2f));
         flp.leftMargin = Math.round(x);
         setLayoutParams(flp);
     }
@@ -513,6 +528,13 @@ public class BreakpointColumnView extends View {
     public boolean onTouchEvent(MotionEvent event) {
         if (editor == null || currentFile == null) return super.onTouchEvent(event);
         if (listener == null) return super.onTouchEvent(event);
+        // 只在断点列宽度内消费事件, 否则不消费让事件穿透到下层编辑器。
+        // 防止 overlay View 因为 bounds 异常而吞掉整个编辑器区域的点击。
+        final float x = event.getX();
+        final int w = getWidth();
+        if (w <= 0 || x < 0f || x > w) {
+            return false;
+        }
         if (gestureDetector == null) initGestureDetector();
         boolean handled = gestureDetector.onTouchEvent(event);
         if (event.getAction() == MotionEvent.ACTION_UP && !handled) {
@@ -523,6 +545,8 @@ public class BreakpointColumnView extends View {
 
     @Override
     public boolean performClick() {
+        // performClick 仅在确认落在断点列内时由 GestureDetector 触发,
+        // 这里直接转发到 super 处理无障碍 click 事件即可。
         return super.performClick();
     }
 

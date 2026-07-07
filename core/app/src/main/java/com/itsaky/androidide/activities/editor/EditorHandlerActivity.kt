@@ -33,10 +33,7 @@ import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.tabs.TabLayout.Tab
 import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
-import com.itsaky.androidide.fragments.editor.FragmentTabEntry
-import com.itsaky.androidide.fragments.editor.FragmentTabRegistry
-import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
-import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
+import com.itsaky.androidide.utils.EditorFragmentTabRegistrar
 import com.itsaky.androidide.resources.R
 import com.blankj.utilcode.util.ImageUtils
 import com.itsaky.androidide.R.string
@@ -112,7 +109,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     private set
 
   init {
-    registerFragmentTabs()
+    EditorFragmentTabRegistrar.registerAll()
   }
 
   override fun doOpenFile(file: File, selection: Range?) {
@@ -129,50 +126,6 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
 
   override fun provideEditorAt(index: Int): CodeEditorView? {
     return getEditorAtIndex(index)
-  }
-
-  /**
-   * Registers fragment tabs with the FragmentTabRegistry.
-   * This is called during initialization to register available fragment tabs.
-   */
-  private fun registerFragmentTabs() {
-    // Only register once
-    if (FragmentTabRegistry.isRegistered("markdown_preview")) {
-      return
-    }
-
-    // Markdown 预览
-    FragmentTabRegistry.register(
-      FragmentTabEntry(
-        id = "markdown_preview",
-        title = "Markdown Preview",
-        iconRes = R.drawable.ic_markdown_preview,
-        fragmentClass = MarkdownPreviewFragment::class.java,
-        fileExtensions = MarkdownPreviewFragment.SUPPORTED_EXTENSIONS,
-        order = 100,
-        fragmentFactory = { MarkdownPreviewFragment() }
-      )
-    )
-
-    // 图片预览 —— Android XML vector / SVG / 常见位图 (PNG / JPG / WebP /
-    // GIF / HEIC / BMP / AVIF / ICO / TIFF). 通过 FragmentTabRegistry 注册,
-    // 文件后缀命中 ImagePreviewFragment.SUPPORTED_FORMATS 时 editor 在 tab 栏
-    // 给出 "Image Preview" 入口.
-    FragmentTabRegistry.register(
-      FragmentTabEntry(
-        id = "image_preview",
-        title = ImagePreviewFragment.TAB_TITLE,
-        iconRes = R.drawable.ic_file_type_image,
-        fragmentClass = ImagePreviewFragment::class.java,
-        fileExtensions = ImagePreviewFragment.SUPPORTED_FORMATS,
-        order = 110,
-        // factory 不传 filePath: 真正的路径在 EditorFragmentTabManager
-        // 打开 tab 时通过 ImagePreviewFragment.newInstance(filePath) 注入到
-        // arguments. 这里仅供 tab 创建时 fallback 预览, 真实打开后会用
-        // newInstance(filePath) 覆盖.
-        fragmentFactory = { ImagePreviewFragment() },
-      )
-    )
   }
 
   /** Handles both file editor tabs and lifecycle-backed fragment tabs in the same TabLayout. */
@@ -752,7 +705,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
               bm.toggle(f, line)
               return
             }
-            if (entry.needsInjector) {
+            if (entry.category == com.itsaky.androidide.debugger.model.BreakpointTypeCatalog.Category.BROWSER) {
               com.itsaky.androidide.utils.flashInfo(
                   "BROWSER 断点需要 frida/xposed 注入器, 暂未接入")
               return
@@ -767,8 +720,8 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
               y: Float,
           ) {
             // 短按已有断点 → 弹完整配置面板 (跟 Phase 22 一致)
-            com.itsaky.androidide.debugger.view.BreakpointDetailDialog.showForEdit(
-                this@EditorHandlerActivity, bp)
+            com.itsaky.androidide.debugger.view.BreakpointDetailDialog.showForExisting(
+                this@EditorHandlerActivity, bp.id) {}
           }
 
           override fun onBreakpointLongClick(
@@ -785,7 +738,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
           }
         }
     )
-    gutter.showSidebar()
+    gutter.show()
   }
 
   override fun findIndexOfEditorByFile(file: File?): Int {

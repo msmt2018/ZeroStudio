@@ -125,10 +125,10 @@ class ProcessRunner {
         cmd: List<String>,
         timeoutMs: Long,
     ): ProcessResult {
-        val outBuf = arrayOfNulls<String>(null)
-        val errBuf = arrayOfNulls<String>(null)
-        val outErr = arrayOfNulls<Throwable>(null)
-        val errErr = arrayOfNulls<Throwable>(null)
+        val outBuf = arrayOfNulls<String>(1)
+        val errBuf = arrayOfNulls<String>(1)
+        val outErr = arrayOfNulls<Throwable>(1)
+        val errErr = arrayOfNulls<Throwable>(1)
         val done = CountDownLatch(1)
 
         thread(name = "ProcessRunner-out", isDaemon = true) {

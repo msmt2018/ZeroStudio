@@ -8,7 +8,7 @@ import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
 import com.itsaky.androidide.actions.markInvisible
 import com.itsaky.androidide.activities.editor.EditorHandlerActivity
-import com.itsaky.androidide.fragments.editor.FragmentTabRegistry
+import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
 import com.itsaky.androidide.models.SaveResult
 import com.itsaky.androidide.resources.R
 import java.io.File
@@ -18,6 +18,11 @@ import java.io.File
  *
  * This action opens a Markdown preview tab in the EditorHandlerActivity
  * when the user clicks the preview button in the editor toolbar.
+ *
+ * **注意**: 只匹配 [MarkdownPreviewFragment.SUPPORTED_EXTENSIONS] 中的
+ * 文件后缀 (md / markdown / mkd 等), 不匹配 image / C/C++ 等其它预览类型。
+ * 图片预览见 [com.itsaky.androidide.actions.etc.image.ImagePreviewAction],
+ * C/C++ 3D 预览见 [com.itsaky.androidide.actions.etc.universal.UniversalPreviewAction]。
  *
  * @author ZeroStudio
  */
@@ -45,22 +50,22 @@ class MarkdownPreviewAction(context: Context, override val order: Int) : EditorR
       return
     }
 
-    // Check if there's an open file with a Markdown extension
+    // 只匹配 Markdown 后缀 (不匹配 image / C/C++ 等其它预览类型)
     val editor = data.getEditor()
     val file = editor?.file
 
     if (file != null) {
       val extension = file.extension.lowercase()
-      if (FragmentTabRegistry.getByFileExtension(extension).isNotEmpty()) {
+      if (MarkdownPreviewFragment.SUPPORTED_EXTENSIONS.contains(extension)) {
         visible = true
         enabled = true
       } else {
         markInvisible()
       }
     } else {
-      // No file open, check if we can open a generic Markdown preview
+      // No file open
       visible = true
-      enabled = false // No file to preview
+      enabled = false
     }
   }
 

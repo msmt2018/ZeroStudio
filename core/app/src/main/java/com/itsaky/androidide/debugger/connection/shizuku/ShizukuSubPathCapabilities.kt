@@ -19,6 +19,7 @@
 package com.itsaky.androidide.debugger.connection.shizuku
 
 import com.itsaky.androidide.debugger.connection.DebugTarget
+import com.itsaky.androidide.debugger.connection.ShizukuConfig
 import com.itsaky.androidide.utils.ILogger
 
 /**
@@ -29,12 +30,12 @@ import com.itsaky.androidide.utils.ILogger
  * `!status.isRunning` 短路, 这里 capability 是显式 WifiAdb 模式时用)。
  */
 class WifiAdbCapability(
-    private val adbProbe: (DebugTarget) -> Boolean = { target ->
+    private val adbProbe: (DebugTarget) -> Boolean = { _ ->
         // 默认: trust caller's pre-flight adb connect probe; 实际可用性
         // 由 AdbForwardConnection.runPreConnectCheck 在 connect() 阶段验证。
         // 这里返 true 是 "WifiAdb 总是探得到" (在 Shizuku 跑了之后, Auto 模式
         // 至少能给个回退选项; 如果 adb 不可达后续 connect 阶段会报错)。
-        target.adbSerial.isNotBlank()
+        true
     },
 ) : ShizukuSubPathCapability {
     override val subPath = ShizukuConfig.SubPath.WifiAdb
@@ -135,7 +136,7 @@ class SocksCapability(
  */
 fun defaultShizukuSubPathCapabilities(
     serverApiVersion: Int = -1,
-    adbProbe: (DebugTarget) -> Boolean = { it.adbSerial.isNotBlank() },
+    adbProbe: (DebugTarget) -> Boolean = { _ -> true },
     hostPluginProbe: (DebugTarget) -> Boolean = { _ -> true },
 ): List<ShizukuSubPathCapability> = listOf(
     WifiAdbCapability(adbProbe),

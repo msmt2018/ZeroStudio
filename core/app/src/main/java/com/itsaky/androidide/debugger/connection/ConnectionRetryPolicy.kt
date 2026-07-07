@@ -25,11 +25,11 @@ class ConnectionRetryPolicy(
     suspend fun <T> retry(
         block: suspend (attempt: Int) -> Result<T>,
     ): Result<T> {
-        var lastFailure: Result.Failure<T>? = null
+        var lastFailure: Result<T>? = null
         for (attempt in 1..maxAttempts) {
             val r = block(attempt)
             if (r.isSuccess) return r
-            lastFailure = r as Result.Failure<T>
+            lastFailure = r
             // 最后一次失败不再 delay
             if (attempt < maxAttempts) {
                 val backoff = computeBackoff(attempt)

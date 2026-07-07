@@ -174,7 +174,7 @@ class AidlSocketConnection(
                 // 2) startActivity 把端口塞进 intent extra
                 val launched = hostLauncherImpl.launch(
                     packageName = target.packageName,
-                    mainActivity = target.mainActivity,
+                    mainActivity = target.mainActivity ?: "",
                     port = port,
                 )
                 if (!launched) {

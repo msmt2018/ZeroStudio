@@ -78,16 +78,20 @@ sealed class ConnectionType(
         val ALL: List<ConnectionType> =
             listOf(AidlSocket, Shizuku, Root, InnetVmSocks, InnetVmAdb, UsbLan)
 
-        fun fromId(id: String?): ConnectionType =
-            ALL.firstOrNull { it.id == id } ?: AidlSocket
+        fun fromId(id: String?): ConnectionType {
+            // ALL 列表初始化存在竞态,filterNotNull 防御 it 为 null 导致的 NPE
+            val all: List<ConnectionType> = ALL.filterNotNull()
+            return all.firstOrNull { it.id == id } ?: AidlSocket
+        }
 
-        fun isValidId(id: String?): Boolean = ALL.any { it.id == id }
+        fun isValidId(id: String?): Boolean = ALL.filterNotNull().any { it.id == id }
 
         /**
          * 兼容旧 id "innet_vm"：如果用户的偏好是旧值,映射到新的 SOCKS5 方案
          * (默认走 SOCKS5 因为更通用,ADB 转发需要 VM 端开 adbd 端口)。
          */
         fun fromIdCompat(id: String?): ConnectionType = when (id) {
+            null -> AidlSocket
             "innet_vm" -> InnetVmSocks
             else -> fromId(id)
         }

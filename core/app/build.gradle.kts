@@ -208,6 +208,17 @@ dependencies {
 
   // UI/UX
   implementation(libs.bundles.compose) // androidx compose
+  // 磨砂玻璃 (Frosted glass) - 音频/视频预览 fragment 控件
+  implementation(libs.haze)
+  implementation(libs.haze.blur)
+  implementation(libs.haze.blur.materials)
+
+  // Media3 - 音频/视频预览 fragment 播放引擎
+  implementation(libs.androidx.media3.exoplayer)
+  implementation(libs.androidx.media3.ui)
+  implementation(libs.androidx.media3.session)
+  implementation(libs.androidx.media3.datasource)
+  implementation(libs.androidx.media3.extractor)
   // androidx.compose.runtime.livedata.observeAsState (used by MarkdownPreviewFragment)
   implementation(libs.androidx.compose.runtime.livedata)
   implementation(libs.androidx.core.ktx)
@@ -257,7 +268,7 @@ dependencies {
   implementation(projects.tooling.api)
  
   implementation(projects.tooling.pluginConfig)
-  implementation(projects.utilities.logwire)
+  implementation(projects.debugger.logRuntime.logwire)
   implementation(projects.utilities.buildInfo)
   implementation(projects.utilities.lookup)
   implementation(projects.utilities.flashbar)
@@ -272,7 +283,7 @@ dependencies {
   implementation(projects.event.eventbus)
   implementation(projects.event.eventbusAndroid)
   implementation(projects.event.eventbusEvents)
-  implementation(projects.ideDebugger)
+  implementation(projects.debugger.breakpointDebugger.ideDebugger)
   implementation(projects.modules.mtDataFilesProvider)
   implementation(projects.modules.deviceCompat)
   implementation(projects.modules.zeroSymbolInputView)
@@ -282,6 +293,8 @@ dependencies {
   implementation(projects.modules.zeroRegularPreview)
   implementation(projects.modules.composePreview)
   implementation(projects.modules.colorpicker)
+  implementation(projects.modules.universalPreview)
+  implementation(projects.modules.webPreview)
   implementation(libs.common.soraLanguageTextmate)
 
   // Shizuku 客户端 API (子项目 3 断点调试连接层用)

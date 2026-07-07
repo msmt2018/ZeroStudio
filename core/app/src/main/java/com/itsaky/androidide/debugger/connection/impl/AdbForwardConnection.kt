@@ -125,7 +125,7 @@ abstract class AdbForwardConnection(
                 }
             }.onFailure { log.debug("resolve: probe {} failed: {}", addr, it.message) }
         }
-        return attempt.onSuccess {
+        return if (attempt.isSuccess) {
             transitionTo(ConnectionState.Connecting)
             Result.success(
                 ResolveInfo(
@@ -134,8 +134,10 @@ abstract class AdbForwardConnection(
                     requiresHostRunning = true,
                 )
             )
-        }.onFailure { t ->
+        } else {
+            val t = attempt.exceptionOrNull()!!
             transitionTo(ConnectionState.Closed(mapConnectError(t)))
+            Result.failure(t)
         }
     }
 
@@ -336,8 +338,9 @@ abstract class AdbForwardConnection(
     // ---- protected helpers for subclasses ----
 
     protected fun runAdb(args: List<String>): AdbResult {
-        val effectiveArgs = if (!adbSerial.isNullOrBlank()) {
-            listOf("-s", adbSerial) + args
+        val serial = adbSerial
+        val effectiveArgs = if (!serial.isNullOrBlank()) {
+            listOf("-s", serial) + args
         } else {
             args
         }

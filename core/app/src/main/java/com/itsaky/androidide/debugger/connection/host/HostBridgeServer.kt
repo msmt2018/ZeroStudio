@@ -185,7 +185,7 @@ class HostBridgeServer(
     // ---- 私有 ----
 
     private fun acceptLoop(lss: LocalServerSocket) {
-        while (running.get() && !lss.isClosed) {
+        while (running.get()) {
             try {
                 val client = lss.accept()
                 handleClient(client)
@@ -249,8 +249,8 @@ class HostBridgeServer(
         }
     }
 
-    private fun parseHello(raw: String): HostHello? {
-        if (raw.isBlank()) return null
+    private fun parseHello(raw: String?): HostHello? {
+        if (raw.isNullOrBlank()) return null
         // 协议: "HELLO pkg=<pkg> pid=<pid> [process=<processName>] [sdk=<sdk>] [buildVersion=<v>]"
         val trimmed = raw.trim()
         if (!trimmed.startsWith("HELLO ")) return null

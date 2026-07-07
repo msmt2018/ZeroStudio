@@ -16,6 +16,7 @@
 
 package com.itsaky.androidide.debugger.view;
 
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
@@ -27,6 +28,9 @@ import com.itsaky.androidide.debugger.DebuggerController;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.debugger.model.BreakpointTypeCatalog;
 import com.itsaky.androidide.debugger.model.IdeBreakpoint;
+import com.itsaky.androidide.editor.ui.IDEEditor;
+import com.itsaky.androidide.editor.ui.gutter.BreakpointGutterDelegate;
+import com.itsaky.androidide.editor.ui.gutter.BreakpointGutterStates;
 import io.github.rosemoe.sora.event.ContentChangeEvent;
 import io.github.rosemoe.sora.event.ScrollEvent;
 import io.github.rosemoe.sora.event.SubscriptionReceipt;
@@ -103,6 +107,8 @@ public final class BreakpointGutterManager {
     @NonNull private String fileCanonical;
     private final List<SubscriptionReceipt<?>> subscriptions = new ArrayList<>();
     @Nullable private DebugSessionState.Listener sessionListener;
+    /** Phase 25: renderer delegate 模式标志 (替代 overlay View) */
+    private boolean delegateAttached = false;
 
     /**
      * Phase 23 续: 设 true 用 {@link BreakpointSidebar} 替代默认的
@@ -143,6 +149,11 @@ public final class BreakpointGutterManager {
     }
 
     public void refresh() {
+        if (delegateAttached) {
+            // renderer delegate 模式: invalidate editor 让 renderer 重绘
+            editor.postInvalidate();
+            return;
+        }
         if (column == null) return;
         if (column instanceof BreakpointColumnView) {
             ((BreakpointColumnView) column).refresh();
@@ -152,21 +163,32 @@ public final class BreakpointGutterManager {
     }
 
     public void show() {
-        if (column != null) return;
-        if (!(editor.getParent() instanceof ViewGroup)) return;
-        ViewGroup parent = (ViewGroup) editor.getParent();
-        // 移除旧 column (避免重复挂)
-        for (int i = 0; i < parent.getChildCount(); i++) {
-            View c = parent.getChildAt(i);
-            if (c instanceof BreakpointColumnView || c instanceof BreakpointSidebar) {
-                parent.removeView(c);
-            }
+        if (column != null || delegateAttached) return;
+
+        // Phase 25: 优先使用 IDEEditorRenderer (直接在编辑器 Canvas 上绘制断点列,
+        // 与行号 1:1 同步, 无 overlay View 吞事件问题)。
+        // 仅当 editor 是 IDEEditor 且 useLegacySidebar=false 时启用。
+        if (!useLegacySidebar && editor instanceof IDEEditor) {
+            attachRendererDelegate((IDEEditor) editor);
         }
-        // Phase 23 续: 根据 useLegacySidebar flag 选择 gutter View
-        if (useLegacySidebar) {
-            attachLegacySidebar(parent);
-        } else {
-            attachColumnView(parent);
+
+        // 如果 renderer delegate 不可用, 回退到 overlay View 方案
+        if (!delegateAttached) {
+            if (!(editor.getParent() instanceof ViewGroup)) return;
+            ViewGroup parent = (ViewGroup) editor.getParent();
+            // 移除旧 column (避免重复挂)
+            for (int i = 0; i < parent.getChildCount(); i++) {
+                View c = parent.getChildAt(i);
+                if (c instanceof BreakpointColumnView || c instanceof BreakpointSidebar) {
+                    parent.removeView(c);
+                }
+            }
+            // Phase 23 续: 根据 useLegacySidebar flag 选择 gutter View
+            if (useLegacySidebar) {
+                attachLegacySidebar(parent);
+            } else {
+                attachColumnView(parent);
+            }
         }
         subscribeEditorEvents();
         subscribeSessionState();
@@ -178,7 +200,25 @@ public final class BreakpointGutterManager {
             ((BreakpointColumnView) column).refresh();
         } else if (column instanceof BreakpointSidebar) {
             ((BreakpointSidebar) column).refresh();
+        } else if (delegateAttached) {
+            // renderer delegate 模式: invalidate editor 让 renderer 重绘
+            editor.postInvalidate();
         }
+    }
+
+    /**
+     * Phase 25: 通过 IDEEditorRenderer 绘制断点列 (不使用 overlay View)。
+     *
+     * <p>把 [BreakpointGutterDelegate] 设置到 [IDEEditor] 上,
+     * IDEEditorRenderer 会通过 delegate 获取断点数据, 在 drawLineNumber /
+     * drawLineNumberBackground 中直接绘制断点圆点 + 命中行高亮。
+     *
+     * <p>触摸事件由 IDEEditor.onTouchEvent 拦截并路由到 delegate 的回调,
+     * delegate 再转发给 [actionListener] (弹 BreakpointTypePickerDialog 等)。
+     */
+    private void attachRendererDelegate(@NonNull IDEEditor ideEditor) {
+        ideEditor.setBreakpointGutterDelegate(new BreakpointGutterDelegateImpl(ideEditor));
+        delegateAttached = true;
     }
 
     /**
@@ -283,6 +323,12 @@ public final class BreakpointGutterManager {
     }
 
     public void hide() {
+        // Phase 25: 清除 renderer delegate
+        if (delegateAttached && editor instanceof IDEEditor) {
+            ((IDEEditor) editor).setBreakpointGutterDelegate(null);
+            delegateAttached = false;
+            editor.postInvalidate();
+        }
         if (column == null) return;
         if (column.getParent() instanceof ViewGroup) {
             ((ViewGroup) column.getParent()).removeView(column);
@@ -338,11 +384,16 @@ public final class BreakpointGutterManager {
     private void subscribeSessionState() {
         try {
             DebugSessionState st = DebuggerController.getInstance().sessionState();
-            sessionListener = s -> {
-                if (column instanceof BreakpointColumnView) {
-                    ((BreakpointColumnView) column).refresh();
-                } else if (column instanceof BreakpointSidebar) {
-                    ((BreakpointSidebar) column).refresh();
+            sessionListener = new DebugSessionState.Listener() {
+                @Override
+                public void onStateChanged(@NonNull DebugSessionState s) {
+                    if (delegateAttached) {
+                        editor.postInvalidate();
+                    } else if (column instanceof BreakpointColumnView) {
+                        ((BreakpointColumnView) column).refresh();
+                    } else if (column instanceof BreakpointSidebar) {
+                        ((BreakpointSidebar) column).refresh();
+                    }
                 }
             };
             st.addListener(sessionListener);
@@ -364,5 +415,121 @@ public final class BreakpointGutterManager {
             c = ((android.content.ContextWrapper) c).getBaseContext();
         }
         return null;
+    }
+
+    /**
+     * Phase 25: [BreakpointGutterDelegate] 实现, 桥接 [BreakpointManager] /
+     * [DebuggerController] 数据到 [IDEEditorRenderer]。
+     *
+     * <p>触摸回调转发给 [actionListener] (弹 BreakpointTypePickerDialog /
+     * BreakpointDetailDialog)。
+     */
+    private class BreakpointGutterDelegateImpl implements BreakpointGutterDelegate {
+
+        private final IDEEditor ideEditor;
+
+        BreakpointGutterDelegateImpl(@NonNull IDEEditor editor) {
+            this.ideEditor = editor;
+        }
+
+        @Override
+        public String currentFile() {
+            return fileCanonical;
+        }
+
+        @Override
+        public int breakpointStateForLine(int line) {
+            if (fileCanonical == null) return BreakpointGutterStates.NONE;
+            IdeBreakpoint bp = BreakpointManager.getInstance().findAt(fileCanonical, line);
+            if (bp == null) return BreakpointGutterStates.NONE;
+            return mapState(bp.state);
+        }
+
+        @Override
+        public int hitLine() {
+            try {
+                DebugSessionState st = DebuggerController.getInstance().sessionState();
+                if (st.isSuspended() && st.currentFrame() != null) {
+                    return st.currentFrame().lineNumber;
+                }
+            } catch (Throwable ignored) {}
+            return -1;
+        }
+
+        @Override
+        public void onGutterClick(int line, float screenX, float screenY) {
+            if (actionListener == null) return;
+            FragmentActivity activity = findActivity(ideEditor);
+            if (activity == null) return;
+            // 弹 BreakpointTypePickerDialog (4 类断点选择), 选中后回调 actionListener.onAddBreakpoint
+            BreakpointTypePickerDialog.show(activity, fileCanonical, line, screenX, screenY,
+                    (entry, f, l, x, y) -> {
+                        if (actionListener != null) {
+                            actionListener.onAddBreakpoint(f, l, entry, x, y);
+                        }
+                    });
+        }
+
+        @Override
+        public void onGutterExistingClick(int line, float screenX, float screenY) {
+            if (actionListener == null) return;
+            IdeBreakpoint bp = BreakpointManager.getInstance().findAt(fileCanonical, line);
+            if (bp != null) {
+                actionListener.onEditBreakpoint(bp, screenX, screenY);
+            }
+        }
+
+        @Override
+        public void onGutterLongClick(int line, float screenX, float screenY) {
+            if (actionListener == null) return;
+            // 长按: 找最近的断点 (±2 行), 弹菜单
+            IdeBreakpoint nearest = findNearestBreakpoint(fileCanonical, line);
+            if (nearest != null) {
+                actionListener.onBreakpointLongClick(nearest, screenX, screenY);
+            } else {
+                // 空白处长按 = 等同于单击 (弹 picker)
+                FragmentActivity activity = findActivity(ideEditor);
+                if (activity == null) return;
+                BreakpointTypePickerDialog.show(activity, fileCanonical, line, screenX, screenY,
+                        (entry, f, l, x, y) -> {
+                            if (actionListener != null) {
+                                actionListener.onAddBreakpoint(f, l, entry, x, y);
+                            }
+                        });
+            }
+        }
+
+        @Nullable
+        private IdeBreakpoint findNearestBreakpoint(@NonNull String file, int row) {
+            IdeBreakpoint best = null;
+            int bestDelta = Integer.MAX_VALUE;
+            for (IdeBreakpoint bp : BreakpointManager.getInstance().forFile(file)) {
+                int d = Math.abs(bp.line - row);
+                if (d < bestDelta && d <= 2) {
+                    bestDelta = d;
+                    best = bp;
+                }
+            }
+            return best;
+        }
+
+        /** 把 IdeBreakpoint.State 映射到 BreakpointGutterStates 常量。 */
+        private int mapState(@NonNull IdeBreakpoint.State state) {
+            switch (state) {
+                case NORMAL:         return BreakpointGutterStates.NORMAL;
+                case INVALID:        return BreakpointGutterStates.INVALID;
+                case VERIFIED:       return BreakpointGutterStates.VERIFIED;
+                case CONDITION:      return BreakpointGutterStates.CONDITION;
+                case LOG:            return BreakpointGutterStates.LOG;
+                case DISABLED:       return BreakpointGutterStates.DISABLED;
+                case HIT:            return BreakpointGutterStates.HIT;
+                case EXCEPTION:      return BreakpointGutterStates.EXCEPTION;
+                case FIELD_WATCHPOINT: return BreakpointGutterStates.FIELD_WATCHPOINT;
+                case METHOD:         return BreakpointGutterStates.METHOD;
+                case DEPENDENT:      return BreakpointGutterStates.DEPENDENT;
+                case TEMPORARY:      return BreakpointGutterStates.TEMPORARY;
+                default:             return BreakpointGutterStates.NORMAL;
+            }
+        }
     }
 }

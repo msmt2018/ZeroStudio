@@ -181,16 +181,21 @@ public class BreakpointDetailDialog extends DialogFragment {
         Window w = dialog.getWindow();
         if (w != null) {
             w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            // 关键修复 (Phase 24 bug): 高度改为 WRAP_CONTENT 避免覆盖整个编辑器;
+            // 移除 FLAG_BLUR_BEHIND (某些系统会触发全屏模糊), 用 setDimAmount 替代
             w.setLayout(WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT);
-            try { w.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND); } catch (Throwable ignored) {}
-            w.setDimAmount(0.4f);
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            w.setDimAmount(0.5f);
         }
         dialog.setCanceledOnTouchOutside(true);
 
         LayoutInflater inflater = LayoutInflater.from(requireContext());
         View root = inflater.inflate(R.layout.dialog_breakpoint_detail, null, false);
-        dialog.setContentView(root);
+        // 强制 contentView 宽度 MATCH_PARENT, 让内部 LinearLayout 的 maxWidth 生效,
+        // 避免 inflate(null) 导致根 FrameLayout 退化为 WRAP_CONTENT
+        dialog.setContentView(root, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
         bindCommon(root);
         renderForEntry(root);
         return dialog;

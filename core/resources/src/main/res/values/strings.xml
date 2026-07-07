@@ -308,6 +308,8 @@
      <string name="idepref_debugger_aidl_listen_port_title">AIDL listen port (0 = random)</string>
      <string name="idepref_debugger_shizuku_sub_path_title">Shizuku sub-path</string>
      <string name="idepref_debugger_shizuku_sub_path_summary">Auto picks the first working strategy. Lock to one only for advanced use.</string>
+     <string name="idepref_debugger_shizuku_manager_title">打开 Shizuku 管理器</string>
+     <string name="idepref_debugger_shizuku_manager_summary">查看 Shizuku 状态, 启动 server, 授权 IDE, 配对无线 ADB 调试。</string>
      <string name="idepref_debugger_root_su_bin_title">su binary path</string>
      <string name="idepref_debugger_innet_socks_host_title">SOCKS5 host</string>
      <string name="idepref_debugger_innet_socks_port_title">SOCKS5 port</string>
@@ -343,6 +345,16 @@
     <string name="title_preview_layout">Preview Layout</string>
     <string name="title_markdown_preview">Markdown Preview</string>
     <string name="desc_markdown_preview">Preview Markdown file with rich content support</string>
+    <string name="title_image_preview">Image Preview</string>
+    <string name="desc_image_preview">Preview image files (PNG / JPG / SVG / WebP / vector drawable)</string>
+    <string name="title_universal_preview">Universal Preview</string>
+    <string name="desc_universal_preview">3D/2D graphics preview for C/C++ source (AST topology / Three.js / ImGui)</string>
+    <string name="title_audio_preview">Audio Preview</string>
+    <string name="desc_audio_preview">Preview audio files (MP3 / WAV / FLAC / OGG / AAC / M4A / Opus) with frosted glass controls</string>
+    <string name="title_video_preview">Video Preview</string>
+    <string name="desc_video_preview">Preview video files (MP4 / MKV / WebM / AVI / MOV) with frosted glass controls</string>
+    <string name="title_web_preview">Web Preview</string>
+    <string name="desc_web_preview">Preview HTML / Vue / React / dev server / Node.js backend with Chrome DevTools (CDP bridge)</string>
      <string name="title_viewaction_delete">Delete</string>
      <string name="msg_yesno_def_title">Please confirm</string>
      <string name="msg_yesno_def_message">Are you sure?</string>

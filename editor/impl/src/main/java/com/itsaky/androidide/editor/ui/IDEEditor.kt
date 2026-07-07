@@ -21,6 +21,8 @@ import android.content.Context
 import android.graphics.Rect
 import android.os.Bundle
 import android.util.AttributeSet
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.inputmethod.EditorInfo
 import androidx.annotation.StringRes
 import com.blankj.utilcode.util.FileUtils
@@ -39,6 +41,8 @@ import com.itsaky.androidide.editor.schemes.IDEColorSchemeProvider
 import com.itsaky.androidide.editor.snippets.AbstractSnippetVariableResolver
 import com.itsaky.androidide.editor.snippets.FileVariableResolver
 import com.itsaky.androidide.editor.snippets.WorkspaceVariableResolver
+import com.itsaky.androidide.editor.ui.gutter.BreakpointGutterDelegate
+import com.itsaky.androidide.editor.ui.gutter.BreakpointGutterStates
 import com.itsaky.androidide.eventbus.events.editor.ChangeType
 import com.itsaky.androidide.eventbus.events.editor.ColorSchemeInvalidatedEvent
 import com.itsaky.androidide.eventbus.events.editor.DocumentChangeEvent
@@ -80,6 +84,7 @@ import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.lang.Language
 import io.github.rosemoe.sora.text.UndoManager
 import io.github.rosemoe.sora.widget.CodeEditor
+import io.github.rosemoe.sora.widget.EditorRenderer
 import io.github.rosemoe.sora.widget.EditorSearcher
 import io.github.rosemoe.sora.widget.IDEEditorSearcher
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
@@ -140,6 +145,91 @@ constructor(
 
   @Volatile private var selectionEventVersion = 0L
   private var selectionChangeJob: Job? = null
+
+  // ---- 断点列渲染委托 ----
+  // 由 core/app 的 BreakpointGutterManager 设置, 桥接断点数据到 IDEEditorRenderer。
+  // null 时不绘制断点列。
+  @Volatile var breakpointGutterDelegate: BreakpointGutterDelegate? = null
+
+  // 断点列手势检测器 (单击/长按)
+  private val bpGutterGestureDetector: GestureDetector by lazy {
+    GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+      override fun onSingleTapUp(e: MotionEvent): Boolean {
+        val delegate = breakpointGutterDelegate ?: return false
+        val renderer = getRenderer() as? IDEEditorRenderer ?: return false
+        if (!renderer.isPointInBreakpointColumn(e.x)) return false
+        val row = rowAtY(e.y)
+        if (row < 0) return false
+        val state = delegate.breakpointStateForLine(row)
+        val loc = IntArray(2)
+        getLocationOnScreen(loc)
+        val screenX = loc[0] + e.x
+        val screenY = loc[1] + e.y
+        if (state != BreakpointGutterStates.NONE) {
+          delegate.onGutterExistingClick(row, screenX, screenY)
+        } else {
+          delegate.onGutterClick(row, screenX, screenY)
+        }
+        return true
+      }
+
+      override fun onLongPress(e: MotionEvent) {
+        val delegate = breakpointGutterDelegate ?: return
+        val renderer = getRenderer() as? IDEEditorRenderer ?: return
+        if (!renderer.isPointInBreakpointColumn(e.x)) return
+        val row = rowAtY(e.y)
+        if (row < 0) return
+        val loc = IntArray(2)
+        getLocationOnScreen(loc)
+        val screenX = loc[0] + e.x
+        val screenY = loc[1] + e.y
+        delegate.onGutterLongClick(row, screenX, screenY)
+      }
+
+      override fun onDown(e: MotionEvent): Boolean = true
+    })
+  }
+
+  /**
+   * 覆写 [CodeEditor.onCreateRenderer] 返回 [IDEEditorRenderer]。
+   *
+   * IDEEditorRenderer 继承 EditorRenderer, 重写行号列绘制方法,
+   * 把断点列直接绘制到编辑器 Canvas 上 (与行号 1:1 同步)。
+   * 不修改 sora-editor 源码, 通过继承 + 重写实现。
+   */
+  override fun onCreateRenderer(): EditorRenderer {
+    return IDEEditorRenderer(this) { breakpointGutterDelegate }
+  }
+
+  /**
+   * 覆写 [CodeEditor.onTouchEvent] 拦截断点列区域的触摸事件。
+   *
+   * 如果触摸点落在断点列内, 交给 [bpGutterGestureDetector] 处理
+   * (单击 = 添加/编辑断点, 长按 = 断点菜单), 不传递给编辑器。
+   * 否则交给 [super.onTouchEvent] 正常处理 (光标移动、选择、滚动等)。
+   */
+  override fun onTouchEvent(event: MotionEvent): Boolean {
+    val renderer = getRenderer() as? IDEEditorRenderer
+    if (renderer != null && breakpointGutterDelegate != null) {
+      val delegate = breakpointGutterDelegate!!
+      if (delegate.currentFile() != null && renderer.isPointInBreakpointColumn(event.x)) {
+        bpGutterGestureDetector.onTouchEvent(event)
+        if (event.action == MotionEvent.ACTION_UP) {
+          performClick()
+        }
+        return true
+      }
+    }
+    return super.onTouchEvent(event)
+  }
+
+  /** 根据 Y 坐标计算对应的行号 (0-based)。 */
+  private fun rowAtY(y: Float): Int {
+    val rowHeight = rowHeight
+    if (rowHeight <= 0f) return -1
+    val firstRow = Math.max(0, firstVisibleRow)
+    return firstRow + (y / rowHeight).toInt()
+  }
 
   private fun processSelectionChange() {
     // Safe check for language client before accessing

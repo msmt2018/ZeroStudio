@@ -175,11 +175,12 @@ include(
     ":event:eventbus-android",
     ":event:eventbus-events",
 
-    ":ide-decompiler",
-    ":ide-debugger",
-    ":ide-debugger-host",
-    ":ide-log-plugin",
-    ":ide-language",
+    ":debugger:ide-decompiler",
+    ":debugger:Breakpoint-debugger:ide-debugger",
+    ":debugger:Breakpoint-debugger:ide-debugger-host",
+    ":debugger:log-runtime:ide-log-plugin",
+    ":debugger:ide-language",
+    ":debugger:log-runtime:logwire",
 
     ":java:javac-services",
     ":java:lsp",
@@ -216,7 +217,6 @@ include(
     ":utilities:build-info",
     ":utilities:flashbar",
     ":utilities:framework-stubs",
-    ":utilities:logwire",
     ":utilities:lookup",
     ":utilities:preferences",
     ":utilities:shared",
@@ -245,6 +245,8 @@ include(
     ":modules:zero-Symbol-input-view",
     ":modules:zero-mcp-server",
     ":modules:zero-regular-preview",
+    ":modules:universal-preview",
+    ":modules:web-preview",
     ":modules:zero-onboarding-guide",
     // Shizuku 客户端 API: 子项目 3 断点调试连接层用
     // (只依赖 api 模块, 不依赖 manager / server 等独立 app 模块;

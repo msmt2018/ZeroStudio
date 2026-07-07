@@ -183,6 +183,7 @@ enum class FileExtension(
   MPSAN("mp3", R.drawable.ic_file_type_music),
   WAV("wav", R.drawable.ic_file_type_music),
   OGG("ogg", R.drawable.ic_file_type_music),
+  OGA("oga", R.drawable.ic_file_type_music),
   FLAC("flac", R.drawable.ic_file_type_music),
   AAC("aac", R.drawable.ic_file_type_music),
   M4A("m4a", R.drawable.ic_file_type_music),

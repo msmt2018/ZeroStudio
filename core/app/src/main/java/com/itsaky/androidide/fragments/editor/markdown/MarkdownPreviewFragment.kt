@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLif
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
+import com.itsaky.androidide.ui.SymbolInputVisibilityManager
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -104,6 +105,36 @@ class MarkdownPreviewFragment : Fragment() {
                 MarkdownPreviewScreen(filePath = filePath, inlineContent = inlineContent)
             }
         }
+    }
+
+    // === Bug 5.1: 进入 Markdown 预览时隐藏符号输入控件, 退出时恢复 ===
+    // 与 ImagePreviewFragment 一致: 通过 SymbolInputVisibilityManager 把符号输入
+    // 控件 + header 状态栏 + 分隔线全部 GONE, 只保留 EdgeSnapBubbleView 在屏幕
+    // 可见区域. 上滑气泡时 EditorBottomSheet.drawerDragListener 会调用
+    // showFromPreview() 恢复.
+
+    override fun onResume() {
+        super.onResume()
+        SymbolInputVisibilityManager.hideForPreview()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SymbolInputVisibilityManager.showFromPreview()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (hidden) {
+            SymbolInputVisibilityManager.showFromPreview()
+        } else {
+            SymbolInputVisibilityManager.hideForPreview()
+        }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        SymbolInputVisibilityManager.showFromPreview()
     }
 }
 

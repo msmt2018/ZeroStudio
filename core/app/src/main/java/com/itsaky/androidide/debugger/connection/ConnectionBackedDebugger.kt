@@ -94,12 +94,12 @@ class ConnectionBackedDebugger(
     suspend fun shutdown() {
         try {
             connection.detach()
-        } catch (Throwable t) {
+        } catch (t: Throwable) {
             log.warn("detach failed: ${t.message}")
         } finally {
             try {
                 debugger?.disconnect()
-            } catch (Throwable ignored) {}
+            } catch (ignored: Throwable) {}
             debugger = null
             connection.release()
         }

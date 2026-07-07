@@ -81,13 +81,13 @@ class RootConnection(
     override suspend fun resolve(): Result<ResolveInfo> {
         val attempt = retryPolicy.retry { _ ->
             runCatching {
-                val ok = rootProbeImpl.probeHasRoot(settings.root.suBinary)
+                val ok = rootProbeImpl.probeHasRoot(settings.root.suBinPath)
                 if (!ok) {
-                    throw IOException("root not available (su=${settings.root.suBinary} not granted)")
+                    throw IOException("root not available (su=${settings.root.suBinPath} not granted)")
                 }
             }.onFailure { log.debug("resolve attempt failed: {}", it.message) }
         }
-        return attempt.onSuccess {
+        return if (attempt.isSuccess) {
             transitionTo(ConnectionState.Connecting)
             Result.success(
                 ResolveInfo(
@@ -96,9 +96,11 @@ class RootConnection(
                     requiresHostRunning = false,
                 )
             )
-        }.onFailure { t ->
+        } else {
+            val t = attempt.exceptionOrNull()!!
             transitionTo(ConnectionState.Closed(mapResolveError(t)))
-        }.also { /* map result */ }
+            Result.failure(t)
+        }
     }
 
     // ---- connect: 找 host pid + 准备 attach ----
@@ -108,7 +110,7 @@ class RootConnection(
             runCatching {
                 val pid = rootClientImpl.findProcessId(
                     packageName = target.packageName,
-                    suBin = settings.root.suBinary,
+                    suBin = settings.root.suBinPath,
                     timeoutMs = settings.root.probeTimeoutMs,
                 )
                 if (pid <= 0) {
@@ -136,7 +138,7 @@ class RootConnection(
             runCatching {
                 val s = rootClientImpl.openJdwpStream(
                     hostPid = pid,
-                    suBin = settings.root.suBinary,
+                    suBin = settings.root.suBinPath,
                     timeoutMs = settings.root.probeTimeoutMs,
                 )
                 // Phase 17: 跟 InnetVmSocksConnection / AdbForwardConnection 同款
