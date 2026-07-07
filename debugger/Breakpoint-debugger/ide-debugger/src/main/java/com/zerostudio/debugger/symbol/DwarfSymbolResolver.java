@@ -251,7 +251,7 @@ public final class DwarfSymbolResolver implements SourceNameMapper.SymbolResolve
                         if (is64Unit) { totalLen = r.readUint64(); } else { totalLen = unitLen; }
                         if (totalLen == 0) break;
                         long unitEnd = r.position() + totalLen - (is64Unit ? 12 : 4);
-                        short version = r.readUint16();
+                        short version = (short) r.readUint16();
                         r.readUint32(); // debug_info offset
                         if (is64) r.readUint64(); // 8-byte address
                         r.readUint8(); // address size
@@ -346,7 +346,7 @@ public final class DwarfSymbolResolver implements SourceNameMapper.SymbolResolve
                         long total = is64L ? lr.readUint64() : unitLen;
                         if (total == 0) break;
                         long unitEnd = lr.position() + total - (is64L ? 12 : 4);
-                        short lver = lr.readUint16();
+                        short lver = (short) lr.readUint16();
                         if (lver < 2 || lver > 5) { lr.seek(unitEnd); continue; }
                         int hdrLen = is64L ? (int) lr.readUint64() : lr.readUint32();
                         long afterHdr = lr.position() + hdrLen;
