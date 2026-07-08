@@ -86,6 +86,35 @@ public final class Tag {
     this.syntaxTypeId = syntaxTypeId;
   }
 
+  /**
+   * 创建一个被忽略的哨兵标签，对应上游 Rust {@code Tag::ignored}。
+   *
+   * <p>哨兵标签的 {@code startByte}/{@code endByte} 被设为 {@link Integer#MAX_VALUE}，
+   * 其它字段为零值。通过 {@link #isIgnored()} 检测。
+   *
+   * @param nameStartByte name 节点的起始字节偏移。
+   * @param nameEndByte   name 节点的结束字节偏移。
+   */
+  static Tag ignored(int nameStartByte, int nameEndByte) {
+    return new Tag(
+        Integer.MAX_VALUE, Integer.MAX_VALUE,
+        nameStartByte, nameEndByte,
+        0, 0,
+        TSPoint.create(0, 0), TSPoint.create(0, 0),
+        0, 0,
+        null, false, 0);
+  }
+
+  /**
+   * 检查此标签是否是被忽略的哨兵标签。
+   *
+   * <p>对应上游 Rust {@code Tag::is_ignored}。当 {@code startByte == Integer.MAX_VALUE}
+   * 时返回 {@code true}。
+   */
+  public boolean isIgnored() {
+    return startByte == Integer.MAX_VALUE;
+  }
+
   public int getStartByte() { return startByte; }
   public int getEndByte() { return endByte; }
   public int getNameStartByte() { return nameStartByte; }

@@ -20,6 +20,7 @@ package com.itsaky.androidide.treesitter.tags;
 import com.itsaky.androidide.treesitter.TSLanguage;
 import com.itsaky.androidide.treesitter.TSQuery;
 import com.itsaky.androidide.treesitter.TSQueryPredicateStep;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,10 +52,10 @@ import java.util.regex.PatternSyntaxException;
  *
  * <p><strong>谓词约定：</strong>
  * <ul>
- *   <li>{@code (#not-local?)} — 标记 pattern 的 name 必须是非局部变量（跳过局部变量定义）。</li>
- *   <li>{@code #set! local.scope-inherits "false"} — 局部作用域不继承父作用域。</li>
- *   <li>{@code (select-adjacent! @doc @name)} — 只保留与指定 capture 相邻的文档注释。</li>
- *   <li>{@code (strip! @doc "regex")} — 从文档注释中去除匹配正则的内容。</li>
+ *   <li>{@code (#is-not? local)} — 属性谓词，标记 pattern 的 name 必须是非局部变量（跳过局部变量定义）。</li>
+ *   <li>{@code #set! local.scope-inherits "false"} — 属性设置，局部作用域不继承父作用域。</li>
+ *   <li>{@code (select-adjacent! @doc @name)} — 通用谓词，只保留与指定 capture 行相邻的文档注释。第一个参数必须是 {@code @doc}。</li>
+ *   <li>{@code (strip! @doc "regex")} — 通用谓词，从文档注释中去除匹配正则的内容。第一个参数必须是 {@code @doc}。</li>
  * </ul>
  */
 public final class TagsConfiguration implements AutoCloseable {
@@ -110,7 +111,9 @@ public final class TagsConfiguration implements AutoCloseable {
 
     // 拼接 locals_query + tags_query
     String querySource = localsQuery + tagsQuery;
-    int tagsQueryOffset = localsQuery.length();
+    // C2 修复：使用 UTF-8 字节长度（与上游 Rust locals_query.len() 一致），
+    // 而非 Java String.length() 返回的 UTF-16 char 数。
+    int tagsQueryOffset = localsQuery.getBytes(StandardCharsets.UTF_8).length;
 
     TSQuery query = TSQuery.create(language, querySource);
     if (query == null || !query.canAccess()) {
@@ -205,7 +208,18 @@ public final class TagsConfiguration implements AutoCloseable {
    *
    * <p>tree-sitter 的 C API 通过 {@code ts_query_predicates_for_pattern} 返回所有谓词的
    * 原始步骤（TSQueryPredicateStep 数组），每个谓词以 Done 步骤结尾。第一个 String 步骤
-   * 是操作符名称（如 "not-local?"、"set!"、"select-adjacent!"、"strip!"）。
+   * 是操作符名称（如 {@code "is-not?"}、{@code "set!"}、{@code "select-adjacent!"}、
+   * {@code "strip!"}）。
+   *
+   * <p>与上游 Rust {@code tags.rs} 的 {@code TagsConfiguration::new} 一致：
+   * <ul>
+   *   <li>{@code (#is-not? local)} — 属性谓词，设置 {@code nameMustBeNonLocal}。</li>
+   *   <li>{@code #set! local.scope-inherits "false"} — 属性设置，设置 {@code localScopeInherits}。</li>
+   *   <li>{@code (select-adjacent! @doc @X)} — 通用谓词，第一个参数必须是 {@code @doc} capture，
+   *       第二个参数（capture）设为 {@code docsAdjacentCapture}。</li>
+   *   <li>{@code (strip! @doc "regex")} — 通用谓词，第一个参数必须是 {@code @doc} capture，
+   *       第二个参数（string）编译为正则设为 {@code docStripRegex}。</li>
+   * </ul>
    */
   private static PatternInfo parsePatternInfo(TSQuery query, int patternIndex,
       int docCaptureIndex) throws TagsException {
@@ -230,6 +244,19 @@ public final class TagsConfiguration implements AutoCloseable {
       String operator = query.getStringValueForId(opStep.getValueId());
       if (operator == null) continue;
 
+      // C8 修复：检查第一个参数是否是 @doc capture（与上游 Rust 的
+      // predicate.args.first() == Some(&QueryPredicateArg::Capture(doc_capture_index)) 一致）。
+      // select-adjacent! 和 strip! 要求第一个参数是 @doc。
+      boolean firstArgIsDoc = false;
+      if (predicateSteps.size() >= 2 && docCaptureIndex != NO_CAPTURE) {
+        TSQueryPredicateStep firstArg = predicateSteps.get(1);
+        if (firstArg.getType() == TSQueryPredicateStep.Type.Capture
+            && firstArg.getValueId() == docCaptureIndex) {
+          firstArgIsDoc = true;
+        }
+      }
+
+      // 收集 string/capture 参数（用于 is-not? 和 set!）
       List<String> stringArgs = new ArrayList<>();
       List<Integer> captureArgs = new ArrayList<>();
       for (int j = 1; j < predicateSteps.size(); j++) {
@@ -243,8 +270,13 @@ public final class TagsConfiguration implements AutoCloseable {
       }
 
       switch (operator) {
-        case "not-local?":
-          info.nameMustBeNonLocal = true;
+        case "is-not?":
+          // C1 修复：与上游 Rust 一致，使用属性谓词 (#is-not? local)，
+          // 而非之前错误的通用谓词 (#not-local?)。
+          // 第一个 string 参数是属性 key，检查是否为 "local"。
+          if (!stringArgs.isEmpty() && "local".equals(stringArgs.get(0))) {
+            info.nameMustBeNonLocal = true;
+          }
           break;
         case "set!":
           // #set! key value 或 #set! key
@@ -258,19 +290,30 @@ public final class TagsConfiguration implements AutoCloseable {
           }
           break;
         case "select-adjacent!":
-          // (select-adjacent! @doc @name) → docsAdjacentCapture = name capture index
-          if (docCaptureIndex != NO_CAPTURE && !captureArgs.isEmpty()) {
-            info.docsAdjacentCapture = captureArgs.get(captureArgs.size() - 1);
+          // C8+C9 修复：与上游 Rust 一致，要求第一个参数是 @doc capture，
+          // 使用第二个参数（predicateSteps.get(2)，即 args.get(1)）作为 docsAdjacentCapture。
+          if (firstArgIsDoc && predicateSteps.size() >= 3) {
+            TSQueryPredicateStep secondArg = predicateSteps.get(2);
+            if (secondArg.getType() == TSQueryPredicateStep.Type.Capture) {
+              info.docsAdjacentCapture = secondArg.getValueId();
+            }
           }
           break;
         case "strip!":
-          // (strip! @doc "regex")
-          if (docCaptureIndex != NO_CAPTURE && !stringArgs.isEmpty()) {
-            try {
-              info.docStripRegex = Pattern.compile(stringArgs.get(0));
-            } catch (PatternSyntaxException e) {
-              throw new TagsException(TagsError.INVALID_REGEX,
-                  "Invalid strip regex: " + stringArgs.get(0), e);
+          // C8 修复：与上游 Rust 一致，要求第一个参数是 @doc capture，
+          // 使用第二个参数（predicateSteps.get(2)，即 args.get(1)）作为正则字符串。
+          if (firstArgIsDoc && predicateSteps.size() >= 3) {
+            TSQueryPredicateStep secondArg = predicateSteps.get(2);
+            if (secondArg.getType() == TSQueryPredicateStep.Type.String) {
+              String pattern = query.getStringValueForId(secondArg.getValueId());
+              if (pattern != null) {
+                try {
+                  info.docStripRegex = Pattern.compile(pattern);
+                } catch (PatternSyntaxException e) {
+                  throw new TagsException(TagsError.INVALID_REGEX,
+                      "Invalid strip regex: " + pattern, e);
+                }
+              }
             }
           }
           break;

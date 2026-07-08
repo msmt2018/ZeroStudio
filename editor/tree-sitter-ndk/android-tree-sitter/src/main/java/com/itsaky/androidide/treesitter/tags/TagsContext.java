@@ -29,7 +29,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 
 /**
@@ -94,10 +96,8 @@ public final class TagsContext implements AutoCloseable {
       cursor = TSQueryCursor.create();
       cursor.exec(config.getQuery(), tree.getRootNode());
 
+      // iterateMatches 内部已完成去重、过滤和排序
       List<Tag> tags = iterateMatches(config, sourceCode, tree);
-      tags.sort(Comparator
-          .comparingInt((Tag t) -> t.getNameStartByte())
-          .thenComparingInt(Tag::getNameEndByte));
 
       return new TagsResult(tags, hasError);
     } finally {
@@ -111,10 +111,14 @@ public final class TagsContext implements AutoCloseable {
 
   private List<Tag> iterateMatches(TagsConfiguration config, byte[] source, TSTree tree)
       throws TagsConfiguration.TagsException {
-    List<Tag> tagQueue = new ArrayList<>();
+    // C5 修复：收集所有 (Tag, patternIndex) 对，用于后续按 (nameEnd, nameStart) 去重
+    List<Tag> tagList = new ArrayList<>();
+    List<Integer> patternIndices = new ArrayList<>();
+    Map<Long, Integer> dedupMap = new HashMap<>();
+
     Deque<LocalScope> scopeStack = new ArrayDeque<>();
-    // 初始全局 scope
-    scopeStack.push(new LocalScope(true, 0, source.length, new ArrayList<>()));
+    // 初始全局 scope（与上游 Rust 一致：inherits=false, range=0..source.len()）
+    scopeStack.push(new LocalScope(false, 0, source.length, new ArrayList<>()));
 
     int tagsPatternIndex = config.getTagsPatternIndex();
     int nameCaptureIndex = config.getNameCaptureIndex();
@@ -144,9 +148,10 @@ public final class TagsContext implements AutoCloseable {
       }
 
       // tags 段：提取 name/doc/ignore/syntax_type
+      // 与上游 Rust 一致的 capture 处理结构：独立的 if 语句（非 if-else 链），
+      // 允许单个 capture 同时匹配多个条件。
       TSNode nameNode = null;
       TSNode tagNode = null;
-      TSNode ignoreNode = null;
       List<TSNode> docNodes = new ArrayList<>();
       TSNode docsAdjacentNode = null;
       TagsConfiguration.NamedCapture namedCapture = null;
@@ -158,25 +163,31 @@ public final class TagsContext implements AutoCloseable {
         int captureIndex = capture.getIndex();
         TSNode node = capture.getNode();
 
-        if (captureIndex == nameCaptureIndex) {
-          nameNode = node;
-        } else if (captureIndex == ignoreCaptureIndex) {
-          ignoreNode = node;
+        // C7 修复：@ignore 设置 isIgnored 并设置 nameNode（作为 fallback）
+        // 与上游 Rust 一致：is_ignored = true; name_node = Some(capture.node)
+        if (captureIndex == ignoreCaptureIndex) {
           isIgnored = true;
-        } else if (captureIndex == docCaptureIndex) {
-          docNodes.add(node);
-        } else {
-          TagsConfiguration.NamedCapture nc = config.getNamedCapture(captureIndex);
-          if (nc != null) {
-            namedCapture = nc;
-            tagNode = node;
-          }
+          nameNode = node;
         }
 
-        // 检查 docs_adjacent_capture
+        // docs_adjacent_capture 检查（独立 if，与上游 Rust 一致）
         if (patternInfo.docsAdjacentCapture != null
             && captureIndex == patternInfo.docsAdjacentCapture) {
           docsAdjacentNode = node;
+        }
+
+        // C3 修复：@name 覆盖 nameNode（在 @ignore 之后设置，与上游 Rust 一致）
+        if (captureIndex == nameCaptureIndex) {
+          nameNode = node;
+        } else if (captureIndex == docCaptureIndex) {
+          docNodes.add(node);
+        }
+
+        // named capture (definition.*/reference.*，独立 if，与上游 Rust 一致)
+        TagsConfiguration.NamedCapture nc = config.getNamedCapture(captureIndex);
+        if (nc != null) {
+          namedCapture = nc;
+          tagNode = node;
         }
       }
 
@@ -187,60 +198,81 @@ public final class TagsContext implements AutoCloseable {
       int nameStart = nameNode.getStartByte();
       int nameEnd = nameNode.getEndByte();
 
-      if (isIgnored) {
-        // 构造忽略标签
-        tagQueue.add(new Tag(
-            nameStart, nameEnd, nameStart, nameEnd,
-            nameStart, nameEnd, nameNode.getStartPoint(), nameNode.getEndPoint(),
-            0, 0, null, false, -1));
-        continue;
-      }
-
-      if (tagNode == null || namedCapture == null) {
-        continue;
-      }
-
-      // 检查 name 节点是否有错误
-      if (nameNode.hasErrors()) {
-        continue;
-      }
-
-      // 检查 name_must_be_non_local
-      if (patternInfo.nameMustBeNonLocal) {
-        String nameText = sliceString(source, nameStart, nameEnd);
-        if (isLocalVariable(scopeStack, nameText)) {
+      Tag tag;
+      // C3 修复：与上游 Rust 一致，先检查 tagNode，再检查 is_ignored
+      // 上游：if let Some(tag_node) = tag_node { ... } else if is_ignored { ... } else { continue }
+      if (tagNode != null && namedCapture != null) {
+        // 检查 name 节点是否有错误
+        if (nameNode.hasErrors()) {
           continue;
         }
+
+        // C6 修复：检查 name_must_be_non_local，使用 scope 范围验证
+        if (patternInfo.nameMustBeNonLocal) {
+          String nameText = sliceString(source, nameStart, nameEnd);
+          if (isLocalVariable(scopeStack, nameText, nameStart, nameEnd)) {
+            continue;
+          }
+        }
+
+        // 处理 docs（C10 修复：使用行号比较）
+        String docs = processDocs(patternInfo, docNodes, docsAdjacentNode, source);
+
+        // 计算标签范围
+        int tagStart = tagNode.getStartByte();
+        int tagEnd = tagNode.getEndByte();
+        int startByte = Math.min(tagStart, nameStart);
+        int endByte = Math.max(tagEnd, nameEnd);
+
+        // 计算 line range
+        int[] lineRange = computeLineRange(source, nameStart, nameEnd);
+        int lineStartByte = lineRange[0];
+        int lineEndByte = lineRange[1];
+
+        // 计算 UTF-16 列
+        int[] utf16Columns = computeUtf16Columns(source, nameStart, nameEnd,
+            nameNode.getStartPoint());
+
+        tag = new Tag(
+            startByte, endByte,
+            nameStart, nameEnd,
+            lineStartByte, lineEndByte,
+            nameNode.getStartPoint(), nameNode.getEndPoint(),
+            utf16Columns[0], utf16Columns[1],
+            docs, namedCapture.isDefinition, namedCapture.syntaxTypeId);
+      } else if (isIgnored) {
+        // C4 修复：使用 Tag.ignored() 哨兵标签（与上游 Rust Tag::ignored 一致）
+        tag = Tag.ignored(nameStart, nameEnd);
+      } else {
+        continue;
       }
 
-      // 处理 docs
-      String docs = processDocs(config, patternInfo, docNodes, docsAdjacentNode, source);
-
-      // 计算标签范围
-      int tagStart = tagNode.getStartByte();
-      int tagEnd = tagNode.getEndByte();
-      int startByte = Math.min(tagStart, nameStart);
-      int endByte = Math.max(tagEnd, nameEnd);
-
-      // 计算 line range
-      int[] lineRange = computeLineRange(source, nameStart, nameEnd);
-      int lineStartByte = lineRange[0];
-      int lineEndByte = lineRange[1];
-
-      // 计算 UTF-16 列
-      int[] utf16Columns = computeUtf16Columns(source, nameStart, nameEnd,
-          nameNode.getStartPoint());
-
-      tagQueue.add(new Tag(
-          startByte, endByte,
-          nameStart, nameEnd,
-          lineStartByte, lineEndByte,
-          nameNode.getStartPoint(), nameNode.getEndPoint(),
-          utf16Columns[0], utf16Columns[1],
-          docs, namedCapture.isDefinition, namedCapture.syntaxTypeId));
+      // C5 修复：标签去重，按 (nameEnd, nameStart) 去重，保留 patternIndex 最小的
+      // 与上游 Rust 的 binary_search_by_key + pattern_index 比较一致
+      long dedupKey = ((long) nameEnd << 32) | (nameStart & 0xFFFFFFFFL);
+      Integer existingIdx = dedupMap.get(dedupKey);
+      if (existingIdx == null) {
+        dedupMap.put(dedupKey, tagList.size());
+        tagList.add(tag);
+        patternIndices.add(patternIndex);
+      } else if (patternIndices.get(existingIdx) > patternIndex) {
+        tagList.set(existingIdx, tag);
+        patternIndices.set(existingIdx, patternIndex);
+      }
     }
 
-    return tagQueue;
+    // C4 修复：过滤 ignored 标签（与上游 Rust 的 if tag.is_ignored() { continue; } 一致）
+    List<Tag> result = new ArrayList<>();
+    for (Tag t : tagList) {
+      if (!t.isIgnored()) {
+        result.add(t);
+      }
+    }
+    result.sort(Comparator
+        .comparingInt(Tag::getNameStartByte)
+        .thenComparingInt(Tag::getNameEndByte));
+
+    return result;
   }
 
   private void handleLocalsMatch(TagsConfiguration config, Deque<LocalScope> scopeStack,
@@ -252,76 +284,88 @@ public final class TagsContext implements AutoCloseable {
       TSNode node = capture.getNode();
 
       if (captureIndex == localScopeCaptureIndex) {
-        // 弹出已结束的 scope
-        while (scopeStack.size() > 1 && scopeStack.peek().endByte < node.getStartByte()) {
-          scopeStack.pop();
-        }
-        // push 新 scope，读取 local.scope-inherits 设置
+        // 与上游 Rust 一致：只 push，不 pop。scope 的 range 在 isLocalVariable
+        // 中通过范围包含检查来正确处理，无需手动弹出已结束的 scope。
         scopeStack.push(new LocalScope(
             patternInfo.localScopeInherits,
             node.getStartByte(), node.getEndByte(), new ArrayList<>()));
       } else if (captureIndex == localDefinitionCaptureIndex) {
-        String name = sliceString(source, node.getStartByte(), node.getEndByte());
-        if (!scopeStack.isEmpty()) {
-          scopeStack.peek().localDefs.add(new LocalDef(name, node.getEndByte()));
+        // 与上游 Rust 一致：找到包含此定义范围的最内层 scope（iter().rev().find）
+        // Deque 迭代从 head（innermost）到 tail（outermost），与 Rust iter().rev() 一致。
+        int defStart = node.getStartByte();
+        int defEnd = node.getEndByte();
+        for (LocalScope scope : scopeStack) {
+          if (scope.startByte <= defStart && scope.endByte >= defEnd) {
+            String name = sliceString(source, defStart, defEnd);
+            scope.localDefs.add(new LocalDef(name));
+            break;
+          }
         }
       }
     }
   }
 
-  /** 检查 name 是否是局部变量（在 scope 栈中查找同名定义）。 */
-  private boolean isLocalVariable(Deque<LocalScope> scopeStack, String name) {
+  /**
+   * 检查 name 是否是局部变量（在 scope 栈中查找同名定义）。
+   *
+   * <p>C6 修复：与上游 Rust 一致，只检查范围包含 name 的 scope，
+   * 且非继承的 scope 会中断向父 scope 的查找。
+   * Deque 迭代从 head（innermost）到 tail（outermost），与 Rust iter().rev() 一致。
+   */
+  private boolean isLocalVariable(Deque<LocalScope> scopeStack, String name,
+      int nameStart, int nameEnd) {
     for (LocalScope scope : scopeStack) {
-      for (LocalDef def : scope.localDefs) {
-        if (def.name.equals(name)) {
-          return true;
+      if (scope.startByte <= nameStart && scope.endByte >= nameEnd) {
+        for (LocalDef def : scope.localDefs) {
+          if (def.name.equals(name)) {
+            return true;
+          }
         }
-      }
-      if (!scope.inherits) {
-        break;
+        if (!scope.inherits) {
+          break;
+        }
       }
     }
     return false;
   }
 
-  /** 处理文档注释：过滤相邻 + strip 正则。 */
-  private String processDocs(TagsConfiguration config,
-      TagsConfiguration.PatternInfo patternInfo,
+  /**
+   * 处理文档注释：过滤相邻 + strip 正则。
+   *
+   * <p>C10 修复：与上游 Rust 一致，使用行号（row）比较来判断文档注释的相邻性，
+   * 而非字节偏移比较。上游算法：从 doc_nodes 末尾向前回溯，如果 doc 的 end_row + 1 >= start_row
+   * （即 doc 与相邻节点在同一行或紧邻的上一行），则包含该 doc 并继续回溯。
+   */
+  private String processDocs(TagsConfiguration.PatternInfo patternInfo,
       List<TSNode> docNodes, TSNode docsAdjacentNode, byte[] source) {
     if (docNodes.isEmpty()) {
       return null;
     }
 
-    // 如果有 docs_adjacent_capture，只保留与该节点相邻的 doc
-    List<TSNode> filteredDocs = new ArrayList<>(docNodes);
-    if (docsAdjacentNode != null && filteredDocs.size() > 1) {
-      int adjEnd = docsAdjacentNode.getEndByte();
-      // 从末尾向前回溯，只保留与 adjacent 节点行相邻的 doc
-      List<TSNode> adjacent = new ArrayList<>();
-      int prevLineEnd = adjEnd;
-      for (int i = filteredDocs.size() - 1; i >= 0; i--) {
-        TSNode doc = filteredDocs.get(i);
-        // 简化：检查 doc 是否在 adjacent 之前且行相邻
-        // 完整实现需要检查行号，这里用字节范围近似
-        if (doc.getEndByte() <= prevLineEnd) {
-          adjacent.add(0, doc);
-          prevLineEnd = doc.getStartByte();
+    // C10 修复：与上游 Rust 一致，使用行号比较过滤相邻文档注释
+    int docsStartIndex = 0;
+    if (docsAdjacentNode != null) {
+      docsStartIndex = docNodes.size();
+      int startRow = docsAdjacentNode.getStartPoint().getRow();
+      while (docsStartIndex > 0) {
+        TSNode docNode = docNodes.get(docsStartIndex - 1);
+        int prevDocEndRow = docNode.getEndPoint().getRow();
+        if (prevDocEndRow + 1 >= startRow) {
+          docsStartIndex--;
+          startRow = docNode.getStartPoint().getRow();
         } else {
           break;
         }
       }
-      if (!adjacent.isEmpty()) {
-        filteredDocs = adjacent;
-      }
     }
 
-    // 拼接 docs 并应用 strip regex
+    // 拼接 docs[docsStartIndex..] 并应用 strip regex
     StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < filteredDocs.size(); i++) {
-      if (i > 0) {
+    for (int i = docsStartIndex; i < docNodes.size(); i++) {
+      if (sb.length() > 0) {
         sb.append('\n');
       }
-      TSNode docNode = filteredDocs.get(i);
+      TSNode docNode = docNodes.get(i);
       String docText = sliceString(source, docNode.getStartByte(), docNode.getEndByte());
       if (patternInfo.docStripRegex != null) {
         Matcher m = patternInfo.docStripRegex.matcher(docText);
@@ -419,11 +463,9 @@ public final class TagsContext implements AutoCloseable {
 
   private static final class LocalDef {
     final String name;
-    final int valueEndByte;
 
-    LocalDef(String name, int valueEndByte) {
+    LocalDef(String name) {
       this.name = name;
-      this.valueEndByte = valueEndByte;
     }
   }
 
