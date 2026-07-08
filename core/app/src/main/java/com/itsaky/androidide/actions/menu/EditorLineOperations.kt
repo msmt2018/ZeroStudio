@@ -60,20 +60,23 @@ object EditorLineOperations {
   private const val KOTLIN_IF_QUERY = """(if_expression) @if"""
 
   // Helper extension functions to fix TreeSitter errors
+  // 修复：原实现仅在正常路径末尾调用 tsQuery.close()，cursor 遍历抛异常时 TSQuery 泄漏。
+  // 改为 tsQuery.use {} 包裹整个查询流程，确保任何路径下 native 资源都被释放。
   private fun TSTree.executeQuery(language: TSLanguage, query: String): List<TSQueryMatch> {
     return try {
       val tsQuery = TSQuery.create(language, query)
-      val matches = mutableListOf<TSQueryMatch>()
-      TSQueryCursor.create().use {
-        it.exec(tsQuery, this.rootNode)
-        var match = it.nextMatch()
-        while (match != null) {
-          matches.add(match)
-          match = it.nextMatch()
+      tsQuery.use { q ->
+        val matches = mutableListOf<TSQueryMatch>()
+        TSQueryCursor.create().use { cursor ->
+          cursor.exec(q, this.rootNode)
+          var match = cursor.nextMatch()
+          while (match != null) {
+            matches.add(match)
+            match = cursor.nextMatch()
+          }
         }
+        matches
       }
-      tsQuery.close()
-      matches
     } catch (e: Exception) {
       e.printStackTrace()
       emptyList()

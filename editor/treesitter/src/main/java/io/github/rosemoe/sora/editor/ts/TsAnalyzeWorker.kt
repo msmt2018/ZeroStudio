@@ -222,7 +222,8 @@ class TsAnalyzeWorker(
     }
 
     val tree = tree!!
-    val scopedVariables = TsScopedVariables(tree, text, languageSpec)
+    val scopedVariables =
+        TsScopedVariables(tree, text, languageSpec, cancelChecker = { !isDestroyed })
     val oldTree = (styles.spans as? LineSpansGenerator?)?.tree
     val copied = tree.copy()
 
@@ -263,6 +264,9 @@ class TsAnalyzeWorker(
           recycleNodeAfterUse = true,
           matchCondition = { !isDestroyed },
           onClosedOrEdited = { blocks.clear() },
+          // 升级：注册 0.27 进度回调，使单次 nextMatch() 内部也能响应 isDestroyed 取消，
+          // 避免超大文件上全树 blocks 查询单次迭代耗时过长导致 ANR。
+          cancelChecker = { !isDestroyed },
           debugName = "TsAnalyzeManager.updateCodeBlocks()",
       ) { match ->
         if (!languageSpec.blocksPredicator.doPredicate(languageSpec.predicates, text, match)) {

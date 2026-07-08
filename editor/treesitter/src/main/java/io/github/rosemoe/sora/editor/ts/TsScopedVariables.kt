@@ -46,7 +46,12 @@ private fun TSNode.indices(): TSNodeIndices {
  * @param spec Language specification, which should the same as highlighter's
  * @author Rosemoe
  */
-class TsScopedVariables(tree: TSTree, text: UTF16String, val spec: TsLanguageSpec) {
+class TsScopedVariables(
+    tree: TSTree,
+    text: UTF16String,
+    val spec: TsLanguageSpec,
+    cancelChecker: (() -> Boolean)? = null,
+) {
 
   private val rootScope: Scope
 
@@ -69,6 +74,9 @@ class TsScopedVariables(tree: TSTree, text: UTF16String, val spec: TsLanguageSpe
             tree = tree,
             recycleNodeAfterUse = true,
             onClosedOrEdited = { captures.clear() },
+            // 升级：注册 0.27 进度回调，使全树 locals 查询单次迭代也可响应取消，
+            // 避免超大文件上变量收集耗时过长阻塞工作线程。
+            cancelChecker = cancelChecker,
             debugName = "TsScopedVariables.init()",
         ) { match ->
           if (spec.queryPredicator.doPredicate(spec.predicates, text, match)) {

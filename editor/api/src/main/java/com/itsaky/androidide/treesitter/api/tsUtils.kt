@@ -21,6 +21,7 @@ import com.itsaky.androidide.treesitter.TSNode
 import com.itsaky.androidide.treesitter.TSQuery
 import com.itsaky.androidide.treesitter.TSQueryCursor
 import com.itsaky.androidide.treesitter.TSQueryMatch
+import com.itsaky.androidide.treesitter.TSQueryProgressCallback
 import com.itsaky.androidide.treesitter.TSTree
 import org.slf4j.LoggerFactory
 
@@ -40,6 +41,7 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
     crossinline matchCondition: (TSQueryMatch?) -> Boolean = { true },
     crossinline whileTrue: (TSQueryMatch?) -> Boolean = { true },
     crossinline onClosedOrEdited: () -> Unit = {},
+    noinline cancelChecker: (() -> Boolean)? = null,
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -82,6 +84,7 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
       },
       whileTrue = whileTrue,
       onClosedOrEdited = onClosedOrEdited,
+      cancelChecker = cancelChecker,
       debugName = debugName,
       debugLogging = debugLogging,
       action = action,
@@ -102,6 +105,7 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
     crossinline matchCondition: (TSQueryMatch?) -> Boolean = { true },
     crossinline whileTrue: (TSQueryMatch?) -> Boolean = { true },
     crossinline onClosedOrEdited: () -> Unit = {},
+    noinline cancelChecker: (() -> Boolean)? = null,
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -120,6 +124,7 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
       },
       whileTrue = whileTrue,
       onClosedOrEdited = onClosedOrEdited,
+      cancelChecker = cancelChecker,
       debugName = debugName,
       debugLogging = debugLogging,
       action = action,
@@ -134,6 +139,7 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     crossinline matchCondition: (TSQueryMatch?) -> Boolean,
     crossinline whileTrue: (TSQueryMatch?) -> Boolean,
     crossinline onClosedOrEdited: () -> Unit,
+    noinline cancelChecker: (() -> Boolean)? = null,
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -157,7 +163,15 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     return null
   }
 
-  exec(query, node)
+  // 升级：当调用方提供 cancelChecker 时，使用 tree-sitter 0.27 的 execWithOptions
+  // (ts_query_cursor_exec_with_options) 注册进度回调，使单次 nextMatch() 内部也可被取消。
+  // 这解决了全树查询（如代码块分析）在超大文件上单次迭代无法中断导致的 ANR 风险。
+  // cancelChecker 为 null 时退化为普通 exec，保持原有行为与性能（避免逐行高亮路径的 JNI GlobalRef 开销）。
+  if (cancelChecker != null) {
+    execWithOptions(query, node, TSQueryProgressCallback { cancelChecker() })
+  } else {
+    exec(query, node)
+  }
   var match = nextMatch()
   while (matchCondition(match) && whileTrue(match)) {
 
