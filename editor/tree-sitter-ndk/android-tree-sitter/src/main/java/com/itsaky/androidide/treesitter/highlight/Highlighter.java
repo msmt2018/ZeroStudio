@@ -37,13 +37,24 @@ import java.util.NoSuchElementException;
  * 解析源代码，用 {@link TSQueryCursor} 按 capture 字节顺序遍历 query 匹配，
  * 生成 {@link HighlightEvent} 事件流。
  *
- * <p><strong>当前实现版本（基础版）：</strong>
+ * <p><strong>当前实现版本：</strong>
  * <ul>
- *   <li>支持 highlight capture 合并（同节点的多个 capture 取最具体的）。</li>
+ *   <li>支持 highlight capture 合并（同节点的多个 capture 取最后一个有效的）。</li>
  *   <li>支持 local scope/def/ref 追踪（引用继承定义的高亮类型）。</li>
- *   <li>支持 {@code (#not-local?)} 谓词（跳过局部变量的特定高亮 pattern）。</li>
+ *   <li>支持 {@code (#is-not? local)} 属性谓词（跳过局部变量的特定高亮 pattern）。</li>
+ *   <li>支持 {@code (#set! local.scope-inherits "false")} 属性设置。</li>
+ *   <li>支持 {@code @local.definition-value} capture（使用值范围而非定义节点范围）。</li>
  *   <li><strong>不支持</strong>语言嵌入（injection）——这是后续增强项。</li>
  * </ul>
+ *
+ * <p>算法与上游 Rust {@code highlight.rs} 一致：
+ * <ol>
+ *   <li>按字节顺序遍历 capture，处理同一节点上的所有 capture（locals + highlight）。</li>
+ *   <li>每个 capture 处理前，先弹出已结束的 scope 和 highlight end。</li>
+ *   <li>locals capture 设置 {@code referenceHighlight} 和 {@code definitionHighlightDef}。</li>
+ *   <li>highlight capture 使用 {@code referenceHighlight.or(currentHighlight)} 发射 HighlightStart。</li>
+ *   <li>如果节点是 local definition，回写 highlight 到 LocalDef。</li>
+ * </ol>
  *
  * <p><strong>非线程安全。</strong>每个线程应使用独立的 {@code Highlighter} 实例。
  *
@@ -72,6 +83,7 @@ public final class Highlighter implements AutoCloseable {
   private static final int CANCELLATION_CHECK_INTERVAL = 100;
 
   private final TSParser parser = TSParser.create();
+  private final List<HighlightIterator> activeIterators = new ArrayList<>();
 
   public Highlighter() {
   }
@@ -81,6 +93,10 @@ public final class Highlighter implements AutoCloseable {
    *
    * <p>迭代器是惰性的——每次调用 {@link Iterator#next()} 才会处理下一个 capture。
    * 这允许调用方在处理过程中取消（通过停止迭代）。
+   *
+   * <p>返回的迭代器也实现了 {@link AutoCloseable}。如果提前终止迭代，调用方应
+   * 通过 {@code ((AutoCloseable) iterator).close()} 释放底层资源（cursor/tree）。
+   * {@link Highlighter#close()} 也会自动关闭所有活跃的迭代器。
    *
    * @param config     高亮配置（必须已调用 {@link HighlightConfiguration#configure}）。
    * @param sourceCode 源代码（UTF-8 字节）。
@@ -99,7 +115,9 @@ public final class Highlighter implements AutoCloseable {
     TSQueryCursor cursor = TSQueryCursor.create();
     cursor.exec(config.getQuery(), tree.getRootNode());
 
-    return new HighlightIterator(config, cursor, tree, sourceCode);
+    HighlightIterator iter = new HighlightIterator(config, cursor, tree, sourceCode);
+    activeIterators.add(iter);
+    return iter;
   }
 
   private static Iterator<HighlightEvent> singleSourceEvent(int start, int end) {
@@ -112,6 +130,10 @@ public final class Highlighter implements AutoCloseable {
 
   @Override
   public void close() {
+    for (HighlightIterator iter : activeIterators) {
+      iter.close();
+    }
+    activeIterators.clear();
     parser.close();
   }
 
@@ -120,16 +142,19 @@ public final class Highlighter implements AutoCloseable {
   /**
    * 惰性迭代器，遍历 capture 生成 HighlightEvent。
    *
-   * <p>核心算法（简化版，不含 injection）：
+   * <p>核心算法（与上游 Rust {@code highlight.rs} 一致，不含 injection）：
    * <ol>
    *   <li>用 {@link TSQueryCursor#nextCapture(int[])} 按字节顺序获取 capture。</li>
-   *   <li>根据 pattern_index 判断是 injection/locals/highlight 段。</li>
-   *   <li>locals 段：更新 scope 栈和 local def/ref。</li>
-   *   <li>highlight 段：查找 capture 对应的 highlight 索引，生成 HighlightStart/End。</li>
+   *   <li>每个 capture 处理前，先弹出已结束的 scope（A1 修复）。</li>
+   *   <li>处理同一节点上的所有 locals capture（scope/def/ref），设置
+   *       {@code referenceHighlight} 和 {@code definitionHighlightDef}。</li>
+   *   <li>处理同一节点上的第一个 highlight capture，使用
+   *       {@code referenceHighlight.or(currentHighlight)} 发射 HighlightStart（A4 修复）。</li>
+   *   <li>合并同节点上后续的 highlight capture（跳过 non-local-variable pattern）。</li>
    *   <li>在事件之间插入 Source 事件填充未着色的源码。</li>
    * </ol>
    */
-  private static final class HighlightIterator implements Iterator<HighlightEvent> {
+  private static final class HighlightIterator implements Iterator<HighlightEvent>, AutoCloseable {
 
     private final HighlightConfiguration config;
     private final TSQueryCursor cursor;
@@ -155,6 +180,7 @@ public final class Highlighter implements AutoCloseable {
 
     private int iterCount = 0;
     private boolean finished = false;
+    private boolean closed = false;
 
     HighlightIterator(HighlightConfiguration config, TSQueryCursor cursor,
         TSTree tree, byte[] source) {
@@ -182,6 +208,19 @@ public final class Highlighter implements AutoCloseable {
       return eventQueue.poll();
     }
 
+    @Override
+    public void close() {
+      if (closed) return;
+      closed = true;
+      finished = true;
+      if (cursor != null) {
+        cursor.close();
+      }
+      if (tree != null) {
+        tree.close();
+      }
+    }
+
     private void fillEventQueue() {
       while (eventQueue.isEmpty() && !finished) {
         iterCount++;
@@ -196,7 +235,7 @@ public final class Highlighter implements AutoCloseable {
           if (!hasPeeked) {
             peekNextCapture();
           }
-          int nextCaptureStart = hasPeeked ? getPeekedCaptureStart() : Integer.MAX_VALUE;
+          int nextCaptureStart = getPeekedCaptureStart();
           if (nextEnd <= nextCaptureStart) {
             // 先输出 Source 填充到 end 位置
             emitSource(nextEnd);
@@ -216,7 +255,7 @@ public final class Highlighter implements AutoCloseable {
           return;
         }
 
-        // 处理 peeked capture
+        // 处理 peeked capture（可能处理同一节点上的多个 capture）
         processCapture();
       }
     }
@@ -238,156 +277,193 @@ public final class Highlighter implements AutoCloseable {
       return captures[peekedCaptureIndex].getNode().getStartByte();
     }
 
+    /**
+     * 处理当前 peeked capture，以及同一节点上的所有后续 capture。
+     *
+     * <p>这与上游 Rust {@code highlight.rs} 的主循环逻辑一致：
+     * <ol>
+     *   <li>弹出已结束的 scope（A1 修复：对所有 capture 都执行，不仅限于 local.scope）。</li>
+     *   <li>处理所有 locals capture（同一节点上），设置 referenceHighlight 和 definitionHighlightDef。</li>
+     *   <li>如果没有 highlight capture（下一 capture 是不同节点），直接返回（不发射 highlight）。</li>
+     *   <li>处理 highlight capture，使用 referenceHighlight.or(currentHighlight)（A4 修复）。</li>
+     *   <li>合并同节点上后续的 highlight capture。</li>
+     * </ol>
+     */
     private void processCapture() {
-      TSQueryCapture[] captures = peekedMatch.getCaptures();
-      if (captures == null || peekedCaptureIndex < 0
-          || peekedCaptureIndex >= captures.length) {
+      TSQueryCapture capture = getPeekedCapture();
+      if (capture == null) {
         hasPeeked = false;
         return;
       }
 
-      TSQueryCapture capture = captures[peekedCaptureIndex];
       TSNode node = capture.getNode();
+      int nodeStart = node.getStartByte();
+      int nodeEnd = node.getEndByte();
       int captureIndex = capture.getIndex();
-      int patternIndex = peekedMatch.getPatternIndex();
-      int captureStart = node.getStartByte();
-      int captureEnd = node.getEndByte();
+      TSQueryMatch currentMatch = peekedMatch;
+      int patternIndex = currentMatch.getPatternIndex();
 
-      // 消费 peeked
-      hasPeeked = false;
+      // A1: 弹出已结束的 scope（对所有 capture 都执行）
+      // Rust: while range.start > layer.scope_stack.last().range.end { pop }
+      while (scopeStack.size() > 1 && scopeStack.peek().endByte < nodeStart) {
+        scopeStack.pop();
+      }
 
       int localsPatternIndex = config.getLocalsPatternIndex();
       int highlightsPatternIndex = config.getHighlightsPatternIndex();
 
+      // injection 段 —— 当前版本不支持 injection，跳过
       if (patternIndex < localsPatternIndex) {
-        // injection 段 —— 当前版本不支持 injection，跳过
+        hasPeeked = false;
         return;
       }
 
-      if (patternIndex < highlightsPatternIndex) {
-        // locals 段：处理 scope/def/ref
-        handleLocalsCapture(captureIndex, node, patternIndex);
-        return;
+      // 每个节点的局部状态
+      Integer referenceHighlight = null;
+      LocalDef definitionHighlightDef = null;
+
+      // 处理同一节点上的所有 locals capture
+      while (patternIndex < highlightsPatternIndex) {
+        int localScopeIdx = config.getLocalScopeCaptureIndex();
+        int localDefIdx = config.getLocalDefCaptureIndex();
+        int localRefIdx = config.getLocalRefCaptureIndex();
+        int localDefValueIdx = config.getLocalDefValueCaptureIndex();
+
+        if (captureIndex == localScopeIdx) {
+          // A2: 读取 local.scope-inherits 属性
+          boolean inherits = config.doesScopeInherit(patternIndex);
+          scopeStack.push(new LocalScope(inherits, nodeStart, nodeEnd, new ArrayList<>()));
+          definitionHighlightDef = null;
+        } else if (captureIndex == localDefIdx) {
+          // A3: 扫描当前 match 的 captures 查找 local.definition-value
+          int valueEndByte = 0; // Rust fallback: 0..0
+          if (localDefValueIdx >= 0) {
+            TSQueryCapture[] matchCaptures = currentMatch.getCaptures();
+            if (matchCaptures != null) {
+              for (TSQueryCapture c : matchCaptures) {
+                if (c.getIndex() == localDefValueIdx) {
+                  valueEndByte = c.getNode().getEndByte();
+                  break;
+                }
+              }
+            }
+          }
+          String name = sliceString(nodeStart, nodeEnd);
+          if (!scopeStack.isEmpty()) {
+            LocalDef def = new LocalDef(name, valueEndByte);
+            scopeStack.peek().localDefs.add(def);
+            definitionHighlightDef = def;
+          }
+          referenceHighlight = null;
+        } else if (captureIndex == localRefIdx && definitionHighlightDef == null) {
+          // A4: 不立即发射 HighlightStart，存储 referenceHighlight
+          String name = sliceString(nodeStart, nodeEnd);
+          referenceHighlight = findLocalDefHighlight(name, nodeStart);
+          definitionHighlightDef = null;
+        }
+
+        // 消费当前 capture，peek 下一个
+        hasPeeked = false;
+        capture = getPeekedCapture();
+        if (capture == null) {
+          // 没有更多 capture，此节点无 highlight capture
+          return;
+        }
+        TSNode nextNode = capture.getNode();
+        if (nextNode.getStartByte() != nodeStart || nextNode.getEndByte() != nodeEnd) {
+          // 不同节点，此节点无 highlight capture，保留 peek 给下次 processCapture
+          return;
+        }
+        // 同一节点，继续处理下一个 capture
+        currentMatch = peekedMatch;
+        captureIndex = capture.getIndex();
+        patternIndex = currentMatch.getPatternIndex();
       }
 
-      // highlight 段
-      handleHighlightCapture(captureIndex, node, patternIndex, captureStart, captureEnd);
-    }
+      // 现在处于 highlight 段
+      // 当前 peeked capture 是此节点的第一个 highlight capture
+      int highlightIndex = config.getHighlightIndex(captureIndex);
 
-    private void handleLocalsCapture(int captureIndex, TSNode node, int patternIndex) {
-      int localScopeIndex = config.getLocalScopeCaptureIndex();
-      int localDefIndex = config.getLocalDefCaptureIndex();
-      int localRefIndex = config.getLocalRefCaptureIndex();
+      // 合并同节点上后续的 highlight capture
+      // Rust 第二个 while 循环：peek next, if same node consume and update
+      hasPeeked = false; // 消费第一个 highlight capture
+      while (true) {
+        TSQueryCapture nextCap = getPeekedCapture();
+        if (nextCap == null) break;
+        TSNode nextNode = nextCap.getNode();
+        if (nextNode.getStartByte() != nodeStart || nextNode.getEndByte() != nodeEnd) break;
 
-      if (captureIndex == localScopeIndex) {
-        // 弹出已结束的 scope
-        while (scopeStack.size() > 1 && scopeStack.peek().endByte < node.getStartByte()) {
-          scopeStack.pop();
+        int nextPattern = peekedMatch.getPatternIndex();
+        // 消费此 capture
+        hasPeeked = false;
+
+        // 如果当前节点是 local def/ref，跳过 non-local-variable pattern
+        if ((definitionHighlightDef != null || referenceHighlight != null)
+            && config.isNonLocalVariablePattern(nextPattern)) {
+          continue;
         }
-        scopeStack.push(new LocalScope(true, node.getStartByte(), node.getEndByte(),
-            new ArrayList<>()));
-      } else if (captureIndex == localDefIndex) {
-        String name = sliceString(node.getStartByte(), node.getEndByte());
-        if (!scopeStack.isEmpty()) {
-          // 查找是否有对应的 definition-value capture
-          LocalDef def = new LocalDef(name, node.getStartByte(), node.getEndByte(), -1);
-          scopeStack.peek().localDefs.add(def);
-        }
-      } else if (captureIndex == localRefIndex) {
-        // 引用：在 scope 栈中查找同名 def
-        String name = sliceString(node.getStartByte(), node.getEndByte());
-        Integer refHighlight = findLocalDefHighlight(name, node.getStartByte());
-        if (refHighlight != null && refHighlight >= 0) {
-          emitSource(node.getStartByte());
-          highlightEndStack.push(node.getEndByte());
-          eventQueue.add(new HighlightEvent.HighlightStart(refHighlight));
-        }
+        // 与上游 Rust 一致：更新 capture.index 为最后未跳过的 capture，
+        // 然后 current_highlight = highlight_indices[capture.index]。
+        // 即使该 capture 的 highlight 为 -1（None），也要更新（覆盖前一个有效值），
+        // 因为 Rust 在循环结束后用最后未跳过的 capture 重新计算 current_highlight。
+        captureIndex = nextCap.getIndex();
+        highlightIndex = config.getHighlightIndex(captureIndex);
       }
-      // local.definition-value 不单独处理，在后续 highlight capture 中回写
+
+      // A4: 使用 referenceHighlight.or(currentHighlight)
+      int effectiveHighlight = referenceHighlight != null ? referenceHighlight : highlightIndex;
+
+      // 回写局部变量定义的 highlight
+      if (definitionHighlightDef != null && effectiveHighlight >= 0) {
+        definitionHighlightDef.highlight = effectiveHighlight;
+      }
+
+      // 生成 HighlightStart 事件
+      if (effectiveHighlight >= 0) {
+        emitSource(nodeStart);
+        highlightEndStack.push(nodeEnd);
+        eventQueue.add(new HighlightEvent.HighlightStart(effectiveHighlight));
+      }
     }
 
+    /**
+     * 获取当前 peeked capture。如果 hasPeeked 为 false，先 peek。
+     * 返回 null 表示没有更多 capture。
+     */
+    private TSQueryCapture getPeekedCapture() {
+      if (!hasPeeked) {
+        peekNextCapture();
+      }
+      if (peekedMatch == null) return null;
+      TSQueryCapture[] captures = peekedMatch.getCaptures();
+      if (captures == null || peekedCaptureIndex < 0
+          || peekedCaptureIndex >= captures.length) {
+        return null;
+      }
+      return captures[peekedCaptureIndex];
+    }
+
+    /**
+     * 在 scope 栈中查找同名 def 的 highlight。
+     *
+     * <p>与上游 Rust 一致：从栈顶向下搜索，每个 scope 内从后向前搜索 def。
+     * 如果 scope.inherits 为 false 则停止搜索。
+     *
+     * @return def 的 highlight 值，如果 def 存在但 highlight 未设置则返回 null，
+     *         如果 def 不存在也返回 null。
+     */
     private Integer findLocalDefHighlight(String name, int refStart) {
       for (LocalScope scope : scopeStack) {
-        for (LocalDef def : scope.localDefs) {
+        // 从后向前搜索 def（与 Rust iter().rev() 一致）
+        for (int i = scope.localDefs.size() - 1; i >= 0; i--) {
+          LocalDef def = scope.localDefs.get(i);
           if (def.name.equals(name) && refStart >= def.valueEndByte) {
-            return def.highlight;
+            return def.highlight >= 0 ? def.highlight : null;
           }
         }
         if (!scope.inherits) break;
       }
       return null;
-    }
-
-    private void handleHighlightCapture(int captureIndex, TSNode node, int patternIndex,
-        int captureStart, int captureEnd) {
-      // 合并同节点的后续 highlight capture（取更具体的）
-      int highlightIndex = config.getHighlightIndex(captureIndex);
-      if (highlightIndex < 0) {
-        return;
-      }
-
-      // 检查是否是局部变量且 pattern 标记为 non-local
-      if (config.isNonLocalVariablePattern(patternIndex)) {
-        String name = sliceString(captureStart, captureEnd);
-        if (isLocalVariable(name)) {
-          return;
-        }
-      }
-
-      // peek 下一个 capture，如果同节点则合并
-      while (true) {
-        if (!hasPeeked) {
-          peekNextCapture();
-        }
-        if (peekedMatch == null) break;
-        TSQueryCapture[] captures = peekedMatch.getCaptures();
-        if (captures == null || peekedCaptureIndex < 0
-            || peekedCaptureIndex >= captures.length) break;
-        TSQueryCapture nextCapture = captures[peekedCaptureIndex];
-        TSNode nextNode = nextCapture.getNode();
-        if (nextNode.getStartByte() != captureStart || nextNode.getEndByte() != captureEnd) {
-          break;
-        }
-        // 同节点，检查是否更具体
-        int nextHighlight = config.getHighlightIndex(nextCapture.getIndex());
-        if (nextHighlight >= 0) {
-          highlightIndex = nextHighlight;
-        }
-        hasPeeked = false;
-      }
-
-      // 回写局部变量定义的 highlight
-      if (config.getLocalDefCaptureIndex() >= 0) {
-        String name = sliceString(captureStart, captureEnd);
-        writeBackLocalDefHighlight(name, highlightIndex);
-      }
-
-      // 生成 HighlightStart 事件
-      emitSource(captureStart);
-      highlightEndStack.push(captureEnd);
-      eventQueue.add(new HighlightEvent.HighlightStart(highlightIndex));
-    }
-
-    private boolean isLocalVariable(String name) {
-      for (LocalScope scope : scopeStack) {
-        for (LocalDef def : scope.localDefs) {
-          if (def.name.equals(name)) return true;
-        }
-        if (!scope.inherits) break;
-      }
-      return false;
-    }
-
-    private void writeBackLocalDefHighlight(String name, int highlight) {
-      for (LocalScope scope : scopeStack) {
-        for (LocalDef def : scope.localDefs) {
-          if (def.name.equals(name) && def.highlight < 0) {
-            def.highlight = highlight;
-            return;
-          }
-        }
-        if (!scope.inherits) break;
-      }
     }
 
     private void emitSource(int upTo) {
@@ -412,8 +488,7 @@ public final class Highlighter implements AutoCloseable {
       }
       finished = true;
       // 清理资源
-      cursor.close();
-      tree.close();
+      close();
     }
 
     private String sliceString(int start, int end) {
@@ -440,15 +515,13 @@ public final class Highlighter implements AutoCloseable {
 
   private static final class LocalDef {
     final String name;
-    final int defStartByte;
     final int valueEndByte;
-    int highlight;  // -1 表示未设置
+    int highlight;  // -1 表示未设置（对应 Rust Option::None）
 
-    LocalDef(String name, int defStartByte, int valueEndByte, int highlight) {
+    LocalDef(String name, int valueEndByte) {
       this.name = name;
-      this.defStartByte = defStartByte;
       this.valueEndByte = valueEndByte;
-      this.highlight = highlight;
+      this.highlight = -1;
     }
   }
 }

@@ -47,7 +47,7 @@ import java.util.Objects;
  *
  * <p><strong>谓词约定：</strong>
  * <ul>
- *   <li>{@code (#not-local?)} — 标记 pattern 对局部变量禁用。</li>
+ *   <li>{@code (#is-not? local)} — 标记 pattern 对局部变量禁用（属性谓词，与上游 Rust 一致）。</li>
  *   <li>{@code #set! injection.language "javascript"} — 指定嵌入语言名称。</li>
  *   <li>{@code #set! injection.combined} — 合并多个不连续的嵌入内容。</li>
  *   <li>{@code #set! injection.self} — 嵌入语言为自身。</li>
@@ -73,13 +73,15 @@ public final class HighlightConfiguration implements AutoCloseable {
   private final int localDefCaptureIndex;
   private final int localDefValueCaptureIndex;
   private final int localRefCaptureIndex;
+  private final boolean[] scopeInherits;
   private String[] configuredNames;
 
   private HighlightConfiguration(TSLanguage language, String languageName, TSQuery query,
       int highlightsPatternIndex, int localsPatternIndex, int[] highlightIndices,
       boolean[] nonLocalVariablePatterns, int injectionContentCaptureIndex,
       int injectionLanguageCaptureIndex, int localScopeCaptureIndex,
-      int localDefCaptureIndex, int localDefValueCaptureIndex, int localRefCaptureIndex) {
+      int localDefCaptureIndex, int localDefValueCaptureIndex, int localRefCaptureIndex,
+      boolean[] scopeInherits) {
     this.language = language;
     this.languageName = languageName;
     this.query = query;
@@ -93,6 +95,7 @@ public final class HighlightConfiguration implements AutoCloseable {
     this.localDefCaptureIndex = localDefCaptureIndex;
     this.localDefValueCaptureIndex = localDefValueCaptureIndex;
     this.localRefCaptureIndex = localRefCaptureIndex;
+    this.scopeInherits = scopeInherits;
   }
 
   /**
@@ -176,10 +179,14 @@ public final class HighlightConfiguration implements AutoCloseable {
       }
     }
 
-    // 解析 non_local_variable_patterns
+    // 解析 non_local_variable_patterns: 检查 #is-not? local 属性谓词
+    // 与上游 Rust highlight.rs 一致，使用 property predicate (#is-not? local)
+    // 而非通用谓词 (#not-local?)
     boolean[] nonLocalVariablePatterns = new boolean[patternCount];
+    boolean[] scopeInheritsArr = new boolean[patternCount];
     for (int i = 0; i < patternCount; i++) {
-      nonLocalVariablePatterns[i] = hasNotLocalPredicate(query, i);
+      nonLocalVariablePatterns[i] = hasIsNotLocalPredicate(query, i);
+      scopeInheritsArr[i] = getScopeInherits(query, i);
     }
 
     // highlightIndices 初始为 -1，需要调用 configure() 后才填充
@@ -192,13 +199,19 @@ public final class HighlightConfiguration implements AutoCloseable {
         highlightsPatternIndex, localsPatternIndex, highlightIndices,
         nonLocalVariablePatterns, injectionContentCaptureIndex,
         injectionLanguageCaptureIndex, localScopeCaptureIndex,
-        localDefCaptureIndex, localDefValueCaptureIndex, localRefCaptureIndex);
+        localDefCaptureIndex, localDefValueCaptureIndex, localRefCaptureIndex,
+        scopeInheritsArr);
   }
 
   /**
-   * 检查 pattern 是否有 {@code (#not-local?)} 谓词。
+   * 检查 pattern 是否有 {@code (#is-not? local)} 属性谓词。
+   *
+   * <p>这与上游 Rust {@code highlight.rs} 的实现一致，使用 {@code property_predicates}
+   * 检测 key 为 {@code "local"} 的否定属性谓词。由于 C API 的
+   * {@code ts_query_predicates_for_pattern} 包含所有谓词（含 {@code #is?}/{@code #is-not?}），
+   * 我们通过解析谓词步骤来检测。
    */
-  private static boolean hasNotLocalPredicate(TSQuery query, int patternIndex) {
+  private static boolean hasIsNotLocalPredicate(TSQuery query, int patternIndex) {
     TSQueryPredicateStep[] steps = query.getPredicatesForPattern(patternIndex);
     int i = 0;
     while (i < steps.length) {
@@ -214,11 +227,58 @@ public final class HighlightConfiguration implements AutoCloseable {
       TSQueryPredicateStep opStep = predicateSteps.get(0);
       if (opStep.getType() != TSQueryPredicateStep.Type.String) continue;
       String operator = query.getStringValueForId(opStep.getValueId());
-      if ("not-local?".equals(operator)) {
-        return true;
+      if ("is-not?".equals(operator) && predicateSteps.size() >= 2) {
+        TSQueryPredicateStep argStep = predicateSteps.get(1);
+        if (argStep.getType() == TSQueryPredicateStep.Type.String) {
+          String argValue = query.getStringValueForId(argStep.getValueId());
+          if ("local".equals(argValue)) {
+            return true;
+          }
+        }
       }
     }
     return false;
+  }
+
+  /**
+   * 解析 pattern 的 {@code (#set! local.scope-inherits "false")} 属性设置。
+   *
+   * <p>默认返回 {@code true}（继承）。如果设置了 {@code "false"} 则返回 {@code false}。
+   * 与上游 Rust {@code highlight.rs} 的 {@code property_settings} 检测一致。
+   */
+  private static boolean getScopeInherits(TSQuery query, int patternIndex) {
+    TSQueryPredicateStep[] steps = query.getPredicatesForPattern(patternIndex);
+    int i = 0;
+    while (i < steps.length) {
+      List<TSQueryPredicateStep> predicateSteps = new ArrayList<>();
+      while (i < steps.length && steps[i].getType() != TSQueryPredicateStep.Type.Done) {
+        predicateSteps.add(steps[i]);
+        i++;
+      }
+      i++; // 跳过 Done
+
+      if (predicateSteps.isEmpty()) continue;
+      TSQueryPredicateStep opStep = predicateSteps.get(0);
+      if (opStep.getType() != TSQueryPredicateStep.Type.String) continue;
+      String operator = query.getStringValueForId(opStep.getValueId());
+      if ("set!".equals(operator) && predicateSteps.size() >= 2) {
+        TSQueryPredicateStep keyStep = predicateSteps.get(1);
+        if (keyStep.getType() == TSQueryPredicateStep.Type.String) {
+          String keyValue = query.getStringValueForId(keyStep.getValueId());
+          if ("local.scope-inherits".equals(keyValue)) {
+            // Rust: scope.inherits = prop.value.is_none_or(|r| r == "true")
+            if (predicateSteps.size() >= 3) {
+              TSQueryPredicateStep valStep = predicateSteps.get(2);
+              if (valStep.getType() == TSQueryPredicateStep.Type.String) {
+                return "true".equals(query.getStringValueForId(valStep.getValueId()));
+              }
+            }
+            return true; // 无值 = true
+          }
+        }
+      }
+    }
+    return true; // 默认: 继承
   }
 
   /**
@@ -300,10 +360,20 @@ public final class HighlightConfiguration implements AutoCloseable {
     return highlightIndices[captureIndex];
   }
 
-  /** 检查指定 pattern 是否对局部变量禁用。 */
+  /** 检查指定 pattern 是否对局部变量禁用（即有 {@code #is-not? local} 属性谓词）。 */
   public boolean isNonLocalVariablePattern(int patternIndex) {
     if (patternIndex < 0 || patternIndex >= nonLocalVariablePatterns.length) return false;
     return nonLocalVariablePatterns[patternIndex];
+  }
+
+  /**
+   * 检查指定 pattern 的 scope 是否继承父 scope。
+   *
+   * <p>对应 {@code #set! local.scope-inherits "false"} 属性设置。默认为 {@code true}。
+   */
+  public boolean doesScopeInherit(int patternIndex) {
+    if (patternIndex < 0 || patternIndex >= scopeInherits.length) return true;
+    return scopeInherits[patternIndex];
   }
 
   public String[] getConfiguredNames() {
