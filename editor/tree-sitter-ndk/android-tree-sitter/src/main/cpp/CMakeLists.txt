@@ -33,6 +33,9 @@ set(TS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tree-sitter")
 include_directories("${TS_DIR}/include")
 include_directories("${TS_DIR}/src")
 
+# 确保编译器能找到手动维护的 JNI 绑定层头文件 (ts__log.h, ts__onload.h, ts_*.h 等)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
+
 # WebAssembly 功能开关（与上游 tree-sitter CMake 一致，默认 OFF）
 # 启用后需要提供 wasmtime 库（WASMTIME_INCLUDE_DIR + WASMTIME_LIBRARY）
 # 未启用时，wasm_store.c 的 #else 部分提供 dummy 实现，编译通过但 wasm API 返回空值
