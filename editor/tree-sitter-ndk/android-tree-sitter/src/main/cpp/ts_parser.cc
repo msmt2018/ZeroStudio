@@ -66,6 +66,11 @@ static void ensure_logger_cache(JNIEnv *env) {
     return;
   }
 
+  // M3 修复：无论初始化是否成功，都标记为已初始化。
+  // 如果 FindClass/GetMethodID 失败（如 ProGuard 混淆重命名），
+  // 重试无意义且会导致 GlobalRef 重复创建泄漏。
+  g_logger_cache_inited = true;
+
   // TSLogger 接口类
   jclass logger_local = env->FindClass("com/itsaky/androidide/treesitter/TSLogger");
   if (logger_local == nullptr) {
@@ -108,8 +113,6 @@ static void ensure_logger_cache(JNIEnv *env) {
   g_logtype_lex = env->NewGlobalRef(lex_local);
   env->DeleteLocalRef(parse_local);
   env->DeleteLocalRef(lex_local);
-
-  g_logger_cache_inited = true;
 }
 
 // 获取 JNIEnv，必要时 attach 当前线程

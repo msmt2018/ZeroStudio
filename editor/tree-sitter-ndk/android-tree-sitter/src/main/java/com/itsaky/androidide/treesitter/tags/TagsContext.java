@@ -425,7 +425,8 @@ public final class TagsContext implements AutoCloseable {
   }
 
   private static boolean isWhitespace(byte b) {
-    return b == ' ' || b == '\t' || b == '\r' || b == '\n';
+    // 与上游 Rust is_ascii_whitespace 一致：空格、tab、换行、回车、换页符
+    return b == ' ' || b == '\t' || b == '\r' || b == '\n' || b == '\f';
   }
 
   /** 从 source 字节中切片 UTF-8 字符串。 */
