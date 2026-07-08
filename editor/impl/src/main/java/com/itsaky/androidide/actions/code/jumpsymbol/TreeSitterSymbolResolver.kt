@@ -14,6 +14,8 @@ import com.itsaky.androidide.treesitter.TSNode
 import com.itsaky.androidide.treesitter.TSParser
 import com.itsaky.androidide.treesitter.string.UTF16String
 import com.itsaky.androidide.treesitter.string.UTF16StringFactory
+import com.itsaky.androidide.treesitter.tags.TagsContext
+import com.itsaky.androidide.treesitter.tags.TagsConfiguration
 import java.io.File
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
@@ -29,7 +31,13 @@ object TreeSitterSymbolResolver {
       "java" -> parseJavaSymbols(code)
       "kt",
       "kts" -> parseKotlinSymbols(code, extension)
-      else -> parseTreeSitterSymbols(context, file, code, extension)
+      else -> {
+        // 升级：优先使用 android-tree-sitter 的 TagsContext（有效应用 tags API + tags.scm），
+        // 失败或无 tags.scm 时回退到原有手动遍历。
+        parseTagsSymbols(context, code, extension).ifEmpty {
+          parseTreeSitterSymbols(context, file, code, extension)
+        }
+      }
     }
   }
 
@@ -353,6 +361,76 @@ object TreeSitterSymbolResolver {
 
     private fun ParserRuleContext.cleanedText(): String =
         source.sliceSafe(start.startIndex, stop.endIndex).cleanSymbolText()
+  }
+
+  /**
+   * 升级：使用 android-tree-sitter 的 TagsContext + TagsConfiguration 提取符号。 有效应用此前 100%
+   * 未使用的 tags 包（TagsContext/TagsConfiguration/Tag）+ tags.scm 资源（c/rust/cpp/python/dart/
+   * typeScript）。 TagsContext 以 UTF-8 字节解析，Tag 的 syntaxTypeId 经
+   * TagsConfiguration.getSyntaxTypeName 映射为符号种类。
+   */
+  private fun parseTagsSymbols(context: Context, code: String, extension: String): List<SymbolInfo> {
+    val languageImpl = TreeSitterLanguageProvider.forType(extension, context) ?: return emptyList()
+    val tagsScm = readScheme(context, extension, "tags")
+    if (tagsScm.isBlank()) return emptyList()
+
+    val localsScm = readScheme(context, extension, "locals")
+    val sourceBytes = code.toByteArray(Charsets.UTF_8)
+
+    return try {
+      TagsContext().use { tsContext ->
+        TagsConfiguration.create(languageImpl.languageSpec.language, tagsScm, localsScm).use { cfg ->
+          val result = tsContext.generateTags(cfg, sourceBytes)
+          result.tags
+              .filter { it.isDefinition && !it.isIgnored() }
+              .mapNotNull { tag ->
+                val name =
+                    if (tag.nameStartByte in 0 until tag.nameEndByte &&
+                        tag.nameEndByte <= sourceBytes.size)
+                        sourceBytes
+                            .copyOfRange(tag.nameStartByte, tag.nameEndByte)
+                            .toString(Charsets.UTF_8)
+                    else null
+                name ?: return@mapNotNull null
+                val kind = cfg.getSyntaxTypeName(tag.syntaxTypeId)
+                SymbolInfo(
+                    name = name,
+                    signature = kind,
+                    line = tag.startPoint.row,
+                    type = mapTagKind(kind),
+                    language = extension,
+                )
+              }
+              .sortedBy { it.line }
+        }
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+      emptyList()
+    }
+  }
+
+  /** 将 TagsConfiguration 的 syntax type 名称映射为 SymbolType。 */
+  private fun mapTagKind(kind: String): SymbolType =
+      when (kind) {
+        "class", "struct", "union" -> SymbolType.CLASS
+        "interface", "trait" -> SymbolType.INTERFACE
+        "method" -> SymbolType.METHOD
+        "function" -> SymbolType.FUNCTION
+        "module", "namespace" -> SymbolType.PACKAGE
+        "field", "property" -> SymbolType.FIELD
+        "constant", "variable" -> SymbolType.VARIABLE
+        "enum" -> SymbolType.ENUM
+        "constructor" -> SymbolType.CONSTRUCTOR
+        else -> SymbolType.UNKNOWN
+      }
+
+  private fun readScheme(context: Context, type: String, name: String): String {
+    return try {
+      context.assets.open("editor/treesitter/${type}/${name}.scm").use { it.reader().readText() }
+    } catch (e: Exception) {
+      ""
+    }
   }
 
   private fun parseTreeSitterSymbols(

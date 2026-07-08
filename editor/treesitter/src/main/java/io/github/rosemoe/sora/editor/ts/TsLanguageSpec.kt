@@ -45,6 +45,11 @@ import java.io.Closeable
  * @param bracketsScmSource The scm source for capturing brackets. Capture named
  *   'editor.brackets.open' and 'editor.brackets.close' are used to compute bracket pairs
  * @param localsScmSource The scm source code for tracking local variables
+ * @param injectionsScmSource The scm source code for language injections (tree-sitter 0.27
+ *   injection convention: `@injection.content` / `@injection.language` captures + `#set!
+ *   injection.language/self/parent/include-children/combined` directives). Loaded as a separate
+ *   query so that injection regions can be discovered per byte-range; failure does not affect the
+ *   core highlight query.
  * @param localsCaptureSpec Custom specification for locals scm file
  * @param predicates Client custom predicate implementations
  * @author Rosemoe
@@ -55,6 +60,7 @@ open class TsLanguageSpec(
     codeBlocksScmSource: String = "",
     bracketsScmSource: String = "",
     localsScmSource: String = "",
+    injectionsScmSource: String = "",
     localsCaptureSpec: LocalsCaptureSpec = LocalsCaptureSpec.DEFAULT,
     val predicates: List<TsPredicate> = listOf(MatchPredicate),
 ) : Closeable {
@@ -100,6 +106,30 @@ open class TsLanguageSpec(
         TSQuery.EMPTY
       } else TSQuery.create(language, bracketsScmSource)
 
+  /**
+   * 升级：加载 injections.scm 为独立 TSQuery（与 blocksQuery/bracketsQuery 同模式）。 独立查询使
+   * injection 模式可按行/字节范围发现，且失败不影响主高亮查询。 有效应用 tree-sitter 0.27 注入约定。
+   */
+  val injectionsQuery: TSQuery =
+      if (injectionsScmSource.isBlank()) {
+        TSQuery.EMPTY
+      } else {
+        try {
+          TSQuery.create(language, injectionsScmSource).also {
+            it.validateOrThrow("injections")
+          }
+        } catch (e: Exception) {
+          // injection 查询为可选能力，失败时降级为空查询，不影响核心高亮
+          TSQuery.EMPTY
+        }
+      }
+
+  /** `injection.content` capture 在 injectionsQuery 中的索引，-1 表示无注入内容捕获 */
+  val injectionContentCaptureIndex: Int
+
+  /** `injection.language` capture 在 injectionsQuery 中的索引，-1 表示无注入语言捕获 */
+  val injectionLanguageCaptureIndex: Int
+
   init {
     // Check the queries before access
     try {
@@ -131,6 +161,7 @@ open class TsLanguageSpec(
       tsQuery.close()
       blocksQuery.close()
       bracketsQuery.close()
+      injectionsQuery.close()
       throw e
     }
   }
@@ -170,10 +201,28 @@ open class TsLanguageSpec(
     highlightPatternOffset = highlightOffset
   }
 
+  init {
+    // 升级：解析 injectionsQuery 中的 injection.content / injection.language capture 索引，
+    // 供注入渲染器按字节范围发现注入区域并确定注入语言。
+    var injContent = -1
+    var injLang = -1
+    if (injectionsQuery.canAccess()) {
+      for (i in 0 until injectionsQuery.captureCount) {
+        when (injectionsQuery.getCaptureNameForId(i)) {
+          "injection.content" -> injContent = i
+          "injection.language" -> injLang = i
+        }
+      }
+    }
+    injectionContentCaptureIndex = injContent
+    injectionLanguageCaptureIndex = injLang
+  }
+
   override fun close() {
     tsQuery.close()
     blocksQuery.close()
     bracketsQuery.close()
+    injectionsQuery.close()
     closed = true
   }
 }

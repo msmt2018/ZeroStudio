@@ -44,6 +44,7 @@ import com.itsaky.androidide.treesitter.TSQueryCursor
 import com.itsaky.androidide.treesitter.TSTree
 import com.itsaky.androidide.treesitter.api.TreeSitterQueryCapture
 import com.itsaky.androidide.treesitter.api.safeExecQueryCursor
+import com.itsaky.androidide.treesitter.predicate.SetDirectiveHandler
 import io.github.rosemoe.sora.editor.ts.spans.TsSpanFactory
 import io.github.rosemoe.sora.lang.styling.Span
 import io.github.rosemoe.sora.lang.styling.SpanFactory
@@ -112,6 +113,10 @@ class LineSpansGenerator(
 
     TSQueryCursor.create().use { cursor ->
       cursor.setByteRange(startIndex * 2, endIndex * 2)
+      // 升级：注册 SetDirectiveHandler 使高亮查询中的 #set! 指令被有效处理
+      // （此前 SetDirectiveHandler 仅在缩进查询游标上注册）。#set! 元数据存入 TSQueryMatch，
+      // 供注入渲染等下游能力使用。
+      cursor.addPredicateHandler(SetDirectiveHandler())
 
       cursor.safeExecQueryCursor(
           query = languageSpec.tsQuery,
