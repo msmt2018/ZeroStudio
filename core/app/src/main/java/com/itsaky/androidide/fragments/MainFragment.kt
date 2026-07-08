@@ -38,7 +38,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -204,7 +203,7 @@ class MainFragment : BaseFragment() {
             modifier =
                 Modifier.fillMaxSize()
                     .verticalScroll(scrollState)
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp)
           ) {
           QuickStartGradientCard()
 
@@ -237,7 +236,7 @@ class MainFragment : BaseFragment() {
                   items(recentSorted, key = { it.path }) { project ->
                     SwipeableProjectItem(
                         project = project,
-                        onClick = { openProject(File(project.path)) },
+                        onClick = { openProjectWithCheck(project) },
                         onPin = { performPinToggle(project) },
                         onDelete = { performDelete(project) },
                     )
@@ -263,7 +262,7 @@ class MainFragment : BaseFragment() {
                   items(frequentSorted, key = { it.path }) { project ->
                     SwipeableProjectItem(
                         project = project,
-                        onClick = { openProject(File(project.path)) },
+                        onClick = { openProjectWithCheck(project) },
                         onPin = { performPinToggle(project) },
                         onDelete = { performDelete(project) },
                     )
@@ -278,24 +277,12 @@ class MainFragment : BaseFragment() {
               }
             }
           }
-          }
 
-          // 工具与服务区域
-          Box(
-            modifier =
-                Modifier.align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 20.dp))
-          ) {
-            Surface(
-              modifier = Modifier.matchParentSize().blur(radius = 18.dp), // 模糊半径
-              color = Color.White.copy(alpha = 0.9f),
-            ) {}
+          Spacer(modifier = Modifier.height(16.dp))
 
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-              SectionTitle(stringResource(R.string.main_tools_services))
-              ToolsServiceGrid()
-            }
+          // 工具与服务区域（已移入滚动流，移除原底部 overlay 遮挡物）
+          SectionTitle(stringResource(R.string.main_tools_services))
+          ToolsServiceGrid()
           }
         }
       }
@@ -514,5 +501,27 @@ class MainFragment : BaseFragment() {
 
   private fun openProject(root: File) {
     (requireActivity() as MainActivity).openProject(root)
+  }
+
+  /**
+   * 点击最近 / 高频项目 item 时的入口。若项目已在存储中永久删除（目录不存在），
+   * 则立即移除该 item、持久化记录与内存缓存，并提示用户；否则正常打开。
+   */
+  private fun openProjectWithCheck(project: ProjectHistory) {
+    val root = File(project.path)
+    if (root.exists() && root.isDirectory) {
+      openProject(root)
+      return
+    }
+    // 项目已永久删除：移除 item + 记录 + 缓存
+    viewLifecycleScope.launch {
+      RecentProjectsManager.removeProjectAsync(requireContext(), project.path)
+      historyState.removeAll { it.path == project.path }
+      Toast.makeText(
+          requireContext(),
+          R.string.msg_opened_project_does_not_exist,
+          Toast.LENGTH_SHORT,
+      ).show()
+    }
   }
 }

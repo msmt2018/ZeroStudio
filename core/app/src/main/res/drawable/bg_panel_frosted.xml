@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  ZeroStudio IDE - 半透明磨砂面板背景
+  ZeroStudio IDE - 半透明磨砂面板背景 (白色版)
 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#E60A0A0A" />
-    <stroke android:width="1dp" android:color="#22FFFFFF" />
+    <solid android:color="#14000000" />
+    <stroke android:width="1dp" android:color="#1A000000" />
     <corners android:radius="12dp" />
 </shape>

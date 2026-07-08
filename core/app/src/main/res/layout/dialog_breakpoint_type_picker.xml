@@ -1,39 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  ZeroStudio IDE - 断点类型选择器弹窗布局 (Phase 20)
-  高斯模糊磨砂半透明效果
+  ZeroStudio IDE - 断点类型选择器弹窗布局 (白底紧凑版)
+  高斯模糊磨砂半透明效果 (白色版)
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
-    android:padding="24dp">
+    android:padding="20dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:maxWidth="520dp"
+        android:maxWidth="640dp"
         android:orientation="vertical"
         android:background="@drawable/bg_dialog_frosted_glass"
-        android:padding="20dp">
+        android:padding="16dp">
 
         <!-- 标题 -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/debugger_bp_type_picker_title"
-            android:textAppearance="?attr/textAppearanceTitleMedium"
-            android:textColor="#F0FFFFFF"
+            android:textAppearance="?attr/textAppearanceTitleSmall"
+            android:textColor="#FF1E1E1E"
             android:fontFamily="sans-serif-medium"/>
 
         <TextView
             android:id="@+id/bptp_location"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="#A0FFFFFF"
+            android:textColor="#99000000"
             android:fontFamily="monospace"
             tools:text="MainActivity.kt : 27"
             xmlns:tools="http://schemas.android.com/tools"/>
@@ -42,8 +42,8 @@
         <ScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:maxHeight="520dp"
+            android:layout_marginTop="10dp"
+            android:maxHeight="440dp"
             android:scrollbars="vertical">
 
             <LinearLayout
@@ -62,11 +62,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
-            android:layout_marginTop="12dp"
-            android:padding="10dp"
+            android:layout_marginTop="8dp"
+            android:padding="8dp"
             android:text="@android:string/cancel"
-            android:textColor="#80FFFFFF"
-            android:textAppearance="?attr/textAppearanceLabelLarge"
+            android:textColor="#991E1E1E"
+            android:textAppearance="?attr/textAppearanceLabelMedium"
             android:background="?attr/selectableItemBackground"
             android:clickable="true"
             android:focusable="true"/>

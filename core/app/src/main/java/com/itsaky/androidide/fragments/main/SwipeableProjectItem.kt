@@ -90,7 +90,9 @@ fun SwipeableProjectItem(
   // subtle "depress" parallax that pairs with the action menu reveal.
   val dragProgress = (abs(animatedDragOffset) / maxRevealPx).coerceIn(0f, 1f)
   val foregroundScale = 1f - dragProgress * 0.08f
-  val foregroundElevation = (6f * dragProgress).coerceAtLeast(2f)
+  // Shadow only appears while dragging so the collapsed item reads as a flat
+  // list row (no floating "card" wrapper) — see "多余的包裹层需要去除".
+  val foregroundElevation = 4f * dragProgress
   val foregroundAlpha = 1f - dragProgress * 0.05f
 
   // Snap-back / snap-open logic when the user lifts the finger.
@@ -205,11 +207,11 @@ fun SwipeableProjectItem(
                   )
                 }
                 .clip(RoundedCornerShape(12.dp))
-                // Frosted glass surface: a thin white-tinted background with
-                // a soft blur underneath so the action menu behind it
-                // bleeds through slightly. This is the "高斯模糊的半透明
-                // 磨砂效果" the design called for.
-                .background(Color(0xFFF6F8FB).copy(alpha = 0.86f))
+                // Flat white surface matching the page background — removes
+                // the visible "card wrapper" rectangle the user reported
+                // ("多余的包裹层需要去除"), while still occluding the action
+                // menu behind it when collapsed.
+                .background(Color.White)
                 .clickable {
                   // A click on the card always opens the project, even if
                   // the user happens to be in the "expanded" state.
@@ -259,17 +261,30 @@ fun SwipeableProjectItem(
         }
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-          Text(
-              project.name,
-              fontWeight = FontWeight.Bold,
-              fontSize = 12.sp,
-              color = Color(0xFF1E1E1E),
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-          )
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                project.name,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                color = Color(0xFF1E1E1E),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            // 点击次数记录器：在高频项目列表中显示打开次数
+            if (project.openCount > 0) {
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                  "×${project.openCount}",
+                  fontSize = 9.sp,
+                  color = Color(0xFF00897B),
+                  fontWeight = FontWeight.SemiBold,
+              )
+            }
+          }
           Text(
               project.path,
-              fontSize = 8.sp,
+              fontSize = 9.sp,
               color = Color.Gray,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,

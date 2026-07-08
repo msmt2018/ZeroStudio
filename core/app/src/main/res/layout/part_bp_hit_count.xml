@@ -13,7 +13,7 @@
         android:layout_height="wrap_content"
         android:text="@string/debugger_bcd_hit_count"
         android:textAppearance="?attr/textAppearanceLabelMedium"
-        android:textColor="#A0FFFFFF"/>
+        android:textColor="#99000000"/>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -44,8 +44,8 @@
                 android:id="@+id/bphc_input"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#F0FFFFFF"
-                android:inputType="number"
+                android:textColor="#FF1E1E1E"
+            android:inputType="number"
                 android:singleLine="true"/>
         </com.google.android.material.textfield.TextInputLayout>
     </LinearLayout>
