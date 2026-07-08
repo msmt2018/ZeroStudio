@@ -129,6 +129,7 @@ TSQuery_captureNameForId(JNIEnv *env, jclass self, jlong query, jint id) {
   uint32_t count;
   const char
       *name = ts_query_capture_name_for_id((TSQuery *) query, id, &count);
+  if (name == nullptr) return nullptr;
   return (jstring) env->NewStringUTF(name);
 }
 
@@ -137,6 +138,7 @@ TSQuery_stringValueForId(JNIEnv *env, jclass self, jlong query, jint id) {
   req_nnp(env, query);
   uint32_t count;
   const char *str = ts_query_string_value_for_id((TSQuery *) query, id, &count);
+  if (str == nullptr) return nullptr;
   return env->NewStringUTF(str);
 }
 

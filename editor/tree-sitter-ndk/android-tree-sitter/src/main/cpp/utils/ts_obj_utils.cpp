@@ -248,12 +248,20 @@ TSNode _unmarshalNode(JNIEnv *env, jobject javaObject) {
 
 // TreeCursorNode
 jobject _marshalTreeCursorNode(JNIEnv *env, TreeCursorNode node) {
-  return env->CallStaticObjectMethod(objectFactoryClass,
+  // node.name (field name) 在大多数节点上为 nullptr；node.type 理论上不会为 nullptr，
+  // 但此处一并做防御性处理。NewStringUTF(nullptr) 是未定义行为，必须避免。
+  jstring typeStr = node.type != nullptr ? env->NewStringUTF(node.type) : nullptr;
+  jstring nameStr = node.name != nullptr ? env->NewStringUTF(node.name) : nullptr;
+  jobject result = env->CallStaticObjectMethod(objectFactoryClass,
                                      factory_createTreeCursorNode,
-                                     env->NewStringUTF(node.type),
-                                     env->NewStringUTF(node.name),
+                                     typeStr,
+                                     nameStr,
                                      (jint) node.startByte,
                                      (jint) node.endByte);
+  // CallStaticObjectMethod 不会消费传入的 LocalRef，需手动释放。
+  if (typeStr != nullptr) env->DeleteLocalRef(typeStr);
+  if (nameStr != nullptr) env->DeleteLocalRef(nameStr);
+  return result;
 }
 
 // TSPoint

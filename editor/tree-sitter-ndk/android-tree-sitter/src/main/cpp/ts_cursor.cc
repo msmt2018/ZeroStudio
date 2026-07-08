@@ -41,6 +41,11 @@ static jobject TreeCursor_currentTreeCursorNode(JNIEnv *env, jclass self, jlong 
 static jstring TreeCursor_currentFieldName(JNIEnv *env, jclass self, jlong cursor) {
   req_nnp(env, cursor);
   const char *name = ts_tree_cursor_current_field_name((TSTreeCursor *) cursor);
+  // field name 为 nullptr 是常见情况（大多数节点没有字段名），
+  // NewStringUTF(nullptr) 是未定义行为，必须避免。
+  if (name == nullptr) {
+    return nullptr;
+  }
   jstring result = env->NewStringUTF(name);
   return result;
 }

@@ -57,15 +57,18 @@ static jint TSLanguage_symForName(JNIEnv *env,
 static jstring
 TSLanguage_symName(JNIEnv *env, jclass self, jlong lngPtr, jint sym) {
   req_nnp(env, lngPtr);
-  return env->NewStringUTF(ts_language_symbol_name((TSLanguage *) lngPtr, sym));
+  const char *name = ts_language_symbol_name((TSLanguage *) lngPtr, sym);
+  if (name == nullptr) return nullptr;
+  return env->NewStringUTF(name);
 }
 
 
 static jstring
 TSLanguage_fldNameForId(JNIEnv *env, jclass self, jlong ptr, jint id) {
   req_nnp(env, ptr);
-  return env->NewStringUTF(ts_language_field_name_for_id((TSLanguage *) ptr,
-                                                         id));
+  const char *name = ts_language_field_name_for_id((TSLanguage *) ptr, id);
+  if (name == nullptr) return nullptr;
+  return env->NewStringUTF(name);
 }
 
 
