@@ -230,6 +230,11 @@ public final class Highlighter implements AutoCloseable {
       if (closed) return;
       closed = true;
       finished = true;
+      // 关闭所有活跃的层（释放 cursor/tree 资源）
+      for (HighlightIterLayer layer : layers) {
+        layer.close();
+      }
+      layers.clear();
     }
 
     private void fillEventQueue() {
@@ -556,7 +561,11 @@ public final class Highlighter implements AutoCloseable {
     }
 
     boolean isExhausted() {
-      return exhausted || (highlightEndStack.isEmpty() && peekedMatch == null && !hasPeeked);
+      // 必须在 peek 之后才能判断是否耗尽。
+      // 新层初始 hasPeeked=false，不应被判为耗尽（否则会在 sortLayers 中被误删）。
+      // 只有 peek 后 peekedMatch==null 且 highlight_end_stack 为空才表示真正耗尽。
+      return exhausted
+          || (hasPeeked && peekedMatch == null && highlightEndStack.isEmpty());
     }
 
     /**
@@ -914,8 +923,6 @@ public final class Highlighter implements AutoCloseable {
     }
 
     List<TSRange> result = new ArrayList<>();
-    int parentIdx = 0;
-    TSRange parentRange = parentRanges[parentIdx];
 
     for (TSNode node : nodes) {
       // preceding_range 跟踪当前 content 节点内已处理部分的结束位置
