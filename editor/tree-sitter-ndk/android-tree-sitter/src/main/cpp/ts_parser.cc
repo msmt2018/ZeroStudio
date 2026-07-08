@@ -20,6 +20,7 @@
 #include <mutex>
 #include <iostream>
 #include <unordered_map>
+#include <vector>
 
 #include "utf16str/UTF16String.h"
 #include "utils/ts_obj_utils.h"
@@ -409,8 +410,9 @@ TSParser_setLanguage(JNIEnv *env,
                      jlong language) {
   req_nnp(env, parser, "parser");
   req_nnp(env, language, "language");
-  bool ok = ts_parser_set_language(((TSParserInternal *) parser)->getParser(env),
-                                   (TSLanguage *) language);
+  TSParser *pParser = ((TSParserInternal *) parser)->getParser(env);
+  if (pParser == nullptr) return (jboolean) false;
+  bool ok = ts_parser_set_language(pParser, (TSLanguage *) language);
   return (jboolean) ok;
 }
 
@@ -419,7 +421,9 @@ TSParser_getLanguage(JNIEnv *env,
                      jclass self,
                      jlong parser) {
   req_nnp(env, parser);
-  return (jlong) ts_parser_language(((TSParserInternal *) parser)->getParser(env));
+  TSParser *pParser = ((TSParserInternal *) parser)->getParser(env);
+  if (pParser == nullptr) return 0;
+  return (jlong) ts_parser_language(pParser);
 }
 
 static void
@@ -428,6 +432,9 @@ TSParser_reset(JNIEnv *env,
                jlong parser) {
   req_nnp(env, parser);
   TSParser *pParser = ((TSParserInternal *) (parser))->getParser(env);
+  // M5 修复：getParser 在 parser 已销毁时返回 nullptr 并设置 pending exception，
+  // 此处必须 early return，避免将 nullptr 传给 C API 导致 SIGSEGV。
+  if (pParser == nullptr) return;
   LOGD("ts_parser.cc", "Reset parser: %p, language: %p", pParser,
        ts_parser_language(pParser));
   ts_parser_reset(pParser);
@@ -459,18 +466,23 @@ TSParser_setIncludedRanges(
     jlong parser,
     jobjectArray ranges) {
   req_nnp(env, parser);
+  // M2 修复：添加 null 检查，避免 GetArrayLength(nullptr) 导致 SIGSEGV
+  req_nnp(env, ranges, "ranges");
+  TSParser *pParser = ((TSParserInternal *) parser)->getParser(env);
+  if (pParser == nullptr) return (jboolean) false;
   int count = env->GetArrayLength(ranges);
-  TSRange tsRanges[count];
+  // M2 修复：使用堆分配替代 VLA（变长数组非标准 C++，且大数组可能栈溢出）
+  std::vector<TSRange> tsRanges(count > 0 ? count : 1);
   for (int i = 0; i < count; i++) {
     jobject range = env->GetObjectArrayElement(ranges, i);
     std::string msg = std::string("ranges[") + std::to_string(i) + "]";
     req_nnp(env, range, msg);
     tsRanges[i] = _unmarshalRange(env, range);
+    env->DeleteLocalRef(range);
   }
 
-  const TSRange *r = tsRanges;
-  return (jboolean) ts_parser_set_included_ranges(((TSParserInternal *) parser)->getParser(
-      env), r, count);
+  const TSRange *r = tsRanges.data();
+  return (jboolean) ts_parser_set_included_ranges(pParser, r, count);
 }
 
 static jobjectArray
@@ -479,16 +491,21 @@ TSParser_getIncludedRanges(
     jclass self,
     jlong parser) {
   req_nnp(env, parser);
+  TSParser *pParser = ((TSParserInternal *) parser)->getParser(env);
+  if (pParser == nullptr) return nullptr;
   jint count;
   const TSRange *ranges =
-      ts_parser_included_ranges(((TSParserInternal *) parser)->getParser(env),
+      ts_parser_included_ranges(pParser,
                                 reinterpret_cast<uint32_t *>(&count));
   jobjectArray result = createRangeArr(env, count);
   req_nnp(env, result, "TSRange[] from factory");
 
   for (uint32_t i = 0; i < count; i++) {
     const TSRange *r = (ranges + i);
-    env->SetObjectArrayElement(result, (jint) i, _marshalRange(env, *r));
+    jobject obj = _marshalRange(env, *r);
+    env->SetObjectArrayElement(result, (jint) i, obj);
+    // M6 修复：释放循环中创建的 LocalRef
+    env->DeleteLocalRef(obj);
   }
   return result;
 }
@@ -577,7 +594,9 @@ static void
 TSParser_setWasmStore(JNIEnv *env, jclass clazz, jlong parser, jlong store) {
   req_nnp(env, parser);
   auto *parserInternal = (TSParserInternal *) parser;
-  ts_parser_set_wasm_store(parserInternal->getParser(env),
+  TSParser *pParser = parserInternal->getParser(env);
+  if (pParser == nullptr) return;
+  ts_parser_set_wasm_store(pParser,
                            store == 0 ? nullptr : (TSWasmStore *) store);
 }
 
@@ -587,7 +606,9 @@ static jlong
 TSParser_takeWasmStore(JNIEnv *env, jclass clazz, jlong parser) {
   req_nnp(env, parser);
   auto *parserInternal = (TSParserInternal *) parser;
-  TSWasmStore *store = ts_parser_take_wasm_store(parserInternal->getParser(env));
+  TSParser *pParser = parserInternal->getParser(env);
+  if (pParser == nullptr) return 0;
+  TSWasmStore *store = ts_parser_take_wasm_store(pParser);
   return (jlong) store;
 }
 
@@ -598,8 +619,9 @@ TSParser_printDotGraphs(JNIEnv *env, jclass clazz, jlong parser,
                         jint file_descriptor) {
   req_nnp(env, parser);
   auto *parserInternal = (TSParserInternal *) parser;
-  ts_parser_print_dot_graphs(parserInternal->getParser(env),
-                             (int) file_descriptor);
+  TSParser *pParser = parserInternal->getParser(env);
+  if (pParser == nullptr) return;
+  ts_parser_print_dot_graphs(pParser, (int) file_descriptor);
 }
 
 // ts_parser_set_logger：设置 parser 的日志回调

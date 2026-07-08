@@ -179,6 +179,8 @@ static void TSQueryCursor_exec(JNIEnv *env,
                                jlong query,
                                jobject node) {
   req_nnp(env, cursor);
+  // M4 修复：添加 query 指针检查，避免 null query 传给 C API 导致 SIGSEGV
+  req_nnp(env, query, "query");
   // exec 会重置 cursor 状态，释放之前可能设置的 progress callback
   release_qc_progress_ref(cursor);
   ts_query_cursor_exec((TSQueryCursor *) cursor,
@@ -194,6 +196,8 @@ static void TSQueryCursor_execWithOptions(JNIEnv *env,
                                            jobject node,
                                            jobject progressCallback) {
   req_nnp(env, cursor);
+  // M4 修复：添加 query 指针检查
+  req_nnp(env, query, "query");
 
   // 释放之前可能设置的 progress callback
   release_qc_progress_ref(cursor);

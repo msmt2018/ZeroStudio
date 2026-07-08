@@ -75,7 +75,9 @@ static jobjectArray TSTree_changedRanges(JNIEnv *env,
 
   for (uint32_t i = 0; i < count; i++) {
     TSRange *r = (ranges + i);
-    env->SetObjectArrayElement(arr, (jint)i, _marshalRange(env, *r));
+    jobject obj = _marshalRange(env, *r);
+    env->SetObjectArrayElement(arr, (jint)i, obj);
+    env->DeleteLocalRef(obj);
   }
 
   free(ranges);
@@ -103,7 +105,9 @@ static jobjectArray TSTree_includedRanges(JNIEnv *env,
 
   for (uint32_t i = 0; i < count; i++) {
     TSRange *r = (ranges + i);
-    env->SetObjectArrayElement(arr, (jint)i, _marshalRange(env, *r));
+    jobject obj = _marshalRange(env, *r);
+    env->SetObjectArrayElement(arr, (jint)i, obj);
+    env->DeleteLocalRef(obj);
   }
 
   free(ranges);

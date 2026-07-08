@@ -74,8 +74,10 @@ static jint TSLanguage_fldIdForName(JNIEnv *env,
                                     jlong ptr,
                                     jbyteArray name,
                                     jint length) {
-  jbyte *nm = env->GetByteArrayElements(name, nullptr);
+  // M1 修复：先检查 ptr，再获取数组元素（与 symForName 保持一致），
+  // 避免 ptr 为 null 时 GetByteArrayElements 的资源泄漏。
   req_nnp(env, ptr);
+  jbyte *nm = env->GetByteArrayElements(name, nullptr);
   uint32_t id = ts_language_field_id_for_name((TSLanguage *) ptr,
                                               reinterpret_cast<const char *>(nm),
                                               length);

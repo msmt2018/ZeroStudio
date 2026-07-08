@@ -31,17 +31,20 @@ static jlong TSQuery_newQuery(JNIEnv *env,
                               jlong language,
                               jstring source) {
   req_nnp(env, language);
-  const char *c_source;
-  uint32_t source_length = env->GetStringLength(source);
-  c_source = env->GetStringUTFChars(source, nullptr);
-  auto error_offset = new uint32_t;
-  auto error_type = new TSQueryError;
+  const char *c_source = env->GetStringUTFChars(source, nullptr);
+  // C2 修复：使用 GetStringUTFLength 获取 UTF-8 字节长度，
+  // 而非 GetStringLength 返回的 UTF-16 码元数。
+  // ts_query_new 的 source_length 参数期望字节数。
+  uint32_t source_length = (uint32_t) env->GetStringUTFLength(source);
+  // C1 修复：使用栈分配而非堆分配，避免内存泄漏。
+  uint32_t error_offset = 0;
+  TSQueryError error_type = TSQueryErrorNone;
   TSQuery *query = ts_query_new((TSLanguage *) language,
                                 c_source,
                                 source_length,
-                                error_offset,
-                                error_type);
-  fillQuery(env, queryObject, *error_offset, *error_type);
+                                &error_offset,
+                                &error_type);
+  fillQuery(env, queryObject, error_offset, error_type);
   env->ReleaseStringUTFChars(source, c_source);
   return (jlong) query;
 }
@@ -90,6 +93,7 @@ static jobjectArray TSQuery_predicatesForPattern(JNIEnv *env,
     const TSQueryPredicateStep *predicate = (predicates + i);
     jobject obj = _marshalQueryPredicateStep(env, predicate);
     env->SetObjectArrayElement(result, i, obj);
+    env->DeleteLocalRef(obj);
   }
 
   return result;
