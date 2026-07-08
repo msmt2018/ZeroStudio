@@ -163,7 +163,9 @@ include(
     ":editor:treesitter",
     ":editor:editor-lsp",
     
+    ":editor:tree-sitter-ndk:android-tree-sitter",
     ":editor:tree-sitter-ndk:annotation-processors",
+    ":editor:tree-sitter-ndk:annotations",
     ":editor:tree-sitter-ndk:tree-sitter-jnilibs",
     ":editor:tree-sitter-ndk:toml",
     ":editor:tree-sitter-ndk:cmake",

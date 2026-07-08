@@ -29,7 +29,7 @@ android { namespace = "io.github.rosemoe.sora.ts" }
 dependencies {
   api(libs.common.editor)
   api(libs.common.kotlin.coroutines.android)
-  api(libs.androidide.ts) { isChanging = true }
+  api(projects.editor.treeSitterNdk.androidTreeSitter)
   api(libs.androidx.collection)
 
   api(projects.core.common)

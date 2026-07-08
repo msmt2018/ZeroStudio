@@ -17,8 +17,6 @@
 
 plugins {
   id("com.android.library")
-  id("com.vanniktech.maven.publish.base")
-  id("android-tree-sitter.ts")
 }
 
 description = "Android Java bindings for Tree Sitter."
@@ -46,24 +44,25 @@ android {
   defaultConfig {
     externalNativeBuild {
       cmake {
-        // 额外参数由 `android-tree-sitter.ts` 插件注入（AUTOGEN_HEADERS）。
-        // 此处仅声明存在，避免在某些 AGP 版本/配置下被视为“未启用 native build”。
+        // 头文件已手动维护（见各 ts_*.h），无需 AUTOGEN_HEADERS 注入。
+        // 此处仅声明存在，避免在某些 AGP 版本/配置下被视为"未启用 native build"。
       }
     }
   }
 }
 
 dependencies {
-  implementation(projects.annotations)
-  annotationProcessor(projects.annotationProcessors)
+  implementation(projects.editor.treeSitterNdk.annotations)
+  annotationProcessor(projects.editor.treeSitterNdk.annotationProcessors)
 
-  testImplementation(projects.treeSitterAidl)
-  testImplementation(projects.treeSitterJava)
-  testImplementation(projects.treeSitterJson)
-  testImplementation(projects.treeSitterKotlin)
-  testImplementation(projects.treeSitterLog)
-  testImplementation(projects.treeSitterXml)
-  testImplementation(projects.treeSitterPython)
+  // 语法包保持远程 Maven 依赖（本地仅核心 android-tree-sitter 已本地化）
+  testImplementation(projects.editor.treeSitterNdk.aidl)
+  testImplementation(libs.androidide.ts.java)
+  testImplementation(libs.androidide.ts.json)
+  testImplementation(libs.androidide.ts.kotlin)
+  testImplementation(libs.androidide.ts.log)
+  testImplementation(libs.androidide.ts.xml)
+  testImplementation(libs.androidide.ts.python)
   testImplementation(libs.tests.google.truth)
   testImplementation(libs.tests.junit)
   testImplementation(libs.tests.robolectric)

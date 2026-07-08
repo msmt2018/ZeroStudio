@@ -32,7 +32,7 @@ dependencies {
   ksp(projects.annotation.processorsKsp)
   kapt(projects.annotation.processors)
 
-  api(libs.androidide.ts)
+  api(projects.editor.treeSitterNdk.androidTreeSitter)
   api(libs.androidide.ts.java)
   api(libs.androidide.ts.json)
   api(libs.androidide.ts.kotlin)
@@ -84,7 +84,6 @@ dependencies {
   // implementation(projects.lsp.clangd)
 
   // tree sitter
-  // api(projects.editor.treeSitterNdk.androidTreeSitter)
   api(projects.editor.treeSitterNdk.toml)
   api(projects.editor.treeSitterNdk.cmake)
   // api(projects.editor.treeSitterNdk.reStructuredText)
