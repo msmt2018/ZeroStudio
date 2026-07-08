@@ -217,7 +217,7 @@ public class TSNode extends TSNativeObject {
   public List<TSNode> findChildrenWithTypeReverse(final String type, final boolean namedOnly) {
     checkAccess();
     final var result = new ArrayList<TSNode>();
-    for (int i = (namedOnly ? getNamedChildCount() : getChildCount()) - 1; i > 0; --i) {
+    for (int i = (namedOnly ? getNamedChildCount() : getChildCount()) - 1; i >= 0; --i) {
       final var child = namedOnly ? getNamedChild(i) : getChild(i);
       if (child.isNull()) {
         continue;
@@ -288,6 +288,10 @@ public class TSNode extends TSNativeObject {
    * @return 包含该后代的子节点。
    */
   public TSNode childWithDescendant(TSNode descendant) {
+    checkAccess();
+    getTree().checkAccess();
+    descendant.checkAccess();
+    descendant.getTree().checkAccess();
     return Native.childWithDescendant(this, descendant);
   }
 
@@ -298,6 +302,8 @@ public class TSNode extends TSNativeObject {
    * @return 字段名或 <code>null</code>。
    */
   public String fieldNameForNamedChild(int namedChildIndex) {
+    checkAccess();
+    getTree().checkAccess();
     return Native.fieldNameForNamedChild(this, namedChildIndex);
   }
 

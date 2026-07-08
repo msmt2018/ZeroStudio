@@ -402,15 +402,16 @@ TSParser_delete(JNIEnv *env,
   delete parser;
 }
 
-static void
+static jboolean
 TSParser_setLanguage(JNIEnv *env,
                      jclass self,
                      jlong parser,
                      jlong language) {
   req_nnp(env, parser, "parser");
   req_nnp(env, language, "language");
-  ts_parser_set_language(((TSParserInternal *) parser)->getParser(env),
-                         (TSLanguage *) language);
+  bool ok = ts_parser_set_language(((TSParserInternal *) parser)->getParser(env),
+                                   (TSLanguage *) language);
+  return (jboolean) ok;
 }
 
 static jlong
