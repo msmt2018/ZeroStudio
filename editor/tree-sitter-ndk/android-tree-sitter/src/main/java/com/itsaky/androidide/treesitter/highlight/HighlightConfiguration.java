@@ -65,6 +65,8 @@ public final class HighlightConfiguration implements AutoCloseable {
   private final TSLanguage language;
   private final String languageName;
   private final TSQuery query;
+  /** 合并注入的独立 query（上游 combined_injections_query）。可能为 null。 */
+  private final TSQuery combinedInjectionsQuery;
   private final int highlightsPatternIndex;
   private final int localsPatternIndex;
   private final int[] highlightIndices;  // captureIndex -> highlight index 或 -1
@@ -76,17 +78,38 @@ public final class HighlightConfiguration implements AutoCloseable {
   private final int localDefValueCaptureIndex;
   private final int localRefCaptureIndex;
   private final boolean[] scopeInherits;
+  /**
+   * 每个 injection pattern 的属性设置，索引为 patternIndex。
+   * 仅对 patternIndex < localsPatternIndex 的 pattern 有意义。
+   */
+  private final InjectionProps[] injectionProps;
   private String[] configuredNames;
 
+  /** 单个 injection pattern 的属性设置（对应上游 injection_for_match 读取的 property_settings）。 */
+  static final class InjectionProps {
+    /** #set! injection.language "xxx" 的值，null 表示未设置。 */
+    String language = null;
+    /** #set! injection.self（无值），false 表示未设置。 */
+    boolean self = false;
+    /** #set! injection.parent（无值），false 表示未设置。 */
+    boolean parent = false;
+    /** #set! injection.include-children（无值），false 表示未设置。 */
+    boolean includeChildren = false;
+    /** #set! injection.combined（无值），false 表示未设置。 */
+    boolean combined = false;
+  }
+
   private HighlightConfiguration(TSLanguage language, String languageName, TSQuery query,
+      TSQuery combinedInjectionsQuery,
       int highlightsPatternIndex, int localsPatternIndex, int[] highlightIndices,
       boolean[] nonLocalVariablePatterns, int injectionContentCaptureIndex,
       int injectionLanguageCaptureIndex, int localScopeCaptureIndex,
       int localDefCaptureIndex, int localDefValueCaptureIndex, int localRefCaptureIndex,
-      boolean[] scopeInherits) {
+      boolean[] scopeInherits, InjectionProps[] injectionProps) {
     this.language = language;
     this.languageName = languageName;
     this.query = query;
+    this.combinedInjectionsQuery = combinedInjectionsQuery;
     this.highlightsPatternIndex = highlightsPatternIndex;
     this.localsPatternIndex = localsPatternIndex;
     this.highlightIndices = highlightIndices;
@@ -98,6 +121,7 @@ public final class HighlightConfiguration implements AutoCloseable {
     this.localDefValueCaptureIndex = localDefValueCaptureIndex;
     this.localRefCaptureIndex = localRefCaptureIndex;
     this.scopeInherits = scopeInherits;
+    this.injectionProps = injectionProps;
   }
 
   /**
@@ -190,9 +214,42 @@ public final class HighlightConfiguration implements AutoCloseable {
     // 而非通用谓词 (#not-local?)
     boolean[] nonLocalVariablePatterns = new boolean[patternCount];
     boolean[] scopeInheritsArr = new boolean[patternCount];
+    InjectionProps[] injectionPropsArr = new InjectionProps[patternCount];
     for (int i = 0; i < patternCount; i++) {
       nonLocalVariablePatterns[i] = hasIsNotLocalPredicate(query, i);
       scopeInheritsArr[i] = getScopeInherits(query, i);
+      injectionPropsArr[i] = parseInjectionProps(query, i);
+    }
+
+    // 构造 combined_injections_query（上游 Rust 的 combined_injections_query）
+    // 仅当 injection_query 非空时才创建。然后：
+    //  - 主 query 中禁用有 injection.combined 属性的 pattern
+    //  - combined query 中禁用没有 injection.combined 属性的 pattern
+    TSQuery combinedInjectionsQuery = null;
+    if (injectionQueryByteLen > 0) {
+      boolean hasCombined = false;
+      for (int i = 0; i < localsPatternIndex; i++) {
+        if (injectionPropsArr[i].combined) {
+          hasCombined = true;
+          break;
+        }
+      }
+      if (hasCombined) {
+        // 用 injection_query 单独创建一个 query 副本
+        TSQuery combinedQuery = TSQuery.create(language, injectionQuery);
+        if (combinedQuery != null && combinedQuery.canAccess()) {
+          for (int i = 0; i < localsPatternIndex; i++) {
+            if (injectionPropsArr[i].combined) {
+              // 主 query 禁用 combined pattern
+              query.disablePattern(i);
+            } else {
+              // combined query 禁用非 combined pattern
+              combinedQuery.disablePattern(i);
+            }
+          }
+          combinedInjectionsQuery = combinedQuery;
+        }
+      }
     }
 
     // highlightIndices 初始为 -1，需要调用 configure() 后才填充
@@ -202,11 +259,12 @@ public final class HighlightConfiguration implements AutoCloseable {
     }
 
     return new HighlightConfiguration(language, languageName, query,
+        combinedInjectionsQuery,
         highlightsPatternIndex, localsPatternIndex, highlightIndices,
         nonLocalVariablePatterns, injectionContentCaptureIndex,
         injectionLanguageCaptureIndex, localScopeCaptureIndex,
         localDefCaptureIndex, localDefValueCaptureIndex, localRefCaptureIndex,
-        scopeInheritsArr);
+        scopeInheritsArr, injectionPropsArr);
   }
 
   /**
@@ -288,6 +346,66 @@ public final class HighlightConfiguration implements AutoCloseable {
   }
 
   /**
+   * 解析 pattern 的 injection 相关 {@code #set!} 属性设置。
+   *
+   * <p>对应上游 Rust {@code injection_for_match} 中读取的 {@code property_settings}：
+   * <ul>
+   *   <li>{@code #set! injection.language "xxx"} — 指定嵌入语言名称</li>
+   *   <li>{@code #set! injection.self} — 嵌入语言为自身</li>
+   *   <li>{@code #set! injection.parent} — 嵌入语言为父语言</li>
+   *   <li>{@code #set! injection.include-children} — 包含子节点</li>
+   *   <li>{@code #set! injection.combined} — 合并多个不连续的嵌入内容</li>
+   * </ul>
+   */
+  private static InjectionProps parseInjectionProps(TSQuery query, int patternIndex) {
+    InjectionProps props = new InjectionProps();
+    TSQueryPredicateStep[] steps = query.getPredicatesForPattern(patternIndex);
+    int i = 0;
+    while (i < steps.length) {
+      List<TSQueryPredicateStep> predicateSteps = new ArrayList<>();
+      while (i < steps.length && steps[i].getType() != TSQueryPredicateStep.Type.Done) {
+        predicateSteps.add(steps[i]);
+        i++;
+      }
+      i++; // 跳过 Done
+
+      if (predicateSteps.isEmpty()) continue;
+      TSQueryPredicateStep opStep = predicateSteps.get(0);
+      if (opStep.getType() != TSQueryPredicateStep.Type.String) continue;
+      String operator = query.getStringValueForId(opStep.getValueId());
+      if (!"set!".equals(operator) || predicateSteps.size() < 2) continue;
+      TSQueryPredicateStep keyStep = predicateSteps.get(1);
+      if (keyStep.getType() != TSQueryPredicateStep.Type.String) continue;
+      String keyValue = query.getStringValueForId(keyStep.getValueId());
+      switch (keyValue) {
+        case "injection.language":
+          if (predicateSteps.size() >= 3) {
+            TSQueryPredicateStep valStep = predicateSteps.get(2);
+            if (valStep.getType() == TSQueryPredicateStep.Type.String) {
+              props.language = query.getStringValueForId(valStep.getValueId());
+            }
+          }
+          break;
+        case "injection.self":
+          props.self = true;
+          break;
+        case "injection.parent":
+          props.parent = true;
+          break;
+        case "injection.include-children":
+          props.includeChildren = true;
+          break;
+        case "injection.combined":
+          props.combined = true;
+          break;
+        default:
+          break;
+      }
+    }
+    return props;
+  }
+
+  /**
    * 配置高亮名称。
    *
    * <p>对于 query 中的每个 capture 名（如 {@code function.method.builtin}），按点分拆分后
@@ -343,6 +461,8 @@ public final class HighlightConfiguration implements AutoCloseable {
   public TSLanguage getLanguage() { return language; }
   public String getLanguageName() { return languageName; }
   public TSQuery getQuery() { return query; }
+  /** 获取合并注入 query（上游 combined_injections_query），可能为 null。 */
+  public TSQuery getCombinedInjectionsQuery() { return combinedInjectionsQuery; }
   public int getHighlightsPatternIndex() { return highlightsPatternIndex; }
   public int getLocalsPatternIndex() { return localsPatternIndex; }
   public int getInjectionContentCaptureIndex() { return injectionContentCaptureIndex; }
@@ -351,6 +471,19 @@ public final class HighlightConfiguration implements AutoCloseable {
   public int getLocalDefCaptureIndex() { return localDefCaptureIndex; }
   public int getLocalDefValueCaptureIndex() { return localDefValueCaptureIndex; }
   public int getLocalRefCaptureIndex() { return localRefCaptureIndex; }
+
+  /**
+   * 获取指定 pattern 的 injection 属性设置。
+   *
+   * <p>对应上游 Rust {@code injection_for_match} 读取的 {@code property_settings}。
+   * 返回的对象不应被修改。
+   */
+  InjectionProps getInjectionProps(int patternIndex) {
+    if (patternIndex < 0 || patternIndex >= injectionProps.length) {
+      return new InjectionProps();
+    }
+    return injectionProps[patternIndex];
+  }
 
   /** 获取指定 capture 索引对应的高亮索引，-1 表示无高亮。 */
   public int getHighlightIndex(int captureIndex) {
@@ -380,6 +513,9 @@ public final class HighlightConfiguration implements AutoCloseable {
 
   @Override
   public void close() {
+    if (combinedInjectionsQuery != null) {
+      combinedInjectionsQuery.close();
+    }
     if (query != null) {
       query.close();
     }

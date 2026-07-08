@@ -42,9 +42,11 @@ import java.util.NoSuchElementException;
  *   <li>支持 highlight capture 合并（同节点的多个 capture 取最后一个有效的）。</li>
  *   <li>支持 local scope/def/ref 追踪（引用继承定义的高亮类型）。</li>
  *   <li>支持 {@code (#is-not? local)} 属性谓词（跳过局部变量的特定高亮 pattern）。</li>
- *   <li>支持 {@code (#set! local.scope-inherits "false")} 属性设置。</li>
+ *   <li>支持 {@code #set! local.scope-inherits "false"} 属性设置。</li>
  *   <li>支持 {@code @local.definition-value} capture（使用值范围而非定义节点范围）。</li>
- *   <li><strong>不支持</strong>语言嵌入（injection）——这是后续增强项。</li>
+ *   <li>支持语言嵌入（injection）：通过 {@code injectionCallback} 回调为嵌入语言
+ *       （如 HTML 中的 JS/CSS）创建独立的高亮层，支持
+ *       {@code #set! injection.language/self/parent/include-children/combined}。</li>
  * </ul>
  *
  * <p>算法与上游 Rust {@code highlight.rs} 一致：
