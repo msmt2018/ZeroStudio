@@ -390,17 +390,19 @@ public final class TagsContext implements AutoCloseable {
       lineEnd++;
     }
 
-    // trim 首尾空白
+    // trim 首部空白
     while (lineStart < lineEnd && isWhitespace(source[lineStart])) {
       lineStart++;
     }
-    while (lineEnd > lineStart && isWhitespace(source[lineEnd - 1])) {
-      lineEnd--;
-    }
 
-    // 限制最大长度
+    // 限制最大长度（在 trim 尾部空白之前应用，与上游 Rust line_range 一致）
     if (lineEnd - lineStart > MAX_LINE_LEN) {
       lineEnd = lineStart + MAX_LINE_LEN;
+    }
+
+    // trim 尾部空白（在限制后的范围内 trim）
+    while (lineEnd > lineStart && isWhitespace(source[lineEnd - 1])) {
+      lineEnd--;
     }
 
     return new int[]{lineStart, lineEnd};
