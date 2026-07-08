@@ -364,9 +364,9 @@ object TreeSitterSymbolResolver {
     val languageImpl = TreeSitterLanguageProvider.forType(extension, context) ?: return emptyList()
 
     val parser = TSParser.create()
-    parser.language = languageImpl.languageSpec.language
-
+    // 修复：将 language 赋值移入 .use{} 块内，避免赋值抛异常时 parser 泄漏 native 资源。
     return parser.use { p ->
+      p.language = languageImpl.languageSpec.language
       val content: UTF16String = UTF16StringFactory.newString(code)
       p.parseString(null, content)?.use { tree ->
         val symbols = ArrayList<SymbolInfo>()

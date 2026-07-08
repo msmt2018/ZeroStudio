@@ -242,9 +242,16 @@ class TsAnalyzeWorker(
     updateCodeBlocks()
     oldBlocks?.also { ObjectAllocator.recycleBlockLines(it) }
 
-    stylesReceiver?.setStyles(analyzer, styles) { oldTree?.close() }
-
-    stylesReceiver?.updateBracketProvider(analyzer, TsBracketPairs(copied, languageSpec))
+    // 修复：原实现 stylesReceiver?.setStyles(...) { oldTree?.close() } 在 stylesReceiver 为 null
+    // 时回调不会执行，导致旧 tree（已被新 styles.spans 替换、不再被持有）泄漏 native 资源。
+    // 显式处理 null 分支，确保 oldTree 在任意情况下都被关闭。
+    val receiver = stylesReceiver
+    if (receiver != null) {
+      receiver.setStyles(analyzer, styles) { oldTree?.close() }
+      receiver.updateBracketProvider(analyzer, TsBracketPairs(copied, languageSpec))
+    } else {
+      oldTree?.close()
+    }
   }
 
   private fun updateCodeBlocks() {

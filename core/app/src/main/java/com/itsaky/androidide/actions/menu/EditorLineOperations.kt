@@ -1161,48 +1161,51 @@ object EditorLineOperations {
     val langImpl = LanguageAnalysisBridge.getTsLanguage(editor) ?: return emptyList()
     val content = editor.text
     val symbols = mutableListOf<CodeSymbol>()
+    // 修复：原实现 query.close() 仅在正常路径末尾执行，且 match.captures[0] 在空 captures 时
+    // 抛 IndexOutOfBoundsException 导致 query 泄漏。改用 .use{} 保证任意路径释放，并安全访问 captures。
     val query = TSQuery.create(langImpl, queryScm)
-    val matches = tree.executeQuery(langImpl, queryScm)
-    matches.forEach { match: TSQueryMatch ->
-      val node = match.captures[0].node
-      val nameNode = match.captures.find { c -> query.getCaptureNameForId(c.index) == "name" }?.node
-      if (nameNode != null) {
-        val name = nameNode.getText(content).toString()
-        val range = node.toLspRange(content)
-        val selectionRange = nameNode.toLspRange(content)
+    return query.use { q ->
+      val matches = tree.executeQuery(langImpl, queryScm)
+      matches.forEach { match: TSQueryMatch ->
+        val node = match.captures.firstOrNull()?.node ?: return@forEach
+        val nameNode = match.captures.find { c -> q.getCaptureNameForId(c.index) == "name" }?.node
+        if (nameNode != null) {
+          val name = nameNode.getText(content).toString()
+          val range = node.toLspRange(content)
+          val selectionRange = nameNode.toLspRange(content)
 
-        val classCapture =
-            match.captures.find { c -> query.getCaptureNameForId(c.index) == "class" }
-        val methodCapture =
-            match.captures.find { c -> query.getCaptureNameForId(c.index) == "method" }
-        val fieldCapture =
-            match.captures.find { c -> query.getCaptureNameForId(c.index) == "field" }
+          val classCapture =
+              match.captures.find { c -> q.getCaptureNameForId(c.index) == "class" }
+          val methodCapture =
+              match.captures.find { c -> q.getCaptureNameForId(c.index) == "method" }
+          val fieldCapture =
+              match.captures.find { c -> q.getCaptureNameForId(c.index) == "field" }
 
-        when {
-          classCapture != null -> {
-            symbols.add(CodeSymbol(name, "", "Class", range, selectionRange))
-          }
-          methodCapture != null -> {
-            val params =
-                match.captures
-                    .find { c -> query.getCaptureNameForId(c.index) == "params" }
-                    ?.node
-                    ?.getText(content)
-                    ?.toString() ?: "()"
-            val bodyNode = node.getChildByFieldName("body")
-            val bodyRange = bodyNode?.toLspRange(content)
-            symbols.add(CodeSymbol(name, params, "Method", range, selectionRange, bodyRange))
-          }
-          fieldCapture != null -> {
-            val typeNode = node.parent?.getChildByFieldName("type")
-            val detail = typeNode?.getText(content)?.toString() ?: ""
-            symbols.add(CodeSymbol(name, detail, "Field", range, selectionRange))
+          when {
+            classCapture != null -> {
+              symbols.add(CodeSymbol(name, "", "Class", range, selectionRange))
+            }
+            methodCapture != null -> {
+              val params =
+                  match.captures
+                      .find { c -> q.getCaptureNameForId(c.index) == "params" }
+                      ?.node
+                      ?.getText(content)
+                      ?.toString() ?: "()"
+              val bodyNode = node.getChildByFieldName("body")
+              val bodyRange = bodyNode?.toLspRange(content)
+              symbols.add(CodeSymbol(name, params, "Method", range, selectionRange, bodyRange))
+            }
+            fieldCapture != null -> {
+              val typeNode = node.parent?.getChildByFieldName("type")
+              val detail = typeNode?.getText(content)?.toString() ?: ""
+              symbols.add(CodeSymbol(name, detail, "Field", range, selectionRange))
+            }
           }
         }
       }
+      symbols.sortedBy { it.range.start.line }
     }
-    query.close()
-    return symbols.sortedBy { it.range.start.line }
   }
 
   private fun Position.isBefore(other: Position): Boolean {
