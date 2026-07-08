@@ -83,6 +83,20 @@ subprojects {
 
   project.version = rootProject.version
 
+  // 将 Maven 上的 android-tree-sitter / annotations 工件替换为本地项目模块。
+  // Maven 语法包（如 tree-sitter-java:4.3.2）的 POM 声明了对 android-tree-sitter:4.3.2 的
+  // compile-scope 传递依赖，该 Maven 旧工件不包含本地新增的 TSQueryProgressCallback /
+  // execWithOptions 等 API，会遮蔽本地模块的新类导致编译失败。
+  // 通过 dependencySubstitution 将所有对 Maven 工件的引用（含传递依赖）重定向到本地项目。
+  configurations.all {
+    resolutionStrategy.dependencySubstitution {
+      substitute(module("com.itsaky.androidide.treesitter:android-tree-sitter"))
+        .using(project(":editor:tree-sitter-ndk:android-tree-sitter"))
+      substitute(module("com.itsaky.androidide.treesitter:annotations"))
+        .using(project(":editor:tree-sitter-ndk:annotations"))
+    }
+  }
+
   plugins.withId("com.android.application") { configureAndroidModule(libs.androidx.libDesugaring) }
   plugins.withId("com.android.library") { configureAndroidModule(libs.androidx.libDesugaring) }
   plugins.withId("java-library") { configureJavaModule() }
