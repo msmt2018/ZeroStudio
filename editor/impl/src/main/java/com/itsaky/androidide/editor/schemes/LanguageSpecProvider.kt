@@ -55,8 +55,6 @@ object LanguageSpecProvider {
             localsScmSource = readScheme(context, type, "locals"),
             codeBlocksScmSource = readScheme(context, type, "blocks"),
             bracketsScmSource = readScheme(context, type, "brackets"),
-            // 升级：加载 injections.scm，有效应用 tree-sitter 0.27 注入约定
-            injectionsScmSource = readScheme(context, type, "injections"),
             localsCaptureSpec = localsCaptureSpec,
             predicates =
                 listOf(
