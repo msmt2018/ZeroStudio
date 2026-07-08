@@ -297,7 +297,9 @@ jobject _marshalMatch(JNIEnv *env, TSQueryMatch match) {
       env->NewObjectArray(match.capture_count, captureClass, nullptr);
   for (int i = 0; i < match.capture_count; i++) {
     const TSQueryCapture *c = match.captures + i;
-    env->SetObjectArrayElement(captures, i, _marshalCapture(env, *c));
+    jobject cap = _marshalCapture(env, *c);
+    env->SetObjectArrayElement(captures, i, cap);
+    env->DeleteLocalRef(cap);
   }
 
   return env->CallStaticObjectMethod(objectFactoryClass,

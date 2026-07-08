@@ -72,17 +72,19 @@ static jlong TSWasmStore_loadLanguage(JNIEnv *env,
       (uint32_t) wasmLen,
       &error);
 
-  env->ReleaseStringUTFChars(name, lang_name);
-  env->ReleaseByteArrayElements(wasm, wasm_data, JNI_ABORT);
-
+  // 修复 use-after-free：先完成日志记录（使用 lang_name），再释放 JNI 资源
   if (language == nullptr) {
     LOGE(LOG_TAG, "Failed to load wasm language '%s': %s",
          lang_name,
          error.message != nullptr ? error.message : "unknown error");
+    env->ReleaseStringUTFChars(name, lang_name);
+    env->ReleaseByteArrayElements(wasm, wasm_data, JNI_ABORT);
     return 0;
   }
 
   LOGD(LOG_TAG, "Loaded wasm language '%s'", lang_name);
+  env->ReleaseStringUTFChars(name, lang_name);
+  env->ReleaseByteArrayElements(wasm, wasm_data, JNI_ABORT);
   return (jlong) language;
 #else
   LOGW(LOG_TAG, "Wasm feature is not enabled, cannot load wasm language");

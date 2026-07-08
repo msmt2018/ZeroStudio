@@ -135,6 +135,10 @@ static jlongArray TSLanguage_loadLanguage(JNIEnv *env,
   auto language = lang_func();
   if (language == nullptr) {
     LOGE(LOG_TAG, "Function '%s' returned nullptr", func_name);
+    // 修复：释放已获取的 JNI 字符串资源和 dlopen handle
+    env->ReleaseStringUTFChars(libpath, lib_path);
+    env->ReleaseStringUTFChars(func, func_name);
+    dlclose(handle);
     return nullptr;
   }
 

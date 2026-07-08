@@ -106,7 +106,10 @@ public final class Highlighter implements AutoCloseable {
     parser.setLanguage(config.getLanguage());
     parser.reset();
 
-    TSTree tree = parser.parseBytes(sourceCode);
+    // 使用 parseUtf8Bytes 而非 parseBytes：parseBytes 内部使用 UTF16String + TSInputEncodingUTF16LE，
+    // 会导致 tree-sitter 报告 UTF-16LE 字节偏移（每个字符 2 字节），与 UTF-8 源码不匹配。
+    // parseUtf8Bytes 直接使用 TSInputEncodingUTF8，报告的偏移量为 UTF-8 字节偏移。
+    TSTree tree = parser.parseUtf8Bytes(sourceCode);
     if (tree == null) {
       // 解析失败，返回纯 Source 事件
       return singleSourceEvent(0, sourceCode.length);

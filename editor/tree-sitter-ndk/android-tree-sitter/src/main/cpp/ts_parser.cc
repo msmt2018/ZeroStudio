@@ -581,6 +581,76 @@ static jlong TSParser_parse(JNIEnv *env,
   return (jlong) tree;
 }
 
+// 直接使用 UTF-8 字节数组解析，绕过 UTF16String 层。
+// tree-sitter 报告的字节偏移量为 UTF-8 字节偏移，与上游 Rust 一致。
+// 用于 Highlighter 和 TagsContext 等需要 UTF-8 字节偏移的场景。
+static jlong TSParser_parseUtf8Bytes(JNIEnv *env,
+                                      jclass clazz,
+                                      jlong parser,
+                                      jlong tree_pointer,
+                                      jbyteArray source) {
+  req_nnp(env, parser);
+  req_nnp(env, source, "source");
+  auto *ts_parser_internal = (TSParserInternal *) parser;
+  TSParser *ts_parser = ts_parser_internal->getParser(env);
+  if (ts_parser == nullptr) return 0;
+  TSTree *old_tree = tree_pointer == 0 ? nullptr : (TSTree *) tree_pointer;
+
+  if (!ts_parser_internal->begin_round(env)) {
+    return 0;
+  }
+
+  jbyte *src_bytes = env->GetByteArrayElements(source, nullptr);
+  if (src_bytes == nullptr) {
+    ts_parser_internal->end_round(env);
+    return 0;
+  }
+  uint32_t src_len = (uint32_t) env->GetArrayLength(source);
+
+  // 构造 progress_callback payload（与 TSParser_parse 一致）
+  ParseCallbackPayload payload;
+  payload.cancelled = ts_parser_internal->get_cancelled();
+  payload.timeout_micros = ts_parser_internal->get_timeout_micros();
+  payload.start_time = std::chrono::steady_clock::now();
+
+  TSParseOptions options;
+  options.payload = &payload;
+  options.progress_callback = parse_progress_callback;
+
+  // TSInput 的 read 回调直接从 Java byte 数组读取
+  struct ByteArrayInput {
+    const jbyte *data;
+    uint32_t length;
+  };
+  ByteArrayInput input_payload;
+  input_payload.data = src_bytes;
+  input_payload.length = src_len;
+
+  auto read_callback = [](void *p, uint32_t byte_index,
+                          TSPoint position, uint32_t *bytes_read) -> const char * {
+    auto *input = static_cast<ByteArrayInput *>(p);
+    if (byte_index >= input->length) {
+      *bytes_read = 0;
+      return "";
+    }
+    *bytes_read = input->length - byte_index;
+    return reinterpret_cast<const char *>(input->data + byte_index);
+  };
+
+  TSInput input;
+  input.payload = &input_payload;
+  input.read = read_callback;
+  input.encoding = TSInputEncodingUTF8;
+  input.decode = nullptr;
+
+  TSTree *tree = ts_parser_parse_with_options(ts_parser, old_tree, input, options);
+
+  env->ReleaseByteArrayElements(source, src_bytes, JNI_ABORT);
+  ts_parser_internal->end_round(env);
+
+  return (jlong) tree;
+}
+
 static jboolean
 TSParser_requestCancellation(
     JNIEnv *env,
@@ -688,6 +758,7 @@ void TSParser_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSParser_Native_setIncludedRanges, TSParser_setIncludedRanges);
   SET_JNI_METHOD(methods, TSParser_Native_getIncludedRanges, TSParser_getIncludedRanges);
   SET_JNI_METHOD(methods, TSParser_Native_parse, TSParser_parse);
+  SET_JNI_METHOD(methods, TSParser_Native_parseUtf8Bytes, TSParser_parseUtf8Bytes);
   SET_JNI_METHOD(methods, TSParser_Native_requestCancellation,
                  TSParser_requestCancellation);
   SET_JNI_METHOD(methods, TSParser_Native_setWasmStore, TSParser_setWasmStore);

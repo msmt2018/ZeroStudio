@@ -84,7 +84,9 @@ public final class TagsContext implements AutoCloseable {
     parser.setLanguage(config.getLanguage());
     parser.reset();
 
-    TSTree tree = parser.parseBytes(sourceCode);
+    // 使用 parseUtf8Bytes 而非 parseBytes：确保 tree-sitter 报告 UTF-8 字节偏移，
+    // 与 sourceCode (UTF-8) 的字节偏移一致。
+    TSTree tree = parser.parseUtf8Bytes(sourceCode);
 
     if (tree == null) {
       return new TagsResult(new ArrayList<>(), true);

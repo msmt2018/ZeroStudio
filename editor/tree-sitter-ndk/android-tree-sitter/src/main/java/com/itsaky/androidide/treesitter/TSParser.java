@@ -148,6 +148,61 @@ public class TSParser extends TSNativeObject {
   }
 
   /**
+   * 直接使用 UTF-8 字节数组解析源代码。
+   *
+   * <p>与 {@link #parseBytes(byte[])} 不同，此方法绕过 UTF16String 层，直接将 UTF-8 字节
+   * 传给 tree-sitter 解析器（使用 {@code TSInputEncodingUTF8}）。tree-sitter 报告的
+   * 所有字节偏移量（如 {@link TSNode#getStartByte()}）均为 UTF-8 字节偏移，与上游 Rust
+   * 行为一致。
+   *
+   * <p>此方法适用于需要 UTF-8 字节偏移的场景，如 {@link com.itsaky.androidide.treesitter.highlight.Highlighter}
+   * 和 {@link com.itsaky.androidide.treesitter.tags.TagsContext}。
+   *
+   * @param bytes UTF-8 编码的源代码字节。
+   * @return 解析后的语法树，如果解析失败或被取消则返回 {@code null}。
+   */
+  public TSTree parseUtf8Bytes(byte[] bytes) {
+    return parseUtf8Bytes(bytes, 0, bytes.length);
+  }
+
+  /**
+   * 直接使用 UTF-8 字节数组解析源代码（指定偏移和长度）。
+   *
+   * @param bytes  UTF-8 编码的源代码字节。
+   * @param offset 起始字节偏移。
+   * @param len    要解析的字节数。
+   * @return 解析后的语法树，如果解析失败或被取消则返回 {@code null}。
+   * @see #parseUtf8Bytes(byte[])
+   */
+  public TSTree parseUtf8Bytes(byte[] bytes, int offset, int len) {
+    checkAccess();
+    throwIfParseNotCancelled();
+    if (bytes == null) {
+      throw new IllegalArgumentException("bytes cannot be null");
+    }
+    if (offset < 0 || len < 0 || offset + len > bytes.length) {
+      throw new IndexOutOfBoundsException(
+        "bytes.length=" + bytes.length + ", offset=" + offset + ", len=" + len);
+    }
+    if (len == 0) {
+      return null;
+    }
+    parseLock.lock();
+    setCancellationRequested(false);
+    setParsingFlag();
+    try {
+      byte[] src = (offset == 0 && len == bytes.length) ? bytes
+          : java.util.Arrays.copyOfRange(bytes, offset, offset + len);
+      final var tree = Native.parseUtf8Bytes(this.getNativeObject(), 0, src);
+      return createTree(tree);
+    } finally {
+      unsetParsingFlag();
+      parseCondition.signalAll();
+      parseLock.unlock();
+    }
+  }
+
+  /**
    * Parse the given edited source code using the previously parsed syntax tree. The given
    * {@link TSTree} must have been edited using {@link TSTree#edit(TSInputEdit)} before calling this
    * method. See {@link #parseString(TSTree, UTF16String)} for more details.
@@ -475,6 +530,10 @@ public class TSParser extends TSNativeObject {
 
     @FastNative
     static native long parse(long parser, long treePointer, long strPointer);
+
+    // 直接使用 UTF-8 字节数组解析（TSInputEncodingUTF8）
+    @FastNative
+    static native long parseUtf8Bytes(long parser, long treePointer, byte[] source);
 
     @FastNative
     static native boolean requestCancellation(long parser);

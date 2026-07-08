@@ -42,7 +42,7 @@ UTF16StringFactory_newStringBytes(
   auto ba = env->GetByteArrayElements(bytes, nullptr);
   auto vec = std::vector<jbyte>();
   for (int i = off; i < off + len; ++i) {
-    vec.emplace_back(*(ba + off));
+    vec.emplace_back(*(ba + i));
   }
 
   auto *ustr = new UTF16String(vec);
