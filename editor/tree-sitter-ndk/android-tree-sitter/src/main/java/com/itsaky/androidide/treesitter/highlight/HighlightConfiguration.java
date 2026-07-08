@@ -20,6 +20,7 @@ package com.itsaky.androidide.treesitter.highlight;
 import com.itsaky.androidide.treesitter.TSLanguage;
 import com.itsaky.androidide.treesitter.TSQuery;
 import com.itsaky.androidide.treesitter.TSQueryPredicateStep;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -121,8 +122,12 @@ public final class HighlightConfiguration implements AutoCloseable {
 
     // 拼接 injection_query + locals_query + highlights_query
     String querySource = injectionQuery + localsQuery + highlightsQuery;
-    int localsQueryOffset = injectionQuery.length();
-    int highlightsQueryOffset = injectionQuery.length() + localsQuery.length();
+    // 使用 UTF-8 字节长度（而非 String.length() 的 UTF-16 码元数），
+    // 因为这些偏移量用于与 query.getStartByteForPattern(i) 返回的字节偏移量比较。
+    int injectionQueryByteLen = injectionQuery.getBytes(StandardCharsets.UTF_8).length;
+    int localsQueryByteLen = localsQuery.getBytes(StandardCharsets.UTF_8).length;
+    int localsQueryOffset = injectionQueryByteLen;
+    int highlightsQueryOffset = injectionQueryByteLen + localsQueryByteLen;
 
     TSQuery query = TSQuery.create(language, querySource);
     if (query == null || !query.canAccess()) {

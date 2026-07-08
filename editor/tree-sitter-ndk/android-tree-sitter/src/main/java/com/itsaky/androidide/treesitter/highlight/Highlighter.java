@@ -188,8 +188,10 @@ public final class Highlighter implements AutoCloseable {
       this.cursor = cursor;
       this.tree = tree;
       this.source = source;
-      // 初始全局 scope
-      scopeStack.push(new LocalScope(true, 0, source.length, new ArrayList<>()));
+      // 初始全局 scope（与上游 Rust 一致：inherits=false, range=0..usize::MAX）
+      // 注：global scope 的 inherits 标志实际不影响行为（它始终是搜索的最后一个 scope），
+      // 但与上游保持一致以避免混淆。
+      scopeStack.push(new LocalScope(false, 0, Integer.MAX_VALUE, new ArrayList<>()));
     }
 
     @Override
