@@ -97,6 +97,9 @@ class TreeSitterIndentProvider(
     val document = analyzer.document
     TSParser.create().use { parser ->
       parser.language = document.parser.language
+      // 升级：接入 tree-sitter 0.27 parser setTimeout，缩进计算在用户交互（如回车）时触发，
+      // 设较短超时防止大文档卡顿；超时 parseString 返回 null → 返回默认缩进（安全降级）。
+      parser.setTimeout(2_000_000L) // 2s
 
       var closeTree = true
       val tree =

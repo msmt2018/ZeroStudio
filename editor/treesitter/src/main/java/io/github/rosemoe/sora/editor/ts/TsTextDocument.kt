@@ -30,6 +30,15 @@ import com.itsaky.androidide.treesitter.string.UTF16StringFactory
  */
 class TsTextDocument(language: TSLanguage) : AutoCloseable {
 
+  companion object {
+    /**
+     * 单次 parse 的最大时长（微秒）。超出后 parser 提前返回 null，避免超大/病态文件无限阻塞工作线程。
+     * 与 query 侧的 execWithOptions + setMatchLimit 共同构成 0.27 解析/查询的完整健壮性保护。
+     * 超时降级路径：parseString 返回 null → tree 为 null → updateStyles 因 tree?.canAccess()!=true 早退。
+     */
+    private const val PARSE_TIMEOUT_MICROS = 5_000_000L // 5s
+  }
+
   @Volatile private var documentVersion = 1L
 
   /** The version of this text document. */
@@ -40,7 +49,13 @@ class TsTextDocument(language: TSLanguage) : AutoCloseable {
   val text = UTF16StringFactory.newString()
 
   /** The parser used to parse the source text into a syntax tree. */
-  val parser = TSParser.create().also { it.language = language }
+  val parser =
+      TSParser.create().also {
+        it.language = language
+        // 升级：接入 tree-sitter 0.27 的 parser setTimeout，为单次 parse 设置时间上限，
+        // 补齐 parse 侧的健壮性保护（query 侧已有 execWithOptions + setMatchLimit）。
+        it.setTimeout(PARSE_TIMEOUT_MICROS)
+      }
 
   /** The syntax tree. */
   var tree: TSTree? = null

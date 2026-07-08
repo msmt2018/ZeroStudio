@@ -42,6 +42,8 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
     crossinline whileTrue: (TSQueryMatch?) -> Boolean = { true },
     crossinline onClosedOrEdited: () -> Unit = {},
     noinline cancelChecker: (() -> Boolean)? = null,
+    matchLimit: Int = -1,
+    crossinline onExceededMatchLimit: () -> Unit = {},
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -85,6 +87,8 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
       whileTrue = whileTrue,
       onClosedOrEdited = onClosedOrEdited,
       cancelChecker = cancelChecker,
+      matchLimit = matchLimit,
+      onExceededMatchLimit = onExceededMatchLimit,
       debugName = debugName,
       debugLogging = debugLogging,
       action = action,
@@ -106,6 +110,8 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
     crossinline whileTrue: (TSQueryMatch?) -> Boolean = { true },
     crossinline onClosedOrEdited: () -> Unit = {},
     noinline cancelChecker: (() -> Boolean)? = null,
+    matchLimit: Int = -1,
+    crossinline onExceededMatchLimit: () -> Unit = {},
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -125,6 +131,8 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
       whileTrue = whileTrue,
       onClosedOrEdited = onClosedOrEdited,
       cancelChecker = cancelChecker,
+      matchLimit = matchLimit,
+      onExceededMatchLimit = onExceededMatchLimit,
       debugName = debugName,
       debugLogging = debugLogging,
       action = action,
@@ -140,6 +148,8 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     crossinline whileTrue: (TSQueryMatch?) -> Boolean,
     crossinline onClosedOrEdited: () -> Unit,
     noinline cancelChecker: (() -> Boolean)? = null,
+    matchLimit: Int = -1,
+    crossinline onExceededMatchLimit: () -> Unit = {},
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -172,6 +182,12 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
   } else {
     exec(query, node)
   }
+  // 升级：接入 tree-sitter 0.27 的 setMatchLimit，为全树查询设置 pending match 上限，
+  // 防止病态/超大文件导致内存无界增长。配合 didExceedMatchLimit 在循环后诊断是否超限。
+  // matchLimit <= 0 时不设置（保持默认无限制），逐行高亮路径不传入。
+  if (matchLimit > 0) {
+    setMatchLimit(matchLimit)
+  }
   var match = nextMatch()
   while (matchCondition(match) && whileTrue(match)) {
 
@@ -200,6 +216,11 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     }
 
     match = nextMatch()
+  }
+
+  // 升级：循环结束后检查是否因 match limit 超限而静默丢弃了 match，通知调用方。
+  if (matchLimit > 0 && didExceedMatchLimit()) {
+    onExceededMatchLimit()
   }
 
   if (recycleNodeAfterUse && node is TreeSitterNode && !node.isRecycled) {

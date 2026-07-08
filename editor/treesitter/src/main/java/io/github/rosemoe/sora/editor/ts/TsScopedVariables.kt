@@ -30,6 +30,7 @@ import com.itsaky.androidide.treesitter.api.TreeSitterQueryCapture
 import com.itsaky.androidide.treesitter.api.safeExecQueryCursor
 import com.itsaky.androidide.treesitter.string.UTF16String
 import java.util.Stack
+import org.slf4j.LoggerFactory
 
 private typealias TSNodeIndices = Pair<Int, Int>
 
@@ -52,6 +53,10 @@ class TsScopedVariables(
     val spec: TsLanguageSpec,
     cancelChecker: (() -> Boolean)? = null,
 ) {
+
+  companion object {
+    private val log = LoggerFactory.getLogger(TsScopedVariables::class.java)
+  }
 
   private val rootScope: Scope
 
@@ -77,6 +82,12 @@ class TsScopedVariables(
             // 升级：注册 0.27 进度回调，使全树 locals 查询单次迭代也可响应取消，
             // 避免超大文件上变量收集耗时过长阻塞工作线程。
             cancelChecker = cancelChecker,
+            // 升级：接入 0.27 setMatchLimit，为全树 locals 查询设置 pending match 上限，
+            // 防止病态文件内存无界增长；超限时告警（局部变量解析可能不全）。
+            matchLimit = 200000,
+            onExceededMatchLimit = {
+              log.warn("TsScopedVariables: locals query exceeded match limit, scoped variables may be incomplete")
+            },
             debugName = "TsScopedVariables.init()",
         ) { match ->
           if (spec.queryPredicator.doPredicate(spec.predicates, text, match)) {

@@ -274,6 +274,12 @@ class TsAnalyzeWorker(
           // 升级：注册 0.27 进度回调，使单次 nextMatch() 内部也能响应 isDestroyed 取消，
           // 避免超大文件上全树 blocks 查询单次迭代耗时过长导致 ANR。
           cancelChecker = { !isDestroyed },
+          // 升级：接入 0.27 setMatchLimit，为全树 blocks 查询设置 pending match 上限，
+          // 防止病态文件内存无界增长；超限时告警（代码块可能不全）。
+          matchLimit = 200000,
+          onExceededMatchLimit = {
+            log.warn("updateCodeBlocks: blocks query exceeded match limit, code blocks may be incomplete")
+          },
           debugName = "TsAnalyzeManager.updateCodeBlocks()",
       ) { match ->
         if (!languageSpec.blocksPredicator.doPredicate(languageSpec.predicates, text, match)) {
