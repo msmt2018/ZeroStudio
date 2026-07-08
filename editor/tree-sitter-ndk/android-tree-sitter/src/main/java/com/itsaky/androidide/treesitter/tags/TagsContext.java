@@ -270,9 +270,11 @@ public final class TagsContext implements AutoCloseable {
         result.add(t);
       }
     }
+    // 与上游 Rust 一致：按 (nameEnd, nameStart) 升序排序
+    // 上游 tags.rs 的 tag_queue 用 binary_search_by_key 维护此顺序
     result.sort(Comparator
-        .comparingInt(Tag::getNameStartByte)
-        .thenComparingInt(Tag::getNameEndByte));
+        .comparingInt(Tag::getNameEndByte)
+        .thenComparingInt(Tag::getNameStartByte));
 
     return result;
   }
@@ -400,6 +402,15 @@ public final class TagsContext implements AutoCloseable {
     // 限制最大长度（在 trim 尾部空白之前应用，与上游 Rust line_range 一致）
     if (lineEnd - lineStart > MAX_LINE_LEN) {
       lineEnd = lineStart + MAX_LINE_LEN;
+      // 与上游 Rust 一致：若截断点落在多字节 UTF-8 字符中间，回退到有效字符边界。
+      // 上游用 str::from_utf8 + valid_up_to()；这里手动回退到前一个 UTF-8 字符起始。
+      // UTF-8 continuation byte 的模式：10xxxxxx (0x80-0xBF)。
+      // 若 lineEnd 位置的字节是 continuation byte，说明截断了多字节字符，
+      // 向前回退直到 lineEnd 指向一个 UTF-8 字符的首字节（非 continuation byte）。
+      while (lineEnd > lineStart && lineEnd < source.length
+          && (source[lineEnd] & 0xC0) == 0x80) {
+        lineEnd--;
+      }
     }
 
     // trim 尾部空白（在限制后的范围内 trim）

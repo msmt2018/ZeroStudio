@@ -575,39 +575,36 @@ public final class Highlighter implements AutoCloseable {
      * @return 下一个事件，或 null 表示此层本次无事件产出（需继续轮询）。
      */
     HighlightEvent nextEvent(HighlightIter iter) {
-      while (true) {
-        // 先处理 highlight end 栈
-        if (!highlightEndStack.isEmpty()) {
-          int nextEnd = highlightEndStack.peek();
-          if (!hasPeeked) peekNextCapture();
-          int nextCaptureStart = getPeekedCaptureStart();
-          if (nextEnd <= nextCaptureStart) {
-            iter.emitSource(nextEnd);
-            highlightEndStack.pop();
-            return HighlightEvent.HighlightEnd.getInstance();
-          }
-        }
-
+      // 先处理 highlight end 栈
+      if (!highlightEndStack.isEmpty()) {
         if (!hasPeeked) peekNextCapture();
-        if (peekedMatch == null) {
-          // capture 流耗尽
-          if (!highlightEndStack.isEmpty()) {
-            int end = highlightEndStack.pop();
-            iter.emitSource(end);
-            return HighlightEvent.HighlightEnd.getInstance();
-          }
-          // 完全耗尽
-          exhausted = true;
-          return null;
+        int nextCaptureStart = getPeekedCaptureStart();
+        int nextEnd = highlightEndStack.peek();
+        if (nextEnd <= nextCaptureStart) {
+          iter.emitSource(nextEnd);
+          highlightEndStack.pop();
+          return HighlightEvent.HighlightEnd.getInstance();
         }
-
-        // 处理当前 peeked capture
-        HighlightEvent ev = processCapture(iter);
-        if (ev != null) {
-          return ev;
-        }
-        // processCapture 返回 null 表示处理了 injection/locals 但无 highlight 事件，继续循环
       }
+
+      if (!hasPeeked) peekNextCapture();
+      if (peekedMatch == null) {
+        // capture 流耗尽
+        if (!highlightEndStack.isEmpty()) {
+          int end = highlightEndStack.pop();
+          iter.emitSource(end);
+          return HighlightEvent.HighlightEnd.getInstance();
+        }
+        // 完全耗尽
+        exhausted = true;
+        return null;
+      }
+
+      // 处理当前 peeked capture
+      // processCapture 返回 null 表示处理了 injection（已插入新层）或 locals，
+      // 需要返回 null 让 fillEventQueue 重新排序并选择最优先的层。
+      // 这与上游 Rust 的 continue 'main + sort_layers() 行为一致。
+      return processCapture(iter);
     }
 
     private void peekNextCapture() {
@@ -966,11 +963,13 @@ public final class Highlighter implements AutoCloseable {
           precedingEndByte = excludedRanges.get(i)[1];
           precedingEndPoint = excludedPoints.get(i)[1];
         } else {
-          // 最后的 following_range
+          // 最后一段：[precedingEnd, node.endByte)
+          // 与上游 Rust 一致：following_range 本身是 [node.end, MAX)，但作为
+          // excluded_range 参与，实际生成的段是 [preceding.end, node.end_byte)。
           rangeStartByte = precedingEndByte;
           rangeStartPoint = precedingEndPoint;
-          rangeEndByte = Integer.MAX_VALUE;
-          rangeEndPoint = TSPoint.create(Integer.MAX_VALUE, Integer.MAX_VALUE);
+          rangeEndByte = followingStartByte;
+          rangeEndPoint = followingStartPoint;
         }
 
         // 跳过空范围
