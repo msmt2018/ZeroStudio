@@ -170,7 +170,7 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
             "cursor.canAccess=${canAccess()}",
             "query.canAccess=${query.canAccess()}",
             "node.canAccess=${node.canAccess()}",
-            "node.hasChanges=${node.canAccess() && node.hasErrors()}",
+            "node.hasChanges=${node.canAccess() && node.hasChanges()}",
         )
       }
       onClosedOrEdited()

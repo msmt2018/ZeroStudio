@@ -46,7 +46,17 @@ constructor(val spec: TsLanguageSpec, indentsQueryScm: String = "") : Closeable 
       }
 
   init {
-    indentsQuery?.validateOrThrow(name = "indents")
+    try {
+      indentsQuery?.validateOrThrow(name = "indents")
+    } catch (e: Exception) {
+      // 构造失败时关闭已创建的 TSQuery 和 spec，避免 native 资源泄漏
+      indentsQuery?.close()
+      if (spec.language.isExternal) {
+        spec.language.close()
+      }
+      spec.close()
+      throw e
+    }
   }
 
   override fun close() {

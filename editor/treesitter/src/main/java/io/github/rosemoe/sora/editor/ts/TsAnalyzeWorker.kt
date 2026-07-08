@@ -40,13 +40,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
 /** @author Akash Yadav */
 class TsAnalyzeWorker(
     private val analyzer: TsAnalyzeManager,
     private val languageSpec: TsLanguageSpec,
-    private val theme: TsTheme,
+    @Volatile internal var theme: TsTheme,
     private val styles: Styles,
     private val reference: ContentReference,
     private val spanFactory: TsSpanFactory,
@@ -67,7 +68,9 @@ class TsAnalyzeWorker(
   private var analyzerJob: Job? = null
 
   private var isInitialized = false
-  private var isDestroyed = false
+  // volatile：确保 stop()/destroy() 在其他线程的修改对工作线程可见，
+  // 避免 doMod/updateStyles 在 document.close() 后继续访问已释放的 native 资源
+  @Volatile private var isDestroyed = false
 
   val document = TsTextDocument(languageSpec.language)
 
@@ -101,10 +104,24 @@ class TsAnalyzeWorker(
 
     document.requestCancellationAndWaitIfParsing()
 
-    analyzerContext.close()
     messageChannel.clear()
     analyzerJob?.cancel(CancellationException("Requested to be stopped"))
     analyzerScope.cancel(CancellationException("Requested to be stopped"))
+
+    // 等待工作线程真正结束，确保不会在 document.close() 后继续访问 native 资源
+    // (use-after-free)。runBlocking 阻塞时间极短，因为 isDestroyed 已为 true 且
+    // messageChannel 已清空，工作线程会快速退出。
+    if (analyzerJob != null) {
+      runBlocking {
+        try {
+          analyzerJob?.join()
+        } catch (e: CancellationException) {
+          // 忽略：job 已取消
+        }
+      }
+    }
+
+    analyzerContext.close()
     document.close()
   }
 

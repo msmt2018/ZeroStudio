@@ -73,7 +73,8 @@ object LanguageSpecProvider {
 
   private fun readScheme(context: Context, type: String, name: String): String {
     return try {
-      context.assets.open("${BASE_SPEC_PATH}/${type}/${name}.scm").reader().readText()
+      // 使用 .use {} 确保 InputStream 在异常时也能被关闭
+      context.assets.open("${BASE_SPEC_PATH}/${type}/${name}.scm").use { it.reader().readText() }
     } catch (e: Exception) {
       if (e !is FileNotFoundException) {
         // log everything except FileNotFoundException

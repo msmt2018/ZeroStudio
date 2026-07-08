@@ -58,7 +58,10 @@ object EqualPredicate : TreeSitterPredicate() {
       predicateSteps: List<TsClientPredicateStep>,
       syntheticCaptures: TsSyntheticCaptureContainer,
   ): PredicateResult {
-    val first = getCaptureContent(tsQuery, match, predicateSteps[1].content, text)
+    // getCaptureContent 返回 List<String>，需要拼接为单个字符串后再比较。
+    // 修复前：first 是 List<String>，second 是 String（字面量），== 永远为 false。
+    val first =
+        getCaptureContent(tsQuery, match, predicateSteps[1].content, text).joinToString("")
     val second =
         predicateSteps[2].let {
           check(
@@ -69,7 +72,7 @@ object EqualPredicate : TreeSitterPredicate() {
           }
 
           if (it.predicateType == TSQueryPredicateStep.Type.Capture) {
-            getCaptureContent(tsQuery, match, it.content, text)
+            getCaptureContent(tsQuery, match, it.content, text).joinToString("")
           } else {
             it.content
           }

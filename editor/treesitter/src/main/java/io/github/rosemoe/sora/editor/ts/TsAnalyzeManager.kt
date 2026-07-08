@@ -42,6 +42,9 @@ open class TsAnalyzeManager(val languageSpec: TsLanguageSpec, var theme: TsTheme
 
   open fun updateTheme(theme: TsTheme) {
     this.theme = theme
+    // 同步更新 Worker 持有的 theme，确保后续 updateStyles() 创建的 LineSpansGenerator
+    // 使用新主题。修复前：Worker 的 theme 是 val，updateTheme 无法更新。
+    _analyzeWorker?.theme = theme
     (styles.spans as LineSpansGenerator?)?.also { it.theme = theme }
   }
 
