@@ -21,6 +21,7 @@ import com.itsaky.androidide.treesitter.TSLanguage;
 import com.itsaky.androidide.treesitter.TSQuery;
 import com.itsaky.androidide.treesitter.TSQueryPredicateStep;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -285,12 +286,14 @@ public final class HighlightConfiguration implements AutoCloseable {
    * 配置高亮名称。
    *
    * <p>对于 query 中的每个 capture 名（如 {@code function.method.builtin}），按点分拆分后
-   * 与 {@code recognizedNames} 列表做子集匹配，选择匹配段数最多（最具体）的 recognized name
-   * 的索引作为该 capture 的 highlight 值。
+   * 与 {@code recognizedNames} 列表做<strong>子集匹配</strong>（与上游 Rust 一致）：
+   * recognized name 的每个点分段都必须出现在 capture 名的点分段集合中（顺序无关），
+   * 选择匹配段数最多（最具体）的 recognized name 的索引作为该 capture 的 highlight 值。
    *
    * <p>例如，如果 recognized names 为 {@code ["function", "function.method"]}，
    * capture 名 {@code function.method.builtin} 会匹配 {@code function.method}（2 段），
-   * 而不是 {@code function}（1 段）。
+   * 而不是 {@code function}（1 段）。capture 名 {@code function.builtin} 也会匹配
+   * {@code function}（1 段），因为 "function" 是其分段之一。
    *
    * @param recognizedNames 已识别的高亮名称列表（按优先级从低到高）。
    */
@@ -306,28 +309,18 @@ public final class HighlightConfiguration implements AutoCloseable {
         continue;
       }
 
-      // 跳过特殊 capture
-      if (name.equals("injection.content") || name.equals("injection.language")
-          || name.equals("local.scope") || name.equals("local.definition")
-          || name.equals("local.definition-value") || name.equals("local.reference")) {
-        highlightIndices[i] = -1;
-        continue;
-      }
-
-      // 按点分拆分 capture 名
-      String[] captureParts = name.split("\\.");
+      // 按点分拆分 capture 名，转为 List 用于 contains 检查
+      String[] capturePartsArr = name.split("\\.");
+      List<String> captureParts = Arrays.asList(capturePartsArr);
       int bestIndex = -1;
       int bestMatchLen = 0;
 
       for (int j = 0; j < recognizedNames.length; j++) {
         String[] recognizedParts = recognizedNames[j].split("\\.");
-        // 检查 captureParts 是否以 recognizedParts 开头（子集匹配）
-        if (captureParts.length < recognizedParts.length) {
-          continue;
-        }
+        // 子集匹配：recognizedParts 的每一段都必须出现在 captureParts 中（顺序无关）
         boolean match = true;
-        for (int k = 0; k < recognizedParts.length; k++) {
-          if (!captureParts[k].equals(recognizedParts[k])) {
+        for (String part : recognizedParts) {
+          if (!captureParts.contains(part)) {
             match = false;
             break;
           }
