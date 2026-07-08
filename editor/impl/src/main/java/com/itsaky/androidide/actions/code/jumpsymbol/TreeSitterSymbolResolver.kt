@@ -417,8 +417,10 @@ object TreeSitterSymbolResolver {
     if (node == null || !node.canAccess()) return null
 
     return try {
-      val start = node.startByte
-      val end = node.endByte
+      // parser 使用 parseString(UTF16String)，因此 startByte/endByte 返回的是
+      // UTF-16LE 字节偏移。需要除以 2 转换为 char 索引才能用于 String.substring。
+      val start = node.startByte / 2
+      val end = node.endByte / 2
       if (start < 0 || end > source.length || start >= end) null else source.substring(start, end)
     } catch (e: IllegalStateException) {
       null
