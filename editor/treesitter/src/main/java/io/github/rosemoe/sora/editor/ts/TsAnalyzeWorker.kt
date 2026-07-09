@@ -199,6 +199,21 @@ class TsAnalyzeWorker(
 
     document.doInit(init.data)
     document.reparse()
+
+    // 大文件兜底：首次解析因 30s 超时返回 null 时，使用 timeout=0（无超时）重试一次。
+    // 这确保超大文件（几十万行+）最终能被完整解析并获得高亮，而不是静默放弃。
+    // 30s 上限仍作为快速失败保护：常规文件不会触发重试，避免无谓等待。
+    // stop() 可通过 requestCancellationAsync() 中断重试中的 native 解析。
+    if (tree == null && !isDestroyed) {
+      log.warn("doInit: first parse returned null (timeout?), retrying with no timeout for large file")
+      document.parser.setTimeout(0L)
+      try {
+        document.reparse()
+      } finally {
+        document.parser.setTimeout(TsTextDocument.PARSE_TIMEOUT_MICROS)
+      }
+    }
+
     updateStyles()
 
     isInitialized = true
@@ -211,7 +226,22 @@ class TsAnalyzeWorker(
     val textMod = mod.data
     val edit = textMod.edit
 
-    val oldTree = tree!!
+    val oldTree = tree
+    if (oldTree == null) {
+      // 之前的全量解析失败（超时后重试也失败），无法做增量解析。
+      // 直接应用文本修改后重新全量解析，让编辑器有机会恢复高亮。
+      document.doMod(textMod)
+      (edit as? TreeSitterInputEdit?)?.recycle()
+
+      if (isDestroyed) {
+        return
+      }
+
+      document.reparse()
+      updateStyles()
+      return
+    }
+
     oldTree.edit(edit)
 
     document.doMod(textMod)
@@ -294,7 +324,9 @@ class TsAnalyzeWorker(
           cancelChecker = { !isDestroyed },
           // 升级：接入 0.27 setMatchLimit，为全树 blocks 查询设置 pending match 上限，
           // 防止病态文件内存无界增长；超限时告警（代码块可能不全）。
-          matchLimit = 200000,
+          // 与 TsScopedVariables 保持一致的 1_000_000 上限，确保大文件（数万行+）
+          // 的代码块折叠不会被默认限制静默丢弃。
+          matchLimit = 1_000_000,
           onExceededMatchLimit = {
             log.warn("updateCodeBlocks: blocks query exceeded match limit, code blocks may be incomplete")
           },

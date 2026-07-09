@@ -34,9 +34,12 @@ class TsTextDocument(language: TSLanguage) : AutoCloseable {
     /**
      * 单次 parse 的最大时长（微秒）。超出后 parser 提前返回 null，避免超大/病态文件无限阻塞工作线程。
      * 30 秒上限兼顾大文件（数万行）的解析需求与防卡死保护。
-     * 超时降级路径：parseString 返回 null → tree 为 null → updateStyles 因 tree?.canAccess()!=true 早退。
+     * 超时降级路径：
+     *   - doInit 检测到 tree==null 后用 timeout=0 重试一次（无超时兜底），
+     *     确保超大文件最终能被解析并高亮。
+     *   - 重试仍失败 → tree 为 null → updateStyles 因 tree?.canAccess()!=true 早退（无高亮）。
      */
-    private const val PARSE_TIMEOUT_MICROS = 30_000_000L // 30s
+    internal const val PARSE_TIMEOUT_MICROS = 30_000_000L // 30s
   }
 
   @Volatile private var documentVersion = 1L
