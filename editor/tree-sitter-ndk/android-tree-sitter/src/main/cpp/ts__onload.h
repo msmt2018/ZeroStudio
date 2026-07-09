@@ -28,6 +28,8 @@
 #include "ts_query_cursor.h"
 #include "ts_utils.h"
 #include "ts_wasm_store.h"
+#include "ts_utf16string.h"
+#include "ts_utf16string_factory.h"
 
 
 #ifndef _Included__TS_JNI_ONLOAD_
@@ -46,6 +48,8 @@
     TSQueryCursor_Native_AutoRegisterNatives(env); \
     TSUtils_Native_AutoRegisterNatives(env); \
     TSWasmStore_Native_AutoRegisterNatives(env); \
+    UTF16String_Native_AutoRegisterNatives(env); \
+    UTF16StringFactory_Native_AutoRegisterNatives(env); \
 
 // 定义方法数组宏：实例化 JNINativeMethod 数组
 #define TS_JNI_ONLOAD__DEFINE_METHODS_ARR \
@@ -60,5 +64,7 @@
     TSQueryCursor_Native_DefMethodsArray; \
     TSUtils_Native_DefMethodsArray; \
     TSWasmStore_Native_DefMethodsArray; \
+    UTF16String_Native_DefMethodsArray; \
+    UTF16StringFactory_Native_DefMethodsArray; \
 
 #endif
