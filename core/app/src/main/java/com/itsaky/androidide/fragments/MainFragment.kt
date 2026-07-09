@@ -105,7 +105,8 @@ class MainFragment : BaseFragment() {
   @OptIn(ExperimentalMaterial3Api::class)
   @Composable
   private fun ZeroStudioMainLayout() {
-    val scrollState = rememberScrollState()
+    val recentScrollState = rememberScrollState()
+    val frequentScrollState = rememberScrollState()
     var selectedNav by rememberSaveable { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -204,74 +205,86 @@ class MainFragment : BaseFragment() {
             Column(
                 modifier =
                     Modifier.fillMaxSize()
-                        .verticalScroll(scrollState)
                         .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp)
             ) {
-              // 卡片固定在顶部：新建项目 + 打开项目 + 克隆仓库
+              // 卡片固定在顶部：新建项目 + 打开项目 + 克隆仓库（不随列表滚动）
               QuickStartGradientCard()
 
               Spacer(modifier = Modifier.height(20.dp))
 
-              // 最近项目：独立列表（上下排列，非左右并排）
-              SectionTitle(stringResource(R.string.main_recent_projects))
-              if (historyState.isEmpty()) {
-                Text(
-                    stringResource(R.string.main_empty_history),
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(8.dp),
-                )
-              } else {
-                val recentSorted =
-                    historyState.sortedWith(
-                        compareByDescending<ProjectHistory> { it.isPinned }
-                            .thenByDescending { it.timestamp }
+              // 两个独立列表左右并排，各自独立上下滑动。
+              // 最近项目占较宽比例（weight 1.5f），高频项目占较窄比例（weight 0.9f）。
+              Row(modifier = Modifier.fillMaxSize()) {
+                // ── 最近项目列表（左）──
+                Column(modifier = Modifier.weight(1.5f).fillMaxHeight()) {
+                  SectionTitle(stringResource(R.string.main_recent_projects))
+                  if (historyState.isEmpty()) {
+                    Text(
+                        stringResource(R.string.main_empty_history),
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(8.dp),
                     )
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                  recentSorted.forEach { project ->
-                    SwipeableProjectItem(
-                        project = project,
-                        onClick = { openProjectWithCheck(project) },
-                        onPin = { performPinToggle(project) },
-                        onDelete = { performDelete(project) },
-                        showOpenCount = false,
-                    )
+                  } else {
+                    val recentSorted =
+                        historyState.sortedWith(
+                            compareByDescending<ProjectHistory> { it.isPinned }
+                                .thenByDescending { it.timestamp }
+                        )
+                    Column(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .verticalScroll(recentScrollState)
+                                .padding(end = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                      recentSorted.forEach { project ->
+                        SwipeableProjectItem(
+                            project = project,
+                            onClick = { openProjectWithCheck(project) },
+                            onPin = { performPinToggle(project) },
+                            onDelete = { performDelete(project) },
+                            showOpenCount = false,
+                        )
+                      }
+                    }
                   }
                 }
-              }
 
-              Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-              // 高频项目：独立列表（上下排列，非左右并排）
-              SectionTitle(stringResource(R.string.main_frequent_projects))
-              if (historyState.isEmpty()) {
-                Text(
-                    stringResource(R.string.main_empty_history),
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(8.dp),
-                )
-              } else {
-                val frequentSorted =
-                    historyState.sortedWith(
-                        compareByDescending<ProjectHistory> { it.isPinned }
-                            .thenByDescending { it.openCount }
+                // ── 高频项目列表（右）──
+                Column(modifier = Modifier.weight(0.9f).fillMaxHeight()) {
+                  SectionTitle(stringResource(R.string.main_frequent_projects))
+                  if (historyState.isEmpty()) {
+                    Text(
+                        stringResource(R.string.main_empty_history),
+                        fontSize = 12.sp,
+                        color = Color.Gray,
                     )
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                  frequentSorted.forEach { project ->
-                    SwipeableProjectItem(
-                        project = project,
-                        onClick = { openProjectWithCheck(project) },
-                        onPin = { performPinToggle(project) },
-                        onDelete = { performDelete(project) },
-                        showOpenCount = true,
-                    )
+                  } else {
+                    val frequentSorted =
+                        historyState.sortedWith(
+                            compareByDescending<ProjectHistory> { it.isPinned }
+                                .thenByDescending { it.openCount }
+                        )
+                    Column(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .verticalScroll(frequentScrollState)
+                                .padding(start = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                      frequentSorted.forEach { project ->
+                        SwipeableProjectItem(
+                            project = project,
+                            onClick = { openProjectWithCheck(project) },
+                            onPin = { performPinToggle(project) },
+                            onDelete = { performDelete(project) },
+                            showOpenCount = true,
+                        )
+                      }
+                    }
                   }
                 }
               }

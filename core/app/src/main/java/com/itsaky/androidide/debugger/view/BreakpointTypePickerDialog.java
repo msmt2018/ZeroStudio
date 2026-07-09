@@ -145,6 +145,23 @@ public class BreakpointTypePickerDialog extends DialogFragment {
     }
 
     @Override
+    public void onStart() {
+        super.onStart();
+        // 在 onStart 中强制设置窗口尺寸，覆盖 DialogFragment 默认主题可能
+        // 设置的 windowMinWidth/windowMinHeight（这些值可能很小，导致对话框
+        // 被压缩成 "高 300 宽 50dp" 的异常竖条）。
+        Dialog d = getDialog();
+        if (d != null) {
+            Window w = d.getWindow();
+            if (w != null) {
+                w.setLayout(
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        WindowManager.LayoutParams.WRAP_CONTENT);
+            }
+        }
+    }
+
+    @Override
     public void onDestroyView() {
         super.onDestroyView();
     }
