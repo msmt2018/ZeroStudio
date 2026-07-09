@@ -95,21 +95,6 @@ fun SwipeableProjectItem(
   val foregroundElevation = 4f * dragProgress
   val foregroundAlpha = 1f - dragProgress * 0.05f
 
-  // Snap-back / snap-open logic when the user lifts the finger.
-  LaunchedEffect(rawDragOffset, isExpanded) {
-    if (rawDragOffset == 0f) return@LaunchedEffect
-    // Threshold is evaluated against the container width, approximated via
-    // maxRevealPx for a stable feel across screen sizes.
-    val expandedByDrag = abs(rawDragOffset) > maxRevealPx * collapseThresholdFraction
-    if (expandedByDrag != isExpanded) {
-      isExpanded = expandedByDrag
-    }
-    // After snap decision, the underlying target is the expanded or collapsed
-    // position. We re-target rawDragOffset which kicks off the spring.
-    val target = if (isExpanded) -maxRevealPx else 0f
-    if (rawDragOffset != target) rawDragOffset = target
-  }
-
   // Reset expansion when the project identity changes (e.g. list reordered).
   LaunchedEffect(project.path) {
     rawDragOffset = 0f
@@ -264,23 +249,13 @@ fun SwipeableProjectItem(
           Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 project.name,
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 10.sp,
                 color = Color(0xFF1E1E1E),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f),
             )
-            // 点击次数记录器：在高频项目列表中显示打开次数
-            if (project.openCount > 0) {
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                  "×${project.openCount}",
-                  fontSize = 9.sp,
-                  color = Color(0xFF00897B),
-                  fontWeight = FontWeight.SemiBold,
-              )
-            }
           }
           Text(
               project.path,
@@ -289,6 +264,17 @@ fun SwipeableProjectItem(
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
           )
+        }
+        // 🔥点击次数：固定悬浮在右边边缘
+        if (project.openCount > 0) {
+          Text(
+              "🔥${project.openCount}",
+              fontSize = 9.sp,
+              color = Color(0xFF00897B),
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+          )
+          Spacer(modifier = Modifier.width(4.dp))
         }
         // Faint open affordance on the right side. Hidden while the
         // action menu is fully expanded so the gesture reads as

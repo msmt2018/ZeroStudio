@@ -221,19 +221,18 @@ class MainFragment : BaseFragment() {
                 )
               } else {
                 // Pinned items always float to the top, then the most recent
-                // first. The list is rendered with a LazyColumn so the swipe
-                // gestures on each row do not fight the outer vertical
-                // scroll state.
+                // first. 使用普通 Column 让列表高度随内容自适应，避免
+                // LazyColumn 的固定高度造成大块空白。
                 val recentSorted =
                     historyState.sortedWith(
                         compareByDescending<ProjectHistory> { it.isPinned }
                             .thenByDescending { it.timestamp }
                     )
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                  items(recentSorted, key = { it.path }) { project ->
+                  recentSorted.forEach { project ->
                     SwipeableProjectItem(
                         project = project,
                         onClick = { openProjectWithCheck(project) },
@@ -255,11 +254,11 @@ class MainFragment : BaseFragment() {
                         compareByDescending<ProjectHistory> { it.isPinned }
                             .thenByDescending { it.openCount }
                     )
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                  items(frequentSorted, key = { it.path }) { project ->
+                  frequentSorted.forEach { project ->
                     SwipeableProjectItem(
                         project = project,
                         onClick = { openProjectWithCheck(project) },
@@ -278,9 +277,9 @@ class MainFragment : BaseFragment() {
             }
           }
 
-          Spacer(modifier = Modifier.height(16.dp))
+          Spacer(modifier = Modifier.height(8.dp))
 
-          // 工具与服务区域（已移入滚动流，移除原底部 overlay 遮挡物）
+          // 工具与服务区域
           SectionTitle(stringResource(R.string.main_tools_services))
           ToolsServiceGrid()
           }

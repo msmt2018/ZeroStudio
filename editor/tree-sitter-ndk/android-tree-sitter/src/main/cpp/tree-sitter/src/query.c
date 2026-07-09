@@ -342,7 +342,8 @@ struct TSQueryCursor {
   TSRange containing_range;
   uint32_t next_state_id;
   uint32_t next_finished_state_id;
-  const TSQueryCursorOptions *query_options;
+  bool has_query_options;
+  TSQueryCursorOptions query_options;
   TSQueryCursorState query_state;
   unsigned operation_count;
   bool on_visible_node;
@@ -3520,7 +3521,7 @@ void ts_query_cursor_exec(
   self->query = query;
   self->did_exceed_match_limit = false;
   self->operation_count = 0;
-  self->query_options = NULL;
+  self->has_query_options = false;
   self->query_state = (TSQueryCursorState) {0};
 }
 
@@ -3532,7 +3533,8 @@ void ts_query_cursor_exec_with_options(
 ) {
   ts_query_cursor_exec(self, query, node);
   if (query_options) {
-    self->query_options = query_options;
+    self->has_query_options = true;
+    self->query_options = *query_options;
     self->query_state = (TSQueryCursorState) {
       .payload = query_options->payload
     };
@@ -4047,7 +4049,7 @@ static inline bool ts_query_cursor__advance(
       self->operation_count = 0;
     }
 
-    if (self->query_options && self->query_options->progress_callback) {
+    if (self->has_query_options && self->query_options.progress_callback) {
       self->query_state.current_byte_offset = ts_node_start_byte(ts_tree_cursor_current_node(&self->cursor));
     }
     if (
@@ -4056,7 +4058,7 @@ static inline bool ts_query_cursor__advance(
       (
         self->operation_count == 0 &&
         (
-          (self->query_options && self->query_options->progress_callback && self->query_options->progress_callback(&self->query_state))
+          (self->has_query_options && self->query_options.progress_callback && self->query_options.progress_callback(&self->query_state))
         )
       )
     ) {
