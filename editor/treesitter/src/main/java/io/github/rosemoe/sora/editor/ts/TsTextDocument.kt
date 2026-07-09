@@ -33,10 +33,10 @@ class TsTextDocument(language: TSLanguage) : AutoCloseable {
   companion object {
     /**
      * 单次 parse 的最大时长（微秒）。超出后 parser 提前返回 null，避免超大/病态文件无限阻塞工作线程。
-     * 与 query 侧的 execWithOptions + setMatchLimit 共同构成 0.27 解析/查询的完整健壮性保护。
+     * 30 秒上限兼顾大文件（数万行）的解析需求与防卡死保护。
      * 超时降级路径：parseString 返回 null → tree 为 null → updateStyles 因 tree?.canAccess()!=true 早退。
      */
-    private const val PARSE_TIMEOUT_MICROS = 5_000_000L // 5s
+    private const val PARSE_TIMEOUT_MICROS = 30_000_000L // 30s
   }
 
   @Volatile private var documentVersion = 1L

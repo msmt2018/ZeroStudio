@@ -239,7 +239,7 @@ class TsAnalyzeWorker(
 
     val tree = tree!!
     val scopedVariables =
-        TsScopedVariables(tree, text, languageSpec, cancelChecker = { !isDestroyed })
+        TsScopedVariables(tree, text, languageSpec, cancelChecker = { !isDestroyed }, matchLimit = 1_000_000)
     val oldTree = (styles.spans as? LineSpansGenerator?)?.tree
     val copied = tree.copy()
 

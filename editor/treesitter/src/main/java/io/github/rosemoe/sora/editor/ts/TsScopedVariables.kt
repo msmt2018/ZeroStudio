@@ -52,6 +52,7 @@ class TsScopedVariables(
     text: UTF16String,
     val spec: TsLanguageSpec,
     cancelChecker: (() -> Boolean)? = null,
+    matchLimit: Int = 0,
 ) {
 
   companion object {
@@ -86,7 +87,7 @@ class TsScopedVariables(
             cancelChecker = cancelChecker,
             // 升级：接入 0.27 setMatchLimit，为全树 locals 查询设置 pending match 上限，
             // 防止病态文件内存无界增长；超限时告警（局部变量解析可能不全）。
-            matchLimit = 200000,
+            matchLimit = matchLimit,
             onExceededMatchLimit = {
               log.warn("TsScopedVariables: locals query exceeded match limit, scoped variables may be incomplete")
             },
