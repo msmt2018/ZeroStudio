@@ -71,6 +71,7 @@ fun SwipeableProjectItem(
     onPin: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    showOpenCount: Boolean = false,
 ) {
   val density = LocalDensity.current
   val maxRevealPx = with(density) { 150.dp.toPx() }
@@ -265,8 +266,8 @@ fun SwipeableProjectItem(
               overflow = TextOverflow.Ellipsis,
           )
         }
-        // 🔥点击次数：固定悬浮在右边边缘
-        if (project.openCount > 0) {
+        // 🔥点击次数：固定悬浮在右边边缘（仅高频项目显示）
+        if (showOpenCount && project.openCount > 0) {
           Text(
               "🔥${project.openCount}",
               fontSize = 9.sp,

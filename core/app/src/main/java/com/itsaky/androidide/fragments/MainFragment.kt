@@ -238,6 +238,7 @@ class MainFragment : BaseFragment() {
                         onClick = { openProjectWithCheck(project) },
                         onPin = { performPinToggle(project) },
                         onDelete = { performDelete(project) },
+                        showOpenCount = false,
                     )
                   }
                 }
@@ -264,6 +265,7 @@ class MainFragment : BaseFragment() {
                         onClick = { openProjectWithCheck(project) },
                         onPin = { performPinToggle(project) },
                         onDelete = { performDelete(project) },
+                        showOpenCount = true,
                     )
                   }
                 }
@@ -516,11 +518,13 @@ class MainFragment : BaseFragment() {
     viewLifecycleScope.launch {
       RecentProjectsManager.removeProjectAsync(requireContext(), project.path)
       historyState.removeAll { it.path == project.path }
-      Toast.makeText(
-          requireContext(),
-          R.string.msg_opened_project_does_not_exist,
-          Toast.LENGTH_SHORT,
-      ).show()
+      withContext(Dispatchers.Main) {
+        Toast.makeText(
+            requireContext(),
+            R.string.msg_opened_project_does_not_exist,
+            Toast.LENGTH_SHORT,
+        ).show()
+      }
     }
   }
 }
