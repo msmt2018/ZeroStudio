@@ -200,10 +200,10 @@ class MainFragment : BaseFragment() {
           )
         } else {
           Column(
-            modifier =
-                Modifier.fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp)
+              modifier =
+                  Modifier.fillMaxSize()
+                      .verticalScroll(scrollState)
+                      .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
           ) {
           QuickStartGradientCard()
 
@@ -279,7 +279,7 @@ class MainFragment : BaseFragment() {
             }
           }
 
-          Spacer(modifier = Modifier.height(8.dp))
+          Spacer(modifier = Modifier.height(4.dp))
 
           // 工具与服务区域
           SectionTitle(stringResource(R.string.main_tools_services))
@@ -464,16 +464,16 @@ class MainFragment : BaseFragment() {
         )
 
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(vertical = 0.dp),
     ) {
       items(tools) { (icon, color, action) ->
         // 工具与服务按钮
         Surface(
             onClick = action,
-            modifier = Modifier.size(42.dp),
+            modifier = Modifier.size(32.dp),
             color = color,
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(6.dp),
         ) {
           Box(contentAlignment = Alignment.Center) {
             // 工具与服务内部Icon的尺寸
@@ -481,7 +481,7 @@ class MainFragment : BaseFragment() {
                 icon,
                 null,
                 tint = Color.DarkGray.copy(alpha = 0.8f),
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(18.dp),
             )
           }
         }
@@ -496,7 +496,7 @@ class MainFragment : BaseFragment() {
         fontSize = 13.sp,
         fontWeight = FontWeight.ExtraBold,
         color = Color(0xFF333333),
-        modifier = Modifier.padding(bottom = 6.dp),
+        modifier = Modifier.padding(bottom = 3.dp),
     )
   }
 
