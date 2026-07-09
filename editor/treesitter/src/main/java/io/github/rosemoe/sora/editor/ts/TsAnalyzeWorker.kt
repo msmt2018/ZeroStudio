@@ -362,6 +362,10 @@ class TsAnalyzeWorker(
       return
     }
 
+    // 必须重置 included ranges：reparseViewport 可能设置了 viewport 范围的 included ranges，
+    // 增量解析 reparse(oldTree) 必须覆盖整个文件，否则新增内容在 viewport 外不被解析。
+    document.resetIncludedRanges()
+
     document.reparse(oldTree)
 
     oldTree.close()

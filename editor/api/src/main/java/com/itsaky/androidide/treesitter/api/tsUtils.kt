@@ -61,13 +61,18 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
   }
 
   val rootNode = tree.rootNode
-  if (!rootNode.canAccess() || rootNode.hasChanges()) {
+  // isAllowChangedNodes=true 时跳过 hasChanges 检查——高亮查询允许在已编辑的 tree 上执行，
+  // 结果基于编辑前的结构（略微过时但不会崩溃），下一次 reparse 会更新 tree。
+  // 这是 sora-editor 上游的标准用法：TsAnalyzeManager.insert/delete 会给渲染副本 tree
+  // 打 edit 标记（hasChanges=true），LineSpansGenerator.captureRegion 仍需正常查询。
+  if (!rootNode.canAccess() || (!isAllowChangedNodes && rootNode.hasChanges())) {
     if (debugLogging) {
       log.debug(
           "$debugName, Cannot execute query, tree's root node is not accessible or has been edited",
           "rootNode=$rootNode",
           "rootNode.canAccess=${rootNode.canAccess()}",
           "rootNode.hasChanges=${rootNode.canAccess() && rootNode.hasChanges()}",
+          "isAllowChangedNodes=$isAllowChangedNodes",
       )
     }
     return null
@@ -125,7 +130,7 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
         match != null &&
             canAccess() &&
             node.canAccess() &&
-            !node.hasChanges() &&
+            (isAllowChangedNodes || !node.hasChanges()) &&
             matchCondition(match)
       },
       whileTrue = whileTrue,
@@ -162,12 +167,13 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     return null
   }
 
-  if (!node.canAccess() || node.hasChanges()) {
+  if (!node.canAccess() || (!isAllowChangedNodes && node.hasChanges())) {
     if (debugLogging) {
       log.debug(
           "$debugName: Cannot execute query, node is not accessible or has been edited",
           "node.canAccess=${node.canAccess()}",
           "node.hasChanges=${node.canAccess() && node.hasChanges()}",
+          "isAllowChangedNodes=${isAllowChangedNodes}",
       )
     }
     return null

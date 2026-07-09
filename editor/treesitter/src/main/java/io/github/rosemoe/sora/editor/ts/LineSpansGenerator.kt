@@ -142,6 +142,10 @@ class LineSpansGenerator(
       reusableCursor = TSQueryCursor.create()
     }
     val activeCursor = reusableCursor!!
+    // 必须设置 isAllowChangedNodes = true：TsAnalyzeManager.insert/delete 会给渲染副本 tree
+    // 打 edit 标记（hasChanges=true），高亮查询仍需在此 tree 上正常执行。
+    // safeExecQueryCursor 会检查此标志，为 true 时跳过 hasChanges 前置检查。
+    activeCursor.isAllowChangedNodes = true
 
     try {
       activeCursor.setByteRange(startIndex * 2, endIndex * 2)
