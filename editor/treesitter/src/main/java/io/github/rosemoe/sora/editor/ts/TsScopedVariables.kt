@@ -74,9 +74,11 @@ class TsScopedVariables(
     if (needsWalk && spec.localsDefinitionIndices.isNotEmpty()) {
       TSQueryCursor.create().use { cursor ->
         val captures = mutableListOf<TSQueryCapture>()
+        // 使用 node 版本的 safeExecQueryCursor，让它统一负责 rootNode 的回收，
+        // 避免在此处再重复获取一次 rootNode（减少一次 JNI marshal + 对象池获取/回收）。
         cursor.safeExecQueryCursor(
             query = spec.tsQuery,
-            tree = tree,
+            node = rootNode,
             recycleNodeAfterUse = true,
             onClosedOrEdited = { captures.clear() },
             // 升级：注册 0.27 进度回调，使全树 locals 查询单次迭代也可响应取消，
@@ -154,9 +156,11 @@ class TsScopedVariables(
           }
         }
       }
+    } else {
+      // safeExecQueryCursor 未被调用（needsWalk=false 或 localsDefinitionIndices 为空），
+      // rootNode 未被回收，需手动回收。
+      (rootNode as? TreeSitterNode?)?.recycle()
     }
-
-    (rootNode as? TreeSitterNode?)?.recycle()
   }
 
   data class Scope(

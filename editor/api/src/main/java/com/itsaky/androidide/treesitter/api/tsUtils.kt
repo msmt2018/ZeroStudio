@@ -173,6 +173,14 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     return null
   }
 
+  // 升级：接入 tree-sitter 0.27 的 setMatchLimit，为全树查询设置 pending match 上限，
+  // 防止病态/超大文件导致内存无界增长。配合 didExceedMatchLimit 在循环后诊断是否超限。
+  // matchLimit <= 0 时不设置（保持默认无限制），逐行高亮路径不传入。
+  // 必须在 exec 之前设置，确保 cursor 从一开始就受限制。
+  if (matchLimit > 0) {
+    setMatchLimit(matchLimit)
+  }
+
   // 升级：当调用方提供 cancelChecker 时，使用 tree-sitter 0.27 的 execWithOptions
   // (ts_query_cursor_exec_with_options) 注册进度回调，使单次 nextMatch() 内部也可被取消。
   // 这解决了全树查询（如代码块分析）在超大文件上单次迭代无法中断导致的 ANR 风险。
@@ -181,12 +189,6 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     execWithOptions(query, node, TSQueryProgressCallback { cancelChecker() })
   } else {
     exec(query, node)
-  }
-  // 升级：接入 tree-sitter 0.27 的 setMatchLimit，为全树查询设置 pending match 上限，
-  // 防止病态/超大文件导致内存无界增长。配合 didExceedMatchLimit 在循环后诊断是否超限。
-  // matchLimit <= 0 时不设置（保持默认无限制），逐行高亮路径不传入。
-  if (matchLimit > 0) {
-    setMatchLimit(matchLimit)
   }
   var match = nextMatch()
   while (matchCondition(match) && whileTrue(match)) {

@@ -67,9 +67,11 @@ class TsBracketPairs(private val tree: TSTree, private val languageSpec: TsLangu
         // do not store TSNode instances from the capture
         // this is because the nodes are also recycled with the TSQueryCapture instances
         val positions = IntArray(4) { -1 }
+        // 使用缓存的 capture names 数组，避免在循环内对每个 capture 都做 JNI 调用
+        val captureNames = languageSpec.bracketsQuery.getCaptureNames()
 
         for (capture in match.captures) {
-          val captureName = languageSpec.bracketsQuery.getCaptureNameForId(capture.index)
+          val captureName = captureNames[capture.index]
           if (captureName == OPEN_NAME || captureName == CLOSE_NAME) {
             val node = capture.node
             if (index >= node.startByte / 2 && index <= node.endByte / 2) {

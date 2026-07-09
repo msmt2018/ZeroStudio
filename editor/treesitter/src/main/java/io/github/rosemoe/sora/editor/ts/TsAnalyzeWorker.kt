@@ -264,6 +264,8 @@ class TsAnalyzeWorker(
     }
 
     val blocks = mutableListOf<CodeBlock>()
+    // 一次性获取所有 capture 名称并缓存，避免在循环内对每个 capture 都做 JNI 调用
+    val captureNames = languageSpec.blocksQuery.getCaptureNames()
     TSQueryCursor.create().use { cursor ->
       cursor.safeExecQueryCursor(
           query = languageSpec.blocksQuery,
@@ -295,7 +297,7 @@ class TsAnalyzeWorker(
           block.startColumn = start.column / 2
 
           val end =
-              if (languageSpec.blocksQuery.getCaptureNameForId(capture.index).endsWith(".marked")) {
+              if (captureNames[capture.index].endsWith(".marked")) {
                 // Goto last terminal element
                 while (node.childCount > 0) {
                   node = node.getChild(node.childCount - 1)

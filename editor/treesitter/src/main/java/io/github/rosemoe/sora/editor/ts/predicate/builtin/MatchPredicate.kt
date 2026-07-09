@@ -64,11 +64,13 @@ object MatchPredicate : TsPredicate {
 
     val captures = match.captures
     val capturesCount = captures.size
+    // 使用缓存的 capture names 数组，避免在循环内对每个 capture 都做 JNI 调用
+    val captureNames = tsQuery.getCaptureNames()
 
     for (i in 0 until capturesCount) {
       val capture = captures[i]
 
-      if (tsQuery.getCaptureNameForId(capture.index) != targetCaptureName) {
+      if (captureNames[capture.index] != targetCaptureName) {
         continue
       }
 

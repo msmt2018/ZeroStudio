@@ -72,10 +72,15 @@ class LineSpansGenerator(
 
   companion object {
 
-    const val CACHE_THRESHOLD = 60
+    const val CACHE_THRESHOLD = 200
   }
 
   private val caches = mutableListOf<SpanCache>()
+
+  // 复用 TSQueryCursor 避免每行都 create + close 的 native 分配/释放开销。
+  // cursor 在 captureRegion 首次调用时懒初始化，tree 更换时由外部通过
+  // updateTree() 重置（旧的由 GC 回收或外部关闭）。
+  private var reusableCursor: TSQueryCursor? = null
 
   fun edit(edit: TSInputEdit) {
     tree.edit(edit)
@@ -110,10 +115,19 @@ class LineSpansGenerator(
 
     val captures = mutableListOf<TSQueryCapture>()
 
-    TSQueryCursor.create().use { cursor ->
-      cursor.setByteRange(startIndex * 2, endIndex * 2)
+    // 复用 cursor，避免每行 create + close 的 native 开销。
+    // 如果复用的 cursor 已不可用（被外部关闭或 tree 已更换），则新建一个。
+    val cursor = reusableCursor
+    if (cursor == null || !cursor.canAccess()) {
+      reusableCursor?.close()
+      reusableCursor = TSQueryCursor.create()
+    }
+    val activeCursor = reusableCursor!!
 
-      cursor.safeExecQueryCursor(
+    try {
+      activeCursor.setByteRange(startIndex * 2, endIndex * 2)
+
+      activeCursor.safeExecQueryCursor(
           query = languageSpec.tsQuery,
           tree = tree,
           recycleNodeAfterUse = true,
@@ -134,6 +148,7 @@ class LineSpansGenerator(
         val start = (startByte / 2 - startIndex).coerceAtLeast(0)
         val pattern = capture.index
         // Do not add span for overlapping regions and out-of-bounds regions
+        // 使用预计算的 Set 查找避免 JNI 调用
         if (
             start >= lastIndex &&
                 endByte / 2 >= startIndex &&
@@ -181,6 +196,11 @@ class LineSpansGenerator(
       if (lastIndex != endIndex) {
         list.add(emptySpan(lastIndex))
       }
+    } catch (e: Exception) {
+      // cursor 可能因 tree 被更换而失效，重建 cursor 以备下次使用
+      reusableCursor?.close()
+      reusableCursor = null
+      throw e
     }
     if (list.isEmpty()) {
       list.add(emptySpan(0))
