@@ -186,8 +186,6 @@ class LineSpansGenerator(
           }
           var style = 0L
           if (capture.index in languageSpec.localsReferenceIndices) {
-            // scopedVariables 可能为 null（viewport-first 首次渲染时尚未构建），
-            // 此时跳过变量引用解析，让后续 capture 提供 fallback 颜色。
             val sv = scopedVariables
             if (sv != null) {
               val def =
@@ -199,13 +197,15 @@ class LineSpansGenerator(
               if (def != null && def.matchedHighlightPattern != -1) {
                 style = theme.resolveStyleForPattern(def.matchedHighlightPattern)
               }
+              // sv 不为 null 但未找到定义：保持上游行为，跳过此 capture，
+              // 让后续同位置的 capture 提供颜色。
+              if (style == 0L) {
+                continue
+              }
             }
-            // This reference can not be resolved to its definition
-            // but it can have its own fallback color by other captures
-            // so continue to next capture
-            if (style == 0L) {
-              continue
-            }
+            // sv 为 null（viewport-first 首次渲染尚未构建 scopedVariables）：
+            // 不 continue，走下方 resolveStyleForPattern fallback，
+            // 让 reference capture 有机会获得自身颜色而非纯文本。
           }
           if (style == 0L) {
             style = theme.resolveStyleForPattern(capture.index)

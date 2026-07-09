@@ -63,7 +63,14 @@ class TsTextDocument(language: TSLanguage) : AutoCloseable {
   /** The parser used to parse the source text into a syntax tree. */
   val parser =
       TSParser.create().also {
-        it.language = language
+        // 显式检查 setLanguage 返回值：tree-sitter 0.27 中如果 grammar 的 ABI 版本与
+        // parser 不兼容，setLanguage 返回 false 且 language 不会被设置。若不检查，
+        // 后续 parseString 会静默返回 null → 文件完全不着色，且无明确错误日志。
+        if (!it.setLanguage(language)) {
+          throw IllegalStateException(
+              "Failed to set language on TSParser: ABI version incompatible. " +
+                  "Language: ${language.name}. Grammar may need recompilation for tree-sitter 0.27.")
+        }
         // 升级：接入 tree-sitter 0.27 的 parser setTimeout，为单次 parse 设置时间上限，
         // 补齐 parse 侧的健壮性保护（query 侧已有 execWithOptions + setMatchLimit）。
         it.setTimeout(PARSE_TIMEOUT_MICROS)

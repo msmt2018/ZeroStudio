@@ -315,10 +315,11 @@ private fun SwipeActionButton(
 ) {
   val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(120), label = "btn-alpha")
   val scale = 0.85f + 0.15f * progress
-  // 按钮背景：tint 色 + 高斯模糊，形成红/蓝半透明毛玻璃圆形按钮
+  // 按钮背景：按钮颜色（红/蓝）+ 半透明 + 高斯模糊。
+  // alpha 0.6f 让颜色明显可见（红色/蓝色清晰），同时保持半透明质感。
   val bg by
       animateColorAsState(
-          targetValue = tint.copy(alpha = 0.25f + 0.15f * progress),
+          targetValue = tint.copy(alpha = 0.6f),
           animationSpec = tween(140),
           label = "btn-bg",
       )
