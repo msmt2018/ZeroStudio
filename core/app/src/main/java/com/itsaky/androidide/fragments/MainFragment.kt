@@ -38,6 +38,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -199,91 +200,102 @@ class MainFragment : BaseFragment() {
               }
           )
         } else {
-          Column(
-              modifier =
-                  Modifier.fillMaxSize()
-                      .verticalScroll(scrollState)
-                      .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
-          ) {
-          QuickStartGradientCard()
+          Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier =
+                    Modifier.fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp)
+            ) {
+              QuickStartGradientCard()
 
-          Spacer(modifier = Modifier.height(20.dp))
+              Spacer(modifier = Modifier.height(20.dp))
 
-          Row(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1.5f)) {
-              SectionTitle(stringResource(R.string.main_recent_projects))
-              if (historyState.isEmpty()) {
-                Text(
-                    stringResource(R.string.main_empty_history),
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(8.dp),
-                )
-              } else {
-                // Pinned items always float to the top, then the most recent
-                // first. 使用普通 Column 让列表高度随内容自适应，避免
-                // LazyColumn 的固定高度造成大块空白。
-                val recentSorted =
-                    historyState.sortedWith(
-                        compareByDescending<ProjectHistory> { it.isPinned }
-                            .thenByDescending { it.timestamp }
+              Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1.5f)) {
+                  SectionTitle(stringResource(R.string.main_recent_projects))
+                  if (historyState.isEmpty()) {
+                    Text(
+                        stringResource(R.string.main_empty_history),
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(8.dp),
                     )
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                  recentSorted.forEach { project ->
-                    SwipeableProjectItem(
-                        project = project,
-                        onClick = { openProjectWithCheck(project) },
-                        onPin = { performPinToggle(project) },
-                        onDelete = { performDelete(project) },
-                        showOpenCount = false,
+                  } else {
+                    val recentSorted =
+                        historyState.sortedWith(
+                            compareByDescending<ProjectHistory> { it.isPinned }
+                                .thenByDescending { it.timestamp }
+                        )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                      recentSorted.forEach { project ->
+                        SwipeableProjectItem(
+                            project = project,
+                            onClick = { openProjectWithCheck(project) },
+                            onPin = { performPinToggle(project) },
+                            onDelete = { performDelete(project) },
+                            showOpenCount = false,
+                        )
+                      }
+                    }
+                  }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(0.9f)) {
+                  SectionTitle(stringResource(R.string.main_frequent_projects))
+                  if (historyState.isNotEmpty()) {
+                    val frequentSorted =
+                        historyState.sortedWith(
+                            compareByDescending<ProjectHistory> { it.isPinned }
+                                .thenByDescending { it.openCount }
+                        )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                      frequentSorted.forEach { project ->
+                        SwipeableProjectItem(
+                            project = project,
+                            onClick = { openProjectWithCheck(project) },
+                            onPin = { performPinToggle(project) },
+                            onDelete = { performDelete(project) },
+                            showOpenCount = true,
+                        )
+                      }
+                    }
+                  } else {
+                    Text(
+                        stringResource(R.string.main_empty_history),
+                        fontSize = 12.sp,
+                        color = Color.Gray,
                     )
                   }
                 }
               }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            // 工具与服务区域：悬浮在底部，带高斯模糊背景
+            Box(
+                modifier =
+                    Modifier.align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 20.dp))
+            ) {
+              Surface(
+                modifier = Modifier.matchParentSize().blur(radius = 18.dp),
+                color = Color.White.copy(alpha = 0.9f),
+              ) {}
 
-            Column(modifier = Modifier.weight(0.9f)) {
-              SectionTitle(stringResource(R.string.main_frequent_projects))
-              if (historyState.isNotEmpty()) {
-                val frequentSorted =
-                    historyState.sortedWith(
-                        compareByDescending<ProjectHistory> { it.isPinned }
-                            .thenByDescending { it.openCount }
-                    )
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                  frequentSorted.forEach { project ->
-                    SwipeableProjectItem(
-                        project = project,
-                        onClick = { openProjectWithCheck(project) },
-                        onPin = { performPinToggle(project) },
-                        onDelete = { performDelete(project) },
-                        showOpenCount = true,
-                    )
-                  }
-                }
-              } else {
-                Text(
-                    stringResource(R.string.main_empty_history),
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                )
+              Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                SectionTitle(stringResource(R.string.main_tools_services))
+                ToolsServiceGrid()
               }
             }
-          }
-
-          Spacer(modifier = Modifier.height(4.dp))
-
-          // 工具与服务区域
-          SectionTitle(stringResource(R.string.main_tools_services))
-          ToolsServiceGrid()
           }
         }
       }
@@ -464,16 +476,16 @@ class MainFragment : BaseFragment() {
         )
 
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(vertical = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(vertical = 4.dp),
     ) {
       items(tools) { (icon, color, action) ->
         // 工具与服务按钮
         Surface(
             onClick = action,
-            modifier = Modifier.size(32.dp),
+            modifier = Modifier.size(42.dp),
             color = color,
-            shape = RoundedCornerShape(6.dp),
+            shape = RoundedCornerShape(8.dp),
         ) {
           Box(contentAlignment = Alignment.Center) {
             // 工具与服务内部Icon的尺寸
@@ -481,7 +493,7 @@ class MainFragment : BaseFragment() {
                 icon,
                 null,
                 tint = Color.DarkGray.copy(alpha = 0.8f),
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(24.dp),
             )
           }
         }
@@ -496,7 +508,7 @@ class MainFragment : BaseFragment() {
         fontSize = 13.sp,
         fontWeight = FontWeight.ExtraBold,
         color = Color(0xFF333333),
-        modifier = Modifier.padding(bottom = 3.dp),
+        modifier = Modifier.padding(bottom = 6.dp),
     )
   }
 
