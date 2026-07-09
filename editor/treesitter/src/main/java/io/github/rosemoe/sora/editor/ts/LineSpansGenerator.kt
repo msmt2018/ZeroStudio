@@ -66,7 +66,7 @@ class LineSpansGenerator(
     private val content: Content,
     internal var theme: TsTheme,
     private val languageSpec: TsLanguageSpec,
-    var scopedVariables: TsScopedVariables,
+    var scopedVariables: TsScopedVariables?,
     private val spanFactory: TsSpanFactory,
 ) : Spans {
 
@@ -84,6 +84,25 @@ class LineSpansGenerator(
 
   fun edit(edit: TSInputEdit) {
     tree.edit(edit)
+  }
+
+  /**
+   * 增量更新：替换 generator 持有的 tree（用于 doMod 后的快速路径）。
+   *
+   * 关闭旧 tree、设置新 tree、清空 line cache、重置 reusableCursor。
+   * 清空 cache 是必要的：reparse 后 tree 结构可能变化，旧 cache 中的 span 列号
+   * 可能与新 tree 不一致。清空后渲染层会按需重新查询（`LineSpansGenerator.read()`
+   * 是惰性按行的，只查询可见行）。
+   *
+   * @param newTree 新的语法树（调用方负责 copy，本方法负责关闭旧 tree）。
+   */
+  fun updateTree(newTree: TSTree) {
+    val old = tree
+    tree = newTree
+    old?.close()
+    caches.clear()
+    reusableCursor?.close()
+    reusableCursor = null
   }
 
   fun queryCache(line: Int): MutableList<Span>? {
@@ -163,14 +182,19 @@ class LineSpansGenerator(
           }
           var style = 0L
           if (capture.index in languageSpec.localsReferenceIndices) {
-            val def =
-                scopedVariables.findDefinition(
-                    startByte / 2,
-                    endByte / 2,
-                    content.substring(startByte / 2, endByte / 2),
-                )
-            if (def != null && def.matchedHighlightPattern != -1) {
-              style = theme.resolveStyleForPattern(def.matchedHighlightPattern)
+            // scopedVariables 可能为 null（viewport-first 首次渲染时尚未构建），
+            // 此时跳过变量引用解析，让后续 capture 提供 fallback 颜色。
+            val sv = scopedVariables
+            if (sv != null) {
+              val def =
+                  sv.findDefinition(
+                      startByte / 2,
+                      endByte / 2,
+                      content.substring(startByte / 2, endByte / 2),
+                  )
+              if (def != null && def.matchedHighlightPattern != -1) {
+                style = theme.resolveStyleForPattern(def.matchedHighlightPattern)
+              }
             }
             // This reference can not be resolved to its definition
             // but it can have its own fallback color by other captures
