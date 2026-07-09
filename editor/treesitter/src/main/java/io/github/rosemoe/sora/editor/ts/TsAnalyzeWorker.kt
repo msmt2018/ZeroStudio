@@ -41,6 +41,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.slf4j.LoggerFactory
 
 /** @author Akash Yadav */
@@ -102,26 +103,41 @@ class TsAnalyzeWorker(
     log.debug("Stopping TsAnalyzeWorker...")
     isDestroyed = true
 
-    document.requestCancellationAndWaitIfParsing()
+    // 非阻塞取消解析：仅设置 native 取消标志，不等待解析结束。
+    // 原代码调用 requestCancellationAndWaitIfParsing() 在主线程同步等待，
+    // 最坏可阻塞 5 秒（PARSE_TIMEOUT_MICROS），直接导致 ANR。
+    document.requestCancellationAsyncIfParsing()
 
     messageChannel.clear()
+
+    // 投递毒丸消息唤醒工作线程的 LinkedBlockingQueue.take()。
+    // take() 是 JDK 阻塞调用，协程取消无法中断它；不投递消息则工作线程
+    // 永远阻塞在 take()，导致 runBlocking{join()} 永久死锁 → ANR。
+    messageChannel.offer(Init(TextInit("", -1)))
+
     analyzerJob?.cancel(CancellationException("Requested to be stopped"))
     analyzerScope.cancel(CancellationException("Requested to be stopped"))
 
-    // 等待工作线程真正结束，确保不会在 document.close() 后继续访问 native 资源
-    // (use-after-free)。runBlocking 阻塞时间极短，因为 isDestroyed 已为 true 且
-    // messageChannel 已清空，工作线程会快速退出。
+    // 关闭上下文（关闭底层单线程 ExecutorService，中断工作线程）。
+    // 必须在 join 之前关闭：线程中断使 take() 抛出 InterruptedException，
+    // 工作线程协程随即失败结束，join() 才能快速返回。
+    analyzerContext.close()
+
+    // 等待工作线程结束，确保不会在 document.close() 后继续访问 native 资源
+    // (use-after-free)。毒丸 + 线程中断使工作线程快速退出；
+    // withTimeout 作为安全网，防止意外情况下永久阻塞主线程。
     if (analyzerJob != null) {
       runBlocking {
         try {
-          analyzerJob?.join()
-        } catch (e: CancellationException) {
-          // 忽略：job 已取消
+          withTimeout(500) {
+            analyzerJob?.join()
+          }
+        } catch (e: Exception) {
+          // 超时或取消，忽略：工作线程会被 analyzerContext.close() 的中断最终终止
         }
       }
     }
 
-    analyzerContext.close()
     document.close()
   }
 

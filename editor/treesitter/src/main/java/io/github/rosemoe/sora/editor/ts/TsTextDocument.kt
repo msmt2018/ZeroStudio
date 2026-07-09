@@ -69,6 +69,16 @@ class TsTextDocument(language: TSLanguage) : AutoCloseable {
   }
 
   /**
+   * 非阻塞地请求取消解析。仅设置 native 取消标志，不等待解析结束。
+   * 适用于主线程（如 stop()）场景，避免阻塞 UI 线程。
+   */
+  fun requestCancellationAsyncIfParsing() {
+    if (parser.isParsing) {
+      parser.requestCancellationAsync()
+    }
+  }
+
+  /**
    * Initialize the source text with the given initialization message. The caller is responsible for
    * handling the source text state i.e. this method does not check whether the text is already
    * initialized or not.
