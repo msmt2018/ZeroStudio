@@ -207,72 +207,70 @@ class MainFragment : BaseFragment() {
                         .verticalScroll(scrollState)
                         .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp)
             ) {
+              // 卡片固定在顶部：新建项目 + 打开项目 + 克隆仓库
               QuickStartGradientCard()
 
               Spacer(modifier = Modifier.height(20.dp))
 
-              Row(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1.5f)) {
-                  SectionTitle(stringResource(R.string.main_recent_projects))
-                  if (historyState.isEmpty()) {
-                    Text(
-                        stringResource(R.string.main_empty_history),
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(8.dp),
+              // 最近项目：独立列表（上下排列，非左右并排）
+              SectionTitle(stringResource(R.string.main_recent_projects))
+              if (historyState.isEmpty()) {
+                Text(
+                    stringResource(R.string.main_empty_history),
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(8.dp),
+                )
+              } else {
+                val recentSorted =
+                    historyState.sortedWith(
+                        compareByDescending<ProjectHistory> { it.isPinned }
+                            .thenByDescending { it.timestamp }
                     )
-                  } else {
-                    val recentSorted =
-                        historyState.sortedWith(
-                            compareByDescending<ProjectHistory> { it.isPinned }
-                                .thenByDescending { it.timestamp }
-                        )
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                      recentSorted.forEach { project ->
-                        SwipeableProjectItem(
-                            project = project,
-                            onClick = { openProjectWithCheck(project) },
-                            onPin = { performPinToggle(project) },
-                            onDelete = { performDelete(project) },
-                            showOpenCount = false,
-                        )
-                      }
-                    }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                  recentSorted.forEach { project ->
+                    SwipeableProjectItem(
+                        project = project,
+                        onClick = { openProjectWithCheck(project) },
+                        onPin = { performPinToggle(project) },
+                        onDelete = { performDelete(project) },
+                        showOpenCount = false,
+                    )
                   }
                 }
+              }
 
-                Spacer(modifier = Modifier.width(12.dp))
+              Spacer(modifier = Modifier.height(20.dp))
 
-                Column(modifier = Modifier.weight(0.9f)) {
-                  SectionTitle(stringResource(R.string.main_frequent_projects))
-                  if (historyState.isNotEmpty()) {
-                    val frequentSorted =
-                        historyState.sortedWith(
-                            compareByDescending<ProjectHistory> { it.isPinned }
-                                .thenByDescending { it.openCount }
-                        )
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                      frequentSorted.forEach { project ->
-                        SwipeableProjectItem(
-                            project = project,
-                            onClick = { openProjectWithCheck(project) },
-                            onPin = { performPinToggle(project) },
-                            onDelete = { performDelete(project) },
-                            showOpenCount = true,
-                        )
-                      }
-                    }
-                  } else {
-                    Text(
-                        stringResource(R.string.main_empty_history),
-                        fontSize = 12.sp,
-                        color = Color.Gray,
+              // 高频项目：独立列表（上下排列，非左右并排）
+              SectionTitle(stringResource(R.string.main_frequent_projects))
+              if (historyState.isEmpty()) {
+                Text(
+                    stringResource(R.string.main_empty_history),
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(8.dp),
+                )
+              } else {
+                val frequentSorted =
+                    historyState.sortedWith(
+                        compareByDescending<ProjectHistory> { it.isPinned }
+                            .thenByDescending { it.openCount }
+                    )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                  frequentSorted.forEach { project ->
+                    SwipeableProjectItem(
+                        project = project,
+                        onClick = { openProjectWithCheck(project) },
+                        onPin = { performPinToggle(project) },
+                        onDelete = { performDelete(project) },
+                        showOpenCount = true,
                     )
                   }
                 }

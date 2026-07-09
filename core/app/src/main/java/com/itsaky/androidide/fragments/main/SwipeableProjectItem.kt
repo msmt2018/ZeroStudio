@@ -103,14 +103,13 @@ fun SwipeableProjectItem(
   }
 
   Box(modifier = modifier.fillMaxWidth().height(58.dp)) {
-    // ---- Background layer: action menu (Pin + Delete), frosted ----
+    // ---- Background layer: action menu (Pin + Delete) ----
+    // 背景层不再使用高斯模糊——高斯模糊会遮挡整个菜单区域，导致按钮不可见。
+    // 高斯模糊改为设置在每个按钮的背景上（见 SwipeActionButton）。
     Row(
         modifier =
             Modifier.fillMaxSize()
                 .clip(RoundedCornerShape(12.dp))
-                // 毛玻璃：高斯模糊 + 半透明白色渐变叠层，模拟 iOS/Material
-                // 风格的 “Liquid Glass” 效果。
-                .blur(6.dp)
                 .background(
                     Brush.horizontalGradient(
                         listOf(
@@ -301,6 +300,9 @@ fun SwipeableProjectItem(
  * 右侧滑出的单个动作按钮（Pin / Delete）。用 progress 驱动 opacity 与
  * 缩放，保证只有当前景已经划开一段距离时才完全可见，未划开时是淡出
  * 的占位，触感更细腻。
+ *
+ * 按钮为圆形，背景使用半透明高斯模糊（红/蓝半透明毛玻璃），尺寸紧凑
+ * （直径 28dp，较原来 64dp 宽减少约 56%）。
  */
 @Composable
 private fun SwipeActionButton(
@@ -313,32 +315,26 @@ private fun SwipeActionButton(
 ) {
   val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(120), label = "btn-alpha")
   val scale = 0.85f + 0.15f * progress
+  // 按钮背景：tint 色 + 高斯模糊，形成红/蓝半透明毛玻璃圆形按钮
   val bg by
       animateColorAsState(
-          targetValue = tint.copy(alpha = 0.10f + 0.10f * progress),
+          targetValue = tint.copy(alpha = 0.25f + 0.15f * progress),
           animationSpec = tween(140),
           label = "btn-bg",
       )
-  Column(
+  Box(
       modifier =
           Modifier.graphicsLayer { this.alpha = alpha }
               .scale(scale)
-              .clip(RoundedCornerShape(10.dp))
+              .size(28.dp)
+              .clip(CircleShape)
+              // 高斯模糊设置在按钮背景上，而非遮挡整个菜单
+              .blur(4.dp)
               .background(bg)
-              .clickable(enabled = visible, onClick = onClick)
-              .padding(horizontal = 12.dp, vertical = 6.dp)
-              .width(64.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
+              .clickable(enabled = visible, onClick = onClick),
+      contentAlignment = Alignment.Center,
   ) {
-    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(18.dp))
-    Spacer(modifier = Modifier.height(2.dp))
-    Text(
-        label,
-        color = tint,
-        fontSize = 9.sp,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-    )
+    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(16.dp))
   }
   // Hint to the compiler that the content color is fine.
   LocalContentColor
