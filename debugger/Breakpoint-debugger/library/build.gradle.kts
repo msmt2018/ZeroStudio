@@ -34,7 +34,7 @@ val runtimeArtifacts = listOf(
         "ide-debugger-host.aar",
     ),
     RuntimeArtifact(
-        ":debugger:log-runtime:ide-log-plugin",
+        ":debugger:Breakpoint-debugger:ide-log-plugin",
         "assembleRelease",
         "outputs/aar/ide-log-plugin-release.aar",
         "ide-log-plugin-1.0.0.aar",

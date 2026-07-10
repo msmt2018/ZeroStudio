@@ -4,7 +4,7 @@ ZeroStudio 的宿主端日志与 JDWP 服务插件。在用户项目的 debug va
 自动注入到宿主应用程序,在宿主进程内启动 JDWP server 和 logcat 流捕获,
 供 IDE 连接调试和查看日志。
 
-> 与 [`ide-debugger-host`](../../Breakpoint-debugger/ide-debugger-host/README.md)
+> 与 [`ide-debugger-host`](../ide-debugger-host/README.md)
 > 共存于宿主 app:本模块负责启动 JDWP server + 捕获 logcat + 发送 READY 信号;
 > `ide-debugger-host` 负责反向连接 IDE 建立字节桥。
 
@@ -63,8 +63,8 @@ val port = bundle?.getInt("port") ?: -1
 
 本模块通过两个 Gradle init-script 插件注入到用户项目的 debug variant:
 
-- [`IdeLogInitScriptPlugin`](../../tooling/plugin/src/main/java/com/itsaky/androidide/gradle/IdeLogInitScriptPlugin.kt) — 注入 `ide-log-plugin` AAR
-- [`IdeDebuggerInitScriptPlugin`](../../tooling/plugin/src/main/java/com/itsaky/androidide/gradle/IdeDebuggerInitScriptPlugin.kt) — 注入 `ide-log-plugin` + `ide-debugger-host` AAR + manifest placeholder
+- [`IdeLogInitScriptPlugin`](../../../tooling/plugin/src/main/java/com/itsaky/androidide/gradle/IdeLogInitScriptPlugin.kt) — 注入 `ide-log-plugin` AAR
+- [`IdeDebuggerInitScriptPlugin`](../../../tooling/plugin/src/main/java/com/itsaky/androidide/gradle/IdeDebuggerInitScriptPlugin.kt) — 注入 `ide-log-plugin` + `ide-debugger-host` AAR + manifest placeholder
 
 仅 debuggable variant 会被注入,release variant 不受影响。
 
@@ -78,8 +78,8 @@ val port = bundle?.getInt("port") ?: -1
 ## 相关模块
 
 - [`logwire`](../logwire/README.md) — 共享传输协议
-- [`ide-debugger-host`](../../Breakpoint-debugger/ide-debugger-host/README.md) — 宿主端反连桥,与本模块共存
-- [`ide-debugger`](../../Breakpoint-debugger/ide-debugger/README.md) — IDE 端 JDWP 客户端引擎
+- [`ide-debugger-host`](../ide-debugger-host/README.md) — 宿主端反连桥,与本模块共存
+- [`ide-debugger`](../ide-debugger/README.md) — IDE 端 JDWP 客户端引擎
 
 ## License
 

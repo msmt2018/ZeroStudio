@@ -41,7 +41,7 @@ dependencies {
   // Shared wire protocol module: the IDE side and the host-plugin
   // side both consume this so the two ends can never disagree on
   // message layout.
-  implementation(project(":debugger:log-runtime:logwire"))
+  implementation(project(":debugger:Breakpoint-debugger:logwire"))
 
   testImplementation(libs.tests.junit)
 }

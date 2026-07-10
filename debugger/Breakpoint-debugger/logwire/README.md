@@ -110,7 +110,7 @@ if (type == WireConstants.TYPE_LOG_PAYLOAD) {
 ## 相关模块
 
 - [`ide-log-plugin`](../ide-log-plugin/README.md) — 宿主端,使用本协议发送日志
-- [`ide-debugger`](../../Breakpoint-debugger/ide-debugger/README.md) — IDE 端,使用本协议接收日志
+- [`ide-debugger`](../ide-debugger/README.md) — IDE 端,使用本协议接收日志
 
 ## License
 

@@ -155,7 +155,7 @@ include(
     ":core:chatai:workspace",
     ":core:chatai:material3",
 
-    ":debugger:library",
+    ":debugger:Breakpoint-debugger:library",
 
     ":editor:api",
     ":editor:impl",
@@ -177,12 +177,13 @@ include(
     ":event:eventbus-android",
     ":event:eventbus-events",
 
-    ":debugger:ide-decompiler",
+    ":debugger:Breakpoint-debugger:ide-decompiler",
     ":debugger:Breakpoint-debugger:ide-debugger",
     ":debugger:Breakpoint-debugger:ide-debugger-host",
-    ":debugger:log-runtime:ide-log-plugin",
+    ":debugger:Breakpoint-debugger:ide-log-plugin",
     ":debugger:ide-language",
-    ":debugger:log-runtime:logwire",
+    ":debugger:Breakpoint-debugger:logwire",
+    ":debugger:Breakpoint-debugger:library",
 
     ":java:javac-services",
     ":java:lsp",

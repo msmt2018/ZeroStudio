@@ -13,7 +13,7 @@ ZeroStudio 调试器运行时产物的打包聚合模块。它本身不含源码
 | `androidide-plugin.jar` | `:tooling:plugin` | JAR | Gradle init-script 插件,注入 AAR + manifest placeholder 到用户项目 |
 | `ide-debugger.aar` | `:debugger:Breakpoint-debugger:ide-debugger` | AAR | **IDE 端** JDWP 客户端引擎 (断点/求值/堆栈),仅 IDE 进程使用 |
 | `ide-debugger-host.aar` | `:debugger:Breakpoint-debugger:ide-debugger-host` | AAR | **宿主端** 反连桥 (HostAttachAgent + ContentProvider),注入宿主 app |
-| `ide-log-plugin-1.0.0.aar` | `:debugger:log-runtime:ide-log-plugin` | AAR | **宿主端** JdwpServer + LogCaptureService,注入宿主 app |
+| `ide-log-plugin-1.0.0.aar` | `:debugger:Breakpoint-debugger:ide-log-plugin` | AAR | **宿主端** JdwpServer + LogCaptureService,注入宿主 app |
 | `logger.jar` | `:logging:logger` | JAR | 日志门面,IDE 与宿主端共用 |
 | `logsender.aar` | `:logging:logsender` | AAR | 日志发送端 |
 | `plugin-config.jar` | `:tooling:plugin-config` | JAR | 插件配置 |
@@ -27,10 +27,10 @@ ZeroStudio 调试器运行时产物的打包聚合模块。它本身不含源码
 ## 构建
 
 ```bash
-gradle :debugger:library:assemble
+gradle :debugger:Breakpoint-debugger:library:assemble
 ```
 
-产物路径: `debugger/library/build/distributions/debugger-library.zip`
+产物路径: `debugger/Breakpoint-debugger/library/build/distributions/debugger-library.zip`
 
 ## 实现细节
 

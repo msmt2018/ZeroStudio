@@ -81,9 +81,9 @@ IDE 端 [`HostBridgeServer`](../../core/app/src/main/java/com/itsaky/androidide/
 
 ## 相关模块
 
-- [`ide-log-plugin`](../../debugger/log-runtime/ide-log-plugin/README.md) — 宿主端 JdwpServer + LogCapture,与本模块共存于宿主 app
+- [`ide-log-plugin`](../ide-log-plugin/README.md) — 宿主端 JdwpServer + LogCapture,与本模块共存于宿主 app
 - [`ide-debugger`](../ide-debugger/README.md) — IDE 端 JDWP 客户端引擎
-- [`logwire`](../../debugger/log-runtime/logwire/README.md) — 共享传输协议
+- [`logwire`](../logwire/README.md) — 共享传输协议
 
 ## License
 

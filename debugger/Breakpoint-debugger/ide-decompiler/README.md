@@ -63,8 +63,8 @@ System.out.println(result.getSource());
 
 ## 相关模块
 
-- [`ide-debugger`](../Breakpoint-debugger/ide-debugger/README.md) — 调试器引擎,反编译的调用方
-- [`ide-language`](../ide-language/README.md) — 语言分析,可对反编译结果做符号解析
+- [`ide-debugger`](../ide-debugger/README.md) — 调试器引擎,反编译的调用方
+- [`ide-language`](../../ide-language/README.md) — 语言分析,可对反编译结果做符号解析
 
 ## License
 
