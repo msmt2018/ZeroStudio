@@ -38,6 +38,14 @@ import org.slf4j.LoggerFactory
 object LanguageSpecProvider {
 
   private const val BASE_SPEC_PATH = "editor/treesitter"
+
+  // 共享同一 grammar 的语言：当某 type 的 scm 缺失时，回退到此 type 的 scm。
+  // 例如 kts 与 kt 共用 Kotlin grammar，避免 TSQuery.create 因空 query 抛
+  // IllegalArgumentException 导致 language 初始化失败（"全黑字" regression）。
+  private val SHARED_SCM_FALLBACKS = mapOf(
+    "kts" to "kt",
+  )
+
   private val log = LoggerFactory.getLogger(LanguageSpecProvider::class.java)
 
   @JvmStatic
@@ -79,6 +87,21 @@ object LanguageSpecProvider {
       if (e !is FileNotFoundException) {
         // log everything except FileNotFoundException
         log.error("Failed to read scheme file {} for type {}", name, type, e)
+      }
+      // 共享 grammar 回退：kts 等共用同 grammar 的语言可能没有自己的 scm 资源。
+      // 若 type 存在 fallback，尝试从 fallback type 读同名 scm。
+      val fallbackType = SHARED_SCM_FALLBACKS[type]
+      if (fallbackType != null) {
+        try {
+          return context.assets.open("${BASE_SPEC_PATH}/${fallbackType}/${name}.scm").use {
+            it.reader().readText()
+          }
+        } catch (e2: Exception) {
+          if (e2 !is FileNotFoundException) {
+            log.error("Failed to read fallback scheme file {}/{} for type {}",
+              fallbackType, name, type, e2)
+          }
+        }
       }
       ""
     }
