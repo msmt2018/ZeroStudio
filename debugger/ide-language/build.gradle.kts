@@ -17,7 +17,7 @@ android {
 }
 
 dependencies {
-    api(project(":debugger:Breakpoint-debugger:ide-decompiler"))
+    api(project(":debugger:ide-decompiler"))
     compileOnly("com.github.javaparser:javaparser-core:3.17.0")
     testImplementation("com.github.javaparser:javaparser-core:3.17.0")
     testImplementation("junit:junit:4.13.2")

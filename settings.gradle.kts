@@ -177,7 +177,7 @@ include(
     ":event:eventbus-android",
     ":event:eventbus-events",
 
-    ":debugger:Breakpoint-debugger:ide-decompiler",
+    ":debugger:ide-decompiler",
     ":debugger:Breakpoint-debugger:ide-debugger",
     ":debugger:Breakpoint-debugger:ide-debugger-host",
     ":debugger:Breakpoint-debugger:ide-log-plugin",
