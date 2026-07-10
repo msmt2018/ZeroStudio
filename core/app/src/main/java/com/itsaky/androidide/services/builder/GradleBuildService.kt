@@ -340,7 +340,10 @@ class GradleBuildService :
                             implementation name: 'logsender', ext: 'aar'
                             // 新 JDWP/LogCapture 链 (PR-1 之后)。
                             implementation name: 'ide-log-plugin-1.0.0', ext: 'aar'
-                            implementation name: 'ide-debugger', ext: 'aar'
+                            // 断点调试器宿主端反连桥 (HostAttachAgentBootstrap)。
+                            // ide-debugger (IDE 端引擎) 不注入宿主 app — 那是 IDE
+                            // 进程内运行的代码, 通过 IdeDebuggerInitScriptPlugin 控制。
+                            implementation name: 'ide-debugger-host', ext: 'aar'
                             coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
                         }
                     }
@@ -374,14 +377,14 @@ class GradleBuildService :
    */
   private fun ensureLoggerPluginArtifacts() {
     val artifacts =
-        arrayOf(
-            "ide-log-plugin-1.0.0.aar",
-            "ide-debugger.aar",
-            "logger.jar",
-            "logsender.aar",
-            "androidide-plugin.jar",
-            "plugin-config.jar",
-        )
+            arrayOf(
+                "ide-log-plugin-1.0.0.aar",
+                "ide-debugger-host.aar",
+                "logger.jar",
+                "logsender.aar",
+                "androidide-plugin.jar",
+                "plugin-config.jar",
+            )
     val pluginDir = getLoggerPluginDir()
     if (artifacts.all { File(pluginDir, it).isFile }) {
       return

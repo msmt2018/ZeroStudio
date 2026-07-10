@@ -22,12 +22,6 @@ val runtimeArtifacts = listOf(
         "androidide-plugin.jar",
     ),
     RuntimeArtifact(
-        ":debugger:Breakpoint-debugger:ide-debugger",
-        "assembleRelease",
-        "outputs/aar/ide-debugger-release.aar",
-        "ide-debugger.aar",
-    ),
-    RuntimeArtifact(
         ":debugger:Breakpoint-debugger:ide-debugger-host",
         "assembleRelease",
         "outputs/aar/ide-debugger-host-release.aar",
