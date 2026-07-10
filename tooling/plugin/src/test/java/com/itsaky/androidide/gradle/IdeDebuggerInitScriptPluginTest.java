@@ -63,55 +63,58 @@ public class IdeDebuggerInitScriptPluginTest {
         assertThat(project.getPath()).isNotNull();
     }
 
-    // ---- 子项目 9d + 10: computeLocalServerName 纯函数测试 ----
+    // ---- computeLocalServerName 纯函数测试 ----
+    // 名字现在是固定常量 "ide-debug-bridge", 跟 IDE 端
+    // HostBridgeServer.WELL_KNOWN_NAME 对齐 (IDE 与宿主 app uid 不同,
+    // per-uid / per-project 名字双方对不齐, 改用固定约定常量)。
+    // group/name 参数保留兼容但不参与名字生成。
 
     @Test
     public void computeLocalServerName_normalGroupName() throws Exception {
         String name = invokeComputeLocalServerName("com.example", "myapp");
-        assertEquals("ide-debug-bridge-com.example-myapp", name);
+        assertEquals("ide-debug-bridge", name);
     }
 
     @Test
     public void computeLocalServerName_nullGroup_usesDefault() throws Exception {
         String name = invokeComputeLocalServerName(null, "myapp");
-        assertEquals("ide-debug-bridge-default-myapp", name);
+        assertEquals("ide-debug-bridge", name);
     }
 
     @Test
     public void computeLocalServerName_emptyGroup_usesDefault() throws Exception {
         String name = invokeComputeLocalServerName("", "myapp");
-        assertEquals("ide-debug-bridge-default-myapp", name);
+        assertEquals("ide-debug-bridge", name);
     }
 
     @Test
     public void computeLocalServerName_emptyName_usesApp() throws Exception {
         String name = invokeComputeLocalServerName("com.example", "");
-        assertEquals("ide-debug-bridge-com.example-app", name);
+        assertEquals("ide-debug-bridge", name);
     }
 
     @Test
     public void computeLocalServerName_uppercaseIsLowercased() throws Exception {
         String name = invokeComputeLocalServerName("Com.Example", "MyApp");
-        assertEquals("ide-debug-bridge-com.example-myapp", name);
+        assertEquals("ide-debug-bridge", name);
     }
 
     @Test
     public void computeLocalServerName_truncatesAt64() throws Exception {
+        // 固定名字不依赖 group/name, 不截断; 验证长输入仍返回固定常量
         String longGroup = "a".repeat(100);
         String longName = "b".repeat(100);
         String name = invokeComputeLocalServerName(longGroup, longName);
-        // 名字总长度: "ide-debug-bridge-" (17) + group (64) + "-" (1) + name (64) = 146
-        assertTrue("expected name to truncate group/name at 64 chars, got: " + name,
-                name.length() == 17 + 64 + 1 + 64);
+        assertEquals("ide-debug-bridge", name);
     }
 
-    // ---- 子项目 10: computeBootstrapPlaceholders 纯函数测试 ----
+    // ---- computeBootstrapPlaceholders 纯函数测试 ----
 
     @Test
     public void computeBootstrapPlaceholders_basic() throws Exception {
         Map<String, String> ph = invokeComputeBootstrapPlaceholders("com.example", "myapp", 0, null);
         assertEquals(5, ph.size());
-        assertEquals("ide-debug-bridge-com.example-myapp", ph.get("ideLocalServerName"));
+        assertEquals("ide-debug-bridge", ph.get("ideLocalServerName"));
         assertEquals("sdk=0", ph.get("ideDebuggerExtras"));
         assertEquals("", ph.get("ideDebuggerPreheatBreakpointsRaw"));
     }
@@ -141,7 +144,7 @@ public class IdeDebuggerInitScriptPluginTest {
     @Test
     public void computeBootstrapPlaceholders_nullGroupAndName_fallbacks() throws Exception {
         Map<String, String> ph = invokeComputeBootstrapPlaceholders(null, "", 0, null);
-        assertEquals("ide-debug-bridge-default-app", ph.get("ideLocalServerName"));
+        assertEquals("ide-debug-bridge", ph.get("ideLocalServerName"));
     }
 
     // ---- reflection helpers ----

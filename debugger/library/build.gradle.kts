@@ -28,6 +28,12 @@ val runtimeArtifacts = listOf(
         "ide-debugger.aar",
     ),
     RuntimeArtifact(
+        ":debugger:Breakpoint-debugger:ide-debugger-host",
+        "assembleRelease",
+        "outputs/aar/ide-debugger-host-release.aar",
+        "ide-debugger-host.aar",
+    ),
+    RuntimeArtifact(
         ":debugger:log-runtime:ide-log-plugin",
         "assembleRelease",
         "outputs/aar/ide-log-plugin-release.aar",

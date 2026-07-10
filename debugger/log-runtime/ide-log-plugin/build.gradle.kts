@@ -43,9 +43,5 @@ dependencies {
   // message layout.
   implementation(project(":debugger:log-runtime:logwire"))
 
-  // Pull in the host-side counterpart of the logwire protocol
-  // (used by the JdwpServer to publish events back to the IDE).
-  implementation(project(":debugger:Breakpoint-debugger:ide-debugger"))
-
   testImplementation(libs.tests.junit)
 }

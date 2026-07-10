@@ -185,7 +185,11 @@ class AppReadyAutoConnect(
         watcher = w
 
         // 2) HostBridgeServer 反连
-        val name = HostBridgeServer.defaultName()
+        //    用固定名字 [HostBridgeServer.WELL_KNOWN_NAME], 跟宿主 app 的
+        //    manifest placeholder (由 IdeDebuggerInitScriptPlugin 注入) 对齐。
+        //    之前用 defaultName() = "ide-debug-bridge-<uid>", 但宿主 app 进程
+        //    uid 跟 IDE 不同, 双方名字对不齐, 反连永远连不上。
+        val name = HostBridgeServer.WELL_KNOWN_NAME
         val b = HostBridgeServer(name)
         b.setListener { conn -> onBridgeConnection(conn) }
         try {

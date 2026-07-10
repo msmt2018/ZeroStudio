@@ -28,6 +28,8 @@ import com.itsaky.androidide.BuildConfig
 import com.itsaky.androidide.activities.CrashHandlerActivity
 import com.itsaky.androidide.activities.editor.IDELogcatReader
 import com.itsaky.androidide.buildinfo.BuildInfo
+import com.itsaky.androidide.debugger.connection.DebugConnectionPreferences
+import com.itsaky.androidide.debugger.connection.host.AppReadyAutoConnect
 import com.itsaky.androidide.editor.schemes.IDEColorSchemeProvider
 import com.itsaky.androidide.eventbus.events.preferences.PreferenceChangeEvent
 import com.itsaky.androidide.events.AppEventsIndex
@@ -73,6 +75,14 @@ class IDEApplication : TermuxApplication() {
 
   private var uncaughtExceptionHandler: UncaughtExceptionHandler? = null
   private var ideLogcatReader: IDELogcatReader? = null
+
+  /**
+   * 断点调试器自动 attach 协调器。启动后同时监听:
+   *   - host app logcat "READY pkg=... jdwp=PORT" 信号 (AppReadySignalWatcher)
+   *   - host app 反向连接 + HELLO 协议 (HostBridgeServer LocalServerSocket)
+   * 任一触发都会尝试用默认连接方案 attach 到 host app。
+   */
+  @Volatile private var appReadyAutoConnect: AppReadyAutoConnect? = null
 
   init {
     RecyclableObjectPool.DEBUG = BuildConfig.DEBUG
@@ -131,6 +141,21 @@ class IDEApplication : TermuxApplication() {
 
     GlobalScope.launch(Dispatchers.IO) {
       IDEColorSchemeProvider.init()
+    }
+
+    // 启动断点调试器的自动 attach 协调器 (后台 IO 线程):
+    //   start() 会 spawn logcat 子进程 + bind abstract LocalServerSocket,
+    //   不能在主线程做 (会触发 ANR)。
+    //   宿主 app 启动后会反连这个 LocalServerSocket (HostAttachAgentBootstrap),
+    //   或通过 logcat 发 "READY" 信号, 触发 IDE 自动 attach。
+    GlobalScope.launch(Dispatchers.IO) {
+      try {
+        appReadyAutoConnect = AppReadyAutoConnect(
+            settings = DebugConnectionPreferences.load(),
+        ).also { it.start() }
+      } catch (t: Throwable) {
+        log.warn("Failed to start AppReadyAutoConnect: {}", t.message)
+      }
     }
 
     log.info("IDEApplication onCreate completed in {} ms", System.currentTimeMillis() - bootStart)
