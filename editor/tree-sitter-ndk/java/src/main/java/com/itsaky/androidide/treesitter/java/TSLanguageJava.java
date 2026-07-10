@@ -18,7 +18,7 @@
  */
 
 
-package com.itsaky.androidide.treesitter.kotlin;
+package com.itsaky.androidide.treesitter.java;
 
 import com.itsaky.androidide.treesitter.annotations.GenerateNativeHeaders;
 
@@ -26,23 +26,23 @@ import com.itsaky.androidide.treesitter.TSLanguage;
 import com.itsaky.androidide.treesitter.TSLanguageCache;
 
 /**
- * Tree Sitter for Kotlin.
+ * Tree Sitter for Java.
  *
  * @author android_zero
  */
-public final class TSLanguageKotlin {
+public final class TSLanguageJava {
 
   static {
-    System.loadLibrary("tree-sitter-kotlin");
+    System.loadLibrary("tree-sitter-java");
   }
 
-  private TSLanguageKotlin() {
+  private TSLanguageJava() {
     throw new UnsupportedOperationException();
   }
 
   /**
    * @deprecated Tree Sitter language instances are <code>static const</code> and hence, they do not change. The
-   * name of this method is misleading, use {@link TSLanguageKotlin#getInstance()} instead.
+   * name of this method is misleading, use {@link TSLanguageJava#getInstance()} instead.
    */
   @Deprecated
   public static TSLanguage newInstance() {
@@ -50,22 +50,22 @@ public final class TSLanguageKotlin {
   }
   
   /**
-   * Get the instance of the Kotlin language.
+   * Get the instance of the Java language.
    *
-   * @return The instance of the Kotlin language.
+   * @return The instance of the Java language.
    */
   public static TSLanguage getInstance() {
-    var language = TSLanguageCache.get("kotlin");
+    var language = TSLanguageCache.get("java");
     if (language != null) {
       return language;
     }
 
-    language = TSLanguage.create("kotlin", Native.getInstance());
-    TSLanguageCache.cache("kotlin", language);
+    language = TSLanguage.create("java", Native.getInstance());
+    TSLanguageCache.cache("java", language);
     return language;
   }
 
-  @GenerateNativeHeaders(fileName = "kotlin")
+  @GenerateNativeHeaders(fileName = "java")
   public static class Native {
     public static native long getInstance();
   }

@@ -1,7 +1,7 @@
 plugins { id("com.android.library") }
 
 android {
-  namespace = "com.itsaky.androidide.treesitter.kotlin"
+  namespace = "com.itsaky.androidide.treesitter.java"
   ndkVersion = "27.1.12297006"
 
   defaultConfig {

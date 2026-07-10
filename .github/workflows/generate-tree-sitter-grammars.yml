@@ -1,0 +1,156 @@
+name: Generate Tree-Sitter Grammars
+
+# ============================================================================
+# 从 grammar.js 生成 tree-sitter 语法 C/C++ 源码 (parser.c, scanner.c 等)
+# 覆盖语言: kotlin, java
+#
+# 触发方式:
+#   - 手动触发 (workflow_dispatch)，可选择生成全部或指定语言
+#   - 定时触发 (每周一 00:00 UTC)，自动更新语法源码
+# ============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      language:
+        description: '要生成的语言 (留空=全部)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - kotlin
+          - java
+      auto_commit:
+        description: '生成后自动提交到当前分支'
+        required: false
+        default: true
+        type: boolean
+
+  schedule:
+    # 每周一 00:00 UTC (北京时间 08:00) 自动检查更新
+    - cron: '0 0 * * 1'
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install basic system dependency packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git curl build-essential
+
+      # ------------------------------------------------------------------
+      # Rust 工具链 — tree-sitter CLI 依赖 Rust 编译
+      # ------------------------------------------------------------------
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-tree-sitter-${{ hashFiles('scripts/generate-tree-sitter-grammars.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tree-sitter-
+
+      # ------------------------------------------------------------------
+      # Node.js — tree-sitter CLI 需要 Node.js 执行 grammar.js
+      # ------------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ------------------------------------------------------------------
+      # 验证环境
+      # ------------------------------------------------------------------
+      - name: Verify environment
+        run: |
+          echo "Rust:   $(rustc --version)"
+          echo "Cargo:  $(cargo --version)"
+          echo "Node:   $(node --version)"
+          echo "Git:    $(git --version)"
+
+      # ------------------------------------------------------------------
+      # 执行语法源码生成
+      # ------------------------------------------------------------------
+      - name: Generate tree-sitter grammar sources
+        env:
+          TS_CLI_VERSION: '0.25.4'
+        run: |
+          chmod +x ./scripts/generate-tree-sitter-grammars.sh
+          ./scripts/generate-tree-sitter-grammars.sh ${{ github.event.inputs.language || '' }}
+
+      # ------------------------------------------------------------------
+      # 检查是否有文件变更
+      # ------------------------------------------------------------------
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "没有检测到文件变更，语法源码已是最新。"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "检测到文件变更:"
+            git diff --stat
+          fi
+
+      # ------------------------------------------------------------------
+      # 上传变更的源码作为 artifact (无论是否自动提交都上传)
+      # ------------------------------------------------------------------
+      - name: Upload generated sources
+        if: steps.check_changes.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tree-sitter-generated-sources
+          path: |
+            editor/tree-sitter-ndk/kotlin/src/main/cpp/parser.c
+            editor/tree-sitter-ndk/kotlin/src/main/cpp/scanner.c
+            editor/tree-sitter-ndk/kotlin/src/main/cpp/node-types.json
+            editor/tree-sitter-ndk/java/src/main/cpp/parser.c
+            editor/tree-sitter-ndk/java/src/main/cpp/scanner.c
+            editor/tree-sitter-ndk/java/src/main/cpp/node-types.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # ------------------------------------------------------------------
+      # 自动提交 (仅 workflow_dispatch 且 auto_commit=true 时)
+      # ------------------------------------------------------------------
+      - name: Commit generated sources
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.auto_commit == 'true' &&
+          steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add editor/tree-sitter-ndk/kotlin/src/main/cpp/ \
+                  editor/tree-sitter-ndk/java/src/main/cpp/
+
+          git commit -m "$(cat <<'EOF'
+          chore(tree-sitter): 自动重新生成语法源码
+
+          由 GitHub Actions 工作流 generate-tree-sitter-grammars 自动触发。
+          语言: ${{ github.event.inputs.language || '全部 (kotlin, java)' }}
+
+          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+          EOF
+          )"
+
+          echo "提交成功，准备推送..."
+          git push

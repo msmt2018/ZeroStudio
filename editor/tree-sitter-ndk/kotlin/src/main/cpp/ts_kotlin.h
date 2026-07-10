@@ -72,7 +72,7 @@ void TSLanguageKotlin_Native_SetJniMethods(JNINativeMethod *methods, int count);
     if (__TS_LOG_DEBUG == 1) { \
         LOGD(LOG_TAG, "SET_JNI_METHOD: %s to %p", _mth.name, ptr); \
         LOGD(LOG_TAG, "SET_JNI_METHOD: fnPtr = %p", _mths[_mth##__ARR_IDX].fnPtr); \
-    }
+    } \
 }
 #endif
 

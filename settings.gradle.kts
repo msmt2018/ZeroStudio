@@ -170,6 +170,8 @@ include(
     ":editor:tree-sitter-ndk:yaml",
     ":editor:tree-sitter-ndk:aidl",
     ":editor:tree-sitter-ndk:cpp",
+    ":editor:tree-sitter-ndk:java",
+    ":editor:tree-sitter-ndk:kotlin",
 
     ":event:eventbus",
     ":event:eventbus-android",

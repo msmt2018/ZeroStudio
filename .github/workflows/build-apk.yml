@@ -12,6 +12,11 @@ on:
           - assemble
           - assembleDebug
           - assembleRelease
+      regenerate_grammars:
+        description: '构建前重新生成 tree-sitter 语法源码 (需要 Rust 工具链)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -64,6 +69,33 @@ jobs:
         working-directory: core/chatai/web-ui
         run: |
           bun install --frozen-lockfile
+
+      # ------------------------------------------------------------------
+      # Rust 工具链 (仅当需要重新生成 tree-sitter 语法源码时安装)
+      # tree-sitter CLI 依赖 Rust 编译，Node.js 执行 grammar.js
+      # ------------------------------------------------------------------
+      - name: Setup Rust toolchain (for tree-sitter grammar generation)
+        if: github.event.inputs.regenerate_grammars == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        if: github.event.inputs.regenerate_grammars == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-tree-sitter-${{ hashFiles('scripts/generate-tree-sitter-grammars.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tree-sitter-
+
+      - name: Regenerate tree-sitter grammar sources
+        if: github.event.inputs.regenerate_grammars == 'true'
+        env:
+          TS_CLI_VERSION: '0.25.4'
+        run: |
+          chmod +x ./scripts/generate-tree-sitter-grammars.sh
+          ./scripts/generate-tree-sitter-grammars.sh
 
       - name: Install the specified NDK and Android SDK CMake (3.22.1)
         run: |
