@@ -50,9 +50,11 @@ TSNode _unmarshalNode(JNIEnv *env, jobject javaObject);
 
 jobject _marshalPoint(JNIEnv *env, TSPoint point);
 TSPoint _unmarshalPoint(JNIEnv *env, jobject javaObject);
+void _marshalPointToExisting(JNIEnv *env, jobject javaObject, TSPoint point);
 
 jobject _marshalRange(JNIEnv *env, TSRange range);
 TSRange _unmarshalRange(JNIEnv *env, jobject javaObject);
+void _marshalRangeToExisting(JNIEnv *env, jobject javaObject, TSRange range);
 jobjectArray createRangeArr(JNIEnv *env, jint size);
 
 jobject _marshalMatch(JNIEnv *env, TSQueryMatch match);

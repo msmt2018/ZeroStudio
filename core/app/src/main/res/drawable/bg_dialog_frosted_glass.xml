@@ -1,35 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  ZeroStudio IDE - 高斯模糊磨砂背景 (Phase 20)
+  ZeroStudio IDE - 高斯模糊磨砂背景 (白色半透明版)
 
   设计:
     - 圆角 16dp
-    - 30% 半透明白 + 10% 半透明黑叠加 (实现磨砂"暖白"底色)
-    - 1dp 高光描边
+    - 85% 半透明白底, 模拟磨砂"暖白"效果
+    - 1dp 浅灰描边
     - 用于 BreakpointTypePickerDialog / BreakpointDetailDialog / MemoryView
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 1. 底色 — 95% 暗灰 -->
+    <!-- 1. 底色 — 85% 白 (半透明, 让背景经 dim 模糊后透出) -->
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="#E61E1E1E" />
+            <solid android:color="#D9FFFFFF" />
             <corners android:radius="16dp" />
         </shape>
     </item>
-    <!-- 2. 顶部光晕 — 渐变 (30% 透明到 0% 透明) -->
+    <!-- 2. 顶部光晕 — 极淡渐变高光 -->
     <item>
         <shape android:shape="rectangle">
             <gradient
                 android:angle="270"
-                android:startColor="#3DFFFFFF"
+                android:startColor="#33FFFFFF"
                 android:endColor="#00FFFFFF" />
             <corners android:radius="16dp" />
         </shape>
     </item>
-    <!-- 3. 内描边 -->
+    <!-- 3. 内描边 — 浅灰 -->
     <item>
         <shape android:shape="rectangle">
-            <stroke android:width="1dp" android:color="#33FFFFFF" />
+            <stroke android:width="1dp" android:color="#1A000000" />
             <solid android:color="@android:color/transparent" />
             <corners android:radius="16dp" />
         </shape>

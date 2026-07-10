@@ -13,7 +13,7 @@
         android:layout_height="wrap_content"
         android:text="@string/debugger_bpd_dependent_label"
         android:textAppearance="?attr/textAppearanceLabelMedium"
-        android:textColor="#A0FFFFFF"/>
+        android:textColor="#99000000"/>
 
     <Spinner
         android:id="@+id/bpd_dep_spinner"

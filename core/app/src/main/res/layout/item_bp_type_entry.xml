@@ -1,20 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  ZeroStudio IDE - 断点类型单项 (Phase 20)
-  含: 图标 + 标题 + 描述
+  ZeroStudio IDE - 断点类型单项 (白底紧凑版)
 
-  Phase 24 bug 修复:
-    - 图标从 40dp 缩到 32dp, 避免在窄列里独占宽度
-    - 文字列加 minWidth, 防止父容器 WRAP_CONTENT 时 weight=1 塌缩成 0 (只剩图标)
-    - 外层加 minHeight=48dp 保证触摸目标
+  含: 图标 + 标题 + 描述
+  - 图标 24dp, minHeight 40dp, padding 6dp (原 32/48/10 过大)
+  - 文字改深色适配白底磨砂背景
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:minHeight="48dp"
+    android:minHeight="40dp"
     android:orientation="horizontal"
-    android:padding="10dp"
+    android:padding="6dp"
     android:gravity="center_vertical"
     android:background="@drawable/bg_bp_type_item"
     android:clickable="true"
@@ -22,10 +20,10 @@
 
     <ImageView
         android:id="@+id/bptpe_icon"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:padding="4dp"
-        android:tint="#FFAB40"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:padding="2dp"
+        android:tint="#FB8C00"
         tools:src="@drawable/ic_bp_line"
         android:contentDescription="@null"/>
 
@@ -34,24 +32,24 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:minWidth="200dp"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="8dp"
         android:orientation="vertical">
 
         <TextView
             android:id="@+id/bptpe_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textAppearance="?attr/textAppearanceTitleSmall"
-            android:textColor="#F0FFFFFF"
+            android:textAppearance="?attr/textAppearanceLabelMedium"
+            android:textColor="#FF1E1E1E"
             tools:text="普通行断点"/>
 
         <TextView
             android:id="@+id/bptpe_desc"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="1dp"
             android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="#A0FFFFFF"
+            android:textColor="#99000000"
             tools:text="程序运行到这一行代码之前暂停"/>
     </LinearLayout>
 </LinearLayout>

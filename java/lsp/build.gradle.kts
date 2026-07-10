@@ -47,7 +47,7 @@ dependencies {
 
   api(projects.core.indexingApi)
 
-  implementation(libs.androidide.ts)
+  implementation(projects.editor.treeSitterNdk.androidTreeSitter)
   implementation(libs.androidide.ts.java)
   implementation(libs.androidx.annotation)
   implementation(libs.androidx.appcompat)

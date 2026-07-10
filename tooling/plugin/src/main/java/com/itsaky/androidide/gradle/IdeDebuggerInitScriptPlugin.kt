@@ -94,15 +94,26 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
   }
 
   /**
-   * 子项目 9d: 计算 host 端要反连的 IDE LocalServerSocket 名字。
-   * 名字 = "ide-debug-bridge-{group}-{name}", 唯一避免冲突。
+   * 计算 host 端要反连的 IDE LocalServerSocket 名字。
+   *
+   * 返回固定常量 "ide-debug-bridge", 跟 IDE 端
+   * `HostBridgeServer.WELL_KNOWN_NAME` 对齐。
+   *
+   * 为什么不用 per-project / per-uid 名字:
+   *   - IDE 端 AppReadyAutoConnect 在 Application.onCreate 启动, 此时还不知道
+   *     用户会调试哪个 project, 只能 bind 一个全局唯一的名字
+   *   - 本函数在 build time (Gradle 插件) 执行, 无法知道 IDE 进程的 uid
+   *   - 双方唯一能对齐的是一个固定的、约定好的常量
+   *   - 之前用 "ide-debug-bridge-{group}-{name}", 但 IDE 端 bind 的是
+   *     "ide-debug-bridge-{uid}", 名字对不齐, 宿主 app 反连永远连不上
+   *
+   * group/name 参数保留兼容 (调用方仍传), 但不参与名字生成。
    *
    * 纯函数 (不依赖 Project), 便于单测。
    */
+  @Suppress("UNUSED_PARAMETER")
   internal fun computeLocalServerName(group: String?, name: String): String {
-    val safeGroup = (group?.takeIf { it.isNotBlank() } ?: "default").take(64)
-    val safeName = (name.takeIf { it.isNotBlank() } ?: "app").take(64)
-    return "ide-debug-bridge-${safeGroup}-${safeName}".lowercase()
+    return "ide-debug-bridge"
   }
 
   /**
@@ -163,11 +174,18 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
       //    usually also does this; re-adding is harmless because
       //    the dep is the same artifact).
       // 子项目 9d: 同样注入 :ide-debugger-host AAR (host ADRT runtime)
+      //
+      // 注意: 不注入 ide-debugger (IDE 端 JDWP 客户端引擎, 36 个类)。
+      //   那是 IDE 进程内运行的代码, 打进宿主 app 会:
+      //   1) 混入 IDE 端逻辑到宿主端 (违反分层)
+      //   2) 增加 host app 体积 (ide-debugger 含完整 JDWP client)
+      //   3) ide-log-plugin 的 build.gradle 已移除对它的 implementation 依赖
+      //   宿主端只需要: ide-log-plugin (JdwpServer + LogCapture)
+      //                + ide-debugger-host (HostAttachAgent 反连桥)
       try {
         variant.withRuntimeConfiguration {
           listOf(
               IdeLogInitScriptPlugin.IDE_LOG_PLUGIN_ARTIFACT,
-              IdeLogInitScriptPlugin.IDE_DEBUGGER_ARTIFACT,
               IDE_DEBUGGER_HOST_ARTIFACT,  // 子项目 9d: host ADRT
           ).forEach { artifact ->
             val dep = project.dependencies.ideDependency(

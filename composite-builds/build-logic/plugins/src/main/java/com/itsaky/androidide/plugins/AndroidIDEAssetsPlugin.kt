@@ -91,7 +91,7 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
                 "copy${variantNameCapitalized}DebuggerLibraryToAssets",
                 AddFileToAssetsTask::class.java,
             ) {
-              val debuggerLibraryPath = ":debugger:library"
+              val debuggerLibraryPath = ":debugger:Breakpoint-debugger:library"
               val debuggerLibrary =
                   checkNotNull(rootProject.findProject(debuggerLibraryPath)) {
                     "Cannot find required debugger runtime library module: '$debuggerLibraryPath'"

@@ -41,6 +41,11 @@ static jobject TreeCursor_currentTreeCursorNode(JNIEnv *env, jclass self, jlong 
 static jstring TreeCursor_currentFieldName(JNIEnv *env, jclass self, jlong cursor) {
   req_nnp(env, cursor);
   const char *name = ts_tree_cursor_current_field_name((TSTreeCursor *) cursor);
+  // field name 为 nullptr 是常见情况（大多数节点没有字段名），
+  // NewStringUTF(nullptr) 是未定义行为，必须避免。
+  if (name == nullptr) {
+    return nullptr;
+  }
   jstring result = env->NewStringUTF(name);
   return result;
 }
@@ -89,15 +94,15 @@ static jlong TreeCursor_gotoFirstChildForByte(JNIEnv *env,
 }
 
 
-static jboolean TreeCursor_gotoFirstChildForPoint(JNIEnv *env,
+static jlong TreeCursor_gotoFirstChildForPoint(JNIEnv *env,
                                        jclass clazz,
                                        jlong pointer,
                                        jobject point) {
   req_nnp(env, pointer);
-  return (jboolean) ts_tree_cursor_goto_first_child_for_point((TSTreeCursor *) pointer,
-                                                              _unmarshalPoint(
-                                                                  env,
-                                                                  point));
+  // 0.27 的 ts_tree_cursor_goto_first_child_for_point 返回 int64_t 子节点索引，
+  // -1 表示未找到。与 gotoFirstChildForByte 保持一致返回 long。
+  return (jlong) ts_tree_cursor_goto_first_child_for_point((TSTreeCursor *) pointer,
+                                                           _unmarshalPoint(env, point));
 }
 
 

@@ -63,7 +63,12 @@ class TsTheme(private val tsQuery: TSQuery) {
    *
    * @param rule The rule for locating nodes
    */
-  fun eraseStyleRule(rule: String) = putStyleRule(rule, 0L)
+  fun eraseStyleRule(rule: String) {
+    // 修复：原实现 putStyleRule(rule, 0L) 只是将值设为 0L，规则仍然存在于 map 中。
+    // 正确做法是移除 key，使 resolveStyleForPattern 的回退到父规则查找。
+    styles.remove(rule)
+    mapping.clear()
+  }
 
   fun resolveStyleForPattern(pattern: Int): Long {
     val index = mapping.indexOfKey(pattern)

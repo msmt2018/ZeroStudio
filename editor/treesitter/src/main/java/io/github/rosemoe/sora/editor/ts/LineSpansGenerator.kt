@@ -66,19 +66,36 @@ class LineSpansGenerator(
     private val content: Content,
     internal var theme: TsTheme,
     private val languageSpec: TsLanguageSpec,
-    var scopedVariables: TsScopedVariables,
+    var scopedVariables: TsScopedVariables?,
     private val spanFactory: TsSpanFactory,
 ) : Spans {
 
   companion object {
 
-    const val CACHE_THRESHOLD = 60
+    const val CACHE_THRESHOLD = 200
   }
 
   private val caches = mutableListOf<SpanCache>()
 
   fun edit(edit: TSInputEdit) {
     tree.edit(edit)
+  }
+
+  /**
+   * 增量更新：替换 generator 持有的 tree（用于 doMod 后的快速路径）。
+   *
+   * 关闭旧 tree、设置新 tree、清空 line cache。
+   * 清空 cache 是必要的：reparse 后 tree 结构可能变化，旧 cache 中的 span 列号
+   * 可能与新 tree 不一致。清空后渲染层会按需重新查询（`LineSpansGenerator.read()`
+   * 是惰性按行的，只查询可见行）。
+   *
+   * @param newTree 新的语法树（调用方负责 copy，本方法负责关闭旧 tree）。
+   */
+  fun updateTree(newTree: TSTree) {
+    val old = tree
+    tree = newTree
+    old?.close()
+    caches.clear()
   }
 
   fun queryCache(line: Int): MutableList<Span>? {
@@ -110,7 +127,15 @@ class LineSpansGenerator(
 
     val captures = mutableListOf<TSQueryCapture>()
 
+    // 每次新建 cursor（回到升级前的行为）。
+    // 升级后曾改用 reusableCursor 复用，但 tree-sitter 0.27 的 setByteRange 在
+    // start > end 时返回 false 不更新 included_range，且 exec 不重置 range，
+    // 导致 stale range 跨行持续 → 部分行不着色。每次新建 cursor 彻底避免此问题。
     TSQueryCursor.create().use { cursor ->
+      // 必须设置 isAllowChangedNodes = true：TsAnalyzeManager.insert/delete 会给渲染副本 tree
+      // 打 edit 标记（hasChanges=true），高亮查询仍需在此 tree 上正常执行。
+      // safeExecQueryCursor 会检查此标志，为 true 时跳过 hasChanges 前置检查。
+      cursor.isAllowChangedNodes = true
       cursor.setByteRange(startIndex * 2, endIndex * 2)
 
       cursor.safeExecQueryCursor(
@@ -148,21 +173,26 @@ class LineSpansGenerator(
           }
           var style = 0L
           if (capture.index in languageSpec.localsReferenceIndices) {
-            val def =
-                scopedVariables.findDefinition(
-                    startByte / 2,
-                    endByte / 2,
-                    content.substring(startByte / 2, endByte / 2),
-                )
-            if (def != null && def.matchedHighlightPattern != -1) {
-              style = theme.resolveStyleForPattern(def.matchedHighlightPattern)
+            val sv = scopedVariables
+            if (sv != null) {
+              val def =
+                  sv.findDefinition(
+                      startByte / 2,
+                      endByte / 2,
+                      content.substring(startByte / 2, endByte / 2),
+                  )
+              if (def != null && def.matchedHighlightPattern != -1) {
+                style = theme.resolveStyleForPattern(def.matchedHighlightPattern)
+              }
+              // sv 不为 null 但未找到定义：保持上游行为，跳过此 capture，
+              // 让后续同位置的 capture 提供颜色。
+              if (style == 0L) {
+                continue
+              }
             }
-            // This reference can not be resolved to its definition
-            // but it can have its own fallback color by other captures
-            // so continue to next capture
-            if (style == 0L) {
-              continue
-            }
+            // sv 为 null（viewport-first 首次渲染尚未构建 scopedVariables）：
+            // 不 continue，走下方 resolveStyleForPattern fallback，
+            // 让 reference capture 有机会获得自身颜色而非纯文本。
           }
           if (style == 0L) {
             style = theme.resolveStyleForPattern(capture.index)

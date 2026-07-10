@@ -160,6 +160,69 @@ public class TSLanguage extends TSNativeObject {
   }
 
   /**
+   * 获取语言自身报告的名称。
+   *
+   * <p>这是 v15 新增的 C API {@code ts_language_name} 的包装。对于旧版本（v14 及以下）的语言，
+   * 可能返回 {@code null}。
+   *
+   * @return 语言名称，若语言未提供则返回 {@code null}。
+   */
+  public String getLanguageName() {
+    checkAccess();
+    return Native.name(getNativeObject());
+  }
+
+  /**
+   * 获取语言的版本元数据。
+   *
+   * <p>返回一个长度为 3 的 {@code int} 数组，依次为 {@code [major, minor, patch]}。
+   * 对于旧版本（v14 及以下）的语言，返回 {@code null}。
+   *
+   * @return 版本元数据数组，若语言未提供则返回 {@code null}。
+   */
+  public int[] getMetadata() {
+    checkAccess();
+    return Native.metadata(getNativeObject());
+  }
+
+  /**
+   * 获取语言中所有超类型（supertype）的符号 id 列表。
+   *
+   * <p>对于旧版本（v14 及以下）的语言，返回空数组。
+   *
+   * @return 超类型符号 id 数组。
+   */
+  public int[] getSupertypes() {
+    checkAccess();
+    return Native.supertypes(getNativeObject());
+  }
+
+  /**
+   * 获取指定超类型下的所有子类型（subtype）符号 id 列表。
+   *
+   * <p>对于旧版本（v14 及以下）的语言，返回空数组。
+   *
+   * @param supertype 超类型符号 id。
+   * @return 子类型符号 id 数组。
+   */
+  public int[] getSubtypes(int supertype) {
+    checkAccess();
+    return Native.subtypes(getNativeObject(), supertype);
+  }
+
+  /**
+   * 检查此语言是否来自 WebAssembly 模块。
+   *
+   * <p>如果是 wasm 语言，则使用它的 {@link TSParser} 必须分配了 {@link TSWasmStore}。
+   *
+   * @return 如果是 wasm 语言则返回 {@code true}，否则返回 {@code false}。
+   */
+  public boolean isWasm() {
+    checkAccess();
+    return Native.isWasm(getNativeObject());
+  }
+
+  /**
    * Returns whether this language is external i.e. loaded with
    * {@link TSLanguage#loadLanguage(String, String)}.
    *
@@ -169,8 +232,31 @@ public class TSLanguage extends TSNativeObject {
     return getLibHandle() != 0;
   }
 
+  /**
+   * 创建此语言的另一个引用。
+   *
+   * <p>对于 wasm 语言，这会增加引用计数。返回的 {@link TSLanguage} 与原实例共享底层资源，
+   * 关闭其中一个不会影响另一个。
+   *
+   * @return 新的语言引用。
+   */
+  public TSLanguage copy() {
+    checkAccess();
+    final long ptr = Native.copy(getNativeObject());
+    if (ptr == 0) {
+      return null;
+    }
+    return TSLanguage.create(name, ptr);
+  }
+
   @Override
   public void close() {
+    // 先调用 ts_language_delete（在 dlclose 之前，确保语言指针仍有效）
+    // 对内嵌语言为空操作，对 wasm 语言减少引用计数
+    if (getNativeObject() != 0) {
+      Native.delete(getNativeObject());
+    }
+
     if (isExternal()) {
       Native.dlclose(getLibHandle());
       setLibHandle(0);
@@ -184,7 +270,8 @@ public class TSLanguage extends TSNativeObject {
 
   @Override
   protected void closeNativeObj() {
-    // no-op
+    // ts_language_delete 已在 close() 中提前调用，这里设为空操作
+    // 避免对已 dlclose 的语言指针再次调用 ts_language_delete
   }
 
   /**
@@ -290,5 +377,29 @@ public class TSLanguage extends TSNativeObject {
 
     @FastNative
     public static native short nextState(long pointer, short stateId, short symbol);
+
+    @FastNative
+    static native String name(long ptr);
+
+    @FastNative
+    static native int[] metadata(long ptr);  // [major, minor, patch]
+
+    @FastNative
+    static native int[] supertypes(long ptr);  // 符号 id 数组
+
+    @FastNative
+    static native int[] subtypes(long ptr, int supertype);  // 符号 id 数组
+
+    // 检查语言是否来自 wasm 模块（ts_language_is_wasm 总是可用，有 dummy 实现）
+    @FastNative
+    static native boolean isWasm(long ptr);
+
+    // 创建语言的另一个引用（wasm 语言会增加引用计数）
+    @FastNative
+    static native long copy(long ptr);
+
+    // 删除语言引用（wasm 语言会减少引用计数，内嵌语言为空操作）
+    @FastNative
+    static native void delete(long ptr);
   }
 }

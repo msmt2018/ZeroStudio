@@ -134,6 +134,43 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
   }
 
   /**
+   * Start running the given query on the given node, with a progress callback for cancellation.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_query_cursor_exec_with_options}.
+   * The progress callback is invoked periodically during iteration (via {@link #nextMatch()} or
+   * {@link #nextCapture(int[])}), reporting the current byte offset. If the callback returns
+   * {@code true}, the query is cancelled.
+   *
+   * <p>If {@code progressCallback} is {@code null}, this behaves identically to
+   * {@link #exec(TSQuery, TSNode)}.
+   *
+   * @param query            the query to execute.
+   * @param node             the root node to query on.
+   * @param progressCallback the progress callback, or {@code null} for no callback.
+   */
+  public void execWithOptions(TSQuery query, TSNode node, TSQueryProgressCallback progressCallback) {
+    Objects.requireNonNull(node, "TSNode cannot be null");
+    checkAccess();
+    if (query == null || !query.canAccess()) {
+      throw new IllegalArgumentException("Cannot execute invalid query");
+    }
+    if (!node.canAccess() || !node.getTree().canAccess() ||
+      (!isAllowChangedNodes() && node.hasChanges())) {
+      String msg = "Cannot execute query on invalid node. node=" + node + " node.canAccess=" +
+        node.canAccess() + " node.tree.canAccess=" + node.getTree().canAccess() +
+        " node.hasChanges=" + node.hasChanges() + " isAllowChangedNodes=" + isAllowChangedNodes();
+
+      throw new IllegalArgumentException(msg);
+    }
+
+    Native.execWithOptions(getNativeObject(), query.getNativeObject(), node, progressCallback);
+
+    isExecuted = true;
+    targetNode = node;
+    execQuery = query;
+  }
+
+  /**
    * @noinspection NullableProblems
    */
   @Override
@@ -204,14 +241,32 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
     Native.setMatchLimit(getNativeObject(), newLimit);
   }
 
-  public void setByteRange(int start, int end) {
+  /**
+   * Set the range of bytes in which a query will be executed.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_query_cursor_set_byte_range}.
+   *
+   * @param start 起始字节偏移（包含）。
+   * @param end   结束字节偏移（不包含）。
+   * @return 范围是否合法（{@code start <= end} 时为 {@code true}）。
+   */
+  public boolean setByteRange(int start, int end) {
     checkAccess();
-    Native.setByteRange(getNativeObject(), start, end);
+    return Native.setByteRange(getNativeObject(), start, end);
   }
 
-  public void setPointRange(TSPoint start, TSPoint end) {
+  /**
+   * Set the range of points in which a query will be executed.
+   *
+   * <p>This is the Java binding of tree-sitter 0.27 {@code ts_query_cursor_set_point_range}.
+   *
+   * @param start 起始 point（包含）。
+   * @param end   结束 point（不包含）。
+   * @return 范围是否合法。
+   */
+  public boolean setPointRange(TSPoint start, TSPoint end) {
     checkAccess();
-    Native.setPointRange(getNativeObject(), start, end);
+    return Native.setPointRange(getNativeObject(), start, end);
   }
 
   public TSQueryMatch nextMatch() {
@@ -268,10 +323,64 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
     Native.removeMatch(getNativeObject(), id);
   }
 
+  /**
+   * 获取下一个 capture（用于高亮）。这是 v15 新增的 API。
+   *
+   * <p>调用方可通过传入长度为 1 的 {@code captureIndexOut} 数组接收 capture 索引。
+   *
+   * @param captureIndexOut 长度为 1 的 int 数组，用于输出 capture_index；可为 {@code null}。
+   * @return 下一个 {@link TSQueryMatch}，若没有更多 capture 则返回 {@code null}。
+   */
+  public TSQueryMatch nextCapture(int[] captureIndexOut) {
+    checkAccess();
+    checkExecuted("nextCapture");
+    return Native.nextCapture(getNativeObject(), captureIndexOut);
+  }
+
+  /**
+   * 设置全包含式 byte 范围。只有完全落在 {@code [startByte, endByte)} 内的节点才会被查询。
+   * 这是 v15 新增的 API。
+   *
+   * @param startByte 起始字节偏移（包含）。
+   * @param endByte 结束字节偏移（不包含）。
+   * @return 范围是否合法。
+   */
+  public boolean setContainingByteRange(int startByte, int endByte) {
+    checkAccess();
+    return Native.setContainingByteRange(getNativeObject(), startByte, endByte);
+  }
+
+  /**
+   * 设置全包含式 point 范围。只有完全落在 {@code [start, end)} 内的节点才会被查询。
+   * 这是 v15 新增的 API。
+   *
+   * @param start 起始 point（包含）。
+   * @param end 结束 point（不包含）。
+   * @return 范围是否合法。
+   */
+  public boolean setContainingPointRange(TSPoint start, TSPoint end) {
+    checkAccess();
+    return Native.setContainingPointRange(getNativeObject(), start, end);
+  }
+
+  /**
+   * 限制 pattern 根节点搜索的起始深度。这是 v15 新增的 API。
+   *
+   * @param maxStartDepth 最大起始深度。
+   */
+  public void setMaxStartDepth(int maxStartDepth) {
+    checkAccess();
+    Native.setMaxStartDepth(getNativeObject(), maxStartDepth);
+  }
+
   @Override
   public void close() {
     isExecuted = false;
     targetNode = null;
+    // 释放 progress callback GlobalRef（如果在 execWithOptions 中设置过）
+    if (canAccess()) {
+      Native.releaseProgressCallback(getNativeObject());
+    }
     super.close();
   }
 
@@ -299,6 +408,15 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
     @FastNative
     static native void exec(long cursor, long query, TSNode node);
 
+    // tree-sitter 0.27 API：带 progress_callback 的 exec（用于查询取消）
+    @FastNative
+    static native void execWithOptions(long cursor, long query, TSNode node,
+        TSQueryProgressCallback progressCallback);
+
+    // 释放 execWithOptions 设置的 progress callback GlobalRef
+    @FastNative
+    static native void releaseProgressCallback(long cursor);
+
     @FastNative
     static native boolean exceededMatchLimit(long cursor);
 
@@ -309,13 +427,29 @@ public class TSQueryCursor extends TSNativeObject implements Iterable<TSQueryMat
     static native int getMatchLimit(long cursor);
 
     @FastNative
-    static native void setByteRange(long cursor, int start, int end);
+    static native boolean setByteRange(long cursor, int start, int end);
 
     @FastNative
-    static native void setPointRange(long cursor, TSPoint start, TSPoint end);
+    static native boolean setPointRange(long cursor, TSPoint start, TSPoint end);
 
     @FastNative
     static native TSQueryMatch nextMatch(long cursor);
+
+    // v15 新增 API：获取下一个 capture（用于高亮）
+    @FastNative
+    static native TSQueryMatch nextCapture(long cursor, int[] captureIndexOut);
+
+    // v15 新增 API：设置全包含式 byte 范围
+    @FastNative
+    static native boolean setContainingByteRange(long cursor, int startByte, int endByte);
+
+    // v15 新增 API：设置全包含式 point 范围
+    @FastNative
+    static native boolean setContainingPointRange(long cursor, TSPoint start, TSPoint end);
+
+    // v15 新增 API：限制 pattern 根节点搜索起始深度
+    @FastNative
+    static native void setMaxStartDepth(long cursor, int maxStartDepth);
 
     @FastNative
     static native void removeMatch(long cursor, int id);

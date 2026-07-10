@@ -106,6 +106,8 @@ class MainViewModel : ViewModel() {
       try {
         val isValid = withContext(Dispatchers.IO) { root.exists() && root.isDirectory }
         if (!isValid) {
+          // 项目已在存储中永久删除：移除历史记录条目与缓存，避免残留失效 item。
+          RecentProjectsManager.removeProjectAsync(context, root.absolutePath)
           _mainEvents.emit(
               MainEvent.ShowMessage(
                   com.itsaky.androidide.resources.R.string.msg_opened_project_does_not_exist,

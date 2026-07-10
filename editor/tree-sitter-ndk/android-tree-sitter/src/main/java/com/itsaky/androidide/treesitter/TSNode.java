@@ -217,7 +217,7 @@ public class TSNode extends TSNativeObject {
   public List<TSNode> findChildrenWithTypeReverse(final String type, final boolean namedOnly) {
     checkAccess();
     final var result = new ArrayList<TSNode>();
-    for (int i = (namedOnly ? getNamedChildCount() : getChildCount()) - 1; i > 0; --i) {
+    for (int i = (namedOnly ? getNamedChildCount() : getChildCount()) - 1; i >= 0; --i) {
       final var child = namedOnly ? getNamedChild(i) : getChild(i);
       if (child.isNull()) {
         continue;
@@ -279,6 +279,32 @@ public class TSNode extends TSNativeObject {
     checkAccess();
     getTree().checkAccess();
     return Native.getFieldNameForChild(this, childIndex);
+  }
+
+  /**
+   * 获取当前节点下包含指定后代节点的最小子节点。
+   *
+   * @param descendant 后代节点。
+   * @return 包含该后代的子节点。
+   */
+  public TSNode childWithDescendant(TSNode descendant) {
+    checkAccess();
+    getTree().checkAccess();
+    descendant.checkAccess();
+    descendant.getTree().checkAccess();
+    return Native.childWithDescendant(this, descendant);
+  }
+
+  /**
+   * 获取指定命名子节点的字段名。
+   *
+   * @param namedChildIndex 命名子节点的索引。
+   * @return 字段名或 <code>null</code>。
+   */
+  public String fieldNameForNamedChild(int namedChildIndex) {
+    checkAccess();
+    getTree().checkAccess();
+    return Native.fieldNameForNamedChild(this, namedChildIndex);
   }
 
   /**
@@ -656,6 +682,12 @@ public class TSNode extends TSNativeObject {
 
     @FastNative
     static native String getFieldNameForChild(TSNode self, int childIndex);
+
+    @FastNative
+    static native TSNode childWithDescendant(TSNode self, TSNode descendant);
+
+    @FastNative
+    static native String fieldNameForNamedChild(TSNode self, int namedChildIndex);
 
     @FastNative
     static native TSNode getChildByFieldId(TSNode self, int fieldId);

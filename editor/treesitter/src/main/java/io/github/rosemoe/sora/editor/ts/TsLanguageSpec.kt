@@ -28,6 +28,7 @@ import io.github.rosemoe.sora.editor.ts.predicate.Predicator
 import io.github.rosemoe.sora.editor.ts.predicate.TsPredicate
 import io.github.rosemoe.sora.editor.ts.predicate.builtin.MatchPredicate
 import java.io.Closeable
+import org.slf4j.LoggerFactory
 
 /**
  * Language specification for tree-sitter highlighter. This specification covers language code
@@ -59,6 +60,11 @@ open class TsLanguageSpec(
     val predicates: List<TsPredicate> = listOf(MatchPredicate),
 ) : Closeable {
 
+  companion object {
+    private val log = LoggerFactory.getLogger(TsLanguageSpec::class.java)
+  }
+
+
   /** The generated scm source code for querying */
   val querySource = localsScmSource + "\n" + highlightScmSource
 
@@ -66,7 +72,15 @@ open class TsLanguageSpec(
   val highlightScmOffset = localsScmSource.encodeToByteArray().size + 1
 
   /** The actual [TSQuery] object */
-  val tsQuery = TSQuery.create(language, querySource)
+  val tsQuery: TSQuery =
+      try {
+        TSQuery.create(language, querySource)
+      } catch (e: IllegalArgumentException) {
+        // 降级处理：querySource 为空或 query 编译失败时，使用 TSQuery.EMPTY。
+        // 避免抛异常破坏整个 language 创建（"全黑字" regression）。
+        // 调用方应通过 tsQuery.canAccess() / patternCount 检查是否可用。
+        TSQuery.EMPTY
+      }
 
   /** The first index of highlighting pattern */
   val highlightPatternOffset: Int
@@ -110,21 +124,23 @@ open class TsLanguageSpec(
           throw IllegalArgumentException("use non-ASCII characters in scm source is unexpected")
         }
       }
-      if (!tsQuery.canAccess()) {
-        throw IllegalArgumentException(
-            "Syntax highlights query is invalid, errOffset=" +
-                tsQuery.errorOffset +
-                ", errType=" +
-                tsQuery.errorType
-        )
-      }
-      if (tsQuery.errorType != TSQueryError.None) {
-        val region = if (tsQuery.errorOffset < highlightScmOffset) "locals" else "highlight"
-        val offset =
-            if (tsQuery.errorOffset < highlightScmOffset) tsQuery.errorOffset
-            else tsQuery.errorOffset - highlightScmOffset
-        throw IllegalArgumentException(
-            "bad scm sources: error ${tsQuery.errorType.name} occurs in $region range at offset $offset"
+      if (tsQuery.canAccess()) {
+        if (tsQuery.errorType != TSQueryError.None) {
+          val region = if (tsQuery.errorOffset < highlightScmOffset) "locals" else "highlight"
+          val offset =
+              if (tsQuery.errorOffset < highlightScmOffset) tsQuery.errorOffset
+              else tsQuery.errorOffset - highlightScmOffset
+          log.warn(
+              "bad scm sources: error {} occurs in {} range at offset {} (tsQuery still functional for partial highlights)",
+              tsQuery.errorType.name, region, offset,
+          )
+        }
+      } else {
+        // tsQuery.create 失败时使用 TSQuery.EMPTY（上面 try-catch 降级）。
+        // 不抛异常，让 language 仍可创建——只损失高亮能力，但避免"全黑字"regression。
+        log.warn(
+            "tsQuery cannot be accessed; highlighter will run with no capture rules for language='{}'",
+            language.name ?: "<unknown>",
         )
       }
     } catch (e: IllegalArgumentException) {

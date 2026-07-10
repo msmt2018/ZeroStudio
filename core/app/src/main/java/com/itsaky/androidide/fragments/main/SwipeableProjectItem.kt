@@ -71,6 +71,7 @@ fun SwipeableProjectItem(
     onPin: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    showOpenCount: Boolean = false,
 ) {
   val density = LocalDensity.current
   val maxRevealPx = with(density) { 150.dp.toPx() }
@@ -90,23 +91,10 @@ fun SwipeableProjectItem(
   // subtle "depress" parallax that pairs with the action menu reveal.
   val dragProgress = (abs(animatedDragOffset) / maxRevealPx).coerceIn(0f, 1f)
   val foregroundScale = 1f - dragProgress * 0.08f
-  val foregroundElevation = (6f * dragProgress).coerceAtLeast(2f)
+  // Shadow only appears while dragging so the collapsed item reads as a flat
+  // list row (no floating "card" wrapper) — see "多余的包裹层需要去除".
+  val foregroundElevation = 4f * dragProgress
   val foregroundAlpha = 1f - dragProgress * 0.05f
-
-  // Snap-back / snap-open logic when the user lifts the finger.
-  LaunchedEffect(rawDragOffset, isExpanded) {
-    if (rawDragOffset == 0f) return@LaunchedEffect
-    // Threshold is evaluated against the container width, approximated via
-    // maxRevealPx for a stable feel across screen sizes.
-    val expandedByDrag = abs(rawDragOffset) > maxRevealPx * collapseThresholdFraction
-    if (expandedByDrag != isExpanded) {
-      isExpanded = expandedByDrag
-    }
-    // After snap decision, the underlying target is the expanded or collapsed
-    // position. We re-target rawDragOffset which kicks off the spring.
-    val target = if (isExpanded) -maxRevealPx else 0f
-    if (rawDragOffset != target) rawDragOffset = target
-  }
 
   // Reset expansion when the project identity changes (e.g. list reordered).
   LaunchedEffect(project.path) {
@@ -115,14 +103,13 @@ fun SwipeableProjectItem(
   }
 
   Box(modifier = modifier.fillMaxWidth().height(58.dp)) {
-    // ---- Background layer: action menu (Pin + Delete), frosted ----
+    // ---- Background layer: action menu (Pin + Delete) ----
+    // 背景层不再使用高斯模糊——高斯模糊会遮挡整个菜单区域，导致按钮不可见。
+    // 高斯模糊改为设置在每个按钮的背景上（见 SwipeActionButton）。
     Row(
         modifier =
             Modifier.fillMaxSize()
                 .clip(RoundedCornerShape(12.dp))
-                // 毛玻璃：高斯模糊 + 半透明白色渐变叠层，模拟 iOS/Material
-                // 风格的 “Liquid Glass” 效果。
-                .blur(6.dp)
                 .background(
                     Brush.horizontalGradient(
                         listOf(
@@ -205,11 +192,11 @@ fun SwipeableProjectItem(
                   )
                 }
                 .clip(RoundedCornerShape(12.dp))
-                // Frosted glass surface: a thin white-tinted background with
-                // a soft blur underneath so the action menu behind it
-                // bleeds through slightly. This is the "高斯模糊的半透明
-                // 磨砂效果" the design called for.
-                .background(Color(0xFFF6F8FB).copy(alpha = 0.86f))
+                // Flat white surface matching the page background — removes
+                // the visible "card wrapper" rectangle the user reported
+                // ("多余的包裹层需要去除"), while still occluding the action
+                // menu behind it when collapsed.
+                .background(Color.White)
                 .clickable {
                   // A click on the card always opens the project, even if
                   // the user happens to be in the "expanded" state.
@@ -259,21 +246,35 @@ fun SwipeableProjectItem(
         }
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-          Text(
-              project.name,
-              fontWeight = FontWeight.Bold,
-              fontSize = 12.sp,
-              color = Color(0xFF1E1E1E),
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-          )
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                project.name,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 10.sp,
+                color = Color(0xFF1E1E1E),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+          }
           Text(
               project.path,
-              fontSize = 8.sp,
+              fontSize = 9.sp,
               color = Color.Gray,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
           )
+        }
+        // 🔥点击次数：固定悬浮在右边边缘（仅高频项目显示）
+        if (showOpenCount && project.openCount > 0) {
+          Text(
+              "🔥${project.openCount}",
+              fontSize = 9.sp,
+              color = Color(0xFF00897B),
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+          )
+          Spacer(modifier = Modifier.width(4.dp))
         }
         // Faint open affordance on the right side. Hidden while the
         // action menu is fully expanded so the gesture reads as
@@ -299,6 +300,9 @@ fun SwipeableProjectItem(
  * 右侧滑出的单个动作按钮（Pin / Delete）。用 progress 驱动 opacity 与
  * 缩放，保证只有当前景已经划开一段距离时才完全可见，未划开时是淡出
  * 的占位，触感更细腻。
+ *
+ * 按钮为圆形，背景使用半透明高斯模糊（红/蓝半透明毛玻璃），尺寸紧凑
+ * （直径 28dp，较原来 64dp 宽减少约 56%）。
  */
 @Composable
 private fun SwipeActionButton(
@@ -311,32 +315,27 @@ private fun SwipeActionButton(
 ) {
   val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(120), label = "btn-alpha")
   val scale = 0.85f + 0.15f * progress
+  // 按钮背景：按钮颜色（红/蓝）+ 半透明 + 高斯模糊。
+  // alpha 0.6f 让颜色明显可见（红色/蓝色清晰），同时保持半透明质感。
   val bg by
       animateColorAsState(
-          targetValue = tint.copy(alpha = 0.10f + 0.10f * progress),
+          targetValue = tint.copy(alpha = 0.6f),
           animationSpec = tween(140),
           label = "btn-bg",
       )
-  Column(
+  Box(
       modifier =
           Modifier.graphicsLayer { this.alpha = alpha }
               .scale(scale)
-              .clip(RoundedCornerShape(10.dp))
+              .size(28.dp)
+              .clip(CircleShape)
+              // 高斯模糊设置在按钮背景上，而非遮挡整个菜单
+              .blur(4.dp)
               .background(bg)
-              .clickable(enabled = visible, onClick = onClick)
-              .padding(horizontal = 12.dp, vertical = 6.dp)
-              .width(64.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
+              .clickable(enabled = visible, onClick = onClick),
+      contentAlignment = Alignment.Center,
   ) {
-    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(18.dp))
-    Spacer(modifier = Modifier.height(2.dp))
-    Text(
-        label,
-        color = tint,
-        fontSize = 9.sp,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-    )
+    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(16.dp))
   }
   // Hint to the compiler that the content color is fine.
   LocalContentColor

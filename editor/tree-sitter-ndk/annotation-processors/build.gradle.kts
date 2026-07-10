@@ -19,8 +19,7 @@
 plugins { id("java-library") }
 
 dependencies {
-  // implementation(projects.editor.treeSitterNdk.annotations)
-  implementation("com.itsaky.androidide.treesitter:annotations:4.3.2")
+  implementation(projects.editor.treeSitterNdk.annotations)
   implementation(libs.common.com.squareup.javapoet)
 
   implementation(libs.google.auto.service.annotations)

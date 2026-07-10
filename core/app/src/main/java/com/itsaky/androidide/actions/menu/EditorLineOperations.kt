@@ -60,20 +60,23 @@ object EditorLineOperations {
   private const val KOTLIN_IF_QUERY = """(if_expression) @if"""
 
   // Helper extension functions to fix TreeSitter errors
+  // 修复：原实现仅在正常路径末尾调用 tsQuery.close()，cursor 遍历抛异常时 TSQuery 泄漏。
+  // 改为 tsQuery.use {} 包裹整个查询流程，确保任何路径下 native 资源都被释放。
   private fun TSTree.executeQuery(language: TSLanguage, query: String): List<TSQueryMatch> {
     return try {
       val tsQuery = TSQuery.create(language, query)
-      val matches = mutableListOf<TSQueryMatch>()
-      TSQueryCursor.create().use {
-        it.exec(tsQuery, this.rootNode)
-        var match = it.nextMatch()
-        while (match != null) {
-          matches.add(match)
-          match = it.nextMatch()
+      tsQuery.use { q ->
+        val matches = mutableListOf<TSQueryMatch>()
+        TSQueryCursor.create().use { cursor ->
+          cursor.exec(q, this.rootNode)
+          var match = cursor.nextMatch()
+          while (match != null) {
+            matches.add(match)
+            match = cursor.nextMatch()
+          }
         }
+        matches
       }
-      tsQuery.close()
-      matches
     } catch (e: Exception) {
       e.printStackTrace()
       emptyList()
@@ -1158,48 +1161,51 @@ object EditorLineOperations {
     val langImpl = LanguageAnalysisBridge.getTsLanguage(editor) ?: return emptyList()
     val content = editor.text
     val symbols = mutableListOf<CodeSymbol>()
+    // 修复：原实现 query.close() 仅在正常路径末尾执行，且 match.captures[0] 在空 captures 时
+    // 抛 IndexOutOfBoundsException 导致 query 泄漏。改用 .use{} 保证任意路径释放，并安全访问 captures。
     val query = TSQuery.create(langImpl, queryScm)
-    val matches = tree.executeQuery(langImpl, queryScm)
-    matches.forEach { match: TSQueryMatch ->
-      val node = match.captures[0].node
-      val nameNode = match.captures.find { c -> query.getCaptureNameForId(c.index) == "name" }?.node
-      if (nameNode != null) {
-        val name = nameNode.getText(content).toString()
-        val range = node.toLspRange(content)
-        val selectionRange = nameNode.toLspRange(content)
+    return query.use { q ->
+      val matches = tree.executeQuery(langImpl, queryScm)
+      matches.forEach { match: TSQueryMatch ->
+        val node = match.captures.firstOrNull()?.node ?: return@forEach
+        val nameNode = match.captures.find { c -> q.getCaptureNameForId(c.index) == "name" }?.node
+        if (nameNode != null) {
+          val name = nameNode.getText(content).toString()
+          val range = node.toLspRange(content)
+          val selectionRange = nameNode.toLspRange(content)
 
-        val classCapture =
-            match.captures.find { c -> query.getCaptureNameForId(c.index) == "class" }
-        val methodCapture =
-            match.captures.find { c -> query.getCaptureNameForId(c.index) == "method" }
-        val fieldCapture =
-            match.captures.find { c -> query.getCaptureNameForId(c.index) == "field" }
+          val classCapture =
+              match.captures.find { c -> q.getCaptureNameForId(c.index) == "class" }
+          val methodCapture =
+              match.captures.find { c -> q.getCaptureNameForId(c.index) == "method" }
+          val fieldCapture =
+              match.captures.find { c -> q.getCaptureNameForId(c.index) == "field" }
 
-        when {
-          classCapture != null -> {
-            symbols.add(CodeSymbol(name, "", "Class", range, selectionRange))
-          }
-          methodCapture != null -> {
-            val params =
-                match.captures
-                    .find { c -> query.getCaptureNameForId(c.index) == "params" }
-                    ?.node
-                    ?.getText(content)
-                    ?.toString() ?: "()"
-            val bodyNode = node.getChildByFieldName("body")
-            val bodyRange = bodyNode?.toLspRange(content)
-            symbols.add(CodeSymbol(name, params, "Method", range, selectionRange, bodyRange))
-          }
-          fieldCapture != null -> {
-            val typeNode = node.parent?.getChildByFieldName("type")
-            val detail = typeNode?.getText(content)?.toString() ?: ""
-            symbols.add(CodeSymbol(name, detail, "Field", range, selectionRange))
+          when {
+            classCapture != null -> {
+              symbols.add(CodeSymbol(name, "", "Class", range, selectionRange))
+            }
+            methodCapture != null -> {
+              val params =
+                  match.captures
+                      .find { c -> q.getCaptureNameForId(c.index) == "params" }
+                      ?.node
+                      ?.getText(content)
+                      ?.toString() ?: "()"
+              val bodyNode = node.getChildByFieldName("body")
+              val bodyRange = bodyNode?.toLspRange(content)
+              symbols.add(CodeSymbol(name, params, "Method", range, selectionRange, bodyRange))
+            }
+            fieldCapture != null -> {
+              val typeNode = node.parent?.getChildByFieldName("type")
+              val detail = typeNode?.getText(content)?.toString() ?: ""
+              symbols.add(CodeSymbol(name, detail, "Field", range, selectionRange))
+            }
           }
         }
       }
+      symbols.sortedBy { it.range.start.line }
     }
-    query.close()
-    return symbols.sortedBy { it.range.start.line }
   }
 
   private fun Position.isBefore(other: Position): Boolean {

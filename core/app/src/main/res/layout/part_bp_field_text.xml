@@ -14,7 +14,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textAppearance="?attr/textAppearanceLabelMedium"
-        android:textColor="#A0FFFFFF"
+        android:textColor="#99000000"
         tools:text="Element Name"
         xmlns:tools="http://schemas.android.com/tools"/>
 
@@ -31,7 +31,7 @@
             android:id="@+id/bpft_input"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#F0FFFFFF"
+            android:textColor="#FF1E1E1E"
             android:singleLine="true"/>
     </com.google.android.material.textfield.TextInputLayout>
 </LinearLayout>

@@ -105,7 +105,8 @@ class MainFragment : BaseFragment() {
   @OptIn(ExperimentalMaterial3Api::class)
   @Composable
   private fun ZeroStudioMainLayout() {
-    val scrollState = rememberScrollState()
+    val recentScrollState = rememberScrollState()
+    val frequentScrollState = rememberScrollState()
     var selectedNav by rememberSaveable { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -200,101 +201,111 @@ class MainFragment : BaseFragment() {
               }
           )
         } else {
-          Column(
-            modifier =
-                Modifier.fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp)
-          ) {
-          QuickStartGradientCard()
+          Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier =
+                    Modifier.fillMaxSize()
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp)
+            ) {
+              // 卡片固定在顶部：新建项目 + 打开项目 + 克隆仓库（不随列表滚动）
+              QuickStartGradientCard()
 
-          Spacer(modifier = Modifier.height(20.dp))
+              Spacer(modifier = Modifier.height(20.dp))
 
-          Row(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1.5f)) {
-              SectionTitle(stringResource(R.string.main_recent_projects))
-              if (historyState.isEmpty()) {
-                Text(
-                    stringResource(R.string.main_empty_history),
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(8.dp),
-                )
-              } else {
-                // Pinned items always float to the top, then the most recent
-                // first. The list is rendered with a LazyColumn so the swipe
-                // gestures on each row do not fight the outer vertical
-                // scroll state.
-                val recentSorted =
-                    historyState.sortedWith(
-                        compareByDescending<ProjectHistory> { it.isPinned }
-                            .thenByDescending { it.timestamp }
+              // 两个独立列表左右并排，各自独立上下滑动。
+              // 最近项目占较宽比例（weight 1.5f），高频项目占较窄比例（weight 0.9f）。
+              Row(modifier = Modifier.fillMaxSize()) {
+                // ── 最近项目列表（左）──
+                Column(modifier = Modifier.weight(1.5f).fillMaxHeight()) {
+                  SectionTitle(stringResource(R.string.main_recent_projects))
+                  if (historyState.isEmpty()) {
+                    Text(
+                        stringResource(R.string.main_empty_history),
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(8.dp),
                     )
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                  items(recentSorted, key = { it.path }) { project ->
-                    SwipeableProjectItem(
-                        project = project,
-                        onClick = { openProject(File(project.path)) },
-                        onPin = { performPinToggle(project) },
-                        onDelete = { performDelete(project) },
+                  } else {
+                    val recentSorted =
+                        historyState.sortedWith(
+                            compareByDescending<ProjectHistory> { it.isPinned }
+                                .thenByDescending { it.timestamp }
+                        )
+                    Column(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .verticalScroll(recentScrollState)
+                                .padding(end = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                      recentSorted.forEach { project ->
+                        SwipeableProjectItem(
+                            project = project,
+                            onClick = { openProjectWithCheck(project) },
+                            onPin = { performPinToggle(project) },
+                            onDelete = { performDelete(project) },
+                            showOpenCount = false,
+                        )
+                      }
+                    }
+                  }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // ── 高频项目列表（右）──
+                Column(modifier = Modifier.weight(0.9f).fillMaxHeight()) {
+                  SectionTitle(stringResource(R.string.main_frequent_projects))
+                  if (historyState.isEmpty()) {
+                    Text(
+                        stringResource(R.string.main_empty_history),
+                        fontSize = 12.sp,
+                        color = Color.Gray,
                     )
+                  } else {
+                    val frequentSorted =
+                        historyState.sortedWith(
+                            compareByDescending<ProjectHistory> { it.isPinned }
+                                .thenByDescending { it.openCount }
+                        )
+                    Column(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .verticalScroll(frequentScrollState)
+                                .padding(start = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                      frequentSorted.forEach { project ->
+                        SwipeableProjectItem(
+                            project = project,
+                            onClick = { openProjectWithCheck(project) },
+                            onPin = { performPinToggle(project) },
+                            onDelete = { performDelete(project) },
+                            showOpenCount = true,
+                        )
+                      }
+                    }
                   }
                 }
               }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            // 工具与服务区域：悬浮在底部，带高斯模糊背景
+            Box(
+                modifier =
+                    Modifier.align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 20.dp))
+            ) {
+              Surface(
+                modifier = Modifier.matchParentSize().blur(radius = 18.dp),
+                color = Color.White.copy(alpha = 0.9f),
+              ) {}
 
-            Column(modifier = Modifier.weight(0.9f)) {
-              SectionTitle(stringResource(R.string.main_frequent_projects))
-              if (historyState.isNotEmpty()) {
-                val frequentSorted =
-                    historyState.sortedWith(
-                        compareByDescending<ProjectHistory> { it.isPinned }
-                            .thenByDescending { it.openCount }
-                    )
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                  items(frequentSorted, key = { it.path }) { project ->
-                    SwipeableProjectItem(
-                        project = project,
-                        onClick = { openProject(File(project.path)) },
-                        onPin = { performPinToggle(project) },
-                        onDelete = { performDelete(project) },
-                    )
-                  }
-                }
-              } else {
-                Text(
-                    stringResource(R.string.main_empty_history),
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                )
+              Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                SectionTitle(stringResource(R.string.main_tools_services))
+                ToolsServiceGrid()
               }
-            }
-          }
-          }
-
-          // 工具与服务区域
-          Box(
-            modifier =
-                Modifier.align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 20.dp))
-          ) {
-            Surface(
-              modifier = Modifier.matchParentSize().blur(radius = 18.dp), // 模糊半径
-              color = Color.White.copy(alpha = 0.9f),
-            ) {}
-
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-              SectionTitle(stringResource(R.string.main_tools_services))
-              ToolsServiceGrid()
             }
           }
         }
@@ -514,5 +525,29 @@ class MainFragment : BaseFragment() {
 
   private fun openProject(root: File) {
     (requireActivity() as MainActivity).openProject(root)
+  }
+
+  /**
+   * 点击最近 / 高频项目 item 时的入口。若项目已在存储中永久删除（目录不存在），
+   * 则立即移除该 item、持久化记录与内存缓存，并提示用户；否则正常打开。
+   */
+  private fun openProjectWithCheck(project: ProjectHistory) {
+    val root = File(project.path)
+    if (root.exists() && root.isDirectory) {
+      openProject(root)
+      return
+    }
+    // 项目已永久删除：移除 item + 记录 + 缓存
+    viewLifecycleScope.launch {
+      RecentProjectsManager.removeProjectAsync(requireContext(), project.path)
+      historyState.removeAll { it.path == project.path }
+      withContext(Dispatchers.Main) {
+        Toast.makeText(
+            requireContext(),
+            R.string.msg_opened_project_does_not_exist,
+            Toast.LENGTH_SHORT,
+        ).show()
+      }
+    }
   }
 }

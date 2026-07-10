@@ -283,8 +283,30 @@ class HostBridgeServer(
         const val HELLO_READ_TIMEOUT_MS: Long = 5_000L
 
         /**
+         * 固定的 abstract LocalServerSocket 名字, IDE 端与宿主 app 共用。
+         *
+         * 为什么用固定名字而不是 per-uid / per-project:
+         *   - IDE 端 AppReadyAutoConnect 在 Application.onCreate 启动, 此时还不知道
+         *     用户会调试哪个 project, 只能 bind 一个全局唯一的名字
+         *   - 宿主 app 的名字由 IdeDebuggerInitScriptPlugin 在 build time 注入到
+         *     manifest placeholder (ide_local_server_name), build time 也无法知道
+         *     IDE 进程的 uid
+         *   - 双方唯一能对齐的是一个固定的、约定好的常量
+         *   - 单设备上通常只装一个 IDE, 冲突概率极低; 即便冲突, start() 的
+         *     compareAndSet 也会优雅跳过第二次 bind
+         *
+         * 宿主端 HostAttachAgentBootstrap 读 manifest placeholder 拿到这个名字后,
+         * 走 HostAttachAgent.connectToIdeLocalServer 反连 IDE。
+         */
+        const val WELL_KNOWN_NAME = "ide-debug-bridge"
+
+        /**
          * 默认的 LocalServerSocket 名字生成 (per-uid 唯一):
          *   ide-debug-bridge-<uid>
+         *
+         * 保留用于兼容旧调用方 / 测试。生产路径 (AppReadyAutoConnect) 已改用
+         * [WELL_KNOWN_NAME], 因为 IDE 与宿主 app 进程 uid 不同, per-uid 名字
+         * 双方对不齐。
          */
         fun defaultName(uid: Int = android.os.Process.myUid()): String =
             "ide-debug-bridge-$uid"

@@ -23,45 +23,50 @@ class KotlinAstAnalyzer : ScriptAnalyzer {
     val versionVariables = extractVersionVariables(text)
     val parser = TSParser.create()
     parser.language = TSLanguageKotlin.getInstance()
-    val tree = parser.parseString(null, text)
 
-    val rootNode = tree.rootNode
+    // 修复资源泄漏：使用 try-finally 确保 TSParser/TSTree 在异常时也能被关闭。
+    // 修复前：parser/tree 仅在正常流程末尾手动 close，traverse() 抛异常时泄漏 native 资源。
+    try {
+      val tree = parser.parseString(null, text) ?: return Pair(repos, deps)
+      tree.use { t ->
+        val rootNode = t.rootNode
 
-    fun traverse(node: TSNode, currentBlock: String?) {
-      if (!node.canAccess()) return
+        fun traverse(node: TSNode, currentBlock: String?) {
+          if (!node.canAccess()) return
 
-      var nextBlock = currentBlock
+          var nextBlock = currentBlock
 
-      if (node.type == "call_expression") {
-        val idNode = node.getChild(0)
-        if (idNode != null && (idNode.type == "identifier" || idNode.type == "simple_identifier")) {
-          val funcName = text.substring(idNode.startByte / 2, idNode.endByte / 2)
+          if (node.type == "call_expression") {
+            val idNode = node.getChild(0)
+            if (idNode != null && (idNode.type == "identifier" || idNode.type == "simple_identifier")) {
+              val funcName = text.substring(idNode.startByte / 2, idNode.endByte / 2)
 
-          if (
-              funcName == "dependencies" ||
-                  funcName == "repositories" ||
-                  funcName == "pluginManagement"
-          ) {
-            nextBlock = funcName
-          } else if (currentBlock == "dependencies") {
-            if (DependencyDslConfigurations.isDependencyConfiguration(funcName)) {
-              extractDependency(node, funcName, text, file, deps, versionVariables)
+              if (
+                  funcName == "dependencies" ||
+                      funcName == "repositories" ||
+                      funcName == "pluginManagement"
+              ) {
+                nextBlock = funcName
+              } else if (currentBlock == "dependencies") {
+                if (DependencyDslConfigurations.isDependencyConfiguration(funcName)) {
+                  extractDependency(node, funcName, text, file, deps, versionVariables)
+                }
+              } else if (currentBlock == "repositories" || currentBlock == "pluginManagement") {
+                extractRepository(node, funcName, text, file, repos)
+              }
             }
-          } else if (currentBlock == "repositories" || currentBlock == "pluginManagement") {
-            extractRepository(node, funcName, text, file, repos)
+          }
+
+          for (i in 0 until node.childCount) {
+            traverse(node.getChild(i), nextBlock)
           }
         }
-      }
 
-      for (i in 0 until node.childCount) {
-        traverse(node.getChild(i), nextBlock)
+        traverse(rootNode, null)
       }
+    } finally {
+      parser.close()
     }
-
-    traverse(rootNode, null)
-
-    tree.close()
-    parser.close()
 
     return Pair(repos, deps)
   }

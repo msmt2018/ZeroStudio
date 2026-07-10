@@ -21,8 +21,7 @@ android {
 }
 
 dependencies {
-  implementation(libs.androidide.ts)
-  implementation("com.itsaky.androidide.treesitter:annotations:4.3.2")
-  // implementation(projects.editor.treeSitterNdk.annotations)
+  implementation(projects.editor.treeSitterNdk.androidTreeSitter)
+  implementation(projects.editor.treeSitterNdk.annotations)
   annotationProcessor(projects.editor.treeSitterNdk.annotationProcessors)
 }

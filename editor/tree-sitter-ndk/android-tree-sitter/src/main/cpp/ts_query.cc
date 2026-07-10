@@ -31,17 +31,20 @@ static jlong TSQuery_newQuery(JNIEnv *env,
                               jlong language,
                               jstring source) {
   req_nnp(env, language);
-  const char *c_source;
-  uint32_t source_length = env->GetStringLength(source);
-  c_source = env->GetStringUTFChars(source, nullptr);
-  auto error_offset = new uint32_t;
-  auto error_type = new TSQueryError;
+  const char *c_source = env->GetStringUTFChars(source, nullptr);
+  // C2 修复：使用 GetStringUTFLength 获取 UTF-8 字节长度，
+  // 而非 GetStringLength 返回的 UTF-16 码元数。
+  // ts_query_new 的 source_length 参数期望字节数。
+  uint32_t source_length = (uint32_t) env->GetStringUTFLength(source);
+  // C1 修复：使用栈分配而非堆分配，避免内存泄漏。
+  uint32_t error_offset = 0;
+  TSQueryError error_type = TSQueryErrorNone;
   TSQuery *query = ts_query_new((TSLanguage *) language,
                                 c_source,
                                 source_length,
-                                error_offset,
-                                error_type);
-  fillQuery(env, queryObject, *error_offset, *error_type);
+                                &error_offset,
+                                &error_type);
+  fillQuery(env, queryObject, error_offset, error_type);
   env->ReleaseStringUTFChars(source, c_source);
   return (jlong) query;
 }
@@ -90,6 +93,7 @@ static jobjectArray TSQuery_predicatesForPattern(JNIEnv *env,
     const TSQueryPredicateStep *predicate = (predicates + i);
     jobject obj = _marshalQueryPredicateStep(env, predicate);
     env->SetObjectArrayElement(result, i, obj);
+    env->DeleteLocalRef(obj);
   }
 
   return result;
@@ -125,6 +129,7 @@ TSQuery_captureNameForId(JNIEnv *env, jclass self, jlong query, jint id) {
   uint32_t count;
   const char
       *name = ts_query_capture_name_for_id((TSQuery *) query, id, &count);
+  if (name == nullptr) return nullptr;
   return (jstring) env->NewStringUTF(name);
 }
 
@@ -133,6 +138,7 @@ TSQuery_stringValueForId(JNIEnv *env, jclass self, jlong query, jint id) {
   req_nnp(env, query);
   uint32_t count;
   const char *str = ts_query_string_value_for_id((TSQuery *) query, id, &count);
+  if (str == nullptr) return nullptr;
   return env->NewStringUTF(str);
 }
 
@@ -179,6 +185,45 @@ static jint TSQuery_captureQuantifierForId(JNIEnv *env,
   return query_quantifier_id(env, quantifier);
 }
 
+// 创建 query 的副本，返回新 query 的指针（v15 新增）
+static jlong TSQuery_copy(JNIEnv *env, jclass self, jlong query) {
+  req_nnp(env, query);
+  return (jlong) ts_query_copy((TSQuery *) query);
+}
+
+// 获取指定 pattern 在 query 源码中结束的字节偏移（v15 新增）
+static jint TSQuery_endByteForPattern(JNIEnv *env,
+                                      jclass self,
+                                      jlong query,
+                                      jint pattern) {
+  req_nnp(env, query);
+  return (jint) ts_query_end_byte_for_pattern((TSQuery *) query, pattern);
+}
+
+// 禁用指定 pattern，阻止其匹配（v15 新增）
+static void TSQuery_disablePattern(JNIEnv *env,
+                                   jclass self,
+                                   jlong query,
+                                   jint pattern) {
+  req_nnp(env, query);
+  ts_query_disable_pattern((TSQuery *) query, pattern);
+}
+
+// 禁用指定名称的 capture，阻止其在查询结果中出现
+static void TSQuery_disableCapture(JNIEnv *env,
+                                   jclass self,
+                                   jlong query,
+                                   jbyteArray name,
+                                   jint length) {
+  req_nnp(env, query);
+  req_nnp(env, name, "capture name");
+  jbyte *nm = env->GetByteArrayElements(name, nullptr);
+  ts_query_disable_capture((TSQuery *) query,
+                           reinterpret_cast<const char *>(nm),
+                           (uint32_t) length);
+  env->ReleaseByteArrayElements(name, nm, JNI_ABORT);
+}
+
 int query_quantifier_id(JNIEnv *env, TSQuantifier quantifier) {
   switch (quantifier) {
     case TSQuantifierZero:
@@ -215,4 +260,11 @@ void TSQuery_Native__SetJniMethods(JNINativeMethod *methods, int count) {
   SET_JNI_METHOD(methods, TSQuery_Native_stringValueForId, TSQuery_stringValueForId);
   SET_JNI_METHOD(methods, TSQuery_Native_captureQuantifierForId,
                  TSQuery_captureQuantifierForId);
+  SET_JNI_METHOD(methods, TSQuery_Native_copy, TSQuery_copy);
+  SET_JNI_METHOD(methods, TSQuery_Native_endByteForPattern,
+                 TSQuery_endByteForPattern);
+  SET_JNI_METHOD(methods, TSQuery_Native_disablePattern,
+                 TSQuery_disablePattern);
+  SET_JNI_METHOD(methods, TSQuery_Native_disableCapture,
+                 TSQuery_disableCapture);
 }

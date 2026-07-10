@@ -57,7 +57,6 @@ private fun localIdeArtifact(artifact: String): File? {
       when (artifact) {
         "plugin" -> "androidide-plugin.jar"
         "plugin-config" -> "plugin-config.jar"
-        "logger" -> "logger.jar"
         "logsender" -> "logsender.aar"
         "ide-log-plugin" -> "ide-log-plugin-1.0.0.aar"
         "ide-debugger" -> "ide-debugger.aar"

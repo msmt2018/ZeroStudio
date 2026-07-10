@@ -103,7 +103,10 @@ class IdeLogInitScriptPlugin : Plugin<Project> {
 
       try {
         variant.withRuntimeConfiguration {
-          listOf(IDE_LOG_PLUGIN_ARTIFACT, IDE_DEBUGGER_ARTIFACT).forEach { artifact ->
+          // 只注入 ide-log-plugin (host 端 JdwpServer + LogCaptureService)。
+          // 不注入 ide-debugger — 那是 IDE 进程内的 JDWP 客户端引擎,
+          // 不应打进宿主 app (分层违规 + 增体积)。
+          listOf(IDE_LOG_PLUGIN_ARTIFACT).forEach { artifact ->
             val dep = project.dependencies.ideDependency(
                 LIB_GROUP_TOOLING, artifact, project.isTestEnv
             )

@@ -41,7 +41,7 @@ dependencies {
 
   // PR-2: depend on the shared logwire module for the IDE ↔ plugin
   // transport that carries JDWP-bridge notifications.
-  implementation(project(":debugger:log-runtime:logwire"))
+  implementation(project(":debugger:Breakpoint-debugger:logwire"))
 
   // Phase G1: JavaParser for extracting class signatures from .java source files.
   implementation(libs.common.javaparser)

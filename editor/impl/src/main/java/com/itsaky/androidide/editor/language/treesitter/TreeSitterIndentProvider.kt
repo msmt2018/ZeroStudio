@@ -32,6 +32,7 @@ import com.itsaky.androidide.treesitter.TSQueryCapture
 import com.itsaky.androidide.treesitter.TSQueryCursor
 import com.itsaky.androidide.treesitter.TSQueryMatch
 import com.itsaky.androidide.treesitter.TSTree
+import com.itsaky.androidide.treesitter.api.TreeSitterQueryMatch
 import com.itsaky.androidide.treesitter.predicate.SetDirectiveHandler
 import com.itsaky.androidide.utils.IntPair
 import io.github.rosemoe.sora.editor.ts.TsAnalyzeWorker
@@ -97,6 +98,9 @@ class TreeSitterIndentProvider(
     val document = analyzer.document
     TSParser.create().use { parser ->
       parser.language = document.parser.language
+      // 升级：接入 tree-sitter 0.27 parser setTimeout，缩进计算在用户交互（如回车）时触发，
+      // 设较短超时防止大文档卡顿；超时 parseString 返回 null → 返回默认缩进（安全降级）。
+      parser.setTimeout(2_000_000L) // 2s
 
       var closeTree = true
       val tree =
@@ -460,11 +464,13 @@ class TreeSitterIndentProvider(
    */
   private fun getIndents(query: TSQuery, cursor: TSQueryCursor): IndentsContainer {
     val indents = IndentsContainer()
+    // 一次性获取所有 capture 名称并缓存，避免在循环内对每个 capture 都做 JNI 调用
+    val captureNames = query.getCaptureNames()
 
     var match: TSQueryMatch? = cursor.nextMatch()
     while (match != null) {
       for (capture in match.captures) {
-        val captureName = query.getCaptureNameForId(capture.index)
+        val captureName = captureNames[capture.index]
         if (!indents.containsKey(captureName)) {
           log.warn("Unknown capture name in indents query: {}", captureName)
           continue
@@ -472,6 +478,8 @@ class TreeSitterIndentProvider(
 
         indents[captureName]!![capture.node.nodeId] = capture to match.metadata
       }
+      // 回收 match 对象，避免对象池耗尽导致每次都新建 Java 包装对象
+      (match as? TreeSitterQueryMatch?)?.recycle()
       match = cursor.nextMatch()
     }
 

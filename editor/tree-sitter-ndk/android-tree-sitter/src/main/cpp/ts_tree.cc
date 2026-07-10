@@ -75,7 +75,9 @@ static jobjectArray TSTree_changedRanges(JNIEnv *env,
 
   for (uint32_t i = 0; i < count; i++) {
     TSRange *r = (ranges + i);
-    env->SetObjectArrayElement(arr, (jint)i, _marshalRange(env, *r));
+    jobject obj = _marshalRange(env, *r);
+    env->SetObjectArrayElement(arr, (jint)i, obj);
+    env->DeleteLocalRef(obj);
   }
 
   free(ranges);
@@ -103,7 +105,9 @@ static jobjectArray TSTree_includedRanges(JNIEnv *env,
 
   for (uint32_t i = 0; i < count; i++) {
     TSRange *r = (ranges + i);
-    env->SetObjectArrayElement(arr, (jint)i, _marshalRange(env, *r));
+    jobject obj = _marshalRange(env, *r);
+    env->SetObjectArrayElement(arr, (jint)i, obj);
+    env->DeleteLocalRef(obj);
   }
 
   free(ranges);
@@ -117,6 +121,14 @@ static jlong TSTree_getLanguage(JNIEnv *env, __TS_ATTR_UNUSED jclass self,
   return (jlong)ts_tree_language((TSTree *)tree);
 }
 
+// ts_tree_print_dot_graph：将语法树以 DOT 图格式写入指定的文件描述符。
+// 这是 tree-sitter 0.27 的调试 API，传入负数 fd 会关闭输出。
+static void TSTree_printDotGraph(JNIEnv *env, __TS_ATTR_UNUSED jclass self,
+                                 jlong tree, jint file_descriptor) {
+  req_nnp(env, tree);
+  ts_tree_print_dot_graph((TSTree *)tree, (int)file_descriptor);
+}
+
 void TSTree_Native__SetJniMethods(JNINativeMethod *methods,
                                   __TS_ATTR_UNUSED int count) {
   SET_JNI_METHOD(methods, TSTree_Native_edit, TSTree_edit)
@@ -128,4 +140,5 @@ void TSTree_Native__SetJniMethods(JNINativeMethod *methods,
   SET_JNI_METHOD(methods, TSTree_Native_changedRanges, TSTree_changedRanges)
   SET_JNI_METHOD(methods, TSTree_Native_includedRanges, TSTree_includedRanges)
   SET_JNI_METHOD(methods, TSTree_Native_getLanguage, TSTree_getLanguage)
+  SET_JNI_METHOD(methods, TSTree_Native_printDotGraph, TSTree_printDotGraph)
 }

@@ -21,6 +21,7 @@ import com.itsaky.androidide.treesitter.TSNode
 import com.itsaky.androidide.treesitter.TSQuery
 import com.itsaky.androidide.treesitter.TSQueryCursor
 import com.itsaky.androidide.treesitter.TSQueryMatch
+import com.itsaky.androidide.treesitter.TSQueryProgressCallback
 import com.itsaky.androidide.treesitter.TSTree
 import org.slf4j.LoggerFactory
 
@@ -40,6 +41,9 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
     crossinline matchCondition: (TSQueryMatch?) -> Boolean = { true },
     crossinline whileTrue: (TSQueryMatch?) -> Boolean = { true },
     crossinline onClosedOrEdited: () -> Unit = {},
+    noinline cancelChecker: (() -> Boolean)? = null,
+    matchLimit: Int = -1,
+    crossinline onExceededMatchLimit: () -> Unit = {},
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -57,13 +61,18 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
   }
 
   val rootNode = tree.rootNode
-  if (!rootNode.canAccess() || rootNode.hasChanges()) {
+  // isAllowChangedNodes=true 时跳过 hasChanges 检查——高亮查询允许在已编辑的 tree 上执行，
+  // 结果基于编辑前的结构（略微过时但不会崩溃），下一次 reparse 会更新 tree。
+  // 这是 sora-editor 上游的标准用法：TsAnalyzeManager.insert/delete 会给渲染副本 tree
+  // 打 edit 标记（hasChanges=true），LineSpansGenerator.captureRegion 仍需正常查询。
+  if (!rootNode.canAccess() || (!isAllowChangedNodes && rootNode.hasChanges())) {
     if (debugLogging) {
       log.debug(
           "$debugName, Cannot execute query, tree's root node is not accessible or has been edited",
           "rootNode=$rootNode",
           "rootNode.canAccess=${rootNode.canAccess()}",
           "rootNode.hasChanges=${rootNode.canAccess() && rootNode.hasChanges()}",
+          "isAllowChangedNodes=$isAllowChangedNodes",
       )
     }
     return null
@@ -82,6 +91,9 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
       },
       whileTrue = whileTrue,
       onClosedOrEdited = onClosedOrEdited,
+      cancelChecker = cancelChecker,
+      matchLimit = matchLimit,
+      onExceededMatchLimit = onExceededMatchLimit,
       debugName = debugName,
       debugLogging = debugLogging,
       action = action,
@@ -102,6 +114,9 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
     crossinline matchCondition: (TSQueryMatch?) -> Boolean = { true },
     crossinline whileTrue: (TSQueryMatch?) -> Boolean = { true },
     crossinline onClosedOrEdited: () -> Unit = {},
+    noinline cancelChecker: (() -> Boolean)? = null,
+    matchLimit: Int = -1,
+    crossinline onExceededMatchLimit: () -> Unit = {},
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -115,11 +130,14 @@ inline fun <ResultT> TSQueryCursor.safeExecQueryCursor(
         match != null &&
             canAccess() &&
             node.canAccess() &&
-            !node.hasChanges() &&
+            (isAllowChangedNodes || !node.hasChanges()) &&
             matchCondition(match)
       },
       whileTrue = whileTrue,
       onClosedOrEdited = onClosedOrEdited,
+      cancelChecker = cancelChecker,
+      matchLimit = matchLimit,
+      onExceededMatchLimit = onExceededMatchLimit,
       debugName = debugName,
       debugLogging = debugLogging,
       action = action,
@@ -134,6 +152,9 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     crossinline matchCondition: (TSQueryMatch?) -> Boolean,
     crossinline whileTrue: (TSQueryMatch?) -> Boolean,
     crossinline onClosedOrEdited: () -> Unit,
+    noinline cancelChecker: (() -> Boolean)? = null,
+    matchLimit: Int = -1,
+    crossinline onExceededMatchLimit: () -> Unit = {},
     debugName: String = "",
     debugLogging: Boolean = false,
     crossinline action: (TSQueryMatch) -> ResultT,
@@ -146,18 +167,35 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     return null
   }
 
-  if (!node.canAccess() || node.hasChanges()) {
+  if (!node.canAccess() || (!isAllowChangedNodes && node.hasChanges())) {
     if (debugLogging) {
       log.debug(
           "$debugName: Cannot execute query, node is not accessible or has been edited",
           "node.canAccess=${node.canAccess()}",
           "node.hasChanges=${node.canAccess() && node.hasChanges()}",
+          "isAllowChangedNodes=${isAllowChangedNodes}",
       )
     }
     return null
   }
 
-  exec(query, node)
+  // 升级：接入 tree-sitter 0.27 的 setMatchLimit，为全树查询设置 pending match 上限，
+  // 防止病态/超大文件导致内存无界增长。配合 didExceedMatchLimit 在循环后诊断是否超限。
+  // matchLimit <= 0 时不设置（保持默认无限制），逐行高亮路径不传入。
+  // 必须在 exec 之前设置，确保 cursor 从一开始就受限制。
+  if (matchLimit > 0) {
+    setMatchLimit(matchLimit)
+  }
+
+  // 升级：当调用方提供 cancelChecker 时，使用 tree-sitter 0.27 的 execWithOptions
+  // (ts_query_cursor_exec_with_options) 注册进度回调，使单次 nextMatch() 内部也可被取消。
+  // 这解决了全树查询（如代码块分析）在超大文件上单次迭代无法中断导致的 ANR 风险。
+  // cancelChecker 为 null 时退化为普通 exec，保持原有行为与性能（避免逐行高亮路径的 JNI GlobalRef 开销）。
+  if (cancelChecker != null) {
+    execWithOptions(query, node, TSQueryProgressCallback { cancelChecker() })
+  } else {
+    exec(query, node)
+  }
   var match = nextMatch()
   while (matchCondition(match) && whileTrue(match)) {
 
@@ -170,7 +208,7 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
             "cursor.canAccess=${canAccess()}",
             "query.canAccess=${query.canAccess()}",
             "node.canAccess=${node.canAccess()}",
-            "node.hasChanges=${node.canAccess() && node.hasErrors()}",
+            "node.hasChanges=${node.canAccess() && node.hasChanges()}",
         )
       }
       onClosedOrEdited()
@@ -186,6 +224,11 @@ internal inline fun <ResultT> TSQueryCursor.doSafeExecQueryCursor(
     }
 
     match = nextMatch()
+  }
+
+  // 升级：循环结束后检查是否因 match limit 超限而静默丢弃了 match，通知调用方。
+  if (matchLimit > 0 && didExceedMatchLimit()) {
+    onExceededMatchLimit()
   }
 
   if (recycleNodeAfterUse && node is TreeSitterNode && !node.isRecycled) {

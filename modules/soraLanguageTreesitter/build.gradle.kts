@@ -42,7 +42,7 @@ android {
 
 dependencies {
   compileOnly(libs.common.editor)
-  api(libs.androidide.ts)
+  api(projects.editor.treeSitterNdk.androidTreeSitter)
   testImplementation(libs.tests.junit)
   androidTestImplementation(libs.tests.androidx.junit)
   androidTestImplementation(libs.tests.androidx.espresso.core)

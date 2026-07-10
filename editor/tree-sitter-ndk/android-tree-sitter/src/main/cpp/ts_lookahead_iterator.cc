@@ -57,6 +57,7 @@ static jstring TSLookaheadIterator_currentSymbolName(JNIEnv *env,
   req_nnp(env, pointer);
   const char *name =
       ts_lookahead_iterator_current_symbol_name((TSLookaheadIterator *) pointer);
+  if (name == nullptr) return nullptr;
   return env->NewStringUTF(name);
 }
 

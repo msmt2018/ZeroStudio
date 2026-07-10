@@ -17,21 +17,26 @@
 
 plugins {
   id("com.android.library")
-  id("com.vanniktech.maven.publish.base")
-  id("android-tree-sitter.ts")
 }
 
 description = "Android Java bindings for Tree Sitter."
 
 android {
   namespace = "com.itsaky.androidide.treesitter"
+  ndkVersion = "27.1.12297006"
 
   defaultConfig {
     // 将 consumer-rules.pro 合并到消费者（TinaIDE app）的 R8 规则中。
     // 缺少此声明会导致 R8 删除/重命名 JNI 依赖的类（如 TreeSitter.loadLibrary()），
     // 引发运行时 UnsatisfiedLinkError。
     consumerProguardFiles("consumer-rules.pro")
+
+    ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")) }
+
+    externalNativeBuild { cmake { arguments("-DCMAKE_CXX_FLAGS=-std=c++17") } }
   }
+
+  buildFeatures { buildConfig = false }
 
   // 关键：确保生成并打包 `libandroid-tree-sitter.so`。
   // 上层（TinaIDE）会在运行时调用 `System.loadLibrary("android-tree-sitter")`，
@@ -42,30 +47,22 @@ android {
       version = "3.22.1"
     }
   }
-
-  defaultConfig {
-    externalNativeBuild {
-      cmake {
-        // 额外参数由 `android-tree-sitter.ts` 插件注入（AUTOGEN_HEADERS）。
-        // 此处仅声明存在，避免在某些 AGP 版本/配置下被视为“未启用 native build”。
-      }
-    }
-  }
 }
 
 dependencies {
-  implementation(projects.annotations)
-  annotationProcessor(projects.annotationProcessors)
+  implementation(projects.editor.treeSitterNdk.annotations)
+  annotationProcessor(projects.editor.treeSitterNdk.annotationProcessors)
 
-  testImplementation(projects.treeSitterAidl)
-  testImplementation(projects.treeSitterJava)
-  testImplementation(projects.treeSitterJson)
-  testImplementation(projects.treeSitterKotlin)
-  testImplementation(projects.treeSitterLog)
-  testImplementation(projects.treeSitterXml)
-  testImplementation(projects.treeSitterPython)
+  // 语法包保持远程 Maven 依赖（本地仅核心 android-tree-sitter 已本地化）
+  testImplementation(projects.editor.treeSitterNdk.aidl)
+  testImplementation(libs.androidide.ts.java)
+  testImplementation(libs.androidide.ts.json)
+  testImplementation(libs.androidide.ts.kotlin)
+  testImplementation(libs.androidide.ts.log)
+  testImplementation(libs.androidide.ts.xml)
+  testImplementation(libs.androidide.ts.python)
   testImplementation(libs.tests.google.truth)
   testImplementation(libs.tests.junit)
   testImplementation(libs.tests.robolectric)
-  testImplementation(libs.tests.mockito)
+  testImplementation(libs.tests.mockito.kotlin)
 }

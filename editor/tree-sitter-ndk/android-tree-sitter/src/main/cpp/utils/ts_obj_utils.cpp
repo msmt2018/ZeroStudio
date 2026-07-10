@@ -248,12 +248,20 @@ TSNode _unmarshalNode(JNIEnv *env, jobject javaObject) {
 
 // TreeCursorNode
 jobject _marshalTreeCursorNode(JNIEnv *env, TreeCursorNode node) {
-  return env->CallStaticObjectMethod(objectFactoryClass,
+  // node.name (field name) 在大多数节点上为 nullptr；node.type 理论上不会为 nullptr，
+  // 但此处一并做防御性处理。NewStringUTF(nullptr) 是未定义行为，必须避免。
+  jstring typeStr = node.type != nullptr ? env->NewStringUTF(node.type) : nullptr;
+  jstring nameStr = node.name != nullptr ? env->NewStringUTF(node.name) : nullptr;
+  jobject result = env->CallStaticObjectMethod(objectFactoryClass,
                                      factory_createTreeCursorNode,
-                                     env->NewStringUTF(node.type),
-                                     env->NewStringUTF(node.name),
+                                     typeStr,
+                                     nameStr,
                                      (jint) node.startByte,
                                      (jint) node.endByte);
+  // CallStaticObjectMethod 不会消费传入的 LocalRef，需手动释放。
+  if (typeStr != nullptr) env->DeleteLocalRef(typeStr);
+  if (nameStr != nullptr) env->DeleteLocalRef(nameStr);
+  return result;
 }
 
 // TSPoint
@@ -269,6 +277,12 @@ TSPoint _unmarshalPoint(JNIEnv *env, jobject javaObject) {
       (uint32_t) env->GetIntField(javaObject, pointRowField),
       (uint32_t) env->GetIntField(javaObject, pointColumnField),
   };
+}
+
+// 将 TSPoint 写回已存在的 Java TSPoint 对象（原地更新）
+void _marshalPointToExisting(JNIEnv *env, jobject javaObject, TSPoint point) {
+  env->SetIntField(javaObject, pointRowField, (jint) point.row);
+  env->SetIntField(javaObject, pointColumnField, (jint) point.column);
 }
 
 // TSInputEdit
@@ -291,7 +305,9 @@ jobject _marshalMatch(JNIEnv *env, TSQueryMatch match) {
       env->NewObjectArray(match.capture_count, captureClass, nullptr);
   for (int i = 0; i < match.capture_count; i++) {
     const TSQueryCapture *c = match.captures + i;
-    env->SetObjectArrayElement(captures, i, _marshalCapture(env, *c));
+    jobject cap = _marshalCapture(env, *c);
+    env->SetObjectArrayElement(captures, i, cap);
+    env->DeleteLocalRef(cap);
   }
 
   return env->CallStaticObjectMethod(objectFactoryClass,
@@ -332,6 +348,24 @@ TSRange _unmarshalRange(JNIEnv *env, jobject javaObject) {
           env, env->GetObjectField(javaObject, rangeClassEndPointField)),
       (uint32_t) env->GetIntField(javaObject, rangeClassStartByteField),
       (uint32_t) env->GetIntField(javaObject, rangeClassEndByteField)};
+}
+
+// 将 TSRange 写回已存在的 Java TSRange 对象（原地更新）
+void _marshalRangeToExisting(JNIEnv *env, jobject javaObject, TSRange range) {
+  env->SetIntField(javaObject, rangeClassStartByteField, (jint) range.start_byte);
+  env->SetIntField(javaObject, rangeClassEndByteField, (jint) range.end_byte);
+
+  // startPoint 和 endPoint 是 TSPoint 对象，需要写回其 row/column 字段
+  jobject start_point = env->GetObjectField(javaObject, rangeClassStartPointField);
+  if (start_point != nullptr) {
+    _marshalPointToExisting(env, start_point, range.start_point);
+    env->DeleteLocalRef(start_point);
+  }
+  jobject end_point = env->GetObjectField(javaObject, rangeClassEndPointField);
+  if (end_point != nullptr) {
+    _marshalPointToExisting(env, end_point, range.end_point);
+    env->DeleteLocalRef(end_point);
+  }
 }
 
 jobjectArray createRangeArr(JNIEnv *env, jint size) {

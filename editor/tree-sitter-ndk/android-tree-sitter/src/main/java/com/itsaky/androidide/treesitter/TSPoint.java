@@ -47,6 +47,20 @@ public class TSPoint {
     return TSObjectFactoryProvider.getFactory().createPoint(row, column);
   }
 
+  /**
+   * 根据编辑操作更新此 point，使其与编辑后的源代码保持同步。
+   *
+   * <p>这是 tree-sitter 0.27 {@code ts_point_edit} 的包装。此方法会原地修改此 point，
+   * 并返回更新后的字节偏移量。
+   *
+   * @param currentByte 此 point 当前对应的字节偏移量。
+   * @param edit 编辑操作。
+   * @return 更新后的字节偏移量。
+   */
+  public int edit(int currentByte, TSInputEdit edit) {
+    return TSUtils.pointEdit(this, currentByte, edit);
+  }
+
   @Override
   public String toString() {
     return "TSPoint(Row: " + this.row + ", Column: " + this.column + ")";

@@ -30,6 +30,7 @@ import com.itsaky.androidide.treesitter.api.TreeSitterQueryCapture
 import com.itsaky.androidide.treesitter.api.safeExecQueryCursor
 import com.itsaky.androidide.treesitter.string.UTF16String
 import java.util.Stack
+import org.slf4j.LoggerFactory
 
 private typealias TSNodeIndices = Pair<Int, Int>
 
@@ -46,7 +47,17 @@ private fun TSNode.indices(): TSNodeIndices {
  * @param spec Language specification, which should the same as highlighter's
  * @author Rosemoe
  */
-class TsScopedVariables(tree: TSTree, text: UTF16String, val spec: TsLanguageSpec) {
+class TsScopedVariables(
+    tree: TSTree,
+    text: UTF16String,
+    val spec: TsLanguageSpec,
+    cancelChecker: (() -> Boolean)? = null,
+    matchLimit: Int = 0,
+) {
+
+  companion object {
+    private val log = LoggerFactory.getLogger(TsScopedVariables::class.java)
+  }
 
   private val rootScope: Scope
 
@@ -64,11 +75,22 @@ class TsScopedVariables(tree: TSTree, text: UTF16String, val spec: TsLanguageSpe
     if (needsWalk && spec.localsDefinitionIndices.isNotEmpty()) {
       TSQueryCursor.create().use { cursor ->
         val captures = mutableListOf<TSQueryCapture>()
+        // 使用 node 版本的 safeExecQueryCursor，让它统一负责 rootNode 的回收，
+        // 避免在此处再重复获取一次 rootNode（减少一次 JNI marshal + 对象池获取/回收）。
         cursor.safeExecQueryCursor(
             query = spec.tsQuery,
-            tree = tree,
+            node = rootNode,
             recycleNodeAfterUse = true,
             onClosedOrEdited = { captures.clear() },
+            // 升级：注册 0.27 进度回调，使全树 locals 查询单次迭代也可响应取消，
+            // 避免超大文件上变量收集耗时过长阻塞工作线程。
+            cancelChecker = cancelChecker,
+            // 升级：接入 0.27 setMatchLimit，为全树 locals 查询设置 pending match 上限，
+            // 防止病态文件内存无界增长；超限时告警（局部变量解析可能不全）。
+            matchLimit = matchLimit,
+            onExceededMatchLimit = {
+              log.warn("TsScopedVariables: locals query exceeded match limit, scoped variables may be incomplete")
+            },
             debugName = "TsScopedVariables.init()",
         ) { match ->
           if (spec.queryPredicator.doPredicate(spec.predicates, text, match)) {
@@ -135,9 +157,11 @@ class TsScopedVariables(tree: TSTree, text: UTF16String, val spec: TsLanguageSpe
           }
         }
       }
+    } else {
+      // safeExecQueryCursor 未被调用（needsWalk=false 或 localsDefinitionIndices 为空），
+      // rootNode 未被回收，需手动回收。
+      (rootNode as? TreeSitterNode?)?.recycle()
     }
-
-    (rootNode as? TreeSitterNode?)?.recycle()
   }
 
   data class Scope(

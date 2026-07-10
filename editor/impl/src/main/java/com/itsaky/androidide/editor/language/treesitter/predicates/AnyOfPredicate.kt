@@ -41,12 +41,14 @@ object AnyOfPredicate : TreeSitterPredicate() {
     get() = "any-of"
 
   override fun canHandle(steps: List<TsClientPredicateStep>): Boolean {
-    return steps.size > 4 &&
+    // 修复：size > 4 → size >= 4（支持单个字符串的情况 #any-of? @cap "s" Done）
+    // 修复：subList(2, lastIndex - 1) → subList(2, lastIndex)（原代码漏掉最后一个字符串）
+    return steps.size >= 4 &&
         steps.let {
           it[0].predicateType == TSQueryPredicateStep.Type.String &&
               it[1].predicateType == TSQueryPredicateStep.Type.Capture &&
               it[it.lastIndex].predicateType == TSQueryPredicateStep.Type.Done &&
-              it.subList(2, it.lastIndex - 1).all { step ->
+              it.subList(2, it.lastIndex).all { step ->
                 step.predicateType == TSQueryPredicateStep.Type.String
               }
         }
@@ -60,7 +62,8 @@ object AnyOfPredicate : TreeSitterPredicate() {
       syntheticCaptures: TsSyntheticCaptureContainer,
   ): PredicateResult {
     val captured = getCaptureContent(tsQuery, match, predicateSteps[1].content, text)
-    val toMatch = predicateSteps.subList(2, predicateSteps.lastIndex - 1).map { it.content }
+    // 修复：subList(2, lastIndex - 1) → subList(2, lastIndex)（原代码漏掉最后一个字符串）
+    val toMatch = predicateSteps.subList(2, predicateSteps.lastIndex).map { it.content }
     for (capture in captured) {
       if (capture !in toMatch) {
         return PredicateResult.REJECT

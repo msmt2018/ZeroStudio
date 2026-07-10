@@ -33,7 +33,7 @@ dependencies {
   implementation(libs.common.editor)
   implementation(libs.common.utilcode)
   implementation(libs.common.lsp4j.jsonrpc)
-  implementation(libs.androidide.ts)
+  implementation(projects.editor.treeSitterNdk.androidTreeSitter)
   implementation(libs.androidide.ts.xml)
 
   implementation(projects.core.actions)

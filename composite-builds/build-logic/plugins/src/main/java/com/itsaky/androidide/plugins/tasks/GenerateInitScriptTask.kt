@@ -62,7 +62,6 @@ abstract class GenerateInitScriptTask : DefaultTask() {
                         // IdeLogInitScriptPlugin can inject them into debuggable variants.
                         classpath name: "androidide-plugin"
                         classpath name: "plugin-config"
-                        classpath name: "logger"
                     }
                 }
 

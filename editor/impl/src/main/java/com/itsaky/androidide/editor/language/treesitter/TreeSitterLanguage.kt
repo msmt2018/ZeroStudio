@@ -48,19 +48,22 @@ abstract class TreeSitterLanguage(
 
   private lateinit var tsTheme: TsTheme
   internal lateinit var languageSpec: TreeSitterLanguageSpec
-  private lateinit var _indentProvider: TreeSitterIndentProvider
-  private val analyzer by lazy { TreeSitterAnalyzeManager(languageSpec.spec, tsTheme) }
+  private var _indentProvider: TreeSitterIndentProvider? = null
+  // 使用 Lazy 委托以便在 destroy() 中通过 isInitialized() 检查是否已创建
+  private val analyzerLazy = lazy { TreeSitterAnalyzeManager(languageSpec.spec, tsTheme) }
+  private val analyzer by analyzerLazy
   private val newlineHandlersLazy by lazy { createNewlineHandlers() }
 
   private var languageScheme: LanguageScheme? = null
 
-  private val indentProvider: TreeSitterIndentProvider
+  private val indentProvider: TreeSitterIndentProvider?
     get() {
-      if (!this::_indentProvider.isInitialized) {
-        this._indentProvider =
-            TreeSitterIndentProvider(languageSpec, analyzer.analyzeWorker!!, getTabSize())
+      // 修复 NPE：analyzer.analyzeWorker 可能为 null（analyzer 尚未 rerun/reset），
+      // 此时返回 null，由调用方降级处理
+      if (_indentProvider == null) {
+        val worker = analyzer.analyzeWorker ?: return null
+        _indentProvider = TreeSitterIndentProvider(languageSpec, worker, getTabSize())
       }
-
       return _indentProvider
     }
 
@@ -125,10 +128,11 @@ abstract class TreeSitterLanguage(
       }
 
       val indents =
-          this.indentProvider.getIndentsForLines(
+          // indentProvider 可能为 null（analyzer 尚未初始化），此时降级为默认缩进
+          this.indentProvider?.getIndentsForLines(
               content = content.reference,
               positions = linesToReq,
-          )
+          ) ?: return DEF_IDENT_ADV
 
       if (indents.size == 1) {
         val indent = indents[0]
@@ -181,6 +185,10 @@ abstract class TreeSitterLanguage(
   }
 
   override fun destroy() {
+    // 修复资源泄漏：如果 analyzer 已创建，必须销毁以停止工作线程和释放 native 资源
+    if (analyzerLazy.isInitialized()) {
+      analyzer.destroy()
+    }
     this.languageSpec.close()
     this.languageScheme = null
   }
