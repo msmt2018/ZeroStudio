@@ -380,7 +380,6 @@ class GradleBuildService :
             arrayOf(
                 "ide-log-plugin-1.0.0.aar",
                 "ide-debugger-host.aar",
-                "logger.jar",
                 "logsender.aar",
                 "androidide-plugin.jar",
                 "plugin-config.jar",

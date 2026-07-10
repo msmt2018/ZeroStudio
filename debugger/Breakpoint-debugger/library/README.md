@@ -6,7 +6,7 @@ ZeroStudio 调试器运行时产物的打包聚合模块。它本身不含源码
 
 ## 产物
 
-构建后输出 `build/distributions/debugger-library.zip`,内含以下 6 个产物:
+构建后输出 `build/distributions/debugger-library.zip`,内含以下 5 个产物:
 
 ### 注入宿主 app 的运行时产物
 
@@ -16,23 +16,25 @@ ZeroStudio 调试器运行时产物的打包聚合模块。它本身不含源码
 | `ide-log-plugin-1.0.0.aar` | `:debugger:Breakpoint-debugger:ide-log-plugin` | AAR | **宿主端** JdwpServer + LogCaptureService,注入宿主 app |
 | `logsender.aar` | `:logging:logsender` | AAR | 日志接收端,编辑器底部抽屉接收宿主 app 全部日志 |
 
-### Gradle 构建工具链产物 (不进宿主 app)
+### Gradle 构建工具链产物 (不进宿主 app,但必须随 zip 分发)
 
 | 打包文件名 | 来源模块 | 类型 | 用途 |
 | --- | --- | --- | --- |
 | `androidide-plugin.jar` | `:tooling:plugin` | JAR | Gradle init-script 插件本体 (`IdeLogInitScriptPlugin` / `IdeDebuggerInitScriptPlugin`),构建用户项目时加载 |
-| `plugin-config.jar` | `:tooling:plugin-config` | JAR | Gradle 插件配置,init script classpath 依赖 |
-| `logger.jar` | `:logging:logger` | JAR | 日志门面,init script classpath 依赖 |
+| `plugin-config.jar` | `:tooling:plugin-config` | JAR | Gradle 插件配置 (`LogSenderConfig`),init script classpath 依赖 |
 
-> **注意:** `androidide-plugin.jar` / `plugin-config.jar` / `logger.jar` 虽然不进宿主 app APK,
+> **注意:** `androidide-plugin.jar` / `plugin-config.jar` 虽然不进宿主 app APK,
 > 但它们是 Gradle daemon 构建用户项目时的 init script classpath 依赖
-> (见 `GenerateInitScriptTask`),必须随 zip 分发到文件系统,否则 Gradle 构建会崩溃。
+> (见 `GenerateInitScriptTask` 的 `classpath name: "androidide-plugin"` / `"plugin-config"`),
+> 必须随 zip 分发到文件系统,否则 Gradle 构建会崩溃。
 
 ## 不打包的产物
 
-`ide-debugger.aar` (IDE 端 JDWP 客户端引擎) **不打包** — 它是 IDE 进程内运行的代码,
-已通过 IDE APK 自身编译包含,不需要从 zip 解压。`IdeDebuggerInitScriptPlugin` 和
-`IdeLogInitScriptPlugin` 也不再将它注入宿主 app。
+- `ide-debugger.aar` (IDE 端 JDWP 客户端引擎) — IDE 进程内运行的代码,IDE APK 自身编译包含,
+  不需要从 zip 解压,也不注入宿主 app。
+- `logger.jar` (`:logging:logger`) — 历史遗留,Gradle 插件代码 (`tooling:plugin` /
+  `tooling:plugin-config`) 不引用 `logging:logger` 的任何类,init script classpath
+  不再需要它。
 
 ## 构建
 

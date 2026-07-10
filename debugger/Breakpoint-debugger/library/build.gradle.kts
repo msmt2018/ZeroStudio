@@ -34,12 +34,6 @@ val runtimeArtifacts = listOf(
         "ide-log-plugin-1.0.0.aar",
     ),
     RuntimeArtifact(
-        ":logging:logger",
-        "jar",
-        "libs/logger.jar",
-        "logger.jar",
-    ),
-    RuntimeArtifact(
         ":logging:logsender",
         "assembleRelease",
         "outputs/aar/logsender-release.aar",
