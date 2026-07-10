@@ -30,7 +30,7 @@ static jint JNI_VERSION = JNI_VERSION_1_6;
 static jint JNI_VERSION = JNI_VERSION_10;
 #endif
 
-extern "C" TSLanguage *tree_sitter_java();
+extern "C" const TSLanguage *tree_sitter_java();
 
 static jlong TSLanguageJava_getInstance(JNIEnv *env, jclass clazz) {
     return (jlong) tree_sitter_java();
