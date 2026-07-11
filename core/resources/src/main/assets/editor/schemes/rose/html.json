@@ -24,6 +24,16 @@
       "fg": "@comment",
       "italic": true
     },
+    "text": {
+      "fg": "@onSurface",
+      "maybeHexColor": true
+    },
+    "keyword": {
+      "fg": "@keyword"
+    },
+    "operator": {
+      "fg": "@operator"
+    },
     "punctuation.bracket": {
       "fg": "@xml.tag",
       "bold": true
