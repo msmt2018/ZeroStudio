@@ -11,7 +11,10 @@ include("${NDK_COMMON_DIR}/common-config.cmake")
 
 # 确保编译器能找到手动创建的 "ts_html.h" 和 "ts__onload.h"
 # 以及 scanner.c 依赖的 "tag.h"
-# (tree_sitter/parser.h 等头文件由 common-config.cmake 自动创建符号链接解析)
+# tree_sitter/ 目录下的 parser.h / alloc.h / array.h / ts_assert.h 是从
+# tree-sitter 0.27 源码复制的本地副本 (html 的 parser.c 由 0.27 生成,
+# 需要新版 4 参数 REDUCE 宏; 旧版语法模块如 aidl/toml 各自维护兼容旧版
+# 的 parser.h 副本, 不可混用)。
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # 定义源文件
