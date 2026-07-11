@@ -10,7 +10,8 @@ get_filename_component(NDK_COMMON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." 
 include("${NDK_COMMON_DIR}/common-config.cmake")
 
 # 确保编译器能找到手动创建的 "ts_html.h" 和 "ts__onload.h"
-# 以及 scanner.c 依赖的 "tag.h" 和 "tree_sitter/" 头文件
+# 以及 scanner.c 依赖的 "tag.h"
+# (tree_sitter/parser.h 等头文件由 common-config.cmake 自动创建符号链接解析)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # 定义源文件
