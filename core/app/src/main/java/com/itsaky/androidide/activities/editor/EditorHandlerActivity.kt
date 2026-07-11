@@ -45,6 +45,7 @@ import com.itsaky.androidide.editor.language.treesitter.AidlLanguage
 import com.itsaky.androidide.editor.language.treesitter.CLang
 import com.itsaky.androidide.editor.language.treesitter.CmakeLanguage
 import com.itsaky.androidide.editor.language.treesitter.CppLang
+import com.itsaky.androidide.editor.language.treesitter.HtmlLanguage
 import com.itsaky.androidide.editor.language.treesitter.JavaLanguage
 import com.itsaky.androidide.editor.language.treesitter.JsonLanguage
 import com.itsaky.androidide.editor.language.treesitter.KotlinLanguage
@@ -259,6 +260,9 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_CBPS, CmakeLanguage.FACTORY)
     registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_CMLISTSTXT, CmakeLanguage.FACTORY)
     registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_CMCACHE, CmakeLanguage.FACTORY)
+    registerTreeSitterLanguage(HtmlLanguage.TS_TYPE, HtmlLanguage.FACTORY)
+    registerTreeSitterLanguage(HtmlLanguage.TS_TYPE_HTM, HtmlLanguage.FACTORY)
+    registerTreeSitterLanguage(HtmlLanguage.TS_TYPE_XHTML, HtmlLanguage.FACTORY)
   }
 
   private fun <T : TreeSitterLanguage> registerTreeSitterLanguage(
