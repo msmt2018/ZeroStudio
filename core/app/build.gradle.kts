@@ -243,7 +243,7 @@ dependencies {
   implementation(projects.core.lspApi)
   implementation(projects.core.projects)
   implementation(projects.core.resources)
-  implementation(projects.debugger.library)
+  implementation(projects.debugger.breakpointDebugger.library)
   implementation(projects.modules.zeroMcpServer)
   implementation(projects.modules.zeroOnboardingGuide)
   implementation(projects.editor.impl)
@@ -268,7 +268,7 @@ dependencies {
   implementation(projects.tooling.api)
  
   implementation(projects.tooling.pluginConfig)
-  implementation(projects.debugger.logRuntime.logwire)
+  implementation(projects.debugger.breakpointDebugger.logwire)
   implementation(projects.utilities.buildInfo)
   implementation(projects.utilities.lookup)
   implementation(projects.utilities.flashbar)
