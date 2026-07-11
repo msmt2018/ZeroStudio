@@ -17,13 +17,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # 定义源文件
 # parser.c: Tree-sitter 生成的语法解析代码
 # scanner.c: 手写的外部扫描器代码 (HTML 标签扫描)
-# tag.h: scanner.c 依赖的标签类型定义
+# tag.h: scanner.c 依赖的标签类型定义 (HTML 语法独有, 其它语言无此文件)
 # tree-sitter-html.cpp: JNI 绑定代码
 # ${TS_DIR}/src/lib.c: Tree-sitter 核心运行时代码
 add_library(${CMAKE_PROJECT_NAME} SHARED
         "${TS_DIR}/src/lib.c"
         parser.c
         scanner.c
+        tag.h
         tree-sitter-html.cpp
 )
 
