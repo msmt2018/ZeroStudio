@@ -500,7 +500,20 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
 
   override fun openFile(file: File, selection: Range?): CodeEditorView? {
     val range = selection ?: Range.NONE
+    // 图片文件 (PNG / JPG / GIF / WebP / BMP 等位图) 走内部 ImagePreviewFragment
+    // 预览, 不再用外部 Intent.ACTION_VIEW 调系统图片查看器 (会把用户切出 IDE).
+    // SVG / XML 矢量图不在此列 (isImage 判定的是位图), 它们以文本编辑器打开.
     if (ImageUtils.isImage(file)) {
+      val ext = file.extension.lowercase()
+      val tabId = fragmentTabManager?.openFileTab(
+        filePath = file.absolutePath,
+        fileExtension = ext,
+      )
+      if (tabId != null) {
+        log.info("Opened image preview tab {} for {}", tabId, file)
+        return null
+      }
+      // tab 没注册 (理论上不会) → 回退到外部 Intent
       openImage(this, file)
       return null
     }
