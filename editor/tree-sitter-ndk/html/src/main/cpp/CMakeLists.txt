@@ -13,8 +13,10 @@ include("${NDK_COMMON_DIR}/common-config.cmake")
 # 以及 scanner.c 依赖的 "tag.h"
 # tree_sitter/ 目录下的头文件是混合版本兼容副本:
 #   parser.h  — 基于 aidl 模块的旧版副本 (含 version 字段和 TSLexMode 类型,
-#               匹配 html parser.c 的 LANGUAGE_VERSION 14 ABI), 但 REDUCE 宏
-#               改为 4 参数版 (html parser.c 由 tree-sitter 0.25+ 生成)
+#               匹配 html parser.c 的 LANGUAGE_VERSION 14 ABI), 并:
+#               1. REDUCE 宏改为 4 参数版 (html parser.c 由 0.25+ 生成)
+#               2. 新增 ADVANCE_MAP 宏 (从 0.27 源码移植, html parser.c 的
+#                  lexer 用它做字符→状态映射查表)
 #   alloc.h / array.h / ts_assert.h — 从 tree-sitter 0.27 源码复制 (独立工具头,
 #               API 跨版本稳定, 被 tag.h 引用)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
