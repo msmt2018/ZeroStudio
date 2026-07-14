@@ -28,6 +28,15 @@
     <string name="debugger_menu_step">Step</string>
     <string name="debugger_menu_breakpoints">Breakpoints</string>
     <string name="debugger_menu_view">View</string>
+    <!-- Root entry: all 4 submenus nested under one "Breakpoint Debugger" entry -->
+    <string name="debugger_menu_root">Breakpoint Debugger</string>
+    <!-- Add breakpoint by line number -->
+    <string name="debugger_action_add_bp_by_line">Add breakpoint by line…</string>
+    <string name="debugger_add_bp_by_line_title">Add breakpoint by line</string>
+    <string name="debugger_add_bp_by_line_hint">Enter line number</string>
+    <string name="debugger_add_bp_by_line_invalid">Please enter a valid line number (positive integer)</string>
+    <string name="debugger_add_bp_by_line_no_file">No file is currently open</string>
+    <string name="debugger_add_bp_by_line_select_type">Select breakpoint type</string>
 
     <!-- 9 actions -->
     <string name="debugger_action_debug_toggle">🪲 Debug</string>

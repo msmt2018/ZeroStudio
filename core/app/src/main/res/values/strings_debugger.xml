@@ -26,6 +26,15 @@
     <string name="debugger_menu_step">单步</string>
     <string name="debugger_menu_breakpoints">断点</string>
     <string name="debugger_menu_view">视图</string>
+    <!-- 总入口菜单: 把 4 个子菜单收拢到一个「断点调试器」入口下 -->
+    <string name="debugger_menu_root">断点调试器</string>
+    <!-- 按行号添加断点 -->
+    <string name="debugger_action_add_bp_by_line">按行号添加断点…</string>
+    <string name="debugger_add_bp_by_line_title">按行号添加断点</string>
+    <string name="debugger_add_bp_by_line_hint">输入行号</string>
+    <string name="debugger_add_bp_by_line_invalid">请输入有效的行号 (正整数)</string>
+    <string name="debugger_add_bp_by_line_no_file">当前没有打开的文件</string>
+    <string name="debugger_add_bp_by_line_select_type">选择断点类型</string>
 
     <!-- 9 个动作 -->
     <string name="debugger_action_debug_toggle">🪲 调试</string>
