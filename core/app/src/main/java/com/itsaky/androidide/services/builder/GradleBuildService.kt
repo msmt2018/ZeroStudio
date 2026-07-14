@@ -327,6 +327,18 @@ class GradleBuildService :
                             compileOptions {
                                 coreLibraryDesugaringEnabled = true
                             }
+                            // ide-debugger-host AAR 的 AndroidManifest 声明了
+                            // ${ideLocalServerName} placeholder. 新版 AAR 在库构建时
+                            // 已用 defaultConfig.manifestPlaceholders 提供了默认值
+                            // "ide-debug-bridge", 但如果用户设备上缓存了旧版 AAR
+                            // (没有默认值), 这里再注入一次作为兜底, 避免:
+                            //   "requires a placeholder substitution but no value
+                            //    for <ideLocalServerName> is provided"
+                            defaultConfig {
+                                manifestPlaceholders = [
+                                    ideLocalServerName: "ide-debug-bridge"
+                                ]
+                            }
                         }
 
                         dependencies {
