@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Git 变更与提交页面: 独立 Compose UI 渲染 (commit 工作流)
-  顶部 mini-toolbar 由 BaseGitPageFragment.setupToolbar() 填充按钮;
-  下方 git_content_container 是 ComposeView 的占位 (运行时挂入).
+  通用 Git Compose 页面布局 (共享): mini-toolbar + ComposeView 占位.
+  供协作子页面 (PR / Pipelines / CodeReview) 等只需要 mini-toolbar + Compose 的 fragment 复用.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
