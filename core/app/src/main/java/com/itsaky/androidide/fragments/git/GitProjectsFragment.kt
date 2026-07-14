@@ -1,10 +1,14 @@
 package com.itsaky.androidide.fragments.git
 
 import android.content.Context
+import android.graphics.Typeface
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import android.zero.studio.view.filetree.interfaces.FileClickListener
 import android.zero.studio.view.filetree.interfaces.FileLongClickListener
@@ -14,11 +18,14 @@ import android.zero.studio.view.filetree.provider.file
 import android.zero.studio.view.filetree.widget.FileTree
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
+import com.catpuppyapp.puppygit.utils.Libgit2Helper
+import com.github.git24j.core.Repository
 import com.itsaky.androidide.R
 import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 import com.itsaky.androidide.databinding.FragmentGitProjectsBinding
 import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
+import com.itsaky.androidide.fragments.git.menu.GitBranchPopupManager
 import com.itsaky.androidide.fragments.git.tree.ListProjectFilesRequestEvent
 import com.itsaky.androidide.fragments.git.tree.TreeStateManager
 import com.itsaky.androidide.projects.IProjectManager
@@ -48,6 +55,8 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
 
   private var fileTreeView: FileTree? = null
   private var loadingJob: Job? = null
+  private var branchPopupManager: GitBranchPopupManager? = null
+  private var tvBranchName: TextView? = null
 
   private val viewModel: FileTreeViewModel by viewModels({ requireActivity() })
   private var stateManager = TreeStateManager()
@@ -64,6 +73,8 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
   override fun onStart() {
     super.onStart()
     if (!EventBus.getDefault().isRegistered(this)) EventBus.getDefault().register(this)
+    // 返回文件树 tab 时刷新分支名 (可能在其他 tab 切换了分支)
+    updateCurrentBranchName()
   }
 
   override fun onStop() {
@@ -78,11 +89,60 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
   override fun setupToolbar() {
     val ctx = context ?: return
 
-    // ===== 文件树操作 (只保留文件树本身的功能, git 操作已迁移到各自的 git tab) =====
-    // 分支切换 -> GitBranchesFragment (分支 tab)
-    // Clone -> GitPopupManager (顶部菜单按钮)
-    // 文件树 tab 只做文件浏览相关的操作
+    // ===== Git 上下文: 当前分支显示 + 快速切换 =====
+    // 文件树 tab 保留最小化 git 上下文: 显示当前分支名, 点击可快速切换分支.
+    // 完整分支管理 -> GitBranchesFragment (分支 tab)
+    branchPopupManager =
+        GitBranchPopupManager(ctx) { branchName ->
+          switchBranch(branchName)
+        }
 
+    // 当前分支名按钮 (可点击切换分支)
+    val branchView =
+        TextView(ctx).apply {
+          layoutParams =
+              LinearLayout.LayoutParams(
+                  LinearLayout.LayoutParams.WRAP_CONTENT,
+                  resources.getDimensionPixelSize(R.dimen.git_toolbar_icon_size),
+              ).apply {
+                val margin = 6.dpToPx()
+                marginStart = margin
+                marginEnd = margin
+              }
+          text = "branch"
+          // 使用 primary 颜色 (与 BaseGitPageFragment 的图标着色方式一致)
+          val typedValue = android.util.TypedValue()
+          ctx.theme.resolveAttribute(
+              com.google.android.material.R.attr.colorPrimary,
+              typedValue,
+              true,
+          )
+          setTextColor(typedValue.data)
+          textSize = 12f
+          setTypeface(typeface, Typeface.BOLD)
+          gravity = Gravity.CENTER_VERTICAL
+          maxLines = 1
+          val outValue = android.util.TypedValue()
+          ctx.theme.resolveAttribute(
+              android.R.attr.selectableItemBackgroundBorderless,
+              outValue,
+              true,
+          )
+          setBackgroundResource(outValue.resourceId)
+          val padding = 6.dpToPx()
+          setPadding(padding, 0, padding, 0)
+          contentDescription = "Switch Branch"
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            tooltipText = "Switch Branch"
+          }
+          setOnClickListener { branchPopupManager?.show(it) }
+        }
+    tvBranchName = branchView
+    addToolbarCustomView(branchView)
+
+    addToolbarSeparator()
+
+    // ===== 文件树操作 =====
     addToolbarAction(R.drawable.ic_refresh_file_24dp, getString(R.string.refresh)) {
       if (GeneralPreferences.treeRememberExpandedState) {
         fileTreeView?.reloadFileTreeSilently()
@@ -132,9 +192,85 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
     }
   }
 
+  /** 加载当前分支名并更新 toolbar 显示. */
+  private fun updateCurrentBranchName() {
+    val projectDir = resolveWorkspaceDirPath() ?: run {
+      tvBranchName?.text = ""
+      return
+    }
+    CoroutineScope(Dispatchers.IO).launch {
+      val branchName =
+          runCatching {
+                Repository.open(projectDir).use { repo ->
+                  if (repo.headDetached()) {
+                    "HEAD (detached)"
+                  } else {
+                    repo.head()?.shorthand()?.removePrefix("refs/heads/") ?: ""
+                  }
+                }
+              }
+              .getOrDefault("")
+              .ifBlank { "" }
+      withContext(Dispatchers.Main) {
+        if (isAdded && view != null) {
+          tvBranchName?.text = if (branchName.isNotEmpty()) branchName else ""
+        }
+      }
+    }
+  }
+
+  /** 快速切换分支: 执行 checkout 后刷新文件树.
+   *  复刻 puppygit 的调用方式: 先尝试本地分支, 失败则尝试远程分支.
+   */
+  private fun switchBranch(branchName: String) {
+    val projectDir = resolveWorkspaceDirPath() ?: return
+    emitGitOperation("projects", "switch_branch:$branchName")
+    CoroutineScope(Dispatchers.IO).launch {
+      val ret =
+          runCatching {
+            Repository.open(projectDir).use { repo ->
+              // 先尝试本地分支 checkout
+              var checkoutRet = Libgit2Helper.checkoutLocalBranchThenUpdateHead(repo, branchName)
+              if (checkoutRet.hasError()) {
+                // 本地分支失败, 尝试远程分支 (会变成 detached HEAD)
+                checkoutRet = Libgit2Helper.checkoutRemoteBranchThenDetachHead(repo, branchName)
+              }
+              if (checkoutRet.hasError()) {
+                throw RuntimeException(checkoutRet.msg)
+              }
+            }
+          }
+      withContext(Dispatchers.Main) {
+        ret.onSuccess {
+          Toast.makeText(context, "Switched to $branchName", Toast.LENGTH_SHORT).show()
+          updateCurrentBranchName()
+          // 刷新文件树
+          if (GeneralPreferences.treeRememberExpandedState) {
+            fileTreeView?.reloadFileTreeSilently()
+          } else {
+            listProjectFiles()
+          }
+        }
+        ret.onFailure {
+          Toast.makeText(
+                  context,
+                  it.localizedMessage ?: "Failed to switch branch",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
+  }
+
+  private fun Int.dpToPx(): Int {
+    return (this * resources.displayMetrics.density).toInt()
+  }
+
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
     view.post { listProjectFiles() }
+    updateCurrentBranchName()
   }
 
   private fun listProjectFiles() {
@@ -231,6 +367,9 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
     loadingJob?.cancel()
     loadingJob = null
     fileTreeView = null
+    branchPopupManager?.dismiss()
+    branchPopupManager = null
+    tvBranchName = null
     _binding = null
     super.onDestroyView()
   }
