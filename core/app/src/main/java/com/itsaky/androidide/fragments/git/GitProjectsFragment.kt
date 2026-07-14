@@ -19,8 +19,6 @@ import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 import com.itsaky.androidide.databinding.FragmentGitProjectsBinding
 import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
-import com.itsaky.androidide.fragments.git.function.ZeroCloneDialogBottomSheetFragment
-import com.itsaky.androidide.fragments.git.menu.GitBranchPopupManager
 import com.itsaky.androidide.fragments.git.tree.ListProjectFilesRequestEvent
 import com.itsaky.androidide.fragments.git.tree.TreeStateManager
 import com.itsaky.androidide.projects.IProjectManager
@@ -50,8 +48,6 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
 
   private var fileTreeView: FileTree? = null
   private var loadingJob: Job? = null
-  private var tvCurrentBranch: android.widget.TextView? = null
-  private var branchPopupManager: GitBranchPopupManager? = null
 
   private val viewModel: FileTreeViewModel by viewModels({ requireActivity() })
   private var stateManager = TreeStateManager()
@@ -82,19 +78,11 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
   override fun setupToolbar() {
     val ctx = context ?: return
 
-    // ===== 分组 1: 分支切换 =====
-    val branchView = LayoutInflater.from(ctx).inflate(R.layout.item_git_toolbar_branch, null)
-    tvCurrentBranch = branchView.findViewById(R.id.tv_current_branch)
-    updateCurrentBranchName("main")
-    tvCurrentBranch?.setOnClickListener {
-      if (branchPopupManager == null) {
-        branchPopupManager = GitBranchPopupManager(ctx) { name -> updateCurrentBranchName(name) }
-      }
-      branchPopupManager?.show(it)
-    }
-    addToolbarCustomView(branchView)
+    // ===== 文件树操作 (只保留文件树本身的功能, git 操作已迁移到各自的 git tab) =====
+    // 分支切换 -> GitBranchesFragment (分支 tab)
+    // Clone -> GitPopupManager (顶部菜单按钮)
+    // 文件树 tab 只做文件浏览相关的操作
 
-    // ===== 分组 2: 文件树操作 =====
     addToolbarAction(R.drawable.ic_refresh_file_24dp, getString(R.string.refresh)) {
       if (GeneralPreferences.treeRememberExpandedState) {
         fileTreeView?.reloadFileTreeSilently()
@@ -142,16 +130,6 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
     addToolbarAction(R.drawable.ic_redo, "Redo Node Action") {
       fileTreeView?.let { stateManager.redo(it) }
     }
-
-    // ===== 分组 3: Clone =====
-    addToolbarAction(R.drawable.ic_git_clone_24dp, getString(R.string.git_clone)) {
-      ZeroCloneDialogBottomSheetFragment.newInstance(repoId = "")
-          .show(childFragmentManager, "GitProjectsCloneBottomSheet")
-    }
-  }
-
-  private fun updateCurrentBranchName(name: String) {
-    tvCurrentBranch?.text = name
   }
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -252,10 +230,6 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
   override fun onDestroyView() {
     loadingJob?.cancel()
     loadingJob = null
-    tvCurrentBranch?.setOnClickListener(null)
-    tvCurrentBranch = null
-    branchPopupManager?.dismiss()
-    branchPopupManager = null
     fileTreeView = null
     _binding = null
     super.onDestroyView()

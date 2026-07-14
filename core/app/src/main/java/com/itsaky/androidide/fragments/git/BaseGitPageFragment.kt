@@ -204,6 +204,34 @@ abstract class BaseGitPageFragment : Fragment() {
     }
   }
 
+  /**
+   * 创建一个承载**独立设计** Compose 内容的 [ComposeView]。
+   *
+   * 与 [setGitContent] 的区别:
+   * - 不调 [PuppyGitIntegration.ensureReady] / 不包 puppygit 的 [InitContent]
+   * - 不渲染 puppygit Screen (避免 "俄罗斯套娃" —— 双 toolbar / 双返回按钮)
+   * - 只用 AndroidIDE 自己的 [MaterialTheme] 包裹, git core 数据加载通过
+   *   [Libgit2Helper] 直接调用 (与 puppygit screen 一比一复刻调用方式)
+   *
+   * 用法:
+   * ```
+   * val compose = setIdeContent { CommitHistoryScreen(workdir) }
+   * binding.gitContentContainer.addView(compose)
+   * ```
+   *
+   * @param content 独立设计的 Composable 内容
+   * @return 配置好的 [ComposeView]
+   */
+  protected fun setIdeContent(content: @Composable () -> Unit): ComposeView {
+    val ctx = requireContext()
+    return ComposeView(ctx).apply {
+      setViewCompositionStrategy(DisposeOnViewTreeLifecycleDestroyed)
+      setContent {
+        androidx.compose.material3.MaterialTheme { content() }
+      }
+    }
+  }
+
   private fun findToolbarContainer(): LinearLayout? {
     val rootView = view ?: return null
     val scrollView = rootView.findViewById<HorizontalScrollView>(R.id.git_mini_toolbar_scroll)
