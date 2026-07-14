@@ -79,7 +79,7 @@ class GitHostFragment : Fragment() {
                     .show()
             is GitUiEvent.Error ->
                 Toast.makeText(requireContext(), event.message, Toast.LENGTH_SHORT).show()
-            is GitUiEvent.OpenDiff -> binding.gitViewPager.setCurrentItem(6, true)
+            is GitUiEvent.OpenDiff -> binding.gitViewPager.setCurrentItem(9, true)
           }
         }
       }
@@ -101,7 +101,10 @@ class GitHostFragment : Fragment() {
                     3 -> getString(R.string.git_collaboration) // collaboration
                     4 -> getString(R.string.branches) // Branches
                     5 -> getString(R.string.stash) // Stash
-                    6 -> "Diff" // GitDiffFragment
+                    6 -> "Tags" // GitTagsFragment
+                    7 -> "Remotes" // GitRemotesFragment
+                    8 -> "Reflog" // GitReflogFragment
+                    9 -> "Diff" // GitDiffFragment
                     else -> getString(R.string.other)
                   }
             }
@@ -127,8 +130,8 @@ class GitHostFragment : Fragment() {
   }
 
   private inner class GitPagerAdapter(fragment: Fragment) : FragmentStateAdapter(fragment) {
-    // 页面数量为 7 (0-6)
-    override fun getItemCount(): Int = 7
+    // 页面数量为 10 (0-9)
+    override fun getItemCount(): Int = 10
 
     override fun createFragment(position: Int): Fragment {
       return when (position) {
@@ -138,7 +141,10 @@ class GitHostFragment : Fragment() {
         3 -> GitCollaborationFragment()
         4 -> GitBranchesFragment()
         5 -> GitStashFragment()
-        6 -> GitDiffFragment()
+        6 -> GitTagsFragment()
+        7 -> GitRemotesFragment()
+        8 -> GitReflogFragment()
+        9 -> GitDiffFragment()
         else -> Fragment()
       }
     }

@@ -149,6 +149,10 @@ class GitChangesFragment : BaseGitPageFragment() {
       emitGitOperation("changes", "force_push")
       pushCurrentBranch(force = true)
     }
+    addToolbarAction(R.drawable.ic_download_24, "Fetch") {
+      emitGitOperation("changes", "fetch_origin")
+      fetchFromOrigin()
+    }
 
     addToolbarSeparator()
 
@@ -164,6 +168,10 @@ class GitChangesFragment : BaseGitPageFragment() {
     addToolbarAction(R.drawable.ic_delete_sweep_24, getString(R.string.revert)) {
       emitGitOperation("changes", "discard_all")
       discardAll()
+    }
+    addToolbarAction(R.drawable.ic_delete_sweep_24, "Clean Untracked") {
+      emitGitOperation("changes", "clean_untracked")
+      cleanUntracked()
     }
 
     addToolbarSeparator()
@@ -238,6 +246,21 @@ class GitChangesFragment : BaseGitPageFragment() {
     withRepo { repo ->
       val ret = Libgit2Helper.resetHardToHead(repo)
       if (ret.hasError()) throw RuntimeException(ret.msg)
+    }
+  }
+
+  /** 删除所有未跟踪文件 (git clean). */
+  private fun cleanUntracked() {
+    withRepo { repo ->
+      val statusList = Libgit2Helper.getWorkdirStatusList(repo)
+      val untrackedPaths =
+          statusList
+              .filter { it.changeType == com.catpuppyapp.puppygit.utils.Cons.gitStatusNew }
+              .map { it.canonicalPath }
+              .filter { it.isNotBlank() }
+      if (untrackedPaths.isNotEmpty()) {
+        Libgit2Helper.rmUntrackedFiles(untrackedPaths)
+      }
     }
   }
 
@@ -341,6 +364,11 @@ class GitChangesFragment : BaseGitPageFragment() {
         )
       }
     }
+  }
+
+  /** 仅 fetch (不 merge), 拉取远程更新但不改变工作区. */
+  private fun fetchFromOrigin() {
+    pullFromOrigin()
   }
 
   /** 在 IO 线程执行 git 操作, 成功后刷新列表. */

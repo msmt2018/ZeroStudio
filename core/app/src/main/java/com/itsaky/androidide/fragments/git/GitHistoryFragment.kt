@@ -21,6 +21,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -33,10 +35,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +57,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import com.catpuppyapp.puppygit.git.CommitDto
 import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
@@ -62,6 +69,7 @@ import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitHistoryComposeBinding
 import java.util.EnumSet
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -85,13 +93,6 @@ class GitHistoryFragment : BaseGitPageFragment() {
   private val binding
     get() = _binding!!
 
-  /**
-   * 刷新触发器。由 mini-toolbar 的 Refresh 按钮递增，Compose 内的
-   * [LaunchedEffect] 观察 [State.value] 变化后重新加载提交历史。
-   *
-   * 在 Fragment 字段处创建（非 composition 内），在 composition 中读取
-   * `.value` 仍会被快照追踪，属于标准的 state hoisting 用法。
-   */
   private val refreshTrigger = mutableStateOf(0)
 
   override fun onCreateView(
@@ -111,7 +112,6 @@ class GitHistoryFragment : BaseGitPageFragment() {
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
-    // GitRuntimeBootstrap.ensureLoaded() 已在 BaseGitPageFragment.onViewCreated 中调用
     val workdir = resolveWorkspaceDirPath()
 
     val compose = setIdeContent {
@@ -119,9 +119,97 @@ class GitHistoryFragment : BaseGitPageFragment() {
           workdir = workdir,
           refreshKey = refreshTrigger,
           onRefresh = { refreshTrigger.value++ },
+          onResetToCommit = ::resetToCommit,
+          onCherryPick = ::cherryPickCommit,
+          onCheckoutCommit = ::checkoutCommit,
       )
     }
     binding.gitContentContainer.addView(compose)
+  }
+
+  /** 硬重置到指定 commit (会丢失未提交的变更). */
+  private fun resetToCommit(commitHash: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    emitGitOperation("history", "reset_to:$commitHash")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ret = Libgit2Helper.resetHardToRevspec(repo, commitHash)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          Toast.makeText(requireContext(), "已重置到 $commitHash", Toast.LENGTH_SHORT).show()
+          refreshTrigger.value++
+        }
+        result.onFailure {
+          Toast.makeText(
+                  requireContext(),
+                  it.localizedMessage ?: "重置失败",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
+  }
+
+  /** Cherry-pick 指定 commit 到当前分支. */
+  private fun cherryPickCommit(commitHash: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    emitGitOperation("history", "cherrypick:$commitHash")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val settings = SettingsUtil.getSettingsSnapshot()
+          val ret = Libgit2Helper.cherrypick(repo, commitHash, settings = settings)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          Toast.makeText(requireContext(), "Cherry-pick 完成: $commitHash", Toast.LENGTH_SHORT).show()
+          refreshTrigger.value++
+        }
+        result.onFailure {
+          Toast.makeText(
+                  requireContext(),
+                  it.localizedMessage ?: "Cherry-pick 失败",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
+  }
+
+  /** Checkout 到指定 commit (detached HEAD). */
+  private fun checkoutCommit(commitHash: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    emitGitOperation("history", "checkout_commit:$commitHash")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ret = Libgit2Helper.checkoutCommitThenDetachHead(repo, commitHash)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          Toast.makeText(requireContext(), "已切到 commit $commitHash (detached)", Toast.LENGTH_SHORT).show()
+          refreshTrigger.value++
+        }
+        result.onFailure {
+          Toast.makeText(
+                  requireContext(),
+                  it.localizedMessage ?: "Checkout 失败",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
   }
 
   override fun onDestroyView() {
@@ -149,12 +237,18 @@ private sealed interface HistoryUiState {
  * @param workdir 仓库工作目录绝对路径；为 null 表示当前没有打开项目
  * @param refreshKey 刷新触发器，值变化时重新加载
  * @param onRefresh 触发刷新（下拉刷新 / 重试按钮调用）
+ * @param onResetToCommit 硬重置到指定 commit
+ * @param onCherryPick Cherry-pick 指定 commit
+ * @param onCheckoutCommit Checkout 到指定 commit (detached HEAD)
  */
 @Composable
 private fun CommitHistoryContent(
     workdir: String?,
     refreshKey: State<Int>,
     onRefresh: () -> Unit,
+    onResetToCommit: (String) -> Unit,
+    onCherryPick: (String) -> Unit,
+    onCheckoutCommit: (String) -> Unit,
 ) {
   if (workdir == null) {
     GitEmptyState("未打开项目")
@@ -163,10 +257,9 @@ private fun CommitHistoryContent(
 
   var uiState by remember { mutableStateOf<HistoryUiState>(HistoryUiState.Loading) }
   var isRefreshing by remember { mutableStateOf(false) }
+  var confirmReset by remember { mutableStateOf<CommitDto?>(null) }
 
   LaunchedEffect(workdir, refreshKey.value) {
-    // 首次加载 / 从非 Loaded 状态重试：全屏 Loading；
-    // 已有列表时刷新：保留列表，仅显示下拉刷新指示器。
     if (uiState is HistoryUiState.Loaded) {
       isRefreshing = true
     } else {
@@ -187,20 +280,58 @@ private fun CommitHistoryContent(
               contentPadding = PaddingValues(vertical = 8.dp),
               verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
           ) {
-            items(state.commits, key = { it.oidStr }) { commit -> CommitItem(commit) }
+            items(state.commits, key = { it.oidStr }) { commit ->
+              CommitItem(
+                  commit = commit,
+                  onResetToCommit = { confirmReset = commit },
+                  onCherryPick = { onCherryPick(commit.oidStr) },
+                  onCheckoutCommit = { onCheckoutCommit(commit.oidStr) },
+              )
+            }
           }
         }
+  }
+
+  // Reset 确认对话框 (危险操作)
+  confirmReset?.let { commit ->
+    AlertDialog(
+        onDismissRequest = { confirmReset = null },
+        title = { Text("确认重置") },
+        text = {
+          Text("将硬重置到 ${commit.shortOidStr}\n${commit.shortMsg}\n\n⚠️ 未提交的变更将丢失!")
+        },
+        confirmButton = {
+          TextButton(onClick = {
+            confirmReset = null
+            onResetToCommit(commit.oidStr)
+          }) { Text("重置") }
+        },
+        dismissButton = {
+          TextButton(onClick = { confirmReset = null }) { Text("取消") }
+        },
+    )
   }
 }
 
 /**
  * 单条提交卡片：左侧短 hash（monospace, primary）+ 提交消息第一行（粗体）
- * + 作者名 + 日期（小字, onSurfaceVariant）。
+ * + 作者名 + 日期（小字, onSurfaceVariant）。长按弹出操作菜单。
  */
 @Composable
-private fun CommitItem(commit: CommitDto) {
+private fun CommitItem(
+    commit: CommitDto,
+    onResetToCommit: () -> Unit,
+    onCherryPick: () -> Unit,
+    onCheckoutCommit: () -> Unit,
+) {
+  var menuExpanded by remember { mutableStateOf(false) }
+
   Card(
-      modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+      modifier =
+          Modifier.fillMaxWidth().padding(horizontal = 12.dp).combinedClickable(
+              onClick = {},
+              onLongClick = { menuExpanded = true },
+          ),
       shape = RoundedCornerShape(GitSpacing.cardCorner),
       elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
   ) {
@@ -234,6 +365,29 @@ private fun CommitItem(commit: CommitDto) {
             text = commit.dateTime,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        DropdownMenuItem(
+            text = { Text("重置到此 commit") },
+            onClick = {
+              menuExpanded = false
+              onResetToCommit()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Cherry-pick") },
+            onClick = {
+              menuExpanded = false
+              onCherryPick()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Checkout (detached)") },
+            onClick = {
+              menuExpanded = false
+              onCheckoutCommit()
+            },
         )
       }
     }
