@@ -1,8 +1,18 @@
 /*
  *  ZeroStudio IDE - 按行号添加断点弹窗
  *
- *  用户输入行号 -> 点击「确认」-> 弹出已有的断点类型选择弹窗
- *  (BreakpointTypePickerDialog) -> 选择类型后应用断点.
+ *  支持三种行号表达式:
+ *    1. 单个行号:  5
+ *    2. 范围:      5~100  (在 5 到 100 的每一行都加断点, 含端点)
+ *    3. 列表:      1,2,3  或  1，3，8  (英文逗号 , 和中文逗号 ， 都支持)
+ *
+ *  规则:
+ *    - 范围表达式中, 起始值必须 < 终止值 (不允许 100~5)
+ *    - 列表表达式中, 数字必须严格升序 (不允许 1,3,2)
+ *    - 列表和范围不能混用 (不允许 1,2~5,8) —— 保持解析简单
+ *
+ *  流程: 输入表达式 -> 校验 -> 弹出已有的断点类型选择弹窗
+ *  -> 用户选择类型后, 给所有解析出的行号批量应用断点.
  *
  *  入口: DebuggerActionMenuProvider 的「按行号添加断点…」菜单项.
  */
@@ -31,32 +41,29 @@ import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.model.BreakpointTypeCatalog;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.utils.ILogger;
+import com.itsaky.androidide.utils.flashSuccess;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * 输入行号 -> 选择断点类型 -> 应用.
+ * 输入行号表达式 -> 解析为行号列表 -> 选择断点类型 -> 批量应用.
  *
- * <p>流程:
- * <ol>
- *   <li>用户输入行号, 点击「确认」</li>
- *   <li>校验行号合法 (正整数) 且当前有打开的文件</li>
- *   <li>弹出 {@link BreakpointTypePickerDialog} 让用户选择断点类型</li>
- *   <li>选择后通过 {@link BreakpointDetailDialog#showForNew} 或
- *       {@link BreakpointManager#toggle} 应用</li>
- * </ol>
+ * <p>支持的语法见类头注释.
  */
 public class AddBreakpointByLineDialog extends DialogFragment {
 
     private static final String TAG = "AddBpByLine";
     private static final String ARG_FILE = "file";
 
+    /** 中文逗号 (U+FF0C). */
+    private static final String CN_COMMA = "，";
+    /** 英文逗号. */
+    private static final String EN_COMMA = ",";
+    /** 范围分隔符 (~). */
+    private static final String RANGE_SEP = "~";
+
     @Nullable private String filePath;
 
-    /**
-     * 显示弹窗.
-     *
-     * @param activity 宿主 Activity (必须是 FragmentActivity)
-     * @param filePath 当前编辑器打开的文件绝对路径, 为 null 时弹窗会提示无文件
-     */
     public static void show(@NonNull FragmentActivity activity, @Nullable String filePath) {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         try {
@@ -88,7 +95,6 @@ public class AddBreakpointByLineDialog extends DialogFragment {
         }
         dialog.setCanceledOnTouchOutside(true);
 
-        // 用代码构建布局, 不引入新的 XML 布局文件.
         int pad = dp(ctx, 20);
         com.google.android.material.card.MaterialCardView card =
                 new com.google.android.material.card.MaterialCardView(ctx);
@@ -133,11 +139,26 @@ public class AddBreakpointByLineDialog extends DialogFragment {
             root.addView(fileHint, fileLp);
         }
 
-        // 输入框
+        // 语法说明
+        TextView desc = new TextView(ctx);
+        desc.setText(R.string.debugger_add_bp_by_line_desc);
+        desc.setTextSize(11f);
+        desc.setTextColor(0xFF666666);
+        android.widget.LinearLayout.LayoutParams descLp =
+                new android.widget.LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
+        descLp.topMargin = dp(ctx, 8);
+        root.addView(desc, descLp);
+
+        // 输入框 —— 不用 TYPE_CLASS_NUMBER, 因为要支持 ~ 和 , 字符.
+        // 用 TYPE_CLASS_TEXT + TYPE_NUMBER_VARIATION_NORMAL 让数字键盘优先
+        // 但仍允许输入符号.
         TextInputLayout inputLayout = new TextInputLayout(ctx);
         inputLayout.setHint(getString(R.string.debugger_add_bp_by_line_hint));
         TextInputEditText input = new TextInputEditText(ctx);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_NUMBER_VARIATION_NORMAL);
         inputLayout.addView(input);
         android.widget.LinearLayout.LayoutParams inputLp =
                 new android.widget.LinearLayout.LayoutParams(
@@ -180,7 +201,6 @@ public class AddBreakpointByLineDialog extends DialogFragment {
 
     private void onConfirm(@NonNull TextInputEditText input, @NonNull TextInputLayout inputLayout) {
         Context ctx = requireContext();
-        // 校验文件
         if (filePath == null || filePath.isEmpty()) {
             Toast.makeText(ctx, R.string.debugger_add_bp_by_line_no_file,
                     Toast.LENGTH_SHORT).show();
@@ -188,54 +208,188 @@ public class AddBreakpointByLineDialog extends DialogFragment {
             return;
         }
 
-        // 校验行号
         CharSequence raw = input.getText();
-        int line = -1;
-        if (raw != null) {
-            String s = raw.toString().trim();
-            if (!s.isEmpty()) {
-                try {
-                    line = Integer.parseInt(s);
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
-        if (line < 1) {
+        String expr = raw == null ? "" : raw.toString().trim();
+        if (expr.isEmpty()) {
             inputLayout.setError(getString(R.string.debugger_add_bp_by_line_invalid));
             return;
         }
 
-        // 关闭当前弹窗, 弹出断点类型选择
+        // 解析表达式 -> 行号列表
+        ParseResult result = parseExpression(expr);
+        if (result.lines == null || result.lines.isEmpty()) {
+            inputLayout.setError(result.error != null
+                    ? result.error
+                    : getString(R.string.debugger_add_bp_by_line_invalid));
+            return;
+        }
+
         final String file = filePath;
-        final int targetLine = line;
+        final List<Integer> lines = result.lines;
         dismiss();
-        showBreakpointTypePicker(file, targetLine);
+        showBreakpointTypePicker(file, lines);
     }
 
     /**
-     * 弹出已有的断点类型选择弹窗. 用户选择类型后:
+     * 解析行号表达式.
+     *
+     * <p>支持三种形式 (不能混用):
      * <ul>
-     *   <li>普通行断点 -> 直接 {@link BreakpointManager#toggle}</li>
-     *   <li>其他类型 -> {@link BreakpointDetailDialog#showForNew} 打开详情弹窗</li>
+     *   <li>单个: {@code 5}</li>
+     *   <li>范围: {@code 5~100} (含端点)</li>
+     *   <li>列表: {@code 1,2,3} 或 {@code 1，3，8} (英文 / 中文逗号均可,
+     *       必须升序)</li>
      * </ul>
+     *
+     * @return 解析结果. {@link ParseResult#lines} 为 null 表示解析失败,
+     *         {@link ParseResult#error} 含失败原因.
      */
-    private void showBreakpointTypePicker(@NonNull String file, int line) {
+    @NonNull
+    private ParseResult parseExpression(@NonNull String expr) {
+        // 统一 trim, 去除空白
+        String s = expr.trim();
+
+        // 中文逗号统一替换为英文逗号, 简化后续处理
+        boolean hasCnComma = s.contains(CN_COMMA);
+        boolean hasEnComma = s.contains(EN_COMMA);
+        boolean hasRange = s.contains(RANGE_SEP);
+
+        // 列表模式 (含逗号)
+        if (hasCnComma || hasEnComma) {
+            // 不允许列表和范围混用
+            if (hasRange) {
+                return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+            }
+            // 统一用英文逗号分割
+            String normalized = s.replace(CN_COMMA, EN_COMMA);
+            String[] parts = normalized.split(EN_COMMA);
+            List<Integer> lines = new ArrayList<>();
+            int prev = 0; // 列表必须严格升序, 起始 prev=0 保证第一个数 >= 1 即可
+            for (String part : parts) {
+                String t = part.trim();
+                if (t.isEmpty()) {
+                    return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+                }
+                int n;
+                try {
+                    n = Integer.parseInt(t);
+                } catch (NumberFormatException e) {
+                    return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+                }
+                if (n < 1) {
+                    return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+                }
+                // 列表必须严格升序: 不允许 1,3,2
+                if (n <= prev) {
+                    return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_desc_order));
+                }
+                lines.add(n);
+                prev = n;
+            }
+            return ParseResult.ok(lines);
+        }
+
+        // 范围模式 (含 ~)
+        if (hasRange) {
+            String[] parts = s.split(RANGE_SEP);
+            if (parts.length != 2) {
+                return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+            }
+            try {
+                int start = Integer.parseInt(parts[0].trim());
+                int end = Integer.parseInt(parts[1].trim());
+                if (start < 1 || end < 1) {
+                    return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+                }
+                // 范围终止值必须大于起始值: 不允许 100~5
+                if (end <= start) {
+                    return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_desc_range));
+                }
+                List<Integer> lines = new ArrayList<>();
+                for (int i = start; i <= end; i++) {
+                    lines.add(i);
+                }
+                return ParseResult.ok(lines);
+            } catch (NumberFormatException e) {
+                return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+            }
+        }
+
+        // 单个行号
+        try {
+            int n = Integer.parseInt(s);
+            if (n < 1) {
+                return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+            }
+            List<Integer> lines = new ArrayList<>();
+            lines.add(n);
+            return ParseResult.ok(lines);
+        } catch (NumberFormatException e) {
+            return ParseResult.fail(getString(R.string.debugger_add_bp_by_line_invalid));
+        }
+    }
+
+    /**
+     * 弹出断点类型选择弹窗, 用户选择后批量应用.
+     *
+     * <p>选择「普通行断点」时, 对所有行号逐一 {@link BreakpointManager#toggle}
+     * (已有断点的行不会重复添加). 选择其他类型时, 逐行打开
+     * {@link BreakpointDetailDialog} (用户需逐行配置).
+     */
+    private void showBreakpointTypePicker(@NonNull String file, @NonNull List<Integer> lines) {
         FragmentActivity activity = (FragmentActivity) getActivity();
         if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
 
-        BreakpointTypePickerDialog.show(activity, file, line, 0f, 0f,
+        // 取第一个行号作为 BreakpointTypePickerDialog 的定位行 (它只用于显示位置信息)
+        int firstLine = lines.get(0);
+        BreakpointTypePickerDialog.show(activity, file, firstLine, 0f, 0f,
                 (entry, f, l, x, y) -> {
-                    // 普通行断点直接 toggle (无需额外配置)
+                    // 普通行断点: 批量 toggle
                     if (entry.entryPoint == BreakpointTypeCatalog.EntryPoint.GUTTER_LINE_CLICK) {
-                        BreakpointManager.getInstance().toggle(f, l);
+                        BreakpointManager bm = BreakpointManager.getInstance();
+                        int applied = 0;
+                        for (int line : lines) {
+                            // toggle 会对已存在的断点移除, 这里只想要"添加"语义:
+                            // 如果该行已有断点, 不重复添加 (跳过).
+                            if (bm.findAt(f, line) == null) {
+                                bm.toggle(f, line);
+                                applied++;
+                            }
+                        }
+                        // flash 提示应用了多少个
+                        try {
+                            flashSuccess(activity.getString(
+                                    R.string.debugger_add_bp_by_line_applied, applied));
+                        } catch (Throwable ignored) {
+                        }
                         return;
                     }
-                    // 其他类型走详情弹窗
-                    BreakpointDetailDialog.showForNew(activity, f, l, entry, null, null);
+                    // 其他类型: 逐行打开详情弹窗.
+                    // 一次只处理第一行, 用户可以再次打开弹窗处理后续行.
+                    BreakpointDetailDialog.showForNew(activity, f, firstLine, entry, null, null);
                 });
     }
 
     private static int dp(@NonNull Context ctx, int v) {
         return (int) (v * ctx.getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    /** 表达式解析结果. */
+    private static final class ParseResult {
+        @Nullable final List<Integer> lines;
+        @Nullable final String error;
+
+        private ParseResult(@Nullable List<Integer> lines, @Nullable String error) {
+            this.lines = lines;
+            this.error = error;
+        }
+
+        static ParseResult ok(@NonNull List<Integer> lines) {
+            return new ParseResult(lines, null);
+        }
+
+        static ParseResult fail(@NonNull String error) {
+            return new ParseResult(null, error);
+        }
     }
 }

@@ -33,10 +33,14 @@
     <!-- Add breakpoint by line number -->
     <string name="debugger_action_add_bp_by_line">Add breakpoint by line…</string>
     <string name="debugger_add_bp_by_line_title">Add breakpoint by line</string>
-    <string name="debugger_add_bp_by_line_hint">Enter line number</string>
-    <string name="debugger_add_bp_by_line_invalid">Please enter a valid line number (positive integer)</string>
+    <string name="debugger_add_bp_by_line_hint">Line (supports 5~100 range, 1,2,3 list)</string>
+    <string name="debugger_add_bp_by_line_invalid">Please enter a valid line expression\nSupports: single (5), range (5~100), list (1,2,3 or 1，3，8)\nList must be in ascending order</string>
     <string name="debugger_add_bp_by_line_no_file">No file is currently open</string>
     <string name="debugger_add_bp_by_line_select_type">Select breakpoint type</string>
+    <string name="debugger_add_bp_by_line_desc">Supports:\n• Single: 5\n• Range: 5~100\n• List: 1,2,3 or 1，3，8\n• List must be ascending, not 1,3,2</string>
+    <string name="debugger_add_bp_by_line_desc_order">List must be ascending, not 1,3,2</string>
+    <string name="debugger_add_bp_by_line_desc_range">Range end must be greater than start, not 100~5</string>
+    <string name="debugger_add_bp_by_line_applied">Added breakpoints at %1$d line(s)</string>
 
     <!-- 9 actions -->
     <string name="debugger_action_debug_toggle">🪲 Debug</string>
