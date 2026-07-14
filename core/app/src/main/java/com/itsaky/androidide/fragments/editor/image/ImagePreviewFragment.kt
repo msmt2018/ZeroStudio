@@ -943,17 +943,19 @@ private fun decodeRaster(ctx: Context, file: File): LoadedImage {
 @RequiresApi(Build.VERSION_CODES.P)
 private fun decodeRasterWithImageDecoder(file: File): Bitmap {
     val source = ImageDecoder.createSource(file)
-    return ImageDecoder.decodeBitmap(source) { info, _ ->
+    // ImageDecoder.decodeBitmap 的回调签名是 (decoder, info, source) -> Unit,
+    // 必须在 decoder 上调用 setTargetSize / setAllocator.
+    return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
         // 限制最大尺寸, 避免超大图片 OOM (与 Coil 默认行为一致)
         val maxDim = maxOf(info.size.width, info.size.height)
         if (maxDim > 4096) {
             val scale = 4096f / maxDim
-            setTargetSize(
+            decoder.setTargetSize(
                 (info.size.width * scale).toInt(),
                 (info.size.height * scale).toInt(),
             )
         }
-        setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
+        decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
     }
 }
 
