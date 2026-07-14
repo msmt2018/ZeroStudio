@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -216,7 +217,7 @@ class MainFragment : BaseFragment() {
               // 最近项目占较宽比例（weight 1.5f），高频项目占较窄比例（weight 0.9f）。
               Row(modifier = Modifier.fillMaxSize()) {
                 // ── 最近项目列表（左）──
-                Column(modifier = Modifier.weight(1.5f).fillMaxHeight()) {
+                Column(modifier = Modifier.weight(1.5f).fillMaxHeight().clipToBounds()) {
                   SectionTitle(stringResource(R.string.main_recent_projects))
                   if (historyState.isEmpty()) {
                     Text(
@@ -239,13 +240,15 @@ class MainFragment : BaseFragment() {
                         verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                       recentSorted.forEach { project ->
-                        SwipeableProjectItem(
-                            project = project,
-                            onClick = { openProjectWithCheck(project) },
-                            onPin = { performPinToggle(project) },
-                            onDelete = { performDelete(project) },
-                            showOpenCount = false,
-                        )
+                        key(project.path) {
+                          SwipeableProjectItem(
+                              project = project,
+                              onClick = { openProjectWithCheck(project) },
+                              onPin = { performPinToggle(project) },
+                              onDelete = { performDelete(project) },
+                              showOpenCount = false,
+                          )
+                        }
                       }
                     }
                   }
@@ -254,7 +257,7 @@ class MainFragment : BaseFragment() {
                 Spacer(modifier = Modifier.width(8.dp))
 
                 // ── 高频项目列表（右）──
-                Column(modifier = Modifier.weight(0.9f).fillMaxHeight()) {
+                Column(modifier = Modifier.weight(0.9f).fillMaxHeight().clipToBounds()) {
                   SectionTitle(stringResource(R.string.main_frequent_projects))
                   if (historyState.isEmpty()) {
                     Text(
@@ -276,13 +279,15 @@ class MainFragment : BaseFragment() {
                         verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                       frequentSorted.forEach { project ->
-                        SwipeableProjectItem(
-                            project = project,
-                            onClick = { openProjectWithCheck(project) },
-                            onPin = { performPinToggle(project) },
-                            onDelete = { performDelete(project) },
-                            showOpenCount = true,
-                        )
+                        key(project.path) {
+                          SwipeableProjectItem(
+                              project = project,
+                              onClick = { openProjectWithCheck(project) },
+                              onPin = { performPinToggle(project) },
+                              onDelete = { performDelete(project) },
+                              showOpenCount = true,
+                          )
+                        }
                       }
                     }
                   }

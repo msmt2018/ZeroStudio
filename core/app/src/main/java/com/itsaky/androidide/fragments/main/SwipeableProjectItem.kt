@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -102,7 +104,7 @@ fun SwipeableProjectItem(
     isExpanded = false
   }
 
-  Box(modifier = modifier.fillMaxWidth().height(58.dp)) {
+  Box(modifier = modifier.fillMaxWidth().height(58.dp).clipToBounds()) {
     // ---- Background layer: action menu (Pin + Delete) ----
     // 背景层不再使用高斯模糊——高斯模糊会遮挡整个菜单区域，导致按钮不可见。
     // 高斯模糊改为设置在每个按钮的背景上（见 SwipeActionButton）。
@@ -253,8 +255,10 @@ fun SwipeableProjectItem(
                 fontSize = 10.sp,
                 color = Color(0xFF1E1E1E),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                // 不再用 Ellipsis 截断, 改用 basicMarquee 从右到左滚动,
+                // 这样长项目名也能完整显示.
+                softWrap = false,
+                modifier = Modifier.weight(1f).basicMarquee(),
             )
           }
           Text(
