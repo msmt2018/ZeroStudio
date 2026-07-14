@@ -47,12 +47,12 @@ object TreeSitterLanguageProvider {
       TSLanguageRegistry.instance.getFactory<TreeSitterLanguage>(type).create(context)
     } catch (e: TSLanguageRegistry.NotRegisteredException) {
       null
-    } catch (e: Exception) {
-      // TreeSitterLanguage 构造过程中任何异常（scm 资源缺失、query 编译失败、
-      // ABI 不兼容等）都应被吞掉并回退到 null，让 editor 后续走 fallback 路径
-      // （如 GroovyLanguage / CppLanguage / EmptyLanguage）显示文件，而不是让异常
-      // 传播到 IDEEditor 的 editorScope.launch 中导致 callback 永远不被调用、
-      // editor 永远不切换 language、文件全黑字。
+    } catch (e: Throwable) {
+      // 必须 catch Throwable 而非 Exception —— System.loadLibrary("tree-sitter-xxx")
+      // 失败时抛出 UnsatisfiedLinkError (extends Error), TSLanguageHtml 类初始化
+      // 失败时抛出 ExceptionInInitializerError (extends Error). 这些 Error 不会被
+      // catch (e: Exception) 捕获, 会传播到 IDEEditor 的 editorScope.launch 中
+      // 导致 callback 永远不被调用, editor 永远不切换 language, 文件全黑字.
       log.error(
           "Failed to create TreeSitterLanguage for type='{}', falling back to null",
           type,

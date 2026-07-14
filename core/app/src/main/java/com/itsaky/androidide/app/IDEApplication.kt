@@ -116,6 +116,15 @@ class IDEApplication : TermuxApplication() {
     Thread.setDefaultUncaughtExceptionHandler { thread, th -> handleCrash(thread, th) }
 
     if (BuildConfig.DEBUG) {
+      // LeakCanary 2.14 的 RootViewWatcher 在监听到 WebView 的 SelectPopup
+      // 弹窗 (chromium 内部 Dialog.show) 时, 会尝试读取一个 bool 资源
+      // (leak_canary_watcher_ignore_select_popup), 该资源在某些打包配置
+      // 下会从 resource table 中丢失, 导致 Resources$NotFoundException 崩溃.
+      // RootViewWatcher 是 LeakCanary 中误报率最高的 watcher (Dialog/Toast
+      // 都会触发), 关闭它不影响 Activity/Fragment/ViewModel 泄漏检测.
+      leakcanary.AppWatcher.config =
+          leakcanary.AppWatcher.config.copy(watchRootViews = false)
+
       if (DevOpsPreferences.dumpLogs) {
         startLogcatReader()
       }

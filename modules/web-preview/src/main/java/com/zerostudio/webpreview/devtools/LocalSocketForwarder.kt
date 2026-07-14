@@ -47,7 +47,8 @@ import kotlin.concurrent.thread
  * <b>abstract namespace</b>: socket 名以 `@` 开头 (如 `@webview_devtools_remote_1234`),
  * 属于 Linux abstract namespace, 不占文件系统, 也不受 SELinux 文件路径限制。
  *
- * @param abstractSocketName abstract socket 名 (含 `@` 前缀)
+ * @param abstractSocketName abstract socket 名 (**不含** `@` 前缀, 直接传给
+ *        [LocalSocketAddress] with [LocalSocketAddress.Namespace.ABSTRACT])
  * @param tcpPort 转发到的 localhost TCP 端口 (如 9222)
  */
 class LocalSocketForwarder(

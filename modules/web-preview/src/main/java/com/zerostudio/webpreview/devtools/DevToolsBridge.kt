@@ -150,7 +150,16 @@ class DevToolsBridge(
      *
      * <p>
      * 实现: 读 `/proc/net/unix`, 找匹配 `webview_devtools_remote_<myPid>` 前缀的行。
-     * abstract socket 在该文件中第一字段为 00000000 (无文件系统路径)。
+     *
+     * <p>
+     * **注意**: `/proc/net/unix` 中 abstract socket 的 Path 字段在不同内核版本有
+     * 不同表示:
+     * <ul>
+     *   <li>现代内核: `@webview_devtools_remote_1234` (`@` 前缀)</li>
+     *   <li>旧内核: `\0webview_devtools_remote_1234` (NULL 字节, 文本中可能被丢弃)</li>
+     * </ul>
+     * [LocalSocketAddress] with [LocalSocketAddress.Namespace.ABSTRACT] 期望
+     * socket 名**不含** `@` 前缀, 所以这里统一剥离 `\0` 和 `@`.
      */
     private fun findDevToolsSocket(): String? {
         val myPid = Process.myPid()
@@ -158,16 +167,15 @@ class DevToolsBridge(
         return try {
             File("/proc/net/unix").useLines { lines ->
                 // 格式: Num RefCount Protocol Flags Type St Inode Path
-                // abstract socket 的 Path 以 NULL 字节开头, 在文本中表现为前缀 \0
-                // 但读出来时 Path 是字符串, abstract namespace 路径前会有 \u0000
                 lines.forEach { line ->
                     val cols = line.trim().split(Regex("\\s+"))
                     if (cols.size >= 8) {
                         val path = cols[7]
-                        // abstract socket: path 形如 "\u0000webview_devtools_remote_1234"
-                        val cleaned = path.removePrefix("\u0000")
+                        // 剥离 abstract namespace 前缀: \0 (旧内核) 或 @ (现代内核)
+                        val cleaned = path.removePrefix("\u0000").removePrefix("@")
                         if (cleaned.startsWith(prefix)) {
-                            return@useLines "@$cleaned"  // 还原 @ 前缀表示 abstract
+                            // 返回不含 @ 的名称, LocalSocketAddress(ABSTRACT) 不需要 @
+                            return@useLines cleaned
                         }
                     }
                 }
