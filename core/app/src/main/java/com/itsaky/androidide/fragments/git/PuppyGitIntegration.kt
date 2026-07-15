@@ -16,6 +16,7 @@
  */
 package com.itsaky.androidide.fragments.git
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import com.catpuppyapp.puppygit.jni.LibLoader
 import com.catpuppyapp.puppygit.utils.AppModel
@@ -79,6 +80,29 @@ object PuppyGitIntegration {
     // 触发 AppModel 全部字段初始化（dbContainer / realAppContext /
     // masterPassword / paths / navController / scrollBehavior 等）。
     AppModel.init_forPreview()
+    inited.set(true)
+  }
+
+  /**
+   * AndroidIDE 专用 — 非 Composable, 使用真实 app 路径初始化。
+   *
+   * 与 [ensureReady] 的区别:
+   * - 非 Composable, 可在 Fragment.onCreateView 等普通方法中调用
+   * - 调用 [AppModel.init_forAndroidIDE] 使用真实 app 目录 (非假路径)
+   * - 不初始化 navController/scrollBehavior (由调用方 Composable 设置)
+   *
+   * 调用后, 调用方应在 Composable 中:
+   * ```
+   * PuppyGitIntegration.ensureReadyForAndroidIDE(requireContext())
+   * // 在 @Composable 中:
+   * AppModel.navController = rememberNavController()
+   * AppModel.homeTopBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
+   * ```
+   */
+  fun ensureReadyForAndroidIDE(context: Context) {
+    if (inited.get()) return
+    ensureNativeLoaded()
+    AppModel.init_forAndroidIDE(context)
     inited.set(true)
   }
 }

@@ -1047,6 +1047,62 @@ object AppModel {
         AppModel.init_3()
     }
 
+    /**
+     * AndroidIDE 专用初始化 — 使用真实 app 路径 (非 Composable)。
+     *
+     * 与 [init_forPreview] 的区别:
+     * - 路径使用 AndroidIDE app 真实目录 (externalFilesDir 等), 而非假路径 /test_android_preview
+     * - 不调用 [init_3] (navController/scrollBehavior 由调用方 Composable 设置)
+     * - 不调用 [init_2] (SettingsUtil/CertMan 等, 可按需后续补)
+     *
+     * 调用方应在 Composable 中:
+     * 1. 先调本方法 (或通过 [PuppyGitIntegration.ensureReadyForAndroidIDE])
+     * 2. 再用 `rememberNavController()` 设置 `AppModel.navController`
+     * 3. 用 `TopAppBarDefaults.enterAlwaysScrollBehavior()` 设置 `AppModel.homeTopBarScrollBehavior`
+     *
+     * @param realAppContext AndroidIDE app context (fragment.requireContext() 或 activity)
+     */
+    fun init_forAndroidIDE(realAppContext: Context) {
+        // dbContainer
+        AppModel.dbContainer = AppDataContainer(realAppContext)
+
+        AppModel.devModeOn = PrefUtil.getDevMode(realAppContext)
+        AppModel.realAppContext = realAppContext
+        AppModel.masterPassword.value = MasterPassUtil.get(realAppContext)
+
+        // 真实路径 (复用 init_1 的路径辅助函数)
+        val externalFilesDir = getExternalFilesIfErrGetInnerIfStillErrThrowException(realAppContext)
+        val externalCacheDir = getExternalCacheDirIfErrGetInnerIfStillErrThrowException(realAppContext)
+        val innerDataDir = getInnerDataDirOrThrowException(realAppContext)
+        AppModel.externalFilesDir = externalFilesDir
+        AppModel.externalCacheDir = externalCacheDir
+        AppModel.innerDataDir = innerDataDir
+        AppModel.innerCacheDir = getInnerCacheDirOrNull(realAppContext)
+        AppModel.externalDataDir = getExternalDataDirOrNull(realAppContext)
+
+        // repo 和 app 数据目录
+        AppModel.allRepoParentDir = createDirIfNonexists(externalFilesDir, Cons.defaultAllRepoParentDirName)
+        StorageDirCons.DefaultStorageDir.puppyGitRepos.fullPath = AppModel.allRepoParentDir.canonicalPath
+        AppModel.appDataUnderAllReposDir = createDirIfNonexists(AppModel.allRepoParentDir, Cons.defalutPuppyGitDataUnderAllReposDirName)
+        AppModel.logDir = createDirIfNonexists(AppModel.appDataUnderAllReposDir, Cons.defaultLogDirName)
+
+        // 证书目录
+        AppModel.certBundleDir = createDirIfNonexists(AppModel.appDataUnderAllReposDir, CertMan.defaultCertBundleDirName)
+        AppModel.certUserDir = createDirIfNonexists(AppModel.appDataUnderAllReposDir, CertMan.defaultCertUserDirName)
+
+        // 其他工作目录
+        AppModel.fileSnapshotDir = createDirIfNonexists(AppModel.appDataUnderAllReposDir, Cons.defaultFileSnapshotDirName)
+        AppModel.editCacheDir = createDirIfNonexists(AppModel.appDataUnderAllReposDir, Cons.defaultEditCacheDirName)
+        AppModel.patchDir = createDirIfNonexists(AppModel.appDataUnderAllReposDir, Cons.defaultPatchDirName)
+        AppModel.settingsDir = createDirIfNonexists(AppModel.appDataUnderAllReposDir, Cons.defaultSettingsDirName)
+        AppModel.submoduleDotGitBackupDir = createDirIfNonexists(AppModel.appDataUnderAllReposDir, Cons.defaultSubmoduleDotGitFileBakDirName)
+
+        AppModel.exitApp = {}
+
+        reloadTimeZone(AppSettings())
+        // 注意: 不调用 init_3() — navController/scrollBehavior 由 Composable 调用方设置
+    }
+
 
     // start: device configuration (include width/height, and rotate screen or do other actions will update it)
     private val currentConfiguration = mutableStateOf<Configuration?>(null)
