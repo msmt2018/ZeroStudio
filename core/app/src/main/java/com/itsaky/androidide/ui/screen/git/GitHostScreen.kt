@@ -40,14 +40,17 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.catpuppyapp.puppygit.constants.Cons
 import com.catpuppyapp.puppygit.screen.BranchListScreen
+import com.catpuppyapp.puppygit.screen.CommitListScreen
 import com.catpuppyapp.puppygit.screen.IndexScreen
 import com.catpuppyapp.puppygit.screen.ReflogListScreen
 import com.catpuppyapp.puppygit.screen.RemoteListScreen
 import com.catpuppyapp.puppygit.screen.StashListScreen
 import com.catpuppyapp.puppygit.screen.SubmoduleListScreen
 import com.catpuppyapp.puppygit.screen.TagListScreen
+import com.catpuppyapp.puppygit.screen.shared.CommitListFrom
 import com.catpuppyapp.puppygit.ui.theme.InitContent
 import com.catpuppyapp.puppygit.utils.AppModel
+import com.catpuppyapp.puppygit.utils.cache.NaviCache
 import com.itsaky.androidide.fragments.git.RepoIdResolver
 import com.itsaky.androidide.projects.IProjectManager
 import kotlinx.coroutines.launch
@@ -106,11 +109,27 @@ fun GitHostScreen() {
       }
 
       // 子路由: 从标签页或菜单跳转的独立页面。
-      // CommitListScreen 需要 CommitListFrom / isHEAD / 缓存 key 等复杂参数,
-      // 第一版先用占位, 待后续接入完整参数后再替换。
-      composable(Cons.nav_CommitListScreen + "/{repoId}") { backStackEntry ->
-        val id = backStackEntry.arguments?.getString("repoId").orEmpty()
-        PlaceholderScreen("Commit List\nrepoId=$id")
+      // CommitListScreen 路由与 puppygit AppScreenNavigator 保持一致 (5 个路径参数)。
+      // 这样 BranchListScreen / TagListScreen 等页面内部调用 goToCommitListScreen()
+      // 时, 导航能正确匹配本路由。
+      composable(
+          Cons.nav_CommitListScreen +
+              "/{repoId}/{isHEAD}/{from}/{fullOidCacheKey}/{shortBranchNameCacheKey}") { backStackEntry ->
+        val args = backStackEntry.arguments
+        val fullOidCacheKey = args?.getString("fullOidCacheKey") ?: ""
+        val shortBranchNameCacheKey = args?.getString("shortBranchNameCacheKey") ?: ""
+        CommitListScreen(
+            repoId = args?.getString("repoId") ?: "",
+            isHEAD = args?.getString("isHEAD") != "0",
+            fullOidCacheKey = fullOidCacheKey,
+            shortBranchNameCacheKey = shortBranchNameCacheKey,
+            from = CommitListFrom.fromCode(args?.getString("from") ?: "") ?: CommitListFrom.OTHER,
+            naviUp = {
+              navController.navigateUp()
+              NaviCache.del(fullOidCacheKey)
+              NaviCache.del(shortBranchNameCacheKey)
+            },
+        )
       }
 
       // DiffScreen 参数复杂(双 tree / file path / commit list 等), 占位待接入。
@@ -129,7 +148,7 @@ fun GitHostScreen() {
  *
  * 标签页与对应 puppygit Screen:
  *  - 变更   -> [IndexScreen] (工作区改动, naviUp 为 `() -> Unit`)
- *  - 历史   -> CommitListScreen (参数复杂, 暂占位)
+ *  - 历史   -> [CommitListScreen] (isHEAD=true, from=FOLLOW_HEAD, 屏幕内部自动 resolve HEAD)
  *  - 分支   -> [BranchListScreen]
  *  - Stash  -> [StashListScreen]
  *  - Tags   -> [TagListScreen]
@@ -179,10 +198,19 @@ private fun GitHomePage(repoId: String?, navController: NavHostController) {
               NoProjectPlaceholder()
             }
 
-        // 历史: CommitListScreen 需 CommitListFrom/isHEAD 等复杂参数, 占位
+        // 历史: CommitListScreen, isHEAD=true 时屏幕内部自动 resolve HEAD,
+        // 故 fullOidCacheKey/shortBranchNameCacheKey 传空串即可。
+        // from=FOLLOW_HEAD 表示"跟随 HEAD 的提交历史"(与 puppygit 从变更页进入语义一致)。
         1 ->
             if (repoId != null) {
-              PlaceholderScreen("Commit List (TODO)")
+              CommitListScreen(
+                  repoId = repoId,
+                  from = CommitListFrom.FOLLOW_HEAD,
+                  isHEAD = true,
+                  fullOidCacheKey = "",
+                  shortBranchNameCacheKey = "",
+                  naviUp = { /* 标签页内, 不向上导航 */ },
+              )
             } else {
               NoProjectPlaceholder()
             }
