@@ -197,6 +197,14 @@ class GitChangesFragment : BaseGitPageFragment() {
       emitGitOperation("changes", "rebase_abort")
       rebaseAbort()
     }
+    addToolbarAction(R.drawable.ic_check_24, "Cherry-pick Continue") {
+      emitGitOperation("changes", "cherrypick_continue")
+      cherryPickContinue()
+    }
+    addToolbarAction(R.drawable.ic_warning_24, "Cherry-pick Abort") {
+      emitGitOperation("changes", "cherrypick_abort")
+      cherryPickAbort()
+    }
 
     addToolbarSeparator()
 
@@ -500,6 +508,51 @@ class GitChangesFragment : BaseGitPageFragment() {
     }
   }
 
+  /** Cherry-pick Continue: 解决冲突后提交以继续 cherry-pick. */
+  private fun cherryPickContinue() {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    val ctx = context ?: return
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
+          val settings = SettingsUtil.getSettingsSnapshot()
+          val ret =
+              Libgit2Helper.cherrypickContinue(
+                  activityContext = ctx,
+                  repo = repo,
+                  username = username,
+                  email = email,
+                  overwriteAuthor = false,
+                  settings = settings,
+              )
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("Cherry-pick continue 完成"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "Cherry-pick continue 失败") }
+      }
+    }
+  }
+
+  /** Cherry-pick Abort: 中止 cherry-pick, 内部调 resetHardToHead 回到 cherry-pick 前状态. */
+  private fun cherryPickAbort() {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ret = Libgit2Helper.cherrypickAbort(repo)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("Cherry-pick 已中止"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "Cherry-pick 中止失败") }
+      }
+    }
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
   }
@@ -602,6 +655,7 @@ private sealed interface ChangesUiState {
   data class Loaded(
       val staged: List<StatusTypeEntrySaver>,
       val unstaged: List<StatusTypeEntrySaver>,
+      val repoState: Repository.StateT = Repository.StateT.NONE,
   ) : ChangesUiState
 }
 
@@ -632,6 +686,7 @@ private fun ChangesContent(
   }
 
   var uiState by remember { mutableStateOf<ChangesUiState>(ChangesUiState.Loading) }
+  var filterText by remember { mutableStateOf("") }
 
   LaunchedEffect(workdir, refreshTrigger.value) {
     if (uiState is ChangesUiState.Loaded) {
@@ -649,12 +704,33 @@ private fun ChangesContent(
       ChangesUiState.NoProject -> GitEmptyState("未打开项目")
       is ChangesUiState.Error -> GitErrorState(state.message, onRetry = onRefresh)
       is ChangesUiState.Loaded -> {
+        // 仓库状态徽标 (合并/Rebase/Cherry-pick 进行中时显示)
+        RepoStateBadge(state.repoState)
         if (state.staged.isEmpty() && state.unstaged.isEmpty()) {
           GitEmptyState("工作区干净，没有变更")
         } else {
+          // 过滤栏: 按文件名/路径客户端过滤
+          GitFilterBar(
+              value = filterText,
+              onValueChange = { filterText = it },
+              placeholder = "过滤文件名或路径",
+          )
+          val filter = filterText.trim()
+          val filteredStaged =
+              if (filter.isEmpty()) state.staged
+              else
+                  state.staged.filter {
+                    it.relativePathUnderRepo.contains(filter, ignoreCase = true)
+                  }
+          val filteredUnstaged =
+              if (filter.isEmpty()) state.unstaged
+              else
+                  state.unstaged.filter {
+                    it.relativePathUnderRepo.contains(filter, ignoreCase = true)
+                  }
           ChangesList(
-              staged = state.staged,
-              unstaged = state.unstaged,
+              staged = filteredStaged,
+              unstaged = filteredUnstaged,
               onStageFile = onStageFile,
               onUnstageFile = onUnstageFile,
               onOpenDiff = onOpenDiff,
@@ -689,7 +765,13 @@ private suspend fun loadChanges(workdir: String): ChangesUiState =
                       repoId = "",
                       onlyCheckEmpty = false,
                   )
-              ChangesUiState.Loaded(staged = staged.orEmpty(), unstaged = unstaged)
+              val repoState =
+                  runCatching { repo.state() }.getOrNull() ?: Repository.StateT.NONE
+              ChangesUiState.Loaded(
+                  staged = staged.orEmpty(),
+                  unstaged = unstaged,
+                  repoState = repoState,
+              )
             }
           }
           .getOrElse { ChangesUiState.Error(it.localizedMessage ?: "加载变更失败") }
@@ -945,5 +1027,47 @@ private fun changeTypeMeta(changeType: String?): Pair<String, Color> {
     "Conflict", "C" -> "C" to Color(0xFF9C27B0)
     "Typechanged", "T" -> "T" to Color(0xFF9C27B0)
     else -> (raw.firstOrNull()?.toString() ?: "?") to Color(0xFF9C27B0)
+  }
+}
+
+/**
+ * 仓库状态徽标: 当仓库处于 Merge/Rebase/Cherry-pick 进行中状态时,
+ * 在变更列表顶部显示一个小色块标签提示用户.
+ *
+ * - NONE: 不显示
+ * - MERGE: "合并进行中"
+ * - REBASE / REBASE_INTERACTIVE / REBASE_MERGE: "Rebase 进行中"
+ * - CHERRYPICK / CHERRYPICK_SEQUENCE: "Cherry-pick 进行中"
+ */
+@Composable
+private fun RepoStateBadge(state: Repository.StateT) {
+  if (state == Repository.StateT.NONE) return
+  val (text, color) =
+      when (state) {
+        Repository.StateT.MERGE -> "合并进行中" to Color(0xFFFFA000)
+        Repository.StateT.REBASE,
+        Repository.StateT.REBASE_INTERACTIVE,
+        Repository.StateT.REBASE_MERGE -> "Rebase 进行中" to Color(0xFF2196F3)
+        Repository.StateT.CHERRYPICK,
+        Repository.StateT.CHERRYPICK_SEQUENCE -> "Cherry-pick 进行中" to Color(0xFF9C27B0)
+        else -> return
+      }
+  Row(
+      modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Box(
+        modifier =
+            Modifier.clip(RoundedCornerShape(4.dp))
+                .background(color)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+    ) {
+      Text(
+          text = text,
+          color = Color.White,
+          style = MaterialTheme.typography.labelSmall,
+          fontWeight = FontWeight.Bold,
+      )
+    }
   }
 }
