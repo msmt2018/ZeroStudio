@@ -54,12 +54,8 @@ import com.catpuppyapp.puppygit.screen.ErrorListScreen
 import com.catpuppyapp.puppygit.screen.FileChooserScreen
 import com.catpuppyapp.puppygit.screen.FileHistoryScreen
 import com.catpuppyapp.puppygit.screen.IndexScreen
-import com.catpuppyapp.puppygit.screen.ReflogListScreen
 import com.catpuppyapp.puppygit.screen.RemoteListScreen
-import com.catpuppyapp.puppygit.screen.StashListScreen
 import com.catpuppyapp.puppygit.screen.SubPageEditor
-import com.catpuppyapp.puppygit.screen.SubmoduleListScreen
-import com.catpuppyapp.puppygit.screen.TagListScreen
 import com.catpuppyapp.puppygit.screen.TreeToTreeChangeListScreen
 import com.catpuppyapp.puppygit.screen.shared.CommitListFrom
 import com.catpuppyapp.puppygit.screen.shared.DiffFromScreen
@@ -87,7 +83,7 @@ private const val NAV_GIT_HOME = "git_home"
  *  1. 本 Composable 作为唯一宿主, 在内部用 Compose Navigation ([NavHost]) 管理所有
  *     puppygit 页面的跳转栈。
  *  2. 起始页 [NAV_GIT_HOME] 是一个 [GitHomePage], 内部用 [ScrollableTabRow] +
- *     [HorizontalPager] 展示 8 个主要 git 标签页(变更/历史/分支/Stash/Tags/远程/Reflog/子模块)。
+ *     [HorizontalPager] 展示 4 个主要 git 标签页(变更/历史/分支/远程)。
  *  3. 标签页里展示的 puppygit Screen(BranchListScreen 等)直接复用, 不再包裹 Fragment。
  *  4. 子页面(CommitList / Diff / CredentialManager 等复杂页) 通过 [NavHost] 的
  *     composable 路由跳转, 而不是塞进 HorizontalPager。
@@ -305,17 +301,15 @@ fun GitHostScreen() {
 }
 
 /**
- * git 首页: [ScrollableTabRow] + [HorizontalPager] 组合的 8 标签页。
+ * git 首页: [ScrollableTabRow] + [HorizontalPager] 组合的 4 标签页。
  *
  * 标签页与对应 puppygit Screen:
  *  - 变更   -> [IndexScreen] (工作区改动, naviUp 为 `() -> Unit`)
  *  - 历史   -> [CommitListScreen] (isHEAD=true, from=FOLLOW_HEAD, 屏幕内部自动 resolve HEAD)
  *  - 分支   -> [BranchListScreen]
- *  - Stash  -> [StashListScreen]
- *  - Tags   -> [TagListScreen]
  *  - 远程   -> [RemoteListScreen]
- *  - Reflog -> [ReflogListScreen]
- *  - 子模块 -> [SubmoduleListScreen]
+ *
+ * 已移除: Stash / Tags / Reflog / 子模块 (file tree git 操作按钮 + 顶部 toolbar 已覆盖 IDE 日常工作)
  *
  * 标签页内的 [naviUp] 一律返回 `false`: 标签页本身不在导航栈中, 不应触发 popBackStack。
  *
@@ -324,8 +318,9 @@ fun GitHostScreen() {
  */
 @Composable
 private fun GitHomePage(repoId: String?, navController: NavHostController) {
-  val tabs =
-      listOf("变更", "历史", "分支", "Stash", "Tags", "远程", "Reflog", "子模块")
+  // IDE 工作流常用 4 个 git tab: 变更 / 历史 / 分支 / 远程
+  // 移除: Stash / Tags / Reflog / 子模块 (file tree git 操作按钮 + 顶部 toolbar 已覆盖 IDE 日常工作)
+  val tabs = listOf("变更", "历史", "分支", "远程")
   val pagerState = rememberPagerState(initialPage = 0) { tabs.size }
   val scope = rememberCoroutineScope()
 
@@ -384,42 +379,10 @@ private fun GitHomePage(repoId: String?, navController: NavHostController) {
               NoProjectPlaceholder()
             }
 
-        // Stash
+        // 远程
         3 ->
             if (repoId != null) {
-              StashListScreen(repoId = repoId, naviUp = { false })
-            } else {
-              NoProjectPlaceholder()
-            }
-
-        // Tags
-        4 ->
-            if (repoId != null) {
-              TagListScreen(repoId = repoId, naviUp = { false })
-            } else {
-              NoProjectPlaceholder()
-            }
-
-        // 远程
-        5 ->
-            if (repoId != null) {
               RemoteListScreen(repoId = repoId, naviUp = { false })
-            } else {
-              NoProjectPlaceholder()
-            }
-
-        // Reflog
-        6 ->
-            if (repoId != null) {
-              ReflogListScreen(repoId = repoId, naviUp = { false })
-            } else {
-              NoProjectPlaceholder()
-            }
-
-        // 子模块
-        7 ->
-            if (repoId != null) {
-              SubmoduleListScreen(repoId = repoId, naviUp = { false })
             } else {
               NoProjectPlaceholder()
             }

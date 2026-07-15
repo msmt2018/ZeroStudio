@@ -58,6 +58,15 @@
       android:contentDescription="@string/git_action_push"
       android:src="@drawable/ic_git_push" />
 
+    <!-- git 操作菜单入口 (弹出 GitPopupManager: Switch Branch / Init / Token / SetUserInfo) -->
+    <ImageButton
+      android:id="@+id/git_status_menu"
+      android:layout_width="36dp"
+      android:layout_height="36dp"
+      android:background="?attr/selectableItemBackgroundBorderless"
+      android:contentDescription="@string/git_action_open_full_git_ui"
+      android:src="@drawable/ic_more_vert_24" />
+
   </LinearLayout>
 
   <RelativeLayout

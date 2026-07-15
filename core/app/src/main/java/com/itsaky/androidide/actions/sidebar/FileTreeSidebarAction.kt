@@ -21,14 +21,15 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.itsaky.androidide.R
-import com.itsaky.androidide.ui.screen.git.ComposeHostFragment
+import com.itsaky.androidide.fragments.sidebar.FileTreeFragment
 import kotlin.reflect.KClass
 
 /**
  * Sidebar action for showing file tree.
  *
- * 注: fragmentClass 指向 [ComposeHostFragment] (新版 Compose UI 宿主),
- * 替代旧版 GitHostFragment (已删除)。
+ * 注: fragmentClass 指向 [FileTreeFragment] — IDE 文件树核心 fragment,
+ * 已集成顶部 git 状态栏 + 长按弹 git 操作菜单 (add/unstage/revert/branch
+ * switch/commit/pull/push/fetch 等), 详见 fragments/sidebar/FileTreeFragment.kt。
  *
  * @author Akash Yadav
  */
@@ -39,7 +40,7 @@ class FileTreeSidebarAction(context: Context, override val order: Int) : Abstrac
   }
 
   override val id: String = ID
-  override val fragmentClass: KClass<out Fragment> = ComposeHostFragment::class
+  override val fragmentClass: KClass<out Fragment> = FileTreeFragment::class
 
   init {
     icon = null

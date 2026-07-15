@@ -41,6 +41,9 @@ import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
 import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
 import com.itsaky.androidide.events.ListProjectFilesRequestEvent
+import com.itsaky.androidide.fragments.editor.filetree.GitBranchPopupManager
+import com.itsaky.androidide.fragments.editor.filetree.GitPopupManager
+import com.itsaky.androidide.fragments.editor.filetree.TreeStateManager
 import com.itsaky.androidide.fragments.git.GitScreenOpener
 import com.itsaky.androidide.fragments.git.tree.FileTreeGitOps
 import com.itsaky.androidide.models.FileExtension
@@ -70,6 +73,13 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
   private var binding: LayoutEditorFileTreeBinding? = null
   private var fileTreeView: FileTree? = null
 
+  // 文件树核心组件 — IDE 文件树状态管理 (expand/collapse undo/redo)
+  private val treeStateManager = TreeStateManager()
+
+  // git 操作弹窗 (点击状态栏菜单按钮时弹出)
+  private var gitPopupManager: GitPopupManager? = null
+  private var gitBranchPopupManager: GitBranchPopupManager? = null
+
   private val viewModel by viewModels<FileTreeViewModel>(ownerProducer = { requireActivity() })
 
   override fun onCreateView(
@@ -95,8 +105,8 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
   }
 
   /**
-   * 顶部 git 状态栏: 显示当前分支 + ahead/behind + 改动数; 绑定 Pull / Push 按钮;
-   * 点击分支文字打开完整 git UI。
+   * 顶部 git 状态栏: 显示当前分支 + ahead/behind + 改动数; 绑定 Pull / Push / Menu 按钮;
+   * 点击分支文字打开完整 git UI; 点击菜单按钮弹出 GitPopupManager。
    */
   private fun setupGitStatusBar() {
     val b = binding ?: return
@@ -104,7 +114,39 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
     b.gitStatusBranch.setOnClickListener { openFullGitUi() }
     b.gitStatusPull.setOnClickListener { doGitOp(R.string.git_action_pull) { FileTreeGitOps.pull() } }
     b.gitStatusPush.setOnClickListener { doGitOp(R.string.git_action_push) { FileTreeGitOps.push() } }
+    b.gitStatusMenu.setOnClickListener { v -> showGitPopup(v) }
     refreshGitStatusBar()
+  }
+
+  /**
+   * 显示 git 操作菜单 (Switch Branch / Init / Token / SetUserInfo 等)。
+   * 入口: 文件树顶部状态栏的 "⋮" 按钮。
+   */
+  private fun showGitPopup(anchor: View) {
+    val ctx = context ?: return
+    gitPopupManager?.dismiss()
+    val manager =
+        GitPopupManager(ctx).also { gitPopupManager = it }
+    manager.show(anchor)
+  }
+
+  /**
+   * 显示分支切换弹窗 (本地 + 远程分支列表, 点击切换)。
+   * 注: 通常由 GitPopupManager 内部触发, 这里保留直接调用入口以便 FileTreeFragment
+   * 任何位置都可触发 (例如未来从长按文件菜单直接 "切换分支")。
+   */
+  @Suppress("unused")
+  private fun showBranchSwitcher(anchor: View) {
+    val ctx = context ?: return
+    gitBranchPopupManager?.dismiss()
+    val manager =
+        GitBranchPopupManager(ctx) { branchName ->
+          doGitOp(R.string.git_action_branch_switch) {
+            FileTreeGitOps.switchBranch(branchName)
+          }
+        }
+            .also { gitBranchPopupManager = it }
+    manager.show(anchor)
   }
 
   /** 异步刷新顶部 git 状态栏内容。 */
