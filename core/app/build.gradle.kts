@@ -207,7 +207,12 @@ dependencies {
   implementation(libs.androidx.compose.material.icons.extended)
 
   // UI/UX
+  implementation(platform(libs.androidx.compose.bom))
   implementation(libs.bundles.compose) // androidx compose
+  // Compose Navigation — 用于 GitHostScreen 的 NavHost (puppygit Screen 跳转栈)
+  implementation(libs.androidx.navigation.compose)
+  // Compose Foundation — HorizontalPager / rememberPagerState (GitHostScreen 标签页)
+  implementation(libs.androidx.compose.foundation)
   // 磨砂玻璃 (Frosted glass) - 音频/视频预览 fragment 控件
   implementation(libs.haze)
   implementation(libs.haze.blur)

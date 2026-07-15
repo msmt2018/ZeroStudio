@@ -112,8 +112,9 @@ fun GitHostScreen() {
 
   // 2. 解析当前打开工程路径 -> puppygit repoId。
   //    workdir 为 null 表示当前没有打开工程; repoId 为 null 表示尚未解析完成或解析失败。
-  val workdir =
-      remember { IProjectManager.getInstance().getWorkspace()?.getProjectDir()?.path }
+  //    直接用 IProjectManager.projectDirPath (String?) 而非 getWorkspace()?.getProjectDir()?.path,
+  //    更简洁且不依赖 Workspace 是否已配置。
+  val workdir = remember { IProjectManager.getInstance().projectDirPath }
   val repoId = RepoIdResolver.rememberRepoIdForWorkdir(workdir)
 
   // 3. NavHost: 以 puppygit 的 Cons.nav_* 常量作为路由, 统一管理页面跳转栈。
