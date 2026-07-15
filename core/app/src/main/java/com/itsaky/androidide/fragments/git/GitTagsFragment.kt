@@ -47,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -419,6 +420,7 @@ private fun TagListContent(
                 Repository.open(workdir).use { repo ->
                   val settings = SettingsUtil.getSettingsSnapshot()
                   val tags = Libgit2Helper.getAllTags(repoId = "", repo = repo, settings = settings)
+                      .sortedByDescending { it.pointedCommitDto?.originTimeInSecs ?: 0L }
                   TagListUiState.Loaded(tags)
                 }
               }
@@ -429,8 +431,14 @@ private fun TagListContent(
   val nbTrigger = newTagTrigger.value
   var showCreateDialog by remember { mutableStateOf(false) }
   var filterText by remember { mutableStateOf("") }
+  var isRefreshing by remember { mutableStateOf(false) }
+  var detailsFor by remember { mutableStateOf<TagDto?>(null) }
   LaunchedEffect(nbTrigger) {
     if (nbTrigger > 0) showCreateDialog = true
+  }
+  // 加载完成 (无论成功/失败) 后清除下拉刷新指示器
+  LaunchedEffect(uiState) {
+    if (uiState !is TagListUiState.Loading) isRefreshing = false
   }
 
   val paTrigger = pushAllTrigger.value
@@ -446,30 +454,43 @@ private fun TagListContent(
       if (s.tags.isEmpty()) {
         GitEmptyState(message = "暂无 Tag", icon = Icons.Outlined.LocalOffer)
       } else {
-        Column(modifier = Modifier.fillMaxSize()) {
-          GitFilterBar(
-              value = filterText,
-              onValueChange = { filterText = it },
-              placeholder = "过滤 Tag 名称",
-          )
-          val filtered = s.tags.filter { it.name.contains(filterText, ignoreCase = true) }
-          if (filtered.isEmpty()) {
-            GitEmptyState(message = "无匹配的 Tag")
-          } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
-            ) {
-              items(filtered, key = { it.name }) { tag ->
-                TagItem(
-                    tag = tag,
-                    onDelete = onDelete,
-                    onPush = onPushTag,
-                    onDeleteRemote = onDeleteRemoteTag,
-                    onCheckout = onCheckoutTag,
-                    onReset = onResetToTag,
-                )
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true; onRefresh() },
+        ) {
+          Column(modifier = Modifier.fillMaxSize()) {
+            GitFilterBar(
+                value = filterText,
+                onValueChange = { filterText = it },
+                placeholder = "过滤 Tag (名称/消息/Hash/打标签者)",
+            )
+            val filtered = s.tags.filter {
+              it.name.contains(filterText, ignoreCase = true) ||
+                  it.shortName.contains(filterText, ignoreCase = true) ||
+                  it.msg.contains(filterText, ignoreCase = true) ||
+                  it.targetFullOidStr.contains(filterText, ignoreCase = true) ||
+                  it.taggerName.contains(filterText, ignoreCase = true) ||
+                  it.taggerEmail.contains(filterText, ignoreCase = true)
+            }
+            if (filtered.isEmpty()) {
+              GitEmptyState(message = "无匹配的 Tag")
+            } else {
+              LazyColumn(
+                  modifier = Modifier.fillMaxSize(),
+                  contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                  verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
+              ) {
+                items(filtered, key = { it.name }) { tag ->
+                  TagItem(
+                      tag = tag,
+                      onDelete = onDelete,
+                      onPush = onPushTag,
+                      onDeleteRemote = onDeleteRemoteTag,
+                      onCheckout = onCheckoutTag,
+                      onReset = onResetToTag,
+                      onShowDetails = { detailsFor = tag },
+                  )
+                }
               }
             }
           }
@@ -485,6 +506,37 @@ private fun TagListContent(
           onCreate(name.trim(), msg.trim(), force)
         },
         onDismiss = { showCreateDialog = false },
+    )
+  }
+
+  // Tag 详情对话框
+  detailsFor?.let { tag ->
+    AlertDialog(
+        onDismissRequest = { detailsFor = null },
+        title = { Text("Tag 详情") },
+        text = {
+          Column {
+            DetailRow("名称", tag.shortName.ifBlank { tag.name })
+            DetailRow("全名", tag.name)
+            DetailRow("目标 OID", tag.targetFullOidStr)
+            DetailRow("类型", if (tag.isAnnotated) "附注 (Annotated)" else "轻量 (Lightweight)")
+            if (tag.isAnnotated) {
+              Spacer(Modifier.height(8.dp))
+              Text(
+                  "消息:",
+                  style = MaterialTheme.typography.labelMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+              Text(
+                  tag.msg.ifBlank { "(无消息)" },
+                  style = MaterialTheme.typography.bodySmall,
+              )
+            }
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = { detailsFor = null }) { Text("关闭") }
+        },
     )
   }
 }
@@ -544,6 +596,7 @@ private fun TagItem(
     onDeleteRemote: (String) -> Unit,
     onCheckout: (String) -> Unit,
     onReset: (String) -> Unit,
+    onShowDetails: () -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
   Card(
@@ -593,6 +646,10 @@ private fun TagItem(
       }
       DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
         DropdownMenuItem(
+            text = { Text("详情") },
+            onClick = { menuExpanded = false; onShowDetails() },
+        )
+        DropdownMenuItem(
             text = { Text("推送到 origin") },
             onClick = { menuExpanded = false; onPush(tag.shortName) },
         )
@@ -637,4 +694,22 @@ private fun TextInputDialog(
       },
       dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
   )
+}
+
+/** 详情对话框中的键值对行. */
+@Composable
+private fun DetailRow(label: String, value: String) {
+  Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    Text(
+        text = "$label: ",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = value,
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+  }
 }
