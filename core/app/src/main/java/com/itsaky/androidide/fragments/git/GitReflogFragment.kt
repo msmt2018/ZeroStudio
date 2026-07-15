@@ -47,7 +47,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -245,45 +247,87 @@ private fun ReflogContent(
   // 操作确认状态: pair of (操作类型, commit hash)
   var confirmAction by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-  Column(modifier = Modifier.fillMaxSize()) {
-    // 顶部 ref 选择器
-    if (workdir != null && refList.isNotEmpty()) {
-      RefSelector(
-          selectedRef = selectedRef,
-          refs = refList,
-          onRefSelected = { selectedRef = it },
-      )
-    }
+  // 过滤关键字 / 下拉刷新 / 详情对话框状态
+  var filterText by remember { mutableStateOf("") }
+  var isRefreshing by remember { mutableStateOf(false) }
+  var detailsFor by remember { mutableStateOf<ReflogEntryDto?>(null) }
 
-    when (val s = uiState) {
-      ReflogUiState.Loading -> GitLoadingState()
-      ReflogUiState.NoProject -> GitEmptyState(message = "未打开工程")
-      is ReflogUiState.Error -> GitErrorState(message = s.message, onRetry = onRefresh)
-      is ReflogUiState.Loaded -> {
-        if (s.entries.isEmpty()) {
-          GitEmptyState(message = "暂无操作日志", icon = Icons.Outlined.History)
-        } else {
-          LazyColumn(
-              modifier = Modifier.fillMaxSize(),
-              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-              verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
-          ) {
-            items(s.entries.size) { index ->
-              ReflogItem(
-                  entry = s.entries[index],
-                  onCheckoutNew = { entry ->
-                    confirmAction = "checkout_new" to (entry.idNew?.toString() ?: "")
-                  },
-                  onCheckoutOld = { entry ->
-                    confirmAction = "checkout_old" to (entry.idOld?.toString() ?: "")
-                  },
-                  onResetNew = { entry ->
-                    confirmAction = "reset_new" to (entry.idNew?.toString() ?: "")
-                  },
-                  onResetOld = { entry ->
-                    confirmAction = "reset_old" to (entry.idOld?.toString() ?: "")
-                  },
-              )
+  // uiState 离开 Loading 时关掉下拉刷新指示器 (初始加载不触发, 避免双重 loading)
+  LaunchedEffect(uiState) {
+    if (uiState !is ReflogUiState.Loading) isRefreshing = false
+  }
+
+  PullToRefreshBox(
+      isRefreshing = isRefreshing,
+      onRefresh = {
+        isRefreshing = true
+        onRefresh()
+      },
+  ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+      // 顶部 ref 选择器
+      if (workdir != null && refList.isNotEmpty()) {
+        RefSelector(
+            selectedRef = selectedRef,
+            refs = refList,
+            onRefSelected = { selectedRef = it },
+        )
+      }
+
+      // 过滤栏: 按消息/提交者/OID 过滤 reflog 条目
+      GitFilterBar(
+          value = filterText,
+          onValueChange = { filterText = it },
+          placeholder = "过滤 Reflog (消息/提交者/OID)",
+      )
+
+      when (val s = uiState) {
+        ReflogUiState.Loading -> GitLoadingState()
+        ReflogUiState.NoProject -> GitEmptyState(message = "未打开工程")
+        is ReflogUiState.Error -> GitErrorState(message = s.message, onRetry = onRefresh)
+        is ReflogUiState.Loaded -> {
+          // 按 msg / 提交者(username+email) / new OID / old OID 过滤
+          val filtered =
+              if (filterText.isBlank()) s.entries
+              else
+                  s.entries.filter { e ->
+                    e.msg.contains(filterText, ignoreCase = true) ||
+                        e.username.contains(filterText, ignoreCase = true) ||
+                        e.email.contains(filterText, ignoreCase = true) ||
+                        (e.idNew?.toString()?.contains(filterText, ignoreCase = true)
+                            == true) ||
+                        (e.idOld?.toString()?.contains(filterText, ignoreCase = true)
+                            == true)
+                  }
+          if (filtered.isEmpty()) {
+            GitEmptyState(
+                message = if (filterText.isNotBlank()) "无匹配的 Reflog" else "暂无操作日志",
+                icon = Icons.Outlined.History,
+            )
+          } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
+            ) {
+              items(filtered.size) { index ->
+                ReflogItem(
+                    entry = filtered[index],
+                    onCheckoutNew = { entry ->
+                      confirmAction = "checkout_new" to (entry.idNew?.toString() ?: "")
+                    },
+                    onCheckoutOld = { entry ->
+                      confirmAction = "checkout_old" to (entry.idOld?.toString() ?: "")
+                    },
+                    onResetNew = { entry ->
+                      confirmAction = "reset_new" to (entry.idNew?.toString() ?: "")
+                    },
+                    onResetOld = { entry ->
+                      confirmAction = "reset_old" to (entry.idOld?.toString() ?: "")
+                    },
+                    onShowDetails = { detailsFor = it },
+                )
+              }
             }
           }
         }
@@ -334,6 +378,36 @@ private fun ReflogContent(
         },
     )
   }
+
+  // Reflog 条目详情对话框
+  detailsFor?.let { entry ->
+    AlertDialog(
+        onDismissRequest = { detailsFor = null },
+        title = { Text("Reflog 详情") },
+        text = {
+          Column {
+            DetailRow("新 OID", entry.idNew?.toString() ?: "(无)")
+            DetailRow("旧 OID", entry.idOld?.toString() ?: "(无)")
+            DetailRow("提交者", entry.username.ifBlank { "(无)" })
+            DetailRow("邮箱", entry.email.ifBlank { "(无)" })
+            DetailRow("时间", entry.date.ifBlank { "(无)" })
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "消息:",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                entry.msg.ifBlank { "(无消息)" },
+                style = MaterialTheme.typography.bodySmall,
+            )
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = { detailsFor = null }) { Text("关闭") }
+        },
+    )
+  }
 }
 
 @Composable
@@ -343,6 +417,7 @@ private fun ReflogItem(
     onCheckoutOld: (ReflogEntryDto) -> Unit,
     onResetNew: (ReflogEntryDto) -> Unit,
     onResetOld: (ReflogEntryDto) -> Unit,
+    onShowDetails: (ReflogEntryDto) -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
 
@@ -397,6 +472,10 @@ private fun ReflogItem(
         }
       }
       DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        DropdownMenuItem(
+            text = { Text("详情") },
+            onClick = { menuExpanded = false; onShowDetails(entry) },
+        )
         DropdownMenuItem(
             text = { Text("Checkout 到新位置") },
             onClick = { menuExpanded = false; onCheckoutNew(entry) },
@@ -490,5 +569,23 @@ private fun RefSelector(
         }
       }
     }
+  }
+}
+
+/** 详情对话框中的键值对行 (label + monospace value), 对齐其它 git 页面的 DetailRow. */
+@Composable
+private fun DetailRow(label: String, value: String) {
+  Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    Text(
+        text = "$label: ",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = value,
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
   }
 }
