@@ -27,14 +27,20 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -129,6 +135,90 @@ fun GitErrorState(
       Text("重试")
     }
   }
+}
+
+// ===================== 共享对话框组件 =====================
+
+/**
+ * 通用确认对话框。统一各 Git 子页面危险操作 (删除/撤销/重置等) 的二次确认 UI。
+ *
+ * @param title 对话框标题
+ * @param message 确认提示文案
+ * @param confirmText 确认按钮文案, 默认 "确认"
+ * @param dismissText 取消按钮文案, 默认 "取消"
+ * @param destructive 是否为危险操作, true 时确认按钮使用 error 色
+ * @param onConfirm 确认回调
+ * @param onDismiss 取消/外部点击回调
+ */
+@Composable
+fun GitConfirmDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    confirmText: String = "确认",
+    dismissText: String = "取消",
+    destructive: Boolean = false,
+) {
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text(title) },
+      text = { Text(message) },
+      confirmButton = {
+        TextButton(onClick = onConfirm) {
+          Text(
+              text = confirmText,
+              color =
+                  if (destructive) MaterialTheme.colorScheme.error
+                  else MaterialTheme.colorScheme.primary,
+          )
+        }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text(dismissText) } },
+  )
+}
+
+/**
+ * 通用单行文本输入对话框。用于新建分支/tag/stash/remote 等场景。
+ *
+ * @param title 对话框标题
+ * @param label 输入框 label
+ * @param placeholder 输入框 placeholder
+ * @param initialValue 初始值
+ * @param confirmText 确认按钮文案
+ * @param onConfirm 返回用户输入 (已 trim); 返回空字符串表示用户留空
+ * @param onDismiss 取消回调
+ */
+@Composable
+fun GitTextInputDialog(
+    title: String,
+    label: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    placeholder: String = "",
+    initialValue: String = "",
+    confirmText: String = "确定",
+    dismissText: String = "取消",
+) {
+  var text by remember { mutableStateOf(initialValue) }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text(title) },
+      text = {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            label = { Text(label) },
+            placeholder = if (placeholder.isEmpty()) null else { { Text(placeholder) } },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+      },
+      confirmButton = {
+        TextButton(onClick = { onConfirm(text.trim()) }) { Text(confirmText) }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text(dismissText) } },
+  )
 }
 
 // ===================== 协作子页面共享组件 =====================

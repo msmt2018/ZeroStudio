@@ -118,6 +118,9 @@ class GitBranchesFragment : BaseGitPageFragment() {
           onDelete = ::deleteBranch,
           onRename = ::renameBranch,
           onCreate = ::createBranch,
+          onSetUpstream = ::setUpstreamForBranch,
+          onClearUpstream = ::clearUpstreamForBranch,
+          onDeleteRemoteBranch = ::deleteRemoteBranch,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -232,6 +235,70 @@ class GitBranchesFragment : BaseGitPageFragment() {
     }
   }
 
+  /** 设置本地分支的上游 (remote + 远程分支全 refspec). */
+  private fun setUpstreamForBranch(localBranchShortName: String, remoteName: String, remoteBranchShortName: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val upstream = com.catpuppyapp.puppygit.git.Upstream()
+          upstream.remote = remoteName
+          upstream.branchRefsHeadsFullRefSpec = "refs/heads/$remoteBranchShortName"
+          Libgit2Helper.setUpstreamForBranch(repo, upstream, localBranchShortName)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          toast("已设置 $localBranchShortName 的上游为 $remoteName/$remoteBranchShortName")
+          refreshTrigger.value++
+        }
+        result.onFailure { toast(it.localizedMessage ?: "设置上游失败") }
+      }
+    }
+  }
+
+  /** 清除本地分支的上游. */
+  private fun clearUpstreamForBranch(localBranchShortName: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          Libgit2Helper.clearUpstreamForBranch(repo, localBranchShortName)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          toast("已清除 $localBranchShortName 的上游")
+          refreshTrigger.value++
+        }
+        result.onFailure { toast(it.localizedMessage ?: "清除上游失败") }
+      }
+    }
+  }
+
+  /** 删除远程分支 (需要凭据, 推送删除). */
+  private fun deleteRemoteBranch(remoteBranchFullRefSpec: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val context = context ?: return
+    GitCredentialManager.ensureConfigured(context) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val ret = Libgit2Helper.deleteRemoteBranch(repo, remoteBranchFullRefSpec, GitCredentialManager.toHttpCredential(cfg))
+            if (ret.hasError()) throw RuntimeException(ret.msg)
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess {
+            toast("已删除远程分支")
+            refreshTrigger.value++
+          }
+          result.onFailure { toast(it.localizedMessage ?: "删除远程分支失败") }
+        }
+      }
+    }
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
   }
@@ -273,6 +340,9 @@ private fun BranchListContent(
     onDelete: (String) -> Unit,
     onRename: (String, String) -> Unit,
     onCreate: (String) -> Unit,
+    onSetUpstream: (String, String, String) -> Unit,
+    onClearUpstream: (String) -> Unit,
+    onDeleteRemoteBranch: (String) -> Unit,
 ) {
   val trigger = refreshTrigger.value
   val uiState by produceState<BranchListUiState>(BranchListUiState.Loading, trigger, workdir) {
@@ -304,13 +374,14 @@ private fun BranchListContent(
             .getOrElse { BranchListUiState.Error(it.localizedMessage ?: "加载分支失败") }
   }
 
-  // New Branch toolbar 按钮 → 打开新建对话框
   val nbTrigger = newBranchTrigger.value
   var showCreateDialog by remember { mutableStateOf(false) }
   LaunchedEffect(nbTrigger) {
     if (nbTrigger > 0) showCreateDialog = true
   }
   var renaming by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
+  var settingUpstream by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
+  var confirmingDelete by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
 
   when (val s = uiState) {
     BranchListUiState.Loading -> GitLoadingState()
@@ -326,6 +397,9 @@ private fun BranchListContent(
             onCheckout = onCheckout,
             onDelete = onDelete,
             onRenameRequest = { renaming = it },
+            onSetUpstreamRequest = { settingUpstream = it },
+            onClearUpstream = onClearUpstream,
+            onDeleteRemoteBranch = { confirmingDelete = it },
         )
       }
     }
@@ -355,6 +429,32 @@ private fun BranchListContent(
         onDismiss = { renaming = null },
     )
   }
+  settingUpstream?.let { branch ->
+    UpstreamDialog(
+        localBranchName = branch.shortName,
+        onConfirm = { remoteName, remoteBranch ->
+          settingUpstream = null
+          onSetUpstream(branch.shortName, remoteName, remoteBranch)
+        },
+        onDismiss = { settingUpstream = null },
+    )
+  }
+  confirmingDelete?.let { branch ->
+    AlertDialog(
+        onDismissRequest = { confirmingDelete = null },
+        title = { Text("删除远程分支") },
+        text = { Text("确认删除远程分支 ${branch.shortName}?\n此操作不可撤销!") },
+        confirmButton = {
+          TextButton(onClick = {
+            confirmingDelete = null
+            onDeleteRemoteBranch(branch.fullName)
+          }) { Text("删除") }
+        },
+        dismissButton = {
+          TextButton(onClick = { confirmingDelete = null }) { Text("取消") }
+        },
+    )
+  }
 }
 
 /** 卡片式分支列表，分 "本地分支" / "远程分支" 两个 section。 */
@@ -365,6 +465,9 @@ private fun BranchList(
     onCheckout: (String) -> Unit,
     onDelete: (String) -> Unit,
     onRenameRequest: (BranchNameAndTypeDto) -> Unit,
+    onSetUpstreamRequest: (BranchNameAndTypeDto) -> Unit,
+    onClearUpstream: (String) -> Unit,
+    onDeleteRemoteBranch: (BranchNameAndTypeDto) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -374,13 +477,28 @@ private fun BranchList(
     if (local.isNotEmpty()) {
       item(key = "header_local") { SectionHeader("本地分支") }
       items(local, key = { it.fullName }) { branch ->
-        BranchItem(branch, onCheckout, onDelete, onRenameRequest)
+        BranchItem(
+            branch = branch,
+            onCheckout = onCheckout,
+            onDelete = onDelete,
+            onRenameRequest = onRenameRequest,
+            onSetUpstreamRequest = onSetUpstreamRequest,
+            onClearUpstream = onClearUpstream,
+        )
       }
     }
     if (remote.isNotEmpty()) {
       item(key = "header_remote") { SectionHeader("远程分支") }
       items(remote, key = { it.fullName }) { branch ->
-        BranchItem(branch, onCheckout, onDelete, onRenameRequest)
+        BranchItem(
+            branch = branch,
+            onCheckout = onCheckout,
+            onDelete = onDelete,
+            onRenameRequest = onRenameRequest,
+            onSetUpstreamRequest = onSetUpstreamRequest,
+            onClearUpstream = onClearUpstream,
+            onDeleteRemoteBranch = onDeleteRemoteBranch,
+        )
       }
     }
   }
@@ -409,6 +527,9 @@ private fun BranchItem(
     onCheckout: (String) -> Unit,
     onDelete: (String) -> Unit,
     onRenameRequest: (BranchNameAndTypeDto) -> Unit,
+    onSetUpstreamRequest: (BranchNameAndTypeDto) -> Unit,
+    onClearUpstream: (String) -> Unit,
+    onDeleteRemoteBranch: (BranchNameAndTypeDto) -> Unit = null,
 ) {
   val isLocal = branch.type == Branch.BranchType.LOCAL
   val isCurrent = branch.isCurrent
@@ -473,6 +594,20 @@ private fun BranchItem(
                 onRenameRequest(branch)
               },
           )
+          DropdownMenuItem(
+              text = { Text("设置上游") },
+              onClick = {
+                menuExpanded = false
+                onSetUpstreamRequest(branch)
+              },
+          )
+          DropdownMenuItem(
+              text = { Text("清除上游") },
+              onClick = {
+                menuExpanded = false
+                onClearUpstream(branch.shortName)
+              },
+          )
         }
         if (!isCurrent) {
           DropdownMenuItem(
@@ -483,9 +618,58 @@ private fun BranchItem(
               },
           )
         }
+        if (!isLocal && onDeleteRemoteBranch != null) {
+          DropdownMenuItem(
+              text = { Text("删除远程分支") },
+              onClick = {
+                menuExpanded = false
+                onDeleteRemoteBranch(branch)
+              },
+          )
+        }
       }
     }
   }
+}
+
+/** 设置上游对话框: 输入 remote 名称和远程分支名. */
+@Composable
+private fun UpstreamDialog(
+    localBranchName: String,
+    onConfirm: (remoteName: String, remoteBranchName: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+  var remoteName by remember { mutableStateOf("origin") }
+  var remoteBranch by remember { mutableStateOf(localBranchName) }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("设置 $localBranchName 的上游") },
+      text = {
+        Column {
+          OutlinedTextField(
+              value = remoteName,
+              onValueChange = { remoteName = it },
+              label = { Text("Remote 名称 (如 origin)") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
+          Spacer(Modifier.height(8.dp))
+          OutlinedTextField(
+              value = remoteBranch,
+              onValueChange = { remoteBranch = it },
+              label = { Text("远程分支名 (如 main)") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = {
+          onConfirm(remoteName.trim(), remoteBranch.trim())
+        }) { Text("设置") }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+  )
 }
 
 /** 简单的文本输入对话框，用于新建 / 重命名分支。 */

@@ -42,6 +42,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -93,6 +94,12 @@ class GitStashFragment : BaseGitPageFragment() {
    */
   private val refreshTrigger = mutableStateOf(0)
 
+  /**
+   * Stash 对话框触发器。toolbar "Stash All" 按钮递增它, Compose 侧
+   * `LaunchedEffect(stashDialogTrigger)` 观察变化弹出消息输入对话框。
+   */
+  private val stashDialogTrigger = mutableStateOf(0)
+
   override fun onCreateView(
       inflater: LayoutInflater,
       container: ViewGroup?,
@@ -108,7 +115,7 @@ class GitStashFragment : BaseGitPageFragment() {
     }
 
     addToolbarAction(R.drawable.ic_push_pin_24, "Stash All") {
-      stashAll()
+      stashDialogTrigger.value++
     }
   }
 
@@ -120,9 +127,11 @@ class GitStashFragment : BaseGitPageFragment() {
       StashListContent(
           workdir = workdir,
           refreshTrigger = refreshTrigger.value,
+          stashDialogTrigger = stashDialogTrigger.value,
           onApply = ::applyStash,
           onPop = ::popStash,
           onDrop = ::dropStash,
+          onStashWithMessage = ::stashAll,
           onRefresh = ::triggerRefresh,
       )
     }
@@ -147,10 +156,14 @@ class GitStashFragment : BaseGitPageFragment() {
     Libgit2Helper.stashDrop(repo, index)
   }
 
-  private fun stashAll() = performStashAction("Stash All") { repo ->
+  /**
+   * 新建 stash。若 [message] 为空则使用 [Libgit2Helper.stashGenMsg] 自动生成消息。
+   */
+  private fun stashAll(message: String) = performStashAction("Stash All") { repo ->
     val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
     val sig = Signature.create(username, email)
-    Libgit2Helper.stashSave(repo, stasher = sig, msg = Libgit2Helper.stashGenMsg())
+    val msg = message.ifBlank { Libgit2Helper.stashGenMsg() }
+    Libgit2Helper.stashSave(repo, stasher = sig, msg = msg)
   }
 
   /**
@@ -196,19 +209,24 @@ class GitStashFragment : BaseGitPageFragment() {
 /**
  * Stash 列表主体。负责加载状态管理 (Loading / Empty / Error / Loaded) 与
  * 列表渲染。git 操作通过回调交回 [GitStashFragment] 在 `lifecycleScope` 上执行。
+ *
+ * [stashDialogTrigger] 变化时弹出消息输入对话框, 用户确认后调用 [onStashWithMessage]。
  */
 @Composable
 private fun StashListContent(
     workdir: String?,
     refreshTrigger: Int,
+    stashDialogTrigger: Int,
     onApply: (Int) -> Unit,
     onPop: (Int) -> Unit,
     onDrop: (Int) -> Unit,
+    onStashWithMessage: (String) -> Unit,
     onRefresh: () -> Unit,
 ) {
   var list by remember { mutableStateOf<List<StashDto>>(emptyList()) }
   var loading by remember { mutableStateOf(true) }
   var errorMsg by remember { mutableStateOf<String?>(null) }
+  var showStashDialog by remember { mutableStateOf(false) }
 
   LaunchedEffect(workdir, refreshTrigger) {
     if (workdir == null) {
@@ -237,6 +255,12 @@ private fun StashListContent(
     loading = false
   }
 
+  // toolbar "Stash All" 按钮递增 stashDialogTrigger, 这里观察变化弹出对话框。
+  // 排除初始值 0, 避免首次进入页面就弹出。
+  LaunchedEffect(stashDialogTrigger) {
+    if (stashDialogTrigger > 0) showStashDialog = true
+  }
+
   when {
     loading -> GitLoadingState()
     workdir == null -> GitEmptyState(message = "No opened project")
@@ -244,6 +268,55 @@ private fun StashListContent(
     list.isEmpty() -> GitEmptyState(message = "暂无 Stash")
     else -> StashList(list = list, onApply = onApply, onPop = onPop, onDrop = onDrop)
   }
+
+  if (showStashDialog) {
+    StashMessageDialog(
+        onConfirm = { msg ->
+          showStashDialog = false
+          onStashWithMessage(msg)
+        },
+        onDismiss = { showStashDialog = false },
+    )
+  }
+}
+
+/**
+ * Stash 消息输入对话框。留空则由 [Libgit2Helper.stashGenMsg] 自动生成消息。
+ */
+@Composable
+private fun StashMessageDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+  var message by remember { mutableStateOf("") }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("新建 Stash") },
+      text = {
+        Column {
+          Text(
+              text = "输入 stash 消息 (留空则自动生成)",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          OutlinedTextField(
+              value = message,
+              onValueChange = { message = it },
+              label = { Text("Stash 消息") },
+              placeholder = { Text("WIP: feature-x") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { onConfirm(message.trim()) }) { Text("Stash") }
+      },
+      dismissButton = {
+        TextButton(onClick = onDismiss) { Text("取消") }
+      },
+  )
 }
 
 @Composable

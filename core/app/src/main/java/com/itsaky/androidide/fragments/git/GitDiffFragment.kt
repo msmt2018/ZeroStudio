@@ -23,7 +23,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,10 +38,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -125,8 +129,64 @@ class GitDiffFragment : BaseGitPageFragment() {
     super.onViewCreated(view, savedInstanceState)
     val workdir = resolveWorkspaceDirPath()
 
-    val compose = setIdeContent { DiffScreen(workdir, refreshTrigger) }
+    val compose = setIdeContent {
+      DiffScreen(
+          workdir = workdir,
+          refreshTrigger = refreshTrigger,
+          onStageFile = ::stageFile,
+          onUnstageFile = ::unstageFile,
+          onRevertFile = ::revertFile,
+      )
+    }
     binding.gitContentContainer.addView(compose)
+  }
+
+  /** 暂存单个文件. */
+  private fun stageFile(item: StatusTypeEntrySaver) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val ret = runCatching {
+        Repository.open(workdir).use { repo ->
+          Libgit2Helper.stageStatusEntryAndWriteToDisk(repo, listOf(item))
+        }
+      }
+      withContext(Dispatchers.Main) {
+        ret.onSuccess { toast("已暂存 ${item.fileName}"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "暂存失败") }
+      }
+    }
+  }
+
+  /** 取消暂存单个文件. */
+  private fun unstageFile(path: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val ret = runCatching {
+        Repository.open(workdir).use { repo ->
+          Libgit2Helper.unStageItems(repo, listOf(path))
+        }
+      }
+      withContext(Dispatchers.Main) {
+        ret.onSuccess { toast("已取消暂存"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "取消暂存失败") }
+      }
+    }
+  }
+
+  /** 撤销单个文件到 index 版本 (不影响其他文件). */
+  private fun revertFile(item: StatusTypeEntrySaver) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val ret = runCatching {
+        Repository.open(workdir).use { repo ->
+          Libgit2Helper.revertFilesToIndexVersion(repo, listOf(item.relativePathUnderRepo))
+        }
+      }
+      withContext(Dispatchers.Main) {
+        ret.onSuccess { toast("已撤销 ${item.fileName}"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "撤销失败") }
+      }
+    }
   }
 
   private fun triggerRefresh() {
@@ -245,9 +305,16 @@ private fun loadDiffSnapshot(workdir: String): DiffSnapshot {
 }
 
 @Composable
-private fun DiffScreen(workdir: String?, refreshTrigger: MutableState<Int>) {
+private fun DiffScreen(
+    workdir: String?,
+    refreshTrigger: MutableState<Int>,
+    onStageFile: (StatusTypeEntrySaver) -> Unit,
+    onUnstageFile: (String) -> Unit,
+    onRevertFile: (StatusTypeEntrySaver) -> Unit,
+) {
   val tick = refreshTrigger.value
   var uiState by remember(workdir, tick) { mutableStateOf<DiffUiState>(DiffUiState.Loading) }
+  var confirmRevert by remember { mutableStateOf<StatusTypeEntrySaver?>(null) }
 
   LaunchedEffect(workdir, tick) {
     if (workdir == null) {
@@ -279,11 +346,30 @@ private fun DiffScreen(workdir: String?, refreshTrigger: MutableState<Int>) {
           unstaged = state.unstaged,
           staged = state.staged,
           onFileClick = { path ->
-            // diff 内容查看后续实现, 这里暂时只 Toast 提示文件路径
             Toast.makeText(context, path, Toast.LENGTH_SHORT).show()
           },
+          onStageFile = onStageFile,
+          onUnstageFile = onUnstageFile,
+          onRevertFileRequest = { confirmRevert = it },
       )
     }
+  }
+
+  confirmRevert?.let { item ->
+    AlertDialog(
+        onDismissRequest = { confirmRevert = null },
+        title = { Text("确认撤销") },
+        text = { Text("撤销 ${item.fileName} 的修改?\n该文件的未暂存变更将丢失!") },
+        confirmButton = {
+          TextButton(onClick = {
+            confirmRevert = null
+            onRevertFile(item)
+          }) { Text("撤销") }
+        },
+        dismissButton = {
+          TextButton(onClick = { confirmRevert = null }) { Text("取消") }
+        },
+    )
   }
 }
 
@@ -292,6 +378,9 @@ private fun DiffList(
     unstaged: List<StatusTypeEntrySaver>,
     staged: List<StatusTypeEntrySaver>,
     onFileClick: (String) -> Unit,
+    onStageFile: (StatusTypeEntrySaver) -> Unit,
+    onUnstageFile: (String) -> Unit,
+    onRevertFileRequest: (StatusTypeEntrySaver) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -301,13 +390,27 @@ private fun DiffList(
     if (unstaged.isNotEmpty()) {
       item(key = "header_unstaged") { SectionHeader("未暂存变更 (${unstaged.size})") }
       items(items = unstaged, key = { "u_" + it.relativePathUnderRepo }) { entry ->
-        ChangeItemCard(entry, onFileClick)
+        ChangeItemCard(
+            entry = entry,
+            isStaged = false,
+            onClick = onFileClick,
+            onStage = onStageFile,
+            onUnstage = onUnstageFile,
+            onRevertRequest = onRevertFileRequest,
+        )
       }
     }
     if (staged.isNotEmpty()) {
       item(key = "header_staged") { SectionHeader("已暂存变更 (${staged.size})") }
       items(items = staged, key = { "s_" + it.relativePathUnderRepo }) { entry ->
-        ChangeItemCard(entry, onFileClick)
+        ChangeItemCard(
+            entry = entry,
+            isStaged = true,
+            onClick = onFileClick,
+            onStage = onStageFile,
+            onUnstage = onUnstageFile,
+            onRevertRequest = onRevertFileRequest,
+        )
       }
     }
   }
@@ -325,15 +428,27 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun ChangeItemCard(entry: StatusTypeEntrySaver, onClick: (String) -> Unit) {
+private fun ChangeItemCard(
+    entry: StatusTypeEntrySaver,
+    isStaged: Boolean,
+    onClick: (String) -> Unit,
+    onStage: (StatusTypeEntrySaver) -> Unit,
+    onUnstage: (String) -> Unit,
+    onRevertRequest: (StatusTypeEntrySaver) -> Unit,
+) {
   val path = entry.relativePathUnderRepo
   val (badge, color) = changeTypeMeta(entry.changeType)
   val slashIndex = path.lastIndexOf('/')
   val fileName = if (slashIndex >= 0) path.substring(slashIndex + 1) else path
   val dirPart = if (slashIndex > 0) path.substring(0, slashIndex + 1) else ""
+  var menuExpanded by remember { mutableStateOf(false) }
 
   Card(
-      modifier = Modifier.fillMaxWidth().clickable { onClick(path) },
+      modifier =
+          Modifier.fillMaxWidth().combinedClickable(
+              onClick = { onClick(path) },
+              onLongClick = { menuExpanded = true },
+          ),
       shape = RoundedCornerShape(GitSpacing.cardCorner),
       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
       elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
@@ -342,7 +457,6 @@ private fun ChangeItemCard(entry: StatusTypeEntrySaver, onClick: (String) -> Uni
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-      // 变更类型色块 + 单字符标识
       Box(
           modifier =
               Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(color),
@@ -373,6 +487,23 @@ private fun ChangeItemCard(entry: StatusTypeEntrySaver, onClick: (String) -> Uni
               color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
+          )
+        }
+      }
+      DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        if (!isStaged) {
+          DropdownMenuItem(
+              text = { Text("暂存此文件") },
+              onClick = { menuExpanded = false; onStage(entry) },
+          )
+          DropdownMenuItem(
+              text = { Text("撤销修改") },
+              onClick = { menuExpanded = false; onRevertRequest(entry) },
+          )
+        } else {
+          DropdownMenuItem(
+              text = { Text("取消暂存") },
+              onClick = { menuExpanded = false; onUnstage(path) },
           )
         }
       }
