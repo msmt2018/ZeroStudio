@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.catpuppyapp.puppygit.git.StatusTypeEntrySaver
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
+import com.github.git24j.core.Index
 import com.github.git24j.core.Repository
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitDiffComposeBinding
@@ -136,6 +137,7 @@ class GitDiffFragment : BaseGitPageFragment() {
           onStageFile = ::stageFile,
           onUnstageFile = ::unstageFile,
           onRevertFile = ::revertFile,
+          onAddToGitignore = ::addToGitignore,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -185,6 +187,42 @@ class GitDiffFragment : BaseGitPageFragment() {
       withContext(Dispatchers.Main) {
         ret.onSuccess { toast("已撤销 ${item.fileName}"); triggerRefresh() }
             .onFailure { toast(it.localizedMessage ?: "撤销失败") }
+      }
+    }
+  }
+
+  /**
+   * 将文件加入 .gitignore 并从 git index 移除。
+   * 复刻 puppygit GitIgnoreDialog 的逻辑: 追加路径到 .gitignore 文件 + removeFromGit。
+   */
+  private fun addToGitignore(item: StatusTypeEntrySaver) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val relativePath = item.relativePathUnderRepo
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val ret = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ignoreFilePath = Libgit2Helper.getRepoIgnoreFilePathNoEndsWithSlash(repo, createIfNonExists = true)
+          // 追加路径到 .gitignore
+          val ignoreFile = java.io.File(ignoreFilePath)
+          val isFile = !item.relativePathUnderRepo.endsWith("/")
+          val entry = if (isFile) relativePath else "$relativePath/"
+          val existing = if (ignoreFile.exists()) ignoreFile.readText() else ""
+          if (!existing.lines().any { it.trim() == entry.trim() }) {
+            ignoreFile.writeText(
+                if (existing.isNotEmpty() && !existing.endsWith("\n")) "$existing\n$entry\n"
+                else "$existing$entry\n"
+            )
+          }
+          // 从 git index 移除 (如果已跟踪)
+          repo.index().use { index ->
+            Libgit2Helper.removeFromGit(index, relativePath, isFile)
+            index.write()
+          }
+        }
+      }
+      withContext(Dispatchers.Main) {
+        ret.onSuccess { toast("已加入 .gitignore: ${item.fileName}"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "加入 .gitignore 失败") }
       }
     }
   }
@@ -311,6 +349,7 @@ private fun DiffScreen(
     onStageFile: (StatusTypeEntrySaver) -> Unit,
     onUnstageFile: (String) -> Unit,
     onRevertFile: (StatusTypeEntrySaver) -> Unit,
+    onAddToGitignore: (StatusTypeEntrySaver) -> Unit,
 ) {
   val tick = refreshTrigger.value
   var uiState by remember(workdir, tick) { mutableStateOf<DiffUiState>(DiffUiState.Loading) }
@@ -351,6 +390,7 @@ private fun DiffScreen(
           onStageFile = onStageFile,
           onUnstageFile = onUnstageFile,
           onRevertFileRequest = { confirmRevert = it },
+          onAddToGitignore = onAddToGitignore,
       )
     }
   }
@@ -381,6 +421,7 @@ private fun DiffList(
     onStageFile: (StatusTypeEntrySaver) -> Unit,
     onUnstageFile: (String) -> Unit,
     onRevertFileRequest: (StatusTypeEntrySaver) -> Unit,
+    onAddToGitignore: (StatusTypeEntrySaver) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -397,6 +438,7 @@ private fun DiffList(
             onStage = onStageFile,
             onUnstage = onUnstageFile,
             onRevertRequest = onRevertFileRequest,
+            onAddToGitignore = onAddToGitignore,
         )
       }
     }
@@ -410,6 +452,7 @@ private fun DiffList(
             onStage = onStageFile,
             onUnstage = onUnstageFile,
             onRevertRequest = onRevertFileRequest,
+            onAddToGitignore = onAddToGitignore,
         )
       }
     }
@@ -435,6 +478,7 @@ private fun ChangeItemCard(
     onStage: (StatusTypeEntrySaver) -> Unit,
     onUnstage: (String) -> Unit,
     onRevertRequest: (StatusTypeEntrySaver) -> Unit,
+    onAddToGitignore: (StatusTypeEntrySaver) -> Unit,
 ) {
   val path = entry.relativePathUnderRepo
   val (badge, color) = changeTypeMeta(entry.changeType)
@@ -499,6 +543,10 @@ private fun ChangeItemCard(
           DropdownMenuItem(
               text = { Text("撤销修改") },
               onClick = { menuExpanded = false; onRevertRequest(entry) },
+          )
+          DropdownMenuItem(
+              text = { Text("加入 .gitignore") },
+              onClick = { menuExpanded = false; onAddToGitignore(entry) },
           )
         } else {
           DropdownMenuItem(

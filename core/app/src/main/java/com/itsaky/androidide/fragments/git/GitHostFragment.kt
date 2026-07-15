@@ -79,7 +79,7 @@ class GitHostFragment : Fragment() {
                     .show()
             is GitUiEvent.Error ->
                 Toast.makeText(requireContext(), event.message, Toast.LENGTH_SHORT).show()
-            is GitUiEvent.OpenDiff -> binding.gitViewPager.setCurrentItem(9, true)
+            is GitUiEvent.OpenDiff -> binding.gitViewPager.setCurrentItem(10, true)
           }
         }
       }
@@ -104,7 +104,8 @@ class GitHostFragment : Fragment() {
                     6 -> "Tags" // GitTagsFragment
                     7 -> "Remotes" // GitRemotesFragment
                     8 -> "Reflog" // GitReflogFragment
-                    9 -> "Diff" // GitDiffFragment
+                    9 -> "Submodule" // GitSubmoduleFragment
+                    10 -> "Diff" // GitDiffFragment
                     else -> getString(R.string.other)
                   }
             }
@@ -130,8 +131,8 @@ class GitHostFragment : Fragment() {
   }
 
   private inner class GitPagerAdapter(fragment: Fragment) : FragmentStateAdapter(fragment) {
-    // 页面数量为 10 (0-9)
-    override fun getItemCount(): Int = 10
+    // 页面数量为 11 (0-10)
+    override fun getItemCount(): Int = 11
 
     override fun createFragment(position: Int): Fragment {
       return when (position) {
@@ -144,7 +145,8 @@ class GitHostFragment : Fragment() {
         6 -> GitTagsFragment()
         7 -> GitRemotesFragment()
         8 -> GitReflogFragment()
-        9 -> GitDiffFragment()
+        9 -> GitSubmoduleFragment()
+        10 -> GitDiffFragment()
         else -> Fragment()
       }
     }

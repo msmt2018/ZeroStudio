@@ -60,7 +60,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.catpuppyapp.puppygit.etc.Ret
 import com.catpuppyapp.puppygit.git.BranchNameAndTypeDto
+import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.github.git24j.core.Branch
 import com.github.git24j.core.Repository
@@ -121,6 +123,7 @@ class GitBranchesFragment : BaseGitPageFragment() {
           onSetUpstream = ::setUpstreamForBranch,
           onClearUpstream = ::clearUpstreamForBranch,
           onDeleteRemoteBranch = ::deleteRemoteBranch,
+          onMerge = ::mergeBranch,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -299,6 +302,53 @@ class GitBranchesFragment : BaseGitPageFragment() {
     }
   }
 
+  /**
+   * 将 [targetBranchShortName] 合并到当前分支。
+   *
+   * 复刻 puppygit BranchListScreen 的 doMerge 调用:
+   * - [Libgit2Helper.mergeOneHead] (trueMergeFalseRebase=true)
+   * - 返回冲突时提示用户去冲突页面解决
+   */
+  private fun mergeBranch(targetBranchShortName: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
+          val settings = SettingsUtil.getSettingsSnapshot()
+          val ret = Libgit2Helper.mergeOneHead(
+              repo = repo,
+              targetRefName = targetBranchShortName,
+              username = username,
+              email = email,
+              settings = settings,
+          )
+          // 不抛异常, 而是根据 code 判断状态
+          ret
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { ret ->
+          when {
+            ret.success() -> {
+              toast("合并成功")
+              refreshTrigger.value++
+            }
+            ret.code == Ret.ErrCode.mergeFailedByAfterMergeHasConfilts -> {
+              toast("合并存在冲突，请到「冲突」页面解决")
+              refreshTrigger.value++
+            }
+            ret.code == Ret.ErrCode.alreadyUpToDate -> {
+              toast("已经是最新的")
+            }
+            else -> toast(ret.msg.ifBlank { "合并失败" })
+          }
+        }
+        result.onFailure { toast(it.localizedMessage ?: "合并失败") }
+      }
+    }
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
   }
@@ -343,6 +393,7 @@ private fun BranchListContent(
     onSetUpstream: (String, String, String) -> Unit,
     onClearUpstream: (String) -> Unit,
     onDeleteRemoteBranch: (String) -> Unit,
+    onMerge: (String) -> Unit,
 ) {
   val trigger = refreshTrigger.value
   val uiState by produceState<BranchListUiState>(BranchListUiState.Loading, trigger, workdir) {
@@ -382,6 +433,7 @@ private fun BranchListContent(
   var renaming by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var settingUpstream by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var confirmingDelete by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
+  var confirmingMerge by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
 
   when (val s = uiState) {
     BranchListUiState.Loading -> GitLoadingState()
@@ -400,6 +452,7 @@ private fun BranchListContent(
             onSetUpstreamRequest = { settingUpstream = it },
             onClearUpstream = onClearUpstream,
             onDeleteRemoteBranch = { confirmingDelete = it },
+            onMergeRequest = { confirmingMerge = it },
         )
       }
     }
@@ -455,6 +508,22 @@ private fun BranchListContent(
         },
     )
   }
+  confirmingMerge?.let { branch ->
+    AlertDialog(
+        onDismissRequest = { confirmingMerge = null },
+        title = { Text("合并分支") },
+        text = { Text("将分支 ${branch.shortName} 合并到当前分支?") },
+        confirmButton = {
+          TextButton(onClick = {
+            confirmingMerge = null
+            onMerge(branch.shortName)
+          }) { Text("合并") }
+        },
+        dismissButton = {
+          TextButton(onClick = { confirmingMerge = null }) { Text("取消") }
+        },
+    )
+  }
 }
 
 /** 卡片式分支列表，分 "本地分支" / "远程分支" 两个 section。 */
@@ -468,6 +537,7 @@ private fun BranchList(
     onSetUpstreamRequest: (BranchNameAndTypeDto) -> Unit,
     onClearUpstream: (String) -> Unit,
     onDeleteRemoteBranch: (BranchNameAndTypeDto) -> Unit,
+    onMergeRequest: (BranchNameAndTypeDto) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -484,6 +554,7 @@ private fun BranchList(
             onRenameRequest = onRenameRequest,
             onSetUpstreamRequest = onSetUpstreamRequest,
             onClearUpstream = onClearUpstream,
+            onMergeRequest = onMergeRequest,
         )
       }
     }
@@ -498,6 +569,7 @@ private fun BranchList(
             onSetUpstreamRequest = onSetUpstreamRequest,
             onClearUpstream = onClearUpstream,
             onDeleteRemoteBranch = onDeleteRemoteBranch,
+            onMergeRequest = onMergeRequest,
         )
       }
     }
@@ -529,6 +601,7 @@ private fun BranchItem(
     onRenameRequest: (BranchNameAndTypeDto) -> Unit,
     onSetUpstreamRequest: (BranchNameAndTypeDto) -> Unit,
     onClearUpstream: (String) -> Unit,
+    onMergeRequest: (BranchNameAndTypeDto) -> Unit,
     onDeleteRemoteBranch: (BranchNameAndTypeDto) -> Unit = null,
 ) {
   val isLocal = branch.type == Branch.BranchType.LOCAL
@@ -610,6 +683,13 @@ private fun BranchItem(
           )
         }
         if (!isCurrent) {
+          DropdownMenuItem(
+              text = { Text("合并到当前分支") },
+              onClick = {
+                menuExpanded = false
+                onMergeRequest(branch)
+              },
+          )
           DropdownMenuItem(
               text = { Text("删除") },
               onClick = {
