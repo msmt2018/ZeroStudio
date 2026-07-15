@@ -16,6 +16,9 @@
  */
 package com.itsaky.androidide.fragments.git
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -73,10 +76,14 @@ import kotlinx.coroutines.withContext
  * 功能:
  * - 列出所有子模块 ([Libgit2Helper.getSubmoduleDtoList])
  * - 添加子模块 ([Libgit2Helper.addSubmodule])
- * - 删除子模块 ([Libgit2Helper.removeSubmodule])
+ * - 删除子模块 ([Libgit2Helper.removeSubmodule]) — 可选是否删除文件/配置
  * - 修改子模块 URL ([Libgit2Helper.updateSubmoduleUrl])
  * - 克隆单个/全部子模块 ([Libgit2Helper.cloneSubmodules])
  * - 更新单个/全部子模块 ([Libgit2Helper.updateSubmodule])
+ * - 同步配置 / 初始化 (sm.init+sm.sync / submoduleRepoInit)
+ * - 重新加载子模块 ([Libgit2Helper.reloadSubmodule])
+ * - 恢复 .git 文件 ([Libgit2Helper.SubmoduleDotGitFileMan.restoreDotGitFileForSubmodule])
+ * - 复制完整路径
  *
  * 凭据策略: 复用 [GitCredentialManager.ensureConfigured] 得到 cfg, 用
  * [GitCredentialManager.toHttpCredential] 构造一个具体的 [CredentialEntity] 作为
@@ -144,6 +151,9 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
           onUpdateAll = ::updateAllSubmodules,
           onSyncConfig = ::syncSubmoduleConfig,
           onInit = ::initSubmodule,
+          onReload = ::reloadSubmodule,
+          onRestoreDotGit = ::restoreDotGitFile,
+          onCopyPath = ::copySubmodulePath,
           onRefresh = { refreshTrigger.value++ },
       )
     }
@@ -175,15 +185,15 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
     }
   }
 
-  /** 删除子模块 (同时删除文件和配置). */
-  private fun removeSubmodule(dto: SubmoduleDto) {
+  /** 删除子模块。对齐 puppygit SubmoduleListScreen: 可选是否删除文件/配置。 */
+  private fun removeSubmodule(dto: SubmoduleDto, deleteFiles: Boolean, deleteConfigs: Boolean) {
     val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
       val result = runCatching {
         Repository.open(workdir).use { repo ->
           Libgit2Helper.removeSubmodule(
-              deleteFiles = true,
-              deleteConfigs = true,
+              deleteFiles = deleteFiles,
+              deleteConfigs = deleteConfigs,
               repo = repo,
               repoWorkDirPath = workdir,
               submoduleName = dto.name,
@@ -355,6 +365,55 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
     }
   }
 
+  /**
+   * 重新加载子模块。对齐 puppygit SubmoduleListScreen:
+   * [Libgit2Helper.reloadSubmodule] 调用 sm.reload(force)。
+   */
+  private fun reloadSubmodule(dto: SubmoduleDto) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val sm = Libgit2Helper.openSubmodule(repo, dto.name)
+            ?: throw RuntimeException("找不到子模块 ${dto.name}")
+          Libgit2Helper.reloadSubmodule(sm, force = true)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已重新加载 ${dto.name}"); refreshTrigger.value++ }
+        result.onFailure { toast(it.localizedMessage ?: "重新加载失败") }
+      }
+    }
+  }
+
+  /**
+   * 恢复子模块的 .git 文件。对齐 puppygit SubmoduleListScreen:
+   * [Libgit2Helper.SubmoduleDotGitFileMan.restoreDotGitFileForSubmodule]。
+   */
+  private fun restoreDotGitFile(dto: SubmoduleDto) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Libgit2Helper.SubmoduleDotGitFileMan.restoreDotGitFileForSubmodule(
+            parentFullPath = workdir,
+            submodulePathUnderParent = dto.relativePathUnderParent,
+        )
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已尝试恢复 ${dto.name} 的 .git 文件"); refreshTrigger.value++ }
+        result.onFailure { toast(it.localizedMessage ?: "恢复 .git 文件失败") }
+      }
+    }
+  }
+
+  /** 复制子模块完整路径到剪贴板. */
+  private fun copySubmodulePath(dto: SubmoduleDto) {
+    val ctx = context ?: return
+    val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("submodule_path", dto.fullPath))
+    toast("已复制 ${dto.fullPath}")
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
   }
@@ -383,7 +442,7 @@ private fun SubmoduleListContent(
     cloneAllTrigger: Int,
     updateAllTrigger: Int,
     onAdd: (remoteUrl: String, relativePath: String) -> Unit,
-    onRemove: (SubmoduleDto) -> Unit,
+    onRemove: (SubmoduleDto, deleteFiles: Boolean, deleteConfigs: Boolean) -> Unit,
     onUpdateUrl: (submoduleName: String, newUrl: String) -> Unit,
     onClone: (SubmoduleDto) -> Unit,
     onUpdate: (SubmoduleDto) -> Unit,
@@ -391,6 +450,9 @@ private fun SubmoduleListContent(
     onUpdateAll: () -> Unit,
     onSyncConfig: (SubmoduleDto) -> Unit,
     onInit: (SubmoduleDto) -> Unit,
+    onReload: (SubmoduleDto) -> Unit,
+    onRestoreDotGit: (SubmoduleDto) -> Unit,
+    onCopyPath: (SubmoduleDto) -> Unit,
     onRefresh: () -> Unit,
 ) {
   var uiState by remember { mutableStateOf<SubmoduleUiState>(SubmoduleUiState.Loading) }
@@ -447,6 +509,9 @@ private fun SubmoduleListContent(
             onUpdateRequest = { updating = it },
             onSyncConfigRequest = { onSyncConfig(it) },
             onInitRequest = { onInit(it) },
+            onReloadRequest = { onReload(it) },
+            onRestoreDotGitRequest = { onRestoreDotGit(it) },
+            onCopyPathRequest = { onCopyPath(it) },
         )
       }
     }
@@ -461,15 +526,31 @@ private fun SubmoduleListContent(
         onDismiss = { showAddDialog = false },
     )
   }
+  // 删除对话框: 可选是否删除文件/配置 (对齐 puppygit SubmoduleListScreen)
   removing?.let { dto ->
+    var delFiles by remember { mutableStateOf(true) }
+    var delConfigs by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = { removing = null },
         title = { Text("删除子模块") },
-        text = { Text("确认删除子模块 ${dto.name}?\n将同时删除文件和配置，此操作不可撤销!") },
+        text = {
+          Column {
+            Text("确认删除子模块 ${dto.name}? 此操作不可撤销!")
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              androidx.compose.material3.Checkbox(checked = delFiles, onCheckedChange = { delFiles = it })
+              Text("删除工作区文件", style = MaterialTheme.typography.bodySmall)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              androidx.compose.material3.Checkbox(checked = delConfigs, onCheckedChange = { delConfigs = it })
+              Text("删除配置 (.gitmodules / .git/config)", style = MaterialTheme.typography.bodySmall)
+            }
+          }
+        },
         confirmButton = {
           TextButton(onClick = {
             removing = null
-            onRemove(dto)
+            onRemove(dto, delFiles, delConfigs)
           }) { Text("删除", color = MaterialTheme.colorScheme.error) }
         },
         dismissButton = { TextButton(onClick = { removing = null }) { Text("取消") } },
@@ -552,6 +633,9 @@ private fun SubmoduleList(
     onUpdateRequest: (SubmoduleDto) -> Unit,
     onSyncConfigRequest: (SubmoduleDto) -> Unit,
     onInitRequest: (SubmoduleDto) -> Unit,
+    onReloadRequest: (SubmoduleDto) -> Unit,
+    onRestoreDotGitRequest: (SubmoduleDto) -> Unit,
+    onCopyPathRequest: (SubmoduleDto) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -567,6 +651,9 @@ private fun SubmoduleList(
           onUpdateRequest = onUpdateRequest,
           onSyncConfigRequest = onSyncConfigRequest,
           onInitRequest = onInitRequest,
+          onReloadRequest = onReloadRequest,
+          onRestoreDotGitRequest = onRestoreDotGitRequest,
+          onCopyPathRequest = onCopyPathRequest,
       )
     }
   }
@@ -581,6 +668,9 @@ private fun SubmoduleItem(
     onUpdateRequest: (SubmoduleDto) -> Unit,
     onSyncConfigRequest: (SubmoduleDto) -> Unit,
     onInitRequest: (SubmoduleDto) -> Unit,
+    onReloadRequest: (SubmoduleDto) -> Unit,
+    onRestoreDotGitRequest: (SubmoduleDto) -> Unit,
+    onCopyPathRequest: (SubmoduleDto) -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
 
@@ -670,10 +760,31 @@ private fun SubmoduleItem(
           },
       )
       DropdownMenuItem(
+          text = { Text("重新加载") },
+          onClick = {
+            menuExpanded = false
+            onReloadRequest(dto)
+          },
+      )
+      DropdownMenuItem(
+          text = { Text("恢复 .git 文件") },
+          onClick = {
+            menuExpanded = false
+            onRestoreDotGitRequest(dto)
+          },
+      )
+      DropdownMenuItem(
           text = { Text("修改 URL") },
           onClick = {
             menuExpanded = false
             onEditUrlRequest(dto)
+          },
+      )
+      DropdownMenuItem(
+          text = { Text("复制完整路径") },
+          onClick = {
+            menuExpanded = false
+            onCopyPathRequest(dto)
           },
       )
       DropdownMenuItem(
