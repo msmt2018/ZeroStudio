@@ -28,7 +28,7 @@ import kotlin.reflect.KClass
  * Sidebar action for showing file tree.
  *
  * 注: fragmentClass 指向 [ComposeHostFragment] (新版 Compose UI 宿主),
- * 替代旧版 [com.itsaky.androidide.fragments.git.GitHostFragment]。
+ * 替代旧版 GitHostFragment (已删除)。
  *
  * @author Akash Yadav
  */

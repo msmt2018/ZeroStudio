@@ -26,7 +26,7 @@ import androidx.fragment.app.Fragment
 import com.itsaky.androidide.fragments.git.PuppyGitIntegration
 
 /**
- * Compose 宿主 Fragment — 替代旧 [com.itsaky.androidide.fragments.git.GitHostFragment]。
+ * Compose 宿主 Fragment — 替代旧 GitHostFragment (已删除)。
  *
  * 仅做两件事:
  * 1. 在 [onCreateView] 中初始化 puppygit 运行时 ([PuppyGitIntegration.ensureReadyForAndroidIDE])

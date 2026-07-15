@@ -78,7 +78,7 @@ import kotlinx.coroutines.launch
 private const val NAV_GIT_HOME = "git_home"
 
 /**
- * Git 功能聚合入口 Composable — 替代旧的 [com.itsaky.androidide.fragments.git.GitHostFragment]。
+ * Git 功能聚合入口 Composable — 替代旧的 GitHostFragment (已删除)。
  *
  * 旧架构: ViewPager2 + TabLayout + 11 个子 Fragment (ChangesFragment / CommitFragment /
  * BranchFragment / ...) 的套娃, 每个 Fragment 各自维护生命周期与状态。
