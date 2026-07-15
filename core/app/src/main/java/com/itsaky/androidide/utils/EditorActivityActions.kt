@@ -56,6 +56,20 @@ import com.itsaky.androidide.actions.file.SaveFileAction
 import com.itsaky.androidide.actions.filetree.ConvertPathToAction
 import com.itsaky.androidide.actions.filetree.CopyPathAction
 import com.itsaky.androidide.actions.filetree.DeleteAction
+import com.itsaky.androidide.actions.filetree.GitAddAction
+import com.itsaky.androidide.actions.filetree.GitBranchSwitchAction
+import com.itsaky.androidide.actions.filetree.GitBranchesListAction
+import com.itsaky.androidide.actions.filetree.GitCommitAction
+import com.itsaky.androidide.actions.filetree.GitFetchAction
+import com.itsaky.androidide.actions.filetree.GitForcePushAction
+import com.itsaky.androidide.actions.filetree.GitLogAction
+import com.itsaky.androidide.actions.filetree.GitOpenFullUiAction
+import com.itsaky.androidide.actions.filetree.GitPullAction
+import com.itsaky.androidide.actions.filetree.GitPushAction
+import com.itsaky.androidide.actions.filetree.GitRevertAction
+import com.itsaky.androidide.actions.filetree.GitRevertForceAction
+import com.itsaky.androidide.actions.filetree.GitStatusAction
+import com.itsaky.androidide.actions.filetree.GitUnstageAction
 import com.itsaky.androidide.actions.filetree.NewFileAction
 import com.itsaky.androidide.actions.filetree.NewFileOrFolderAction
 import com.itsaky.androidide.actions.filetree.NewFolderAction
@@ -132,6 +146,25 @@ class EditorActivityActions {
       registry.registerAction(RenameAction(context, order++))
       registry.registerAction(RefactorRenameAction(context, order++))
       registry.registerAction(ConvertPathToAction(context, order++))
+
+      // git 文件级 actions (BaseFileTreeGitAction 会自动检查当前项目是否在 git 仓库中,
+      // 不在 git 仓库中则全部隐藏, 所以可以无脑注册)
+      registry.registerAction(GitAddAction(context, order++))
+      registry.registerAction(GitUnstageAction(context, order++))
+      registry.registerAction(GitRevertAction(context, order++))
+      registry.registerAction(GitRevertForceAction(context, order++))
+      registry.registerAction(GitOpenFullUiAction(context, order++))
+
+      // git 仓库级 actions
+      registry.registerAction(GitStatusAction(context, order++))
+      registry.registerAction(GitCommitAction(context, order++))
+      registry.registerAction(GitPullAction(context, order++))
+      registry.registerAction(GitPushAction(context, order++))
+      registry.registerAction(GitForcePushAction(context, order++))
+      registry.registerAction(GitFetchAction(context, order++))
+      registry.registerAction(GitBranchSwitchAction(context, order++))
+      registry.registerAction(GitBranchesListAction(context, order++))
+      registry.registerAction(GitLogAction(context, order++))
     }
 
     @JvmStatic
