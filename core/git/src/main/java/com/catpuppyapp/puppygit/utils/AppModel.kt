@@ -1103,6 +1103,117 @@ object AppModel {
         // 注意: 不调用 init_3() — navController/scrollBehavior 由 Composable 调用方设置
     }
 
+    /**
+     * AndroidIDE 专用第二阶段初始化 (异步) — 补充 [init_forAndroidIDE] 未完成的
+     * SettingsUtil/CertMan/Lg2HomeUtils 等运行时基础设施初始化。
+     *
+     * 必须在 [init_forAndroidIDE] 之后调用。因 [SettingsUtil.init] 是 suspend,
+     * 本函数为 suspend, 调用方需在协程中调用 (例如 Fragment.lifecycleScope.launch)。
+     *
+     * 幂等: 内部用 [init2ForAndroidIDEDone] 保证只执行一次。
+     *
+     * 与 puppygit 原生 [init_2] 的区别:
+     * - 不做密码迁移 (已废弃)
+     * - 不做旧设置迁移 (AndroidIDE 首次接入, 无历史数据)
+     */
+    private val init2ForAndroidIDEDone = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    suspend fun init_2_forAndroidIDE() {
+        if (init2ForAndroidIDEDone.get()) return
+        val funName = "init_2_forAndroidIDE"
+        // realAppContext 是 lateinit, 由 init_forAndroidIDE 设置;
+        // 本函数在 ensureReadyForAndroidIDE 之后调用, 此处一定已初始化
+        if (!this::realAppContext.isInitialized) {
+            MyLog.w(TAG, "#$funName skipped: realAppContext not initialized (init_forAndroidIDE not called?)")
+            return
+        }
+        val applicationContext = AppModel.realAppContext
+
+        val settingsSaveDir = AppModel.getOrCreateSettingsDir()
+
+        // 1. SettingsUtil (suspend) — 必须先于其他 init, 因后续 init 依赖 settings 快照
+        try {
+            SettingsUtil.init(settingsSaveDir, useBak = false)
+        } catch (e: Exception) {
+            MyLog.e(TAG, "#$funName init SettingsUtil err: ${e.stackTraceToString()}")
+        }
+
+        val settings = SettingsUtil.getSettingsSnapshot()
+        reloadTimeZone(settings)
+
+        // 2. CertMan — 加载 TLS 证书 (HTTPS clone/fetch/push 必需)
+        try {
+            CertMan.init(applicationContext, AppModel.certBundleDir, AppModel.certUserDir)
+        } catch (e: Exception) {
+            MyLog.e(TAG, "#$funName init CertMan err: ${e.stackTraceToString()}")
+        }
+
+        // 3. Lg2HomeUtils — 初始化 know_hosts (SSH 操作必需)
+        try {
+            Lg2HomeUtils.init(AppModel.appDataUnderAllReposDir, applicationContext)
+        } catch (e: Exception) {
+            MyLog.e(TAG, "#$funName init Lg2HomeUtils err: ${e.stackTraceToString()}")
+        }
+
+        // 4. DevFeature 状态
+        try {
+            DevFeature.singleDiff.state.value = settings.devSettings.singleDiffOn
+            DevFeature.treatNoWordMatchAsNoMatchedForDiff.state.value = settings.devSettings.treatNoWordMatchAsNoMatchedForDiff
+            DevFeature.degradeMatchByWordsToMatchByCharsIfNonMatched.state.value = settings.devSettings.degradeMatchByWordsToMatchByCharsIfNonMatched
+            DevFeature.showMatchedAllAtDiff.state.value = settings.devSettings.showMatchedAllAtDiff
+            DevFeature.legacyChangeListLoadMethod.state.value = settings.devSettings.legacyChangeListLoadMethod
+        } catch (e: Exception) {
+            MyLog.e(TAG, "#$funName init DevFeature err: ${e.stackTraceToString()}")
+        }
+
+        // 5. EditCache
+        try {
+            EditCache.init(
+                enableCache = settings.editor.editCacheEnable,
+                cacheDir = AppModel.getOrCreateEditCacheDir(),
+                keepInDays = settings.editor.editCacheKeepInDays
+            )
+        } catch (e: Exception) {
+            MyLog.e(TAG, "#$funName init EditCache err: ${e.stackTraceToString()}")
+        }
+
+        // 6. SnapshotUtil
+        try {
+            SnapshotUtil.init(
+                enableContentSnapshotForEditorInitValue = settings.editor.enableContentSnapshot || File(AppModel.appDataUnderAllReposDir, FlagFileName.enableContentSnapshot).exists(),
+                enableFileSnapshotForEditorInitValue = settings.editor.enableFileSnapshot || File(AppModel.appDataUnderAllReposDir, FlagFileName.enableFileSnapshot).exists(),
+                enableFileSnapshotForDiffInitValue = settings.diff.createSnapShotForOriginFileBeforeSave
+            )
+        } catch (e: Exception) {
+            MyLog.e(TAG, "#$funName init SnapshotUtil err: ${e.stackTraceToString()}")
+        }
+
+        // 7. FileOpenHistoryMan
+        try {
+            FileOpenHistoryMan.init(
+                saveDir = settingsSaveDir,
+                limit = settings.editor.fileOpenHistoryLimit,
+                requireClearOldSettingsEditedHistory = false
+            )
+        } catch (e: Exception) {
+            MyLog.e(TAG, "#$funName init FileOpenHistoryMan err: ${e.stackTraceToString()}")
+        }
+
+        // 8. StoragePathsMan
+        try {
+            StoragePathsMan.init(
+                saveDir = settingsSaveDir,
+                oldSettingsStoragePaths = null,
+                oldSettingsLastSelectedPath = null
+            )
+        } catch (e: Exception) {
+            MyLog.e(TAG, "#$funName init StoragePathsMan err: ${e.stackTraceToString()}")
+        }
+
+        init2ForAndroidIDEDone.set(true)
+        MyLog.d(TAG, "#$funName done")
+    }
+
 
     // start: device configuration (include width/height, and rotate screen or do other actions will update it)
     private val currentConfiguration = mutableStateOf<Configuration?>(null)

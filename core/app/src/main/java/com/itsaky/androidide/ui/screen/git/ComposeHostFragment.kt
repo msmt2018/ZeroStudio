@@ -23,14 +23,19 @@ import android.view.ViewGroup
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.itsaky.androidide.fragments.git.PuppyGitIntegration
+import kotlinx.coroutines.launch
 
 /**
  * Compose 宿主 Fragment — 替代旧 GitHostFragment (已删除)。
  *
- * 仅做两件事:
- * 1. 在 [onCreateView] 中初始化 puppygit 运行时 ([PuppyGitIntegration.ensureReadyForAndroidIDE])
- * 2. 挂载 [GitHostScreen] Composable
+ * 做三件事:
+ * 1. 在 [onCreateView] 中同步初始化 puppygit 运行时第一阶段
+ *    ([PuppyGitIntegration.ensureReadyForAndroidIDE] — native 库 + dbContainer + 真实路径)
+ * 2. 在协程中异步初始化第二阶段 ([PuppyGitIntegration.ensureReadyForAndroidIDEAsync]
+ *    — SettingsUtil/CertMan/Lg2HomeUtils 等基础设施)
+ * 3. 挂载 [GitHostScreen] Composable
  *
  * 不再使用 ViewPager2 + TabLayout + 11 个子 Fragment 的套娃架构。
  * 全部 git 页面直接使用 puppygit 的 Compose Screen, 通过 Compose Navigation 管理页面跳转。
@@ -44,9 +49,17 @@ class ComposeHostFragment : Fragment() {
       container: ViewGroup?,
       savedInstanceState: Bundle?,
   ): View {
-    // 初始化 puppygit 运行时 (native 库 + dbContainer + 真实路径)
+    // 第一阶段: 同步初始化 (native 库 + dbContainer + 真实路径)
     // navController/scrollBehavior 由 GitHostScreen 在 Composable 中设置
     PuppyGitIntegration.ensureReadyForAndroidIDE(requireContext())
+
+    // 第二阶段: 异步初始化 (SettingsUtil/CertMan/Lg2HomeUtils 等)
+    // 在协程中执行, 不阻塞 UI; 幂等, Fragment 重建时不会重复执行
+    // 注意: 用 Fragment.lifecycleScope 而非 viewLifecycleOwner.lifecycleScope,
+    // 因 onCreateView 中 view 尚未创建, viewLifecycleOwner 不可用
+    lifecycleScope.launch {
+      PuppyGitIntegration.ensureReadyForAndroidIDEAsync()
+    }
 
     return ComposeView(requireContext()).apply {
       setViewCompositionStrategy(

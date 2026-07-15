@@ -105,4 +105,23 @@ object PuppyGitIntegration {
     AppModel.init_forAndroidIDE(context)
     inited.set(true)
   }
+
+  /**
+   * AndroidIDE 专用第二阶段 (异步) — 补充 SettingsUtil/CertMan/Lg2HomeUtils 等
+   * 运行时基础设施初始化。
+   *
+   * 必须在 [ensureReadyForAndroidIDE] 之后调用。因内部调用 [AppModel.init_2_forAndroidIDE]
+   * (suspend), 本函数也为 suspend, 调用方需在协程中调用:
+   * ```
+   * viewLifecycleOwner.lifecycleScope.launch {
+   *   PuppyGitIntegration.ensureReadyForAndroidIDEAsync()
+   * }
+   * ```
+   *
+   * 幂等: 多次调用安全, 内部只执行一次。
+   */
+  suspend fun ensureReadyForAndroidIDEAsync() {
+    if (!inited.get()) return  // 第一阶段未完成, 无法继续
+    AppModel.init_2_forAndroidIDE()
+  }
 }
