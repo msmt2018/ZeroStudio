@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -39,10 +40,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.catpuppyapp.puppygit.etc.Ret
@@ -66,6 +70,7 @@ import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.github.git24j.core.Branch
 import com.github.git24j.core.Repository
+import com.github.git24j.core.Reset
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitBranchesComposeBinding
 import kotlinx.coroutines.Dispatchers
@@ -118,8 +123,9 @@ class GitBranchesFragment : BaseGitPageFragment() {
           onRefresh = { refreshTrigger.value++ },
           onCheckout = ::checkoutBranch,
           onDelete = ::deleteBranch,
-          onRename = ::renameBranch,
-          onCreate = ::createBranch,
+          onRename = { old, newN, force -> renameBranch(old, newN, force) },
+          onCreate = { name, force, checkout -> createBranch(name, force, checkout) },
+          onReset = ::resetToBranch,
           onSetUpstream = ::setUpstreamForBranch,
           onClearUpstream = ::clearUpstreamForBranch,
           onDeleteRemoteBranch = ::deleteRemoteBranch,
@@ -169,7 +175,12 @@ class GitBranchesFragment : BaseGitPageFragment() {
     }
   }
 
-  private fun createBranch(branchName: String) {
+  /**
+   * 创建本地分支。对齐 puppygit BranchListScreen:
+   * - [force] = true 时传入 [Libgit2Helper.createLocalBranchBasedHead] 的 overwriteIfExisted=true
+   * - [checkout] = true 时创建后自动切换到新分支
+   */
+  private fun createBranch(branchName: String, force: Boolean, checkout: Boolean) {
     if (branchName.isBlank()) return toast("分支名不能为空")
     val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
@@ -179,14 +190,23 @@ class GitBranchesFragment : BaseGitPageFragment() {
               Libgit2Helper.createLocalBranchBasedHead(
                   repo = repo,
                   branchName = branchName,
-                  overwriteIfExisted = false,
+                  overwriteIfExisted = force,
               )
           if (ret.hasError()) throw RuntimeException(ret.msg)
+          if (checkout) {
+            val coRet = Libgit2Helper.checkoutLocalBranchThenUpdateHead(
+                repo = repo,
+                branchName = branchName,
+                force = false,
+                updateHead = true,
+            )
+            if (coRet.hasError()) throw RuntimeException(coRet.msg)
+          }
         }
       }
       withContext(Dispatchers.Main) {
         result.onSuccess {
-          toast("已创建分支 $branchName")
+          toast("已创建分支 $branchName" + if (checkout) " 并切换" else "")
           refreshTrigger.value++
         }
         result.onFailure { toast(it.localizedMessage ?: "创建分支失败") }
@@ -213,7 +233,11 @@ class GitBranchesFragment : BaseGitPageFragment() {
     }
   }
 
-  private fun renameBranch(oldShortName: String, newName: String) {
+  /**
+   * 重命名本地分支。对齐 puppygit BranchListScreen:
+   * - [force] = true 时传入 [Libgit2Helper.renameBranch] 的 force=true (覆盖同名分支)
+   */
+  private fun renameBranch(oldShortName: String, newName: String, force: Boolean) {
     if (newName.isBlank()) return toast("分支名不能为空")
     val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
@@ -224,7 +248,7 @@ class GitBranchesFragment : BaseGitPageFragment() {
                   repo = repo,
                   branchShortName = oldShortName,
                   newName = newName,
-                  force = false,
+                  force = force,
               )
           if (ret.hasError()) throw RuntimeException(ret.msg)
         }
@@ -235,6 +259,30 @@ class GitBranchesFragment : BaseGitPageFragment() {
           refreshTrigger.value++
         }
         result.onFailure { toast(it.localizedMessage ?: "重命名失败") }
+      }
+    }
+  }
+
+  /**
+   * 将当前分支 reset 到 [shortName] 指向的 commit。对齐 puppygit BranchListScreen 的 doReset:
+   * - [resetType] 支持 SOFT / MIXED / HARD (对应 [Reset.ResetT])
+   * - 调用 [Libgit2Helper.resetToRevspec], revspec 传分支短名
+   */
+  private fun resetToBranch(shortName: String, resetType: Reset.ResetT) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ret = Libgit2Helper.resetToRevspec(repo, shortName, resetType)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          toast("已 Reset ($resetType) 到 $shortName")
+          refreshTrigger.value++
+        }
+        result.onFailure { toast(it.localizedMessage ?: "Reset 失败") }
       }
     }
   }
@@ -434,8 +482,9 @@ private fun BranchListContent(
     onRefresh: () -> Unit,
     onCheckout: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onRename: (String, String) -> Unit,
-    onCreate: (String) -> Unit,
+    onRename: (String, String, Boolean) -> Unit,
+    onCreate: (String, Boolean, Boolean) -> Unit,
+    onReset: (String, Reset.ResetT) -> Unit,
     onSetUpstream: (String, String, String) -> Unit,
     onClearUpstream: (String) -> Unit,
     onDeleteRemoteBranch: (String) -> Unit,
@@ -482,6 +531,8 @@ private fun BranchListContent(
   var confirmingDelete by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var confirmingMerge by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var confirmingRebase by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
+  var resetting by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
+  var showingDetails by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var filterText by remember { mutableStateOf("") }
 
   when (val s = uiState) {
@@ -514,6 +565,8 @@ private fun BranchListContent(
                 onDeleteRemoteBranch = { confirmingDelete = it },
                 onMergeRequest = { confirmingMerge = it },
                 onRebaseRequest = { confirmingRebase = it },
+                onResetRequest = { resetting = it },
+                onShowDetails = { showingDetails = it },
             )
           }
         }
@@ -522,25 +575,20 @@ private fun BranchListContent(
   }
 
   if (showCreateDialog) {
-    TextInputDialog(
-        title = "新建分支",
-        confirmText = "创建",
-        initial = "",
-        onConfirm = { name ->
+    CreateBranchDialog(
+        onConfirm = { name, force, checkout ->
           showCreateDialog = false
-          onCreate(name)
+          onCreate(name, force, checkout)
         },
         onDismiss = { showCreateDialog = false },
     )
   }
   renaming?.let { branch ->
-    TextInputDialog(
-        title = "重命名分支",
-        confirmText = "重命名",
-        initial = branch.shortName,
-        onConfirm = { newName ->
+    RenameBranchDialog(
+        branchShortName = branch.shortName,
+        onConfirm = { newName, force ->
           renaming = null
-          onRename(branch.shortName, newName)
+          onRename(branch.shortName, newName, force)
         },
         onDismiss = { renaming = null },
     )
@@ -603,6 +651,19 @@ private fun BranchListContent(
         },
     )
   }
+  resetting?.let { branch ->
+    ResetBranchDialog(
+        branchShortName = branch.shortName,
+        onConfirm = { resetType ->
+          resetting = null
+          onReset(branch.shortName, resetType)
+        },
+        onDismiss = { resetting = null },
+    )
+  }
+  showingDetails?.let { branch ->
+    BranchDetailsDialog(branch = branch, onDismiss = { showingDetails = null })
+  }
 }
 
 /** 卡片式分支列表，分 "本地分支" / "远程分支" 两个 section。 */
@@ -618,6 +679,8 @@ private fun BranchList(
     onDeleteRemoteBranch: (BranchNameAndTypeDto) -> Unit,
     onMergeRequest: (BranchNameAndTypeDto) -> Unit,
     onRebaseRequest: (BranchNameAndTypeDto) -> Unit,
+    onResetRequest: (BranchNameAndTypeDto) -> Unit,
+    onShowDetails: (BranchNameAndTypeDto) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -636,6 +699,8 @@ private fun BranchList(
             onClearUpstream = onClearUpstream,
             onMergeRequest = onMergeRequest,
             onRebaseRequest = onRebaseRequest,
+            onResetRequest = onResetRequest,
+            onShowDetails = onShowDetails,
         )
       }
     }
@@ -652,6 +717,8 @@ private fun BranchList(
             onDeleteRemoteBranch = onDeleteRemoteBranch,
             onMergeRequest = onMergeRequest,
             onRebaseRequest = onRebaseRequest,
+            onResetRequest = onResetRequest,
+            onShowDetails = onShowDetails,
         )
       }
     }
@@ -685,6 +752,8 @@ private fun BranchItem(
     onClearUpstream: (String) -> Unit,
     onMergeRequest: (BranchNameAndTypeDto) -> Unit,
     onRebaseRequest: (BranchNameAndTypeDto) -> Unit,
+    onResetRequest: (BranchNameAndTypeDto) -> Unit,
+    onShowDetails: (BranchNameAndTypeDto) -> Unit,
     onDeleteRemoteBranch: (BranchNameAndTypeDto) -> Unit = null,
 ) {
   val isLocal = branch.type == Branch.BranchType.LOCAL
@@ -733,6 +802,13 @@ private fun BranchItem(
         )
       }
       DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        DropdownMenuItem(
+            text = { Text("详情") },
+            onClick = {
+              menuExpanded = false
+              onShowDetails(branch)
+            },
+        )
         if (isLocal && !isCurrent) {
           DropdownMenuItem(
               text = { Text("切换") },
@@ -778,6 +854,13 @@ private fun BranchItem(
               onClick = {
                 menuExpanded = false
                 onRebaseRequest(branch)
+              },
+          )
+          DropdownMenuItem(
+              text = { Text("重置到此分支") },
+              onClick = {
+                menuExpanded = false
+                onResetRequest(branch)
               },
           )
           DropdownMenuItem(
@@ -842,25 +925,210 @@ private fun UpstreamDialog(
   )
 }
 
-/** 简单的文本输入对话框，用于新建 / 重命名分支。 */
+/**
+ * 新建分支对话框。对齐 puppygit BranchListScreen:
+ * - [force] = true 时覆盖同名分支 (overwriteIfExisted)
+ * - [checkout] = true 时创建后自动切换到新分支
+ */
 @Composable
-private fun TextInputDialog(
-    title: String,
-    confirmText: String,
-    initial: String,
-    onConfirm: (String) -> Unit,
+private fun CreateBranchDialog(
+    onConfirm: (name: String, force: Boolean, checkout: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-  var text by remember { mutableStateOf(initial) }
+  var name by remember { mutableStateOf("") }
+  var force by remember { mutableStateOf(false) }
+  var checkout by remember { mutableStateOf(false) }
   AlertDialog(
       onDismissRequest = onDismiss,
-      title = { Text(title) },
+      title = { Text("新建分支") },
       text = {
-        OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true)
+        Column {
+          OutlinedTextField(
+              value = name,
+              onValueChange = { name = it },
+              label = { Text("分支名") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
+          Spacer(Modifier.height(8.dp))
+          Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.fillMaxWidth(),
+          ) {
+            Checkbox(checked = force, onCheckedChange = { force = it })
+            Text("强制创建 (覆盖同名)")
+          }
+          Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.fillMaxWidth(),
+          ) {
+            Checkbox(checked = checkout, onCheckedChange = { checkout = it })
+            Text("创建后切换")
+          }
+        }
       },
       confirmButton = {
-        TextButton(onClick = { onConfirm(text.trim()) }) { Text(confirmText) }
+        TextButton(onClick = { onConfirm(name.trim(), force, checkout) }) { Text("创建") }
       },
       dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
   )
+}
+
+/**
+ * 重命名分支对话框。对齐 puppygit BranchListScreen:
+ * - [force] = true 时覆盖同名分支
+ */
+@Composable
+private fun RenameBranchDialog(
+    branchShortName: String,
+    onConfirm: (newName: String, force: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+  var newName by remember { mutableStateOf(branchShortName) }
+  var force by remember { mutableStateOf(false) }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("重命名分支") },
+      text = {
+        Column {
+          OutlinedTextField(
+              value = newName,
+              onValueChange = { newName = it },
+              label = { Text("新分支名") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
+          Spacer(Modifier.height(8.dp))
+          Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.fillMaxWidth(),
+          ) {
+            Checkbox(checked = force, onCheckedChange = { force = it })
+            Text("强制覆盖同名分支")
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { onConfirm(newName.trim(), force) }) { Text("重命名") }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+  )
+}
+
+/**
+ * Reset 到分支对话框。对齐 puppygit BranchListScreen 的 doReset:
+ * - SOFT: 仅移动 HEAD, 保留 index 和工作区
+ * - MIXED: 移动 HEAD, 重置 index, 保留工作区 (默认)
+ * - HARD: 移动 HEAD, 重置 index 和工作区 (危险)
+ */
+@Composable
+private fun ResetBranchDialog(
+    branchShortName: String,
+    onConfirm: (Reset.ResetT) -> Unit,
+    onDismiss: () -> Unit,
+) {
+  var resetType by remember { mutableStateOf(Reset.ResetT.MIXED) }
+  val options = listOf(
+      Reset.ResetT.SOFT to "SOFT (保留 index 和工作区)",
+      Reset.ResetT.MIXED to "MIXED (重置 index, 保留工作区)",
+      Reset.ResetT.HARD to "HARD (重置 index 和工作区, 危险!)",
+  )
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("Reset 到 $branchShortName") },
+      text = {
+        Column {
+          Text(
+              text = "选择 Reset 类型:",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Spacer(Modifier.height(8.dp))
+          options.forEach { (type, label) ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+              RadioButton(
+                  selected = resetType == type,
+                  onClick = { resetType = type },
+              )
+              Text(label, style = MaterialTheme.typography.bodySmall)
+            }
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { onConfirm(resetType) }) { Text("Reset") }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+  )
+}
+
+/**
+ * 分支详情对话框。展示 [BranchNameAndTypeDto] 中的关键字段。
+ */
+@Composable
+private fun BranchDetailsDialog(
+    branch: BranchNameAndTypeDto,
+    onDismiss: () -> Unit,
+) {
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("分支详情") },
+      text = {
+        Column {
+          DetailRow("短名", branch.shortName)
+          DetailRow("全名", branch.fullName)
+          DetailRow("类型", branch.type.name)
+          DetailRow("当前分支", if (branch.isCurrent) "是" else "否")
+          if (branch.shortOidStr.isNotBlank()) {
+            DetailRow("短 OID", branch.shortOidStr)
+          }
+          if (branch.oidStr.isNotBlank()) {
+            DetailRow("完整 OID", branch.oidStr)
+          }
+          if (branch.isSymbolic) {
+            DetailRow("符号引用目标", branch.symbolicTargetShortName)
+          }
+          branch.upstream?.let { up ->
+            if (up.remote.isNotBlank()) {
+              DetailRow("上游 Remote", up.remote)
+            }
+            if (up.remoteBranchShortRefSpec.isNotBlank()) {
+              DetailRow("上游分支", up.remoteBranchShortRefSpec)
+            }
+          }
+          if (branch.ahead > 0 || branch.behind > 0) {
+            DetailRow("领先/落后", "↑${branch.ahead} ↓${branch.behind}")
+          }
+          if (branch.remotePrefixFromShortName.isNotBlank()) {
+            DetailRow("Remote 前缀", branch.remotePrefixFromShortName)
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = onDismiss) { Text("关闭") }
+      },
+  )
+}
+
+/** 详情对话框中的键值对行. */
+@Composable
+private fun DetailRow(label: String, value: String) {
+  Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    Text(
+        text = "$label: ",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = value,
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+  }
 }
