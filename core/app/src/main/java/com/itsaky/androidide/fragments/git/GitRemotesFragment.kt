@@ -48,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -402,29 +403,63 @@ private fun RemoteListContent(
   var editing by remember { mutableStateOf<RemoteItemData?>(null) }
   var editingPushUrl by remember { mutableStateOf<RemoteItemData?>(null) }
   var renaming by remember { mutableStateOf<RemoteItemData?>(null) }
+  var filterText by remember { mutableStateOf("") }
+  var isRefreshing by remember { mutableStateOf(false) }
+  var detailsFor by remember { mutableStateOf<RemoteItemData?>(null) }
+
+  // 加载完成 (无论成功/失败/空) 后关闭下拉刷新指示器
+  LaunchedEffect(uiState) {
+    if (uiState !is RemoteListUiState.Loading) isRefreshing = false
+  }
 
   when (val s = uiState) {
     RemoteListUiState.Loading -> GitLoadingState()
     RemoteListUiState.NoProject -> GitEmptyState(message = "未打开工程")
     is RemoteListUiState.Error -> GitErrorState(message = s.message, onRetry = onRefresh)
     is RemoteListUiState.Loaded -> {
-      if (s.remotes.isEmpty()) {
-        GitEmptyState(message = "暂无 Remote\n点击 + 添加远程仓库", icon = Icons.Outlined.Cloud)
-      } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
-        ) {
-          items(s.remotes, key = { it.name }) { remote ->
-            RemoteItem(
-                remote = remote,
-                onFetch = { onFetch(remote.name) },
-                onEditUrl = { editing = remote },
-                onEditPushUrl = { editingPushUrl = remote },
-                onRename = { renaming = remote },
-                onDelete = { onDelete(remote.name) },
+      val filtered = if (filterText.isBlank()) s.remotes else s.remotes.filter {
+        it.name.contains(filterText, ignoreCase = true) ||
+            it.fetchUrl.contains(filterText, ignoreCase = true) ||
+            it.pushUrl.contains(filterText, ignoreCase = true)
+      }
+      PullToRefreshBox(
+          isRefreshing = isRefreshing,
+          onRefresh = {
+            isRefreshing = true
+            onRefresh()
+          },
+      ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+          GitFilterBar(
+              value = filterText,
+              onValueChange = { filterText = it },
+              placeholder = "过滤 Remote (名称/URL)",
+          )
+          if (filtered.isEmpty()) {
+            GitEmptyState(
+                message =
+                    if (filterText.isNotBlank()) "无匹配的 Remote"
+                    else "暂无 Remote\n点击 + 添加远程仓库",
+                icon = Icons.Outlined.Cloud,
             )
+          } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
+            ) {
+              items(filtered, key = { it.name }) { remote ->
+                RemoteItem(
+                    remote = remote,
+                    onFetch = { onFetch(remote.name) },
+                    onEditUrl = { editing = remote },
+                    onEditPushUrl = { editingPushUrl = remote },
+                    onRename = { renaming = remote },
+                    onShowDetails = { detailsFor = remote },
+                    onDelete = { onDelete(remote.name) },
+                )
+              }
+            }
           }
         }
       }
@@ -472,6 +507,23 @@ private fun RemoteListContent(
         onDismiss = { renaming = null },
     )
   }
+  // Remote 详情对话框
+  detailsFor?.let { remote ->
+    AlertDialog(
+        onDismissRequest = { detailsFor = null },
+        title = { Text("Remote 详情") },
+        text = {
+          Column {
+            DetailRow("名称", remote.name)
+            DetailRow("Fetch URL", remote.fetchUrl.ifBlank { "(无)" })
+            DetailRow("Push URL", remote.pushUrl.ifBlank { "(default: uses fetch URL)" })
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = { detailsFor = null }) { Text("关闭") }
+        },
+    )
+  }
 }
 
 @Composable
@@ -481,6 +533,7 @@ private fun RemoteItem(
     onEditUrl: () -> Unit,
     onEditPushUrl: () -> Unit,
     onRename: () -> Unit,
+    onShowDetails: () -> Unit,
     onDelete: () -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
@@ -537,6 +590,10 @@ private fun RemoteItem(
         )
       }
       DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        DropdownMenuItem(text = { Text("详情") }, onClick = {
+          menuExpanded = false
+          onShowDetails()
+        })
         DropdownMenuItem(text = { Text("Fetch") }, onClick = {
           menuExpanded = false
           onFetch()
@@ -686,4 +743,25 @@ private fun RemoteRenameDialog(
       },
       dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
   )
+}
+
+/** 详情对话框中的键值对行. 长 URL 单行省略号显示. */
+@Composable
+private fun DetailRow(label: String, value: String) {
+  Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    Text(
+        text = "$label: ",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = value,
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f),
+    )
+  }
 }
