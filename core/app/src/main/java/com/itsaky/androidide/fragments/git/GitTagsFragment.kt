@@ -36,11 +36,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -61,7 +61,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.catpuppyapp.puppygit.constants.Cons
 import com.catpuppyapp.puppygit.data.entity.CredentialEntity
+import com.catpuppyapp.puppygit.data.entity.RepoEntity
 import com.catpuppyapp.puppygit.git.RemoteAndCredentials
 import com.catpuppyapp.puppygit.git.TagDto
 import com.catpuppyapp.puppygit.settings.SettingsUtil
@@ -79,13 +81,21 @@ import kotlinx.coroutines.withContext
  *
  * 功能:
  * - 列出所有 tag (轻量 / 附注)
- * - 新建轻量 tag (基于 HEAD)
- * - 删除 tag
+ * - 新建轻量 / 附注 tag (基于 HEAD, 可选 force 覆盖)
+ * - 删除本地 tag
+ * - 推送单个 / 全部 tag 到 origin (可选 force)
+ * - 删除远端 tag
+ * - Fetch 远端 tag
+ * - Checkout / Reset 到 tag
  *
  * git core 调用一比一复刻 puppygit:
  * - [Libgit2Helper.getAllTags] 加载列表
- * - [Libgit2Helper.createTagLight] 创建轻量 tag
- * - [Libgit2Helper.delTags] 删除 tag
+ * - [Libgit2Helper.createTagLight] / [Libgit2Helper.createTagAnnotated] 创建
+ * - [Libgit2Helper.delTags] 删除本地 tag
+ * - [Libgit2Helper.pushTags] 推送 / 删除远端 tag
+ * - [Libgit2Helper.fetchAllTags] fetch 远端 tag
+ * - [Libgit2Helper.checkoutCommitThenDetachHead] checkout
+ * - [Libgit2Helper.resetHardToRevspec] reset
  *
  * @author android_zero
  */
@@ -97,6 +107,8 @@ class GitTagsFragment : BaseGitPageFragment() {
 
   private val refreshTrigger = mutableStateOf(0)
   private val newTagTrigger = mutableStateOf(0)
+  private val pushAllTrigger = mutableStateOf(0)
+  private val fetchTagsTrigger = mutableStateOf(0)
 
   override fun onCreateView(
       inflater: LayoutInflater,
@@ -113,6 +125,16 @@ class GitTagsFragment : BaseGitPageFragment() {
       refreshTrigger.value++
     }
 
+    addToolbarAction(R.drawable.ic_download, "Fetch 远端 Tag") {
+      emitGitOperation("tags", "fetch_tags")
+      fetchTagsTrigger.value++
+    }
+
+    addToolbarAction(R.drawable.ic_sync, "推送全部 Tag") {
+      emitGitOperation("tags", "push_all_tags")
+      pushAllTrigger.value++
+    }
+
     addToolbarAction(R.drawable.ic_add_24, "新建 Tag") {
       emitGitOperation("tags", "create_tag_dialog")
       newTagTrigger.value++
@@ -127,10 +149,17 @@ class GitTagsFragment : BaseGitPageFragment() {
           workdir = workdir,
           refreshTrigger = refreshTrigger,
           newTagTrigger = newTagTrigger,
+          pushAllTrigger = pushAllTrigger,
+          fetchTagsTrigger = fetchTagsTrigger,
           onRefresh = { refreshTrigger.value++ },
           onCreate = ::createTag,
           onDelete = ::deleteTag,
           onPushTag = ::pushTag,
+          onPushAllTags = ::pushAllTags,
+          onFetchTags = ::fetchTags,
+          onDeleteRemoteTag = ::deleteRemoteTag,
+          onCheckoutTag = ::checkoutTag,
+          onResetToTag = ::resetToTag,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -140,8 +169,9 @@ class GitTagsFragment : BaseGitPageFragment() {
    * 创建 tag。支持轻量 tag 和附注 tag。
    * @param tagName tag 名称
    * @param message 附注消息, 为空则创建轻量 tag
+   * @param force 是否覆盖已存在的同名 tag
    */
-  private fun createTag(tagName: String, message: String) {
+  private fun createTag(tagName: String, message: String, force: Boolean) {
     if (tagName.isBlank()) return toast("Tag 名不能为空")
     val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
@@ -155,12 +185,12 @@ class GitTagsFragment : BaseGitPageFragment() {
               ?: throw RuntimeException("无法查找 HEAD commit")
           try {
             if (message.isBlank()) {
-              Libgit2Helper.createTagLight(repo, tagName, commit, force = false)
+              Libgit2Helper.createTagLight(repo, tagName, commit, force = force)
             } else {
               val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
               val settings = SettingsUtil.getSettingsSnapshot()
               Libgit2Helper.createTagAnnotated(
-                  repo, tagName, commit, message, username, email, force = false, settings = settings,
+                  repo, tagName, commit, message, username, email, force = force, settings = settings,
               )
             }
           } finally {
@@ -201,6 +231,122 @@ class GitTagsFragment : BaseGitPageFragment() {
           result.onSuccess { toast("已推送 tag $tagName"); refreshTrigger.value++ }
           result.onFailure { toast(it.localizedMessage ?: "推送 tag 失败") }
         }
+      }
+    }
+  }
+
+  /** 推送全部本地 tag 到 origin。对齐 puppygit TagListScreen 的 pushAllTags。 */
+  private fun pushAllTags() {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val context = context ?: return
+    GitCredentialManager.ensureConfigured(context) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val cred = GitCredentialManager.toHttpCredential(cfg)
+            val remoteAndCred = listOf(
+                RemoteAndCredentials("origin", fetchCredential = cred, pushCredential = cred),
+            )
+            // force push: refspec 前缀加 +
+            val refspecs = listOf("+${Cons.gitAllTagsRefspecForFetchAndPush}")
+            val failed = Libgit2Helper.pushTags(repo, remoteAndCred, refspecs)
+            if (failed.isNotEmpty()) {
+              throw RuntimeException(failed.first().exception?.message ?: "推送全部 tag 失败")
+            }
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast("已推送全部 tag"); refreshTrigger.value++ }
+          result.onFailure { toast(it.localizedMessage ?: "推送全部 tag 失败") }
+        }
+      }
+    }
+  }
+
+  /** Fetch 远端 tag。对齐 puppygit TagListScreen: 调用 [Libgit2Helper.fetchAllTags]。 */
+  private fun fetchTags() {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val context = context ?: return
+    GitCredentialManager.ensureConfigured(context) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val cred = GitCredentialManager.toHttpCredential(cfg)
+            val remoteAndCred = listOf(
+                RemoteAndCredentials("origin", fetchCredential = cred, pushCredential = cred),
+            )
+            val dummyRepo = RepoEntity()
+            Libgit2Helper.fetchAllTags(repo, dummyRepo, remoteAndCred, force = true)
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast("已 fetch 远端 tag"); refreshTrigger.value++ }
+          result.onFailure { toast(it.localizedMessage ?: "Fetch tag 失败") }
+        }
+      }
+    }
+  }
+
+  /** 删除远端 tag: 推送删除 refspec `:refs/tags/$tagName`。 */
+  private fun deleteRemoteTag(tagName: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val context = context ?: return
+    GitCredentialManager.ensureConfigured(context) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val cred = GitCredentialManager.toHttpCredential(cfg)
+            val remoteAndCred = listOf(
+                RemoteAndCredentials("origin", fetchCredential = cred, pushCredential = cred),
+            )
+            val refspecs = listOf(":refs/tags/$tagName")
+            val failed = Libgit2Helper.pushTags(repo, remoteAndCred, refspecs)
+            if (failed.isNotEmpty()) {
+              throw RuntimeException(failed.first().exception?.message ?: "删除远端 tag 失败")
+            }
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast("已删除远端 tag $tagName"); refreshTrigger.value++ }
+          result.onFailure { toast(it.localizedMessage ?: "删除远端 tag 失败") }
+        }
+      }
+    }
+  }
+
+  /** Checkout 到 tag 指向的 commit (detached HEAD)。 */
+  private fun checkoutTag(commitHash: String) {
+    if (commitHash.isBlank()) return toast("无法解析 tag 指向的 commit")
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    emitGitOperation("tags", "checkout_tag:$commitHash")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ret = Libgit2Helper.checkoutCommitThenDetachHead(repo, commitHash)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已 checkout 到 $commitHash"); refreshTrigger.value++ }
+        result.onFailure { toast(it.localizedMessage ?: "Checkout 失败") }
+      }
+    }
+  }
+
+  /** 硬重置到 tag。 */
+  private fun resetToTag(tagName: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    emitGitOperation("tags", "reset_to_tag:$tagName")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ret = Libgit2Helper.resetHardToRevspec(repo, tagName)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已重置到 tag $tagName"); refreshTrigger.value++ }
+        result.onFailure { toast(it.localizedMessage ?: "重置失败") }
       }
     }
   }
@@ -248,10 +394,17 @@ private fun TagListContent(
     workdir: String?,
     refreshTrigger: State<Int>,
     newTagTrigger: State<Int>,
+    pushAllTrigger: State<Int>,
+    fetchTagsTrigger: State<Int>,
     onRefresh: () -> Unit,
-    onCreate: (String, String) -> Unit,
+    onCreate: (String, String, Boolean) -> Unit,
     onDelete: (String) -> Unit,
     onPushTag: (String) -> Unit,
+    onPushAllTags: () -> Unit,
+    onFetchTags: () -> Unit,
+    onDeleteRemoteTag: (String) -> Unit,
+    onCheckoutTag: (String) -> Unit,
+    onResetToTag: (String) -> Unit,
 ) {
   val trigger = refreshTrigger.value
   val uiState by produceState<TagListUiState>(TagListUiState.Loading, trigger, workdir) {
@@ -280,6 +433,11 @@ private fun TagListContent(
     if (nbTrigger > 0) showCreateDialog = true
   }
 
+  val paTrigger = pushAllTrigger.value
+  LaunchedEffect(paTrigger) { if (paTrigger > 0) onPushAllTags() }
+  val ftTrigger = fetchTagsTrigger.value
+  LaunchedEffect(ftTrigger) { if (ftTrigger > 0) onFetchTags() }
+
   when (val s = uiState) {
     TagListUiState.Loading -> GitLoadingState()
     TagListUiState.NoProject -> GitEmptyState(message = "未打开工程")
@@ -304,7 +462,14 @@ private fun TagListContent(
                 verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
             ) {
               items(filtered, key = { it.name }) { tag ->
-                TagItem(tag = tag, onDelete = onDelete, onPush = onPushTag)
+                TagItem(
+                    tag = tag,
+                    onDelete = onDelete,
+                    onPush = onPushTag,
+                    onDeleteRemote = onDeleteRemoteTag,
+                    onCheckout = onCheckoutTag,
+                    onReset = onResetToTag,
+                )
               }
             }
           }
@@ -315,23 +480,24 @@ private fun TagListContent(
 
   if (showCreateDialog) {
     CreateTagDialog(
-        onConfirm = { name, msg ->
+        onConfirm = { name, msg, force ->
           showCreateDialog = false
-          onCreate(name.trim(), msg.trim())
+          onCreate(name.trim(), msg.trim(), force)
         },
         onDismiss = { showCreateDialog = false },
     )
   }
 }
 
-/** 创建 Tag 对话框: 支持轻量 tag 和附注 tag. */
+/** 创建 Tag 对话框: 支持轻量 tag 和附注 tag, 可选 force 覆盖。 */
 @Composable
 private fun CreateTagDialog(
-    onConfirm: (name: String, message: String) -> Unit,
+    onConfirm: (name: String, message: String, force: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
   var name by remember { mutableStateOf("") }
   var message by remember { mutableStateOf("") }
+  var force by remember { mutableStateOf(false) }
   AlertDialog(
       onDismissRequest = onDismiss,
       title = { Text("新建 Tag") },
@@ -352,17 +518,33 @@ private fun CreateTagDialog(
               singleLine = true,
               modifier = Modifier.fillMaxWidth(),
           )
+          Spacer(Modifier.height(8.dp))
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = force, onCheckedChange = { force = it })
+            Text(
+                text = "覆盖同名 tag (force)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
         }
       },
       confirmButton = {
-        TextButton(onClick = { onConfirm(name, message) }) { Text("创建") }
+        TextButton(onClick = { onConfirm(name, message, force) }) { Text("创建") }
       },
       dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
   )
 }
 
 @Composable
-private fun TagItem(tag: TagDto, onDelete: (String) -> Unit, onPush: (String) -> Unit) {
+private fun TagItem(
+    tag: TagDto,
+    onDelete: (String) -> Unit,
+    onPush: (String) -> Unit,
+    onDeleteRemote: (String) -> Unit,
+    onCheckout: (String) -> Unit,
+    onReset: (String) -> Unit,
+) {
   var menuExpanded by remember { mutableStateOf(false) }
   Card(
       modifier = Modifier.fillMaxWidth().combinedClickable(
@@ -409,20 +591,25 @@ private fun TagItem(tag: TagDto, onDelete: (String) -> Unit, onPush: (String) ->
           )
         }
       }
-      androidx.compose.material3.IconButton(onClick = { onDelete(tag.shortName) }) {
-        androidx.compose.material3.Icon(
-            imageVector = Icons.Outlined.Delete,
-            contentDescription = "删除 Tag",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-        )
-      }
       DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
         DropdownMenuItem(
             text = { Text("推送到 origin") },
             onClick = { menuExpanded = false; onPush(tag.shortName) },
         )
         DropdownMenuItem(
-            text = { Text("删除") },
+            text = { Text("Checkout (detached)") },
+            onClick = { menuExpanded = false; onCheckout(tag.targetFullOidStr) },
+        )
+        DropdownMenuItem(
+            text = { Text("重置到此 Tag") },
+            onClick = { menuExpanded = false; onReset(tag.shortName) },
+        )
+        DropdownMenuItem(
+            text = { Text("删除远端 Tag") },
+            onClick = { menuExpanded = false; onDeleteRemote(tag.shortName) },
+        )
+        DropdownMenuItem(
+            text = { Text("删除本地 Tag") },
             onClick = { menuExpanded = false; onDelete(tag.shortName) },
         )
       }

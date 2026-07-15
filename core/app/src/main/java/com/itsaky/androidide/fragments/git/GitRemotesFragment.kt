@@ -21,6 +21,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -35,12 +36,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.CloudDownload
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.catpuppyapp.puppygit.data.entity.RepoEntity
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
+import com.github.git24j.core.Remote
 import com.github.git24j.core.Repository
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitComposeBinding
@@ -75,17 +77,21 @@ import kotlinx.coroutines.withContext
  * Remote 管理页面 —— 独立设计的 Compose UI。
  *
  * 功能:
- * - 列出所有 remote (名称 + fetch URL)
+ * - 列出所有 remote (名称 + fetch URL + push URL)
  * - 新建 remote
  * - 删除 remote
- * - 修改 remote URL
+ * - 修改 fetch URL / push URL (push URL 留空则删除)
+ * - 重命名 remote
+ * - Fetch 单个 / 全部 remote
  *
  * git core 调用一比一复刻 puppygit:
  * - [Libgit2Helper.getRemoteList] 加载列表
  * - [Libgit2Helper.createRemote] 创建
  * - [Libgit2Helper.delRemote] 删除
- * - [Libgit2Helper.setRemoteUrlForRepo] 修改 URL
- * - [Libgit2Helper.getRemoteFetchUrlByName] 读取 URL
+ * - [Libgit2Helper.setRemoteUrlForRepo] 修改 fetch URL
+ * - [Remote.setPushurl] / [Libgit2Helper.deletePushUrl] 管理 push URL
+ * - [Remote.rename] 重命名
+ * - [Libgit2Helper.fetchRemoteForRepo] fetch
  *
  * @author android_zero
  */
@@ -97,6 +103,7 @@ class GitRemotesFragment : BaseGitPageFragment() {
 
   private val refreshTrigger = mutableStateOf(0)
   private val newRemoteTrigger = mutableStateOf(0)
+  private val fetchAllTrigger = mutableStateOf(0)
 
   override fun onCreateView(
       inflater: LayoutInflater,
@@ -113,6 +120,11 @@ class GitRemotesFragment : BaseGitPageFragment() {
       refreshTrigger.value++
     }
 
+    addToolbarAction(R.drawable.ic_download, "Fetch 全部") {
+      emitGitOperation("remotes", "fetch_all")
+      fetchAllTrigger.value++
+    }
+
     addToolbarAction(R.drawable.ic_add_24, "添加 Remote") {
       emitGitOperation("remotes", "create_remote_dialog")
       newRemoteTrigger.value++
@@ -127,11 +139,15 @@ class GitRemotesFragment : BaseGitPageFragment() {
           workdir = workdir,
           refreshTrigger = refreshTrigger,
           newRemoteTrigger = newRemoteTrigger,
+          fetchAllTrigger = fetchAllTrigger,
           onRefresh = { refreshTrigger.value++ },
           onCreate = ::createRemote,
           onDelete = ::deleteRemote,
           onEditUrl = ::editRemoteUrl,
+          onEditPushUrl = ::editRemotePushUrl,
+          onRename = ::renameRemote,
           onFetch = ::fetchRemote,
+          onFetchAll = ::fetchAllRemotes,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -216,6 +232,91 @@ class GitRemotesFragment : BaseGitPageFragment() {
     }
   }
 
+  /**
+   * Fetch 所有 remote。对齐 puppygit RemoteListScreen 的 fetchAll:
+   * 遍历 [Libgit2Helper.getRemoteList], 逐个调用 [Libgit2Helper.fetchRemoteForRepo]。
+   */
+  private fun fetchAllRemotes() {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val context = context ?: return
+    GitCredentialManager.ensureConfigured(context) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        var ok = 0
+        var fail = 0
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val cred = GitCredentialManager.toHttpCredential(cfg)
+            val dummyRepo = RepoEntity()
+            val names = Libgit2Helper.getRemoteList(repo)
+            for (name in names) {
+              runCatching { Libgit2Helper.fetchRemoteForRepo(repo, name, cred, dummyRepo) }
+                  .onSuccess { ok++ }
+                  .onFailure { fail++ }
+            }
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast("Fetch 完成: 成功 $ok, 失败 $fail"); refreshTrigger.value++ }
+          result.onFailure { toast(it.localizedMessage ?: "Fetch 全部失败") }
+        }
+      }
+    }
+  }
+
+  /**
+   * 重命名 remote。对齐 puppygit RemoteListScreen:
+   * [Remote.rename] 返回重命名失败的 ref 列表。
+   */
+  private fun renameRemote(oldName: String, newName: String) {
+    if (newName.isBlank()) return toast("新名称不能为空")
+    if (newName == oldName) return
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val problems = Remote.rename(repo, oldName, newName)
+          if (problems.isNotEmpty()) {
+            throw RuntimeException("部分 ref 重命名失败, 需手动修改 config:\n${problems.joinToString("\n")}")
+          }
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          toast("已重命名 $oldName → $newName")
+          refreshTrigger.value++
+        }
+        result.onFailure { toast(it.localizedMessage ?: "重命名失败") }
+      }
+    }
+  }
+
+  /**
+   * 设置/删除 remote 的 push URL。
+   * 对齐 puppygit RemoteListScreen: newUrl 为空时调用 [Libgit2Helper.deletePushUrl] 删除,
+   * 否则调用 [Remote.setPushurl] 设置。
+   */
+  private fun editRemotePushUrl(remoteName: String, newUrl: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          if (newUrl.isBlank()) {
+            Libgit2Helper.deletePushUrl(Libgit2Helper.getRepoConfigForWrite(repo), remoteName)
+          } else {
+            Remote.setPushurl(repo, remoteName, newUrl)
+          }
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          toast(if (newUrl.isBlank()) "已删除 $remoteName 的 push URL" else "已更新 $remoteName 的 push URL")
+          refreshTrigger.value++
+        }
+        result.onFailure { toast(it.localizedMessage ?: "更新 push URL 失败") }
+      }
+    }
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
   }
@@ -229,7 +330,7 @@ class GitRemotesFragment : BaseGitPageFragment() {
 
 // ---- Compose UI ----
 
-private data class RemoteItemData(val name: String, val fetchUrl: String)
+private data class RemoteItemData(val name: String, val fetchUrl: String, val pushUrl: String)
 
 private sealed interface RemoteListUiState {
   data object Loading : RemoteListUiState
@@ -238,16 +339,28 @@ private sealed interface RemoteListUiState {
   data class Error(val message: String) : RemoteListUiState
 }
 
+/** 读取 remote 的 push URL (可能为空). */
+private fun readRemotePushUrl(repo: Repository, remoteName: String): String =
+    runCatching {
+      Libgit2Helper.getRepoConfigForRead(repo)
+          .getString("remote.$remoteName.pushurl")
+          .orElse("")
+    }.getOrDefault("")
+
 @Composable
 private fun RemoteListContent(
     workdir: String?,
     refreshTrigger: State<Int>,
     newRemoteTrigger: State<Int>,
+    fetchAllTrigger: State<Int>,
     onRefresh: () -> Unit,
     onCreate: (String, String) -> Unit,
     onDelete: (String) -> Unit,
     onEditUrl: (String, String) -> Unit,
+    onEditPushUrl: (String, String) -> Unit,
+    onRename: (String, String) -> Unit,
     onFetch: (String) -> Unit,
+    onFetchAll: () -> Unit,
 ) {
   val trigger = refreshTrigger.value
   val uiState by produceState<RemoteListUiState>(RemoteListUiState.Loading, trigger, workdir) {
@@ -263,8 +376,9 @@ private fun RemoteListContent(
                   val names = Libgit2Helper.getRemoteList(repo)
                   val remotes =
                       names.map { name ->
-                        val url = Libgit2Helper.getRemoteFetchUrlByName(repo, name)
-                        RemoteItemData(name, url)
+                        val fetchUrl = Libgit2Helper.getRemoteFetchUrlByName(repo, name)
+                        val pushUrl = readRemotePushUrl(repo, name)
+                        RemoteItemData(name, fetchUrl, pushUrl)
                       }
                   RemoteListUiState.Loaded(remotes)
                 }
@@ -278,7 +392,16 @@ private fun RemoteListContent(
   LaunchedEffect(nrTrigger) {
     if (nrTrigger > 0) showCreateDialog = true
   }
+
+  // Fetch 全部 trigger
+  val faTrigger = fetchAllTrigger.value
+  LaunchedEffect(faTrigger) {
+    if (faTrigger > 0) onFetchAll()
+  }
+
   var editing by remember { mutableStateOf<RemoteItemData?>(null) }
+  var editingPushUrl by remember { mutableStateOf<RemoteItemData?>(null) }
+  var renaming by remember { mutableStateOf<RemoteItemData?>(null) }
 
   when (val s = uiState) {
     RemoteListUiState.Loading -> GitLoadingState()
@@ -296,9 +419,11 @@ private fun RemoteListContent(
           items(s.remotes, key = { it.name }) { remote ->
             RemoteItem(
                 remote = remote,
-                onDelete = { onDelete(remote.name) },
-                onEdit = { editing = remote },
                 onFetch = { onFetch(remote.name) },
+                onEditUrl = { editing = remote },
+                onEditPushUrl = { editingPushUrl = remote },
+                onRename = { renaming = remote },
+                onDelete = { onDelete(remote.name) },
             )
           }
         }
@@ -326,17 +451,44 @@ private fun RemoteListContent(
         onDismiss = { editing = null },
     )
   }
+  editingPushUrl?.let { remote ->
+    RemoteEditPushUrlDialog(
+        remoteName = remote.name,
+        currentUrl = remote.pushUrl,
+        onConfirm = { newUrl ->
+          editingPushUrl = null
+          onEditPushUrl(remote.name, newUrl.trim())
+        },
+        onDismiss = { editingPushUrl = null },
+    )
+  }
+  renaming?.let { remote ->
+    RemoteRenameDialog(
+        remoteName = remote.name,
+        onConfirm = { newName ->
+          renaming = null
+          onRename(remote.name, newName.trim())
+        },
+        onDismiss = { renaming = null },
+    )
+  }
 }
 
 @Composable
 private fun RemoteItem(
     remote: RemoteItemData,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit,
     onFetch: () -> Unit,
+    onEditUrl: () -> Unit,
+    onEditPushUrl: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
 ) {
+  var menuExpanded by remember { mutableStateOf(false) }
   Card(
-      modifier = Modifier.fillMaxWidth(),
+      modifier = Modifier.fillMaxWidth().combinedClickable(
+          onClick = { menuExpanded = true },
+          onLongClick = { menuExpanded = true },
+      ),
       shape = RoundedCornerShape(GitSpacing.cardCorner),
       elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
   ) {
@@ -359,34 +511,52 @@ private fun RemoteItem(
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            text = remote.fetchUrl.ifBlank { "(无 URL)" },
+            text = "fetch: " + remote.fetchUrl.ifBlank { "(无)" },
             style = MaterialTheme.typography.bodySmall,
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        if (remote.pushUrl.isNotBlank()) {
+          Text(
+              text = "push: " + remote.pushUrl,
+              style = MaterialTheme.typography.bodySmall,
+              fontFamily = FontFamily.Monospace,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+          )
+        }
       }
-      IconButton(onClick = onFetch) {
+      IconButton(onClick = { menuExpanded = true }) {
         Icon(
-            imageVector = Icons.Outlined.CloudDownload,
-            contentDescription = "Fetch",
-            tint = MaterialTheme.colorScheme.primary,
+            imageVector = Icons.Outlined.MoreVert,
+            contentDescription = "更多操作",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
       }
-      IconButton(onClick = onEdit) {
-        Icon(
-            imageVector = Icons.Outlined.Edit,
-            contentDescription = "修改 URL",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        )
-      }
-      IconButton(onClick = onDelete) {
-        Icon(
-            imageVector = Icons.Outlined.Delete,
-            contentDescription = "删除",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-        )
+      DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        DropdownMenuItem(text = { Text("Fetch") }, onClick = {
+          menuExpanded = false
+          onFetch()
+        })
+        DropdownMenuItem(text = { Text("修改 Fetch URL") }, onClick = {
+          menuExpanded = false
+          onEditUrl()
+        })
+        DropdownMenuItem(text = { Text("修改 Push URL") }, onClick = {
+          menuExpanded = false
+          onEditPushUrl()
+        })
+        DropdownMenuItem(text = { Text("重命名") }, onClick = {
+          menuExpanded = false
+          onRename()
+        })
+        DropdownMenuItem(text = { Text("删除") }, onClick = {
+          menuExpanded = false
+          onDelete()
+        })
       }
     }
   }
@@ -450,6 +620,69 @@ private fun RemoteEditUrlDialog(
       },
       confirmButton = {
         TextButton(onClick = { onConfirm(url) }) { Text("保存") }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+  )
+}
+
+/** 修改 push URL 对话框: 留空则删除 push URL. */
+@Composable
+private fun RemoteEditPushUrlDialog(
+    remoteName: String,
+    currentUrl: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+  var url by remember { mutableStateOf(currentUrl) }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("修改 $remoteName Push URL") },
+      text = {
+        Column {
+          OutlinedTextField(
+              value = url,
+              onValueChange = { url = it },
+              label = { Text("Push URL") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
+          Spacer(Modifier.height(8.dp))
+          Text(
+              text = "留空将删除当前 push URL (回退到使用 fetch URL)",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { onConfirm(url) }) { Text("保存") }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+  )
+}
+
+/** 重命名 remote 对话框. */
+@Composable
+private fun RemoteRenameDialog(
+    remoteName: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+  var newName by remember { mutableStateOf(remoteName) }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("重命名 $remoteName") },
+      text = {
+        OutlinedTextField(
+            value = newName,
+            onValueChange = { newName = it },
+            label = { Text("新名称") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+      },
+      confirmButton = {
+        TextButton(onClick = { onConfirm(newName) }) { Text("重命名") }
       },
       dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
   )

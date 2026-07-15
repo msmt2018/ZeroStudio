@@ -17,6 +17,9 @@
 
 package com.itsaky.androidide.fragments.git
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -63,6 +66,7 @@ import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.github.git24j.core.Commit
 import com.github.git24j.core.Repository
+import com.github.git24j.core.Reset
 import com.github.git24j.core.Revwalk
 import com.github.git24j.core.SortT
 import com.itsaky.androidide.R
@@ -124,25 +128,37 @@ class GitHistoryFragment : BaseGitPageFragment() {
           onCherryPick = ::cherryPickCommit,
           onCheckoutCommit = ::checkoutCommit,
           onCreateTag = ::createTagForCommit,
+          onCopyHash = ::copyCommitHash,
       )
     }
     binding.gitContentContainer.addView(compose)
   }
 
-  /** 硬重置到指定 commit (会丢失未提交的变更). */
-  private fun resetToCommit(commitHash: String) {
+  /** 复制 commit hash 到剪贴板. */
+  private fun copyCommitHash(commitHash: String) {
+    val ctx = context ?: return
+    val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("commit_hash", commitHash))
+    Toast.makeText(ctx, "已复制 $commitHash", Toast.LENGTH_SHORT).show()
+  }
+
+  /**
+   * 重置到指定 commit。对齐 puppygit CommitListScreen 的 ResetDialog:
+   * 支持 soft / mixed / hard 三种模式。
+   */
+  private fun resetToCommit(commitHash: String, resetType: Reset.ResetT) {
     val workdir = resolveWorkspaceDirPath() ?: return
-    emitGitOperation("history", "reset_to:$commitHash")
+    emitGitOperation("history", "reset_${resetType.name.lowercase()}_to:$commitHash")
     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
       val result = runCatching {
         Repository.open(workdir).use { repo ->
-          val ret = Libgit2Helper.resetHardToRevspec(repo, commitHash)
+          val ret = Libgit2Helper.resetToRevspec(repo, commitHash, resetType)
           if (ret.hasError()) throw RuntimeException(ret.msg)
         }
       }
       withContext(Dispatchers.Main) {
         result.onSuccess {
-          Toast.makeText(requireContext(), "已重置到 $commitHash", Toast.LENGTH_SHORT).show()
+          Toast.makeText(requireContext(), "已重置 (${resetType.name}) 到 $commitHash", Toast.LENGTH_SHORT).show()
           refreshTrigger.value++
         }
         result.onFailure {
@@ -214,8 +230,13 @@ class GitHistoryFragment : BaseGitPageFragment() {
     }
   }
 
-  /** 基于指定 commit 创建轻量 tag. */
-  private fun createTagForCommit(commitHash: String, tagName: String) {
+  /**
+   * 基于指定 commit 创建 tag。支持轻量 tag 和附注 tag。
+   * @param commitHash 目标 commit hash
+   * @param tagName tag 名称
+   * @param message 附注消息, 为空则创建轻量 tag
+   */
+  private fun createTagForCommit(commitHash: String, tagName: String, message: String) {
     if (tagName.isBlank()) return
     val workdir = resolveWorkspaceDirPath() ?: return
     emitGitOperation("history", "create_tag:$commitHash")
@@ -226,7 +247,15 @@ class GitHistoryFragment : BaseGitPageFragment() {
           val commit = Commit.lookup(repo, oid)
               ?: throw RuntimeException("找不到 commit $commitHash")
           try {
-            Libgit2Helper.createTagLight(repo, tagName, commit, force = false)
+            if (message.isBlank()) {
+              Libgit2Helper.createTagLight(repo, tagName, commit, force = false)
+            } else {
+              val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
+              val settings = SettingsUtil.getSettingsSnapshot()
+              Libgit2Helper.createTagAnnotated(
+                  repo, tagName, commit, message, username, email, force = false, settings = settings,
+              )
+            }
           } finally {
             commit.close()
           }
@@ -273,19 +302,22 @@ private sealed interface HistoryUiState {
  * @param workdir 仓库工作目录绝对路径；为 null 表示当前没有打开项目
  * @param refreshKey 刷新触发器，值变化时重新加载
  * @param onRefresh 触发刷新（下拉刷新 / 重试按钮调用）
- * @param onResetToCommit 硬重置到指定 commit
+ * @param onResetToCommit 重置到指定 commit (指定 soft/mixed/hard 模式)
  * @param onCherryPick Cherry-pick 指定 commit
  * @param onCheckoutCommit Checkout 到指定 commit (detached HEAD)
+ * @param onCreateTag 基于指定 commit 创建 tag (附注消息为空则轻量 tag)
+ * @param onCopyHash 复制 commit hash 到剪贴板
  */
 @Composable
 private fun CommitHistoryContent(
     workdir: String?,
     refreshKey: State<Int>,
     onRefresh: () -> Unit,
-    onResetToCommit: (String) -> Unit,
+    onResetToCommit: (String, Reset.ResetT) -> Unit,
     onCherryPick: (String) -> Unit,
     onCheckoutCommit: (String) -> Unit,
-    onCreateTag: (commitHash: String, tagName: String) -> Unit,
+    onCreateTag: (commitHash: String, tagName: String, message: String) -> Unit,
+    onCopyHash: (String) -> Unit,
 ) {
   if (workdir == null) {
     GitEmptyState("未打开项目")
@@ -344,6 +376,7 @@ private fun CommitHistoryContent(
                     onCheckoutCommit = { onCheckoutCommit(commit.oidStr) },
                     onShowDetails = { detailsCommit = commit },
                     onCreateTag = { tagForCommit = commit },
+                    onCopyHash = { onCopyHash(commit.oidStr) },
                 )
               }
             }
@@ -353,19 +386,40 @@ private fun CommitHistoryContent(
     }
   }
 
-  // Reset 确认对话框 (危险操作)
+  // Reset 确认对话框: 选择 soft / mixed / hard 模式 (对齐 puppygit ResetDialog)
   confirmReset?.let { commit ->
     AlertDialog(
         onDismissRequest = { confirmReset = null },
-        title = { Text("确认重置") },
+        title = { Text("重置到 ${commit.shortOidStr}") },
         text = {
-          Text("将硬重置到 ${commit.shortOidStr}\n${commit.shortMsg}\n\n⚠️ 未提交的变更将丢失!")
+          Column {
+            Text(commit.shortMsg, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            Text("SOFT: 移动 HEAD, 保留暂存区与工作区",
+                style = MaterialTheme.typography.bodySmall)
+            Text("MIXED: 移动 HEAD, 重置暂存区, 保留工作区",
+                style = MaterialTheme.typography.bodySmall)
+            Text("HARD: 移动 HEAD, 重置暂存区与工作区 (⚠️ 丢失未提交变更)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error)
+          }
         },
         confirmButton = {
-          TextButton(onClick = {
-            confirmReset = null
-            onResetToCommit(commit.oidStr)
-          }) { Text("重置") }
+          Row {
+            TextButton(onClick = {
+              confirmReset = null
+              onResetToCommit(commit.oidStr, Reset.ResetT.SOFT)
+            }) { Text("SOFT") }
+            TextButton(onClick = {
+              confirmReset = null
+              onResetToCommit(commit.oidStr, Reset.ResetT.MIXED)
+            }) { Text("MIXED") }
+            TextButton(onClick = {
+              confirmReset = null
+              onResetToCommit(commit.oidStr, Reset.ResetT.HARD)
+            }) { Text("HARD") }
+          }
         },
         dismissButton = {
           TextButton(onClick = { confirmReset = null }) { Text("取消") }
@@ -396,9 +450,10 @@ private fun CommitHistoryContent(
     )
   }
 
-  // 基于 commit 创建 tag 对话框
+  // 基于 commit 创建 tag 对话框 (支持附注 tag)
   tagForCommit?.let { commit ->
     var tagName by remember { mutableStateOf("") }
+    var tagMsg by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = { tagForCommit = null },
         title = { Text("基于此提交创建 Tag") },
@@ -415,13 +470,22 @@ private fun CommitHistoryContent(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = tagMsg,
+                onValueChange = { tagMsg = it },
+                label = { Text("附注消息 (留空创建轻量 tag)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
           }
         },
         confirmButton = {
           TextButton(onClick = {
             val name = tagName.trim()
+            val msg = tagMsg.trim()
             tagForCommit = null
-            if (name.isNotEmpty()) onCreateTag(commit.oidStr, name)
+            if (name.isNotEmpty()) onCreateTag(commit.oidStr, name, msg)
           }) { Text("创建") }
         },
         dismissButton = {
@@ -461,6 +525,7 @@ private fun CommitItem(
     onCheckoutCommit: () -> Unit,
     onShowDetails: () -> Unit,
     onCreateTag: () -> Unit,
+    onCopyHash: () -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
 
@@ -511,6 +576,13 @@ private fun CommitItem(
             onClick = {
               menuExpanded = false
               onShowDetails()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("复制 Hash") },
+            onClick = {
+              menuExpanded = false
+              onCopyHash()
             },
         )
         DropdownMenuItem(
