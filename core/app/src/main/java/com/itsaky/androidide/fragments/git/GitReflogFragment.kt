@@ -21,6 +21,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,6 +43,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,8 +74,9 @@ import kotlinx.coroutines.withContext
 /**
  * Reflog (操作日志) 页面 —— 独立设计的 Compose UI。
  *
- * 显示 HEAD 的 reflog 记录, 让用户查看最近的 git 操作历史
- * (commit / checkout / pull / reset 等)。
+ * 显示指定 ref 的 reflog 记录, 让用户查看最近的 git 操作历史
+ * (commit / checkout / pull / reset 等)。默认显示 HEAD, 可通过顶部
+ * 下拉切换到其它 ref (如 refs/heads/main)。
  *
  * 支持的操作 (长按条目):
  * - Checkout New: checkout 到 reflog 条目的新 commit (detached HEAD)
@@ -80,7 +85,8 @@ import kotlinx.coroutines.withContext
  * - Reset Old: 硬重置到旧 commit
  *
  * git core 调用一比一复刻 puppygit:
- * - [Libgit2Helper.getReflogList] 加载 reflog
+ * - [Libgit2Helper.getReflogList] 加载 reflog (按 ref 名)
+ * - [Libgit2Helper.getAllRefs] 获取可选 ref 列表
  * - [Libgit2Helper.checkoutCommitThenDetachHead] checkout
  * - [Libgit2Helper.resetHardToRevspec] reset
  *
@@ -195,8 +201,28 @@ private fun ReflogContent(
     onCheckout: (String) -> Unit,
     onReset: (String) -> Unit,
 ) {
+  // 当前选中的 ref 名, 默认 HEAD
+  var selectedRef by remember { mutableStateOf("HEAD") }
   val trigger = refreshTrigger.value
-  val uiState by produceState<ReflogUiState>(ReflogUiState.Loading, trigger, workdir) {
+
+  // 加载可选 ref 列表 (仅在 workdir 变化或刷新时重新加载)
+  val refList by produceState<List<String>>(emptyList(), workdir, trigger) {
+    if (workdir == null) {
+      value = emptyList()
+      return@produceState
+    }
+    value =
+        runCatching {
+              withContext(Dispatchers.IO) {
+                Repository.open(workdir).use { repo ->
+                  Libgit2Helper.getAllRefs(repo, includeHEAD = true)
+                }
+              }
+            }
+            .getOrElse { emptyList() }
+  }
+
+  val uiState by produceState<ReflogUiState>(ReflogUiState.Loading, trigger, workdir, selectedRef) {
     if (workdir == null) {
       value = ReflogUiState.NoProject
       return@produceState
@@ -208,7 +234,7 @@ private fun ReflogContent(
                 Repository.open(workdir).use { repo ->
                   val settings = SettingsUtil.getSettingsSnapshot()
                   val entries = mutableListOf<ReflogEntryDto>()
-                  Libgit2Helper.getReflogList(repo, "HEAD", entries, settings)
+                  Libgit2Helper.getReflogList(repo, selectedRef, entries, settings)
                   ReflogUiState.Loaded(entries)
                 }
               }
@@ -219,35 +245,46 @@ private fun ReflogContent(
   // 操作确认状态: pair of (操作类型, commit hash)
   var confirmAction by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-  when (val s = uiState) {
-    ReflogUiState.Loading -> GitLoadingState()
-    ReflogUiState.NoProject -> GitEmptyState(message = "未打开工程")
-    is ReflogUiState.Error -> GitErrorState(message = s.message, onRetry = onRefresh)
-    is ReflogUiState.Loaded -> {
-      if (s.entries.isEmpty()) {
-        GitEmptyState(message = "暂无操作日志", icon = Icons.Outlined.History)
-      } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
-        ) {
-          items(s.entries.size) { index ->
-            ReflogItem(
-                entry = s.entries[index],
-                onCheckoutNew = { entry ->
-                  confirmAction = "checkout_new" to (entry.idNew?.toString() ?: "")
-                },
-                onCheckoutOld = { entry ->
-                  confirmAction = "checkout_old" to (entry.idOld?.toString() ?: "")
-                },
-                onResetNew = { entry ->
-                  confirmAction = "reset_new" to (entry.idNew?.toString() ?: "")
-                },
-                onResetOld = { entry ->
-                  confirmAction = "reset_old" to (entry.idOld?.toString() ?: "")
-                },
-            )
+  Column(modifier = Modifier.fillMaxSize()) {
+    // 顶部 ref 选择器
+    if (workdir != null && refList.isNotEmpty()) {
+      RefSelector(
+          selectedRef = selectedRef,
+          refs = refList,
+          onRefSelected = { selectedRef = it },
+      )
+    }
+
+    when (val s = uiState) {
+      ReflogUiState.Loading -> GitLoadingState()
+      ReflogUiState.NoProject -> GitEmptyState(message = "未打开工程")
+      is ReflogUiState.Error -> GitErrorState(message = s.message, onRetry = onRefresh)
+      is ReflogUiState.Loaded -> {
+        if (s.entries.isEmpty()) {
+          GitEmptyState(message = "暂无操作日志", icon = Icons.Outlined.History)
+        } else {
+          LazyColumn(
+              modifier = Modifier.fillMaxSize(),
+              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+              verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
+          ) {
+            items(s.entries.size) { index ->
+              ReflogItem(
+                  entry = s.entries[index],
+                  onCheckoutNew = { entry ->
+                    confirmAction = "checkout_new" to (entry.idNew?.toString() ?: "")
+                  },
+                  onCheckoutOld = { entry ->
+                    confirmAction = "checkout_old" to (entry.idOld?.toString() ?: "")
+                  },
+                  onResetNew = { entry ->
+                    confirmAction = "reset_new" to (entry.idNew?.toString() ?: "")
+                  },
+                  onResetOld = { entry ->
+                    confirmAction = "reset_old" to (entry.idOld?.toString() ?: "")
+                  },
+              )
+            }
           }
         }
       }
@@ -378,6 +415,77 @@ private fun ReflogItem(
           DropdownMenuItem(
               text = { Text("重置到旧位置") },
               onClick = { menuExpanded = false; onResetOld(entry) },
+          )
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Ref 选择器: 显示当前选中的 ref 名, 点击弹出下拉列表切换.
+ * 对齐 puppygit ReflogListScreen 的按 ref 切换能力.
+ */
+@Composable
+private fun RefSelector(
+    selectedRef: String,
+    refs: List<String>,
+    onRefSelected: (String) -> Unit,
+) {
+  var expanded by remember { mutableStateOf(false) }
+  Card(
+      modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 12.dp, vertical = 4.dp)
+          .clickable { expanded = true },
+      shape = RoundedCornerShape(GitSpacing.cardCorner),
+      elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+      colors = CardDefaults.cardColors(
+          containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+      ),
+  ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Icon(
+          imageVector = Icons.Outlined.History,
+          contentDescription = null,
+          tint = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.size(18.dp),
+      )
+      Spacer(Modifier.width(8.dp))
+      Text(
+          text = "Ref:",
+          style = MaterialTheme.typography.labelMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Spacer(Modifier.width(6.dp))
+      Text(
+          text = selectedRef,
+          style = MaterialTheme.typography.labelLarge,
+          fontWeight = FontWeight.SemiBold,
+          fontFamily = FontFamily.Monospace,
+          color = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.weight(1f),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+      )
+      Text(
+          text = if (expanded) "▲" else "▼",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        refs.forEach { ref ->
+          DropdownMenuItem(
+              text = { Text(ref, fontFamily = FontFamily.Monospace) },
+              onClick = {
+                expanded = false
+                onRefSelected(ref)
+              },
           )
         }
       }

@@ -482,6 +482,7 @@ private fun BranchListContent(
   var confirmingDelete by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var confirmingMerge by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var confirmingRebase by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
+  var filterText by remember { mutableStateOf("") }
 
   when (val s = uiState) {
     BranchListUiState.Loading -> GitLoadingState()
@@ -491,18 +492,31 @@ private fun BranchListContent(
       if (s.local.isEmpty() && s.remote.isEmpty()) {
         GitEmptyState(message = "暂无分支")
       } else {
-        BranchList(
-            local = s.local,
-            remote = s.remote,
-            onCheckout = onCheckout,
-            onDelete = onDelete,
-            onRenameRequest = { renaming = it },
-            onSetUpstreamRequest = { settingUpstream = it },
-            onClearUpstream = onClearUpstream,
-            onDeleteRemoteBranch = { confirmingDelete = it },
-            onMergeRequest = { confirmingMerge = it },
-            onRebaseRequest = { confirmingRebase = it },
-        )
+        Column(modifier = Modifier.fillMaxSize()) {
+          GitFilterBar(
+              value = filterText,
+              onValueChange = { filterText = it },
+              placeholder = "过滤分支名称",
+          )
+          val filteredLocal = s.local.filter { it.fullName.contains(filterText, ignoreCase = true) }
+          val filteredRemote = s.remote.filter { it.fullName.contains(filterText, ignoreCase = true) }
+          if (filteredLocal.isEmpty() && filteredRemote.isEmpty()) {
+            GitEmptyState(message = "无匹配的分支")
+          } else {
+            BranchList(
+                local = filteredLocal,
+                remote = filteredRemote,
+                onCheckout = onCheckout,
+                onDelete = onDelete,
+                onRenameRequest = { renaming = it },
+                onSetUpstreamRequest = { settingUpstream = it },
+                onClearUpstream = onClearUpstream,
+                onDeleteRemoteBranch = { confirmingDelete = it },
+                onMergeRequest = { confirmingMerge = it },
+                onRebaseRequest = { confirmingRebase = it },
+            )
+          }
+        }
       }
     }
   }

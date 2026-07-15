@@ -297,6 +297,7 @@ private fun CommitHistoryContent(
   var confirmReset by remember { mutableStateOf<CommitDto?>(null) }
   var detailsCommit by remember { mutableStateOf<CommitDto?>(null) }
   var tagForCommit by remember { mutableStateOf<CommitDto?>(null) }
+  var filterText by remember { mutableStateOf("") }
 
   LaunchedEffect(workdir, refreshKey.value) {
     if (uiState is HistoryUiState.Loaded) {
@@ -312,25 +313,44 @@ private fun CommitHistoryContent(
     HistoryUiState.Loading -> GitLoadingState()
     HistoryUiState.Empty -> GitEmptyState("暂无提交历史")
     is HistoryUiState.Error -> GitErrorState(state.message, onRetry = onRefresh)
-    is HistoryUiState.Loaded ->
-        PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh) {
-          LazyColumn(
-              modifier = Modifier.fillMaxSize(),
-              contentPadding = PaddingValues(vertical = 8.dp),
-              verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
-          ) {
-            items(state.commits, key = { it.oidStr }) { commit ->
-              CommitItem(
-                  commit = commit,
-                  onResetToCommit = { confirmReset = commit },
-                  onCherryPick = { onCherryPick(commit.oidStr) },
-                  onCheckoutCommit = { onCheckoutCommit(commit.oidStr) },
-                  onShowDetails = { detailsCommit = commit },
-                  onCreateTag = { tagForCommit = commit },
-              )
+    is HistoryUiState.Loaded -> {
+      // 对齐 puppygit CommitListScreen 的 FilterTextField: 支持按消息/作者/hash 过滤
+      val filtered = if (filterText.isBlank()) state.commits
+          else state.commits.filter {
+            it.shortMsg.contains(filterText, ignoreCase = true) ||
+                it.author.contains(filterText, ignoreCase = true) ||
+                it.oidStr.contains(filterText, ignoreCase = true)
+          }
+      PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh) {
+        Column(modifier = Modifier.fillMaxSize()) {
+          GitFilterBar(
+              value = filterText,
+              onValueChange = { filterText = it },
+              placeholder = "过滤提交 (消息/作者/hash)",
+          )
+          if (filtered.isEmpty()) {
+            GitEmptyState(if (filterText.isNotBlank()) "无匹配的提交" else "暂无提交历史")
+          } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
+            ) {
+              items(filtered, key = { it.oidStr }) { commit ->
+                CommitItem(
+                    commit = commit,
+                    onResetToCommit = { confirmReset = commit },
+                    onCherryPick = { onCherryPick(commit.oidStr) },
+                    onCheckoutCommit = { onCheckoutCommit(commit.oidStr) },
+                    onShowDetails = { detailsCommit = commit },
+                    onCreateTag = { tagForCommit = commit },
+                )
+              }
             }
           }
         }
+      }
+    }
   }
 
   // Reset 确认对话框 (危险操作)

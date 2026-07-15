@@ -275,6 +275,7 @@ private fun TagListContent(
 
   val nbTrigger = newTagTrigger.value
   var showCreateDialog by remember { mutableStateOf(false) }
+  var filterText by remember { mutableStateOf("") }
   LaunchedEffect(nbTrigger) {
     if (nbTrigger > 0) showCreateDialog = true
   }
@@ -287,13 +288,25 @@ private fun TagListContent(
       if (s.tags.isEmpty()) {
         GitEmptyState(message = "暂无 Tag", icon = Icons.Outlined.LocalOffer)
       } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
-        ) {
-          items(s.tags, key = { it.name }) { tag ->
-            TagItem(tag = tag, onDelete = onDelete, onPush = onPushTag)
+        Column(modifier = Modifier.fillMaxSize()) {
+          GitFilterBar(
+              value = filterText,
+              onValueChange = { filterText = it },
+              placeholder = "过滤 Tag 名称",
+          )
+          val filtered = s.tags.filter { it.name.contains(filterText, ignoreCase = true) }
+          if (filtered.isEmpty()) {
+            GitEmptyState(message = "无匹配的 Tag")
+          } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
+            ) {
+              items(filtered, key = { it.name }) { tag ->
+                TagItem(tag = tag, onDelete = onDelete, onPush = onPushTag)
+              }
+            }
           }
         }
       }

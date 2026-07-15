@@ -142,6 +142,8 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
           onUpdate = ::updateSubmodule,
           onCloneAll = ::cloneAllSubmodules,
           onUpdateAll = ::updateAllSubmodules,
+          onSyncConfig = ::syncSubmoduleConfig,
+          onInit = ::initSubmodule,
           onRefresh = { refreshTrigger.value++ },
       )
     }
@@ -310,6 +312,49 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
     }
   }
 
+  /**
+   * 同步子模块配置: 将 .gitmodules 信息同步到父仓库和子模块的 .git/config.
+   * 对应 puppygit 的 sm.init(true) (父配置) + sm.sync() (子模块配置).
+   */
+  private fun syncSubmoduleConfig(dto: SubmoduleDto) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val sm = Libgit2Helper.openSubmodule(repo, dto.name)
+            ?: throw RuntimeException("找不到子模块 ${dto.name}")
+          sm.init(true)
+          sm.sync()
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已同步 ${dto.name} 配置"); refreshTrigger.value++ }
+        result.onFailure { toast(it.localizedMessage ?: "同步配置失败") }
+      }
+    }
+  }
+
+  /**
+   * 初始化子模块仓库: 创建 .git 文件/目录 (不克隆).
+   * 对应 puppygit 的 [Libgit2Helper.submoduleRepoInit].
+   */
+  private fun initSubmodule(dto: SubmoduleDto) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val sm = Libgit2Helper.openSubmodule(repo, dto.name)
+            ?: throw RuntimeException("找不到子模块 ${dto.name}")
+          Libgit2Helper.submoduleRepoInit(workdir, sm)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已初始化 ${dto.name}"); refreshTrigger.value++ }
+        result.onFailure { toast(it.localizedMessage ?: "初始化失败") }
+      }
+    }
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
   }
@@ -344,6 +389,8 @@ private fun SubmoduleListContent(
     onUpdate: (SubmoduleDto) -> Unit,
     onCloneAll: () -> Unit,
     onUpdateAll: () -> Unit,
+    onSyncConfig: (SubmoduleDto) -> Unit,
+    onInit: (SubmoduleDto) -> Unit,
     onRefresh: () -> Unit,
 ) {
   var uiState by remember { mutableStateOf<SubmoduleUiState>(SubmoduleUiState.Loading) }
@@ -398,6 +445,8 @@ private fun SubmoduleListContent(
             onEditUrlRequest = { editingUrl = it },
             onCloneRequest = { cloning = it },
             onUpdateRequest = { updating = it },
+            onSyncConfigRequest = { onSyncConfig(it) },
+            onInitRequest = { onInit(it) },
         )
       }
     }
@@ -501,6 +550,8 @@ private fun SubmoduleList(
     onEditUrlRequest: (SubmoduleDto) -> Unit,
     onCloneRequest: (SubmoduleDto) -> Unit,
     onUpdateRequest: (SubmoduleDto) -> Unit,
+    onSyncConfigRequest: (SubmoduleDto) -> Unit,
+    onInitRequest: (SubmoduleDto) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -514,6 +565,8 @@ private fun SubmoduleList(
           onEditUrlRequest = onEditUrlRequest,
           onCloneRequest = onCloneRequest,
           onUpdateRequest = onUpdateRequest,
+          onSyncConfigRequest = onSyncConfigRequest,
+          onInitRequest = onInitRequest,
       )
     }
   }
@@ -526,6 +579,8 @@ private fun SubmoduleItem(
     onEditUrlRequest: (SubmoduleDto) -> Unit,
     onCloneRequest: (SubmoduleDto) -> Unit,
     onUpdateRequest: (SubmoduleDto) -> Unit,
+    onSyncConfigRequest: (SubmoduleDto) -> Unit,
+    onInitRequest: (SubmoduleDto) -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
 
@@ -598,6 +653,20 @@ private fun SubmoduleItem(
           onClick = {
             menuExpanded = false
             onUpdateRequest(dto)
+          },
+      )
+      DropdownMenuItem(
+          text = { Text("同步配置") },
+          onClick = {
+            menuExpanded = false
+            onSyncConfigRequest(dto)
+          },
+      )
+      DropdownMenuItem(
+          text = { Text("初始化") },
+          onClick = {
+            menuExpanded = false
+            onInitRequest(dto)
           },
       )
       DropdownMenuItem(

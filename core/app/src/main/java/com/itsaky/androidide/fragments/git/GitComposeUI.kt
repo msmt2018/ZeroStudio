@@ -24,14 +24,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -135,6 +138,52 @@ fun GitErrorState(
       Text("重试")
     }
   }
+}
+
+/**
+ * 通用过滤/搜索栏。放置在列表页顶部，输入关键字客户端过滤。
+ *
+ * 对齐 puppygit 的 `FilterTextField` 能力（简化版）：搜索图标 + 输入框 + 清除按钮。
+ * 状态提升：由调用方持有 [value] 并响应 [onValueChange]，自行对列表做包含匹配过滤。
+ *
+ * @param value 当前关键字
+ * @param onValueChange 关键字变更回调
+ * @param placeholder 占位提示文案
+ * @param modifier 修饰符
+ */
+@Composable
+fun GitFilterBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "输入关键字过滤",
+) {
+  OutlinedTextField(
+      value = value,
+      onValueChange = onValueChange,
+      modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+      placeholder = { Text(placeholder) },
+      leadingIcon = {
+        Icon(
+            imageVector = Icons.Outlined.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      },
+      trailingIcon = {
+        if (value.isNotEmpty()) {
+          IconButton(onClick = { onValueChange("") }) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = "清除",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+        }
+      },
+      singleLine = true,
+      shape = RoundedCornerShape(12.dp),
+  )
 }
 
 // ===================== 共享对话框组件 =====================
