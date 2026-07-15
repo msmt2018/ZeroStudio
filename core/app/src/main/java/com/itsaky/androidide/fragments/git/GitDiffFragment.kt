@@ -46,6 +46,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -62,12 +63,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.catpuppyapp.puppygit.constants.Cons
 import com.catpuppyapp.puppygit.git.StatusTypeEntrySaver
+import com.catpuppyapp.puppygit.utils.FsUtils
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.github.git24j.core.Index
 import com.github.git24j.core.Repository
+import com.github.git24j.core.Tree
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitDiffComposeBinding
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -138,6 +143,7 @@ class GitDiffFragment : BaseGitPageFragment() {
           onUnstageFile = ::unstageFile,
           onRevertFile = ::revertFile,
           onAddToGitignore = ::addToGitignore,
+          onCreatePatch = ::createPatch,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -223,6 +229,35 @@ class GitDiffFragment : BaseGitPageFragment() {
       withContext(Dispatchers.Main) {
         ret.onSuccess { toast("已加入 .gitignore: ${item.fileName}"); triggerRefresh() }
             .onFailure { toast(it.localizedMessage ?: "加入 .gitignore 失败") }
+      }
+    }
+  }
+
+  /** 为单个未暂存文件生成 patch 文件 (index -> worktree). */
+  private fun createPatch(filePath: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    emitGitOperation("diff", "create_patch:$filePath")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val repoName = File(workdir).name
+          val outFile = FsUtils.Patch.newPatchFile(repoName, "index", "worktree")
+          val ret = Libgit2Helper.savePatchToFileAndGetContent(
+              outFile = outFile,
+              pathSpecList = listOf(filePath),
+              repo = repo,
+              tree1 = null,
+              tree2 = null,
+              fromTo = Cons.gitDiffFromIndexToWorktree,
+              returnDiffContent = false,
+          )
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+          outFile.absolutePath
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已保存 patch: $it") }
+            .onFailure { toast(it.localizedMessage ?: "保存 patch 失败") }
       }
     }
   }
@@ -350,10 +385,13 @@ private fun DiffScreen(
     onUnstageFile: (String) -> Unit,
     onRevertFile: (StatusTypeEntrySaver) -> Unit,
     onAddToGitignore: (StatusTypeEntrySaver) -> Unit,
+    onCreatePatch: (String) -> Unit,
 ) {
   val tick = refreshTrigger.value
   var uiState by remember(workdir, tick) { mutableStateOf<DiffUiState>(DiffUiState.Loading) }
   var confirmRevert by remember { mutableStateOf<StatusTypeEntrySaver?>(null) }
+  var isRefreshing by remember { mutableStateOf(false) }
+  var detailsItem by remember { mutableStateOf<Pair<StatusTypeEntrySaver, Boolean>?>(null) }
 
   LaunchedEffect(workdir, tick) {
     if (workdir == null) {
@@ -374,24 +412,40 @@ private fun DiffScreen(
     )
   }
 
-  when (val state = uiState) {
-    is DiffUiState.Loading -> GitLoadingState()
-    is DiffUiState.Empty -> GitEmptyState(message = "工作区干净，没有变更")
-    is DiffUiState.Error ->
-        GitErrorState(message = state.message, onRetry = { refreshTrigger.value++ })
-    is DiffUiState.Success -> {
-      val context = LocalContext.current
-      DiffList(
-          unstaged = state.unstaged,
-          staged = state.staged,
-          onFileClick = { path ->
-            Toast.makeText(context, path, Toast.LENGTH_SHORT).show()
-          },
-          onStageFile = onStageFile,
-          onUnstageFile = onUnstageFile,
-          onRevertFileRequest = { confirmRevert = it },
-          onAddToGitignore = onAddToGitignore,
-      )
+  // 加载完成后清除下拉刷新指示器
+  LaunchedEffect(uiState) {
+    if (uiState !is DiffUiState.Loading) {
+      isRefreshing = false
+    }
+  }
+
+  PullToRefreshBox(
+      isRefreshing = isRefreshing,
+      onRefresh = { isRefreshing = true; refreshTrigger.value++ },
+  ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+      when (val state = uiState) {
+        is DiffUiState.Loading -> GitLoadingState()
+        is DiffUiState.Empty -> GitEmptyState(message = "工作区干净，没有变更")
+        is DiffUiState.Error ->
+            GitErrorState(message = state.message, onRetry = { refreshTrigger.value++ })
+        is DiffUiState.Success -> {
+          val context = LocalContext.current
+          DiffList(
+              unstaged = state.unstaged,
+              staged = state.staged,
+              onFileClick = { path ->
+                Toast.makeText(context, path, Toast.LENGTH_SHORT).show()
+              },
+              onStageFile = onStageFile,
+              onUnstageFile = onUnstageFile,
+              onRevertFileRequest = { confirmRevert = it },
+              onAddToGitignore = onAddToGitignore,
+              onCreatePatch = onCreatePatch,
+              onShowDetails = { item, isStaged -> detailsItem = item to isStaged },
+          )
+        }
+      }
     }
   }
 
@@ -411,6 +465,35 @@ private fun DiffScreen(
         },
     )
   }
+
+  detailsItem?.let { (item, isStaged) ->
+    AlertDialog(
+        onDismissRequest = { detailsItem = null },
+        title = { Text("文件详情") },
+        text = {
+          Column {
+            Text("文件名: ${item.fileName}")
+            Spacer(Modifier.size(2.dp))
+            Text("路径: ${item.relativePathUnderRepo}")
+            Spacer(Modifier.size(2.dp))
+            Text("状态: ${if (isStaged) "已暂存" else "未暂存"}")
+            Spacer(Modifier.size(2.dp))
+            Text("变更类型: ${item.changeType ?: "未知"}")
+            Spacer(Modifier.size(2.dp))
+            Text("父目录: ${item.fileParentPathOfRelativePath.ifEmpty { "(根目录)" }}")
+            Spacer(Modifier.size(2.dp))
+            Text("规范路径: ${item.canonicalPath.ifEmpty { "(无)" }}")
+            Spacer(Modifier.size(2.dp))
+            Text("文件大小: ${item.fileSizeInBytes} 字节")
+            Spacer(Modifier.size(2.dp))
+            Text("仓库路径: ${item.repoWorkDirPath}")
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = { detailsItem = null }) { Text("关闭") }
+        },
+    )
+  }
 }
 
 @Composable
@@ -422,6 +505,8 @@ private fun DiffList(
     onUnstageFile: (String) -> Unit,
     onRevertFileRequest: (StatusTypeEntrySaver) -> Unit,
     onAddToGitignore: (StatusTypeEntrySaver) -> Unit,
+    onCreatePatch: (String) -> Unit,
+    onShowDetails: (StatusTypeEntrySaver, Boolean) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -439,6 +524,8 @@ private fun DiffList(
             onUnstage = onUnstageFile,
             onRevertRequest = onRevertFileRequest,
             onAddToGitignore = onAddToGitignore,
+            onCreatePatch = onCreatePatch,
+            onShowDetails = onShowDetails,
         )
       }
     }
@@ -453,6 +540,8 @@ private fun DiffList(
             onUnstage = onUnstageFile,
             onRevertRequest = onRevertFileRequest,
             onAddToGitignore = onAddToGitignore,
+            onCreatePatch = onCreatePatch,
+            onShowDetails = onShowDetails,
         )
       }
     }
@@ -479,6 +568,8 @@ private fun ChangeItemCard(
     onUnstage: (String) -> Unit,
     onRevertRequest: (StatusTypeEntrySaver) -> Unit,
     onAddToGitignore: (StatusTypeEntrySaver) -> Unit,
+    onCreatePatch: (String) -> Unit,
+    onShowDetails: (StatusTypeEntrySaver, Boolean) -> Unit,
 ) {
   val path = entry.relativePathUnderRepo
   val (badge, color) = changeTypeMeta(entry.changeType)
@@ -548,12 +639,20 @@ private fun ChangeItemCard(
               text = { Text("加入 .gitignore") },
               onClick = { menuExpanded = false; onAddToGitignore(entry) },
           )
+          DropdownMenuItem(
+              text = { Text("保存为 Patch 文件") },
+              onClick = { menuExpanded = false; onCreatePatch(path) },
+          )
         } else {
           DropdownMenuItem(
               text = { Text("取消暂存") },
               onClick = { menuExpanded = false; onUnstage(path) },
           )
         }
+        DropdownMenuItem(
+            text = { Text("详情") },
+            onClick = { menuExpanded = false; onShowDetails(entry, isStaged) },
+        )
       }
     }
   }
