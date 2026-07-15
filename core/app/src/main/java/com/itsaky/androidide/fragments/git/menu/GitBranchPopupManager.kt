@@ -15,7 +15,7 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.itsaky.androidide.fragments.editor.filetree
+package com.itsaky.androidide.fragments.git.menu
 
 import android.content.Context
 import android.graphics.Color
@@ -38,18 +38,11 @@ import com.github.git24j.core.Repository
 import com.google.android.material.color.MaterialColors
 import com.itsaky.androidide.R
 import com.itsaky.androidide.projects.IProjectManager
+import java.util.ArrayList
 import java.util.Locale
 
 /**
- * 分支切换弹出窗口管理器 — IDE 文件树核心组件。
- *
- * 在 file tree 弹出的 git 操作菜单里点击 "Switch Branch" 入口时, 弹出
- * 此 PopupWindow, 列出本地/远程分支, 选中即 git checkout。
- *
- * 复刻 puppygit `Libgit2Helper.getBranchList`。
- *
- * 恢复自 fragments/git/menu/GitBranchPopupManager.kt (commit 4b81f60c 删除),
- * 迁移到 fragments/editor/filetree/ 路径以统一文件树相关代码组织。
+ * 分支切换弹出窗口管理器。
  *
  * @author android_zero
  */
@@ -116,12 +109,13 @@ class GitBranchPopupManager(
   }
 
   private fun loadBranches(): List<BranchModel> {
+    val projectDir = IProjectManager.getInstance().getWorkspace()?.getProjectDir()?.path
     // 治本：projectDirPath 改 nullable 后,把它收紧成本地 val(非空 String),
     // 避免后面 Repository.open(repoPath) 的 smart cast / use 闭包泛型推断失败。
     val repoPath: String =
-        IProjectManager.getInstance().projectDirPath
-            ?.takeIf { it.isNotBlank() }
-            ?: return emptyList()
+        projectDir?.takeIf { it.isNotBlank() }
+            ?: IProjectManager.getInstance().projectDirPath
+                    ?: return emptyList()
 
     return runCatching {
           Repository.open(repoPath).use { repo ->
