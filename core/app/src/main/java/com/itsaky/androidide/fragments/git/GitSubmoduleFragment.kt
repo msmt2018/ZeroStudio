@@ -56,6 +56,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.catpuppyapp.puppygit.data.entity.CredentialEntity
+import com.catpuppyapp.puppygit.data.repository.CredentialRepository
 import com.catpuppyapp.puppygit.git.SubmoduleDto
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.github.git24j.core.Repository
@@ -73,6 +75,14 @@ import kotlinx.coroutines.withContext
  * - 添加子模块 ([Libgit2Helper.addSubmodule])
  * - 删除子模块 ([Libgit2Helper.removeSubmodule])
  * - 修改子模块 URL ([Libgit2Helper.updateSubmoduleUrl])
+ * - 克隆单个/全部子模块 ([Libgit2Helper.cloneSubmodules])
+ * - 更新单个/全部子模块 ([Libgit2Helper.updateSubmodule])
+ *
+ * 凭据策略: 复用 [GitCredentialManager.ensureConfigured] 得到 cfg, 用
+ * [GitCredentialManager.toHttpCredential] 构造一个具体的 [CredentialEntity] 作为
+ * specifiedCredential 传入. 因其 id 为随机 UUID (非 "match_by_domain"),
+ * `cloneSubmodules`/`updateSubmodule` 内部不会查询 credentialDb, 故可传入
+ * [NoOpCredentialRepository] 占位.
  *
  * @author android_zero
  */
@@ -84,6 +94,8 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
 
   private val refreshTrigger = mutableStateOf(0)
   private val addDialogTrigger = mutableStateOf(0)
+  private val cloneAllTrigger = mutableStateOf(0)
+  private val updateAllTrigger = mutableStateOf(0)
 
   override fun onCreateView(
       inflater: LayoutInflater,
@@ -102,6 +114,14 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
     addToolbarAction(R.drawable.ic_add_24, "添加子模块") {
       addDialogTrigger.value++
     }
+
+    addToolbarAction(R.drawable.ic_cloud_download_24, "克隆全部子模块") {
+      cloneAllTrigger.value++
+    }
+
+    addToolbarAction(R.drawable.ic_sync, "更新全部子模块") {
+      updateAllTrigger.value++
+    }
   }
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -113,9 +133,15 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
           workdir = workdir,
           refreshTrigger = refreshTrigger.value,
           addDialogTrigger = addDialogTrigger.value,
+          cloneAllTrigger = cloneAllTrigger.value,
+          updateAllTrigger = updateAllTrigger.value,
           onAdd = ::addSubmodule,
           onRemove = ::removeSubmodule,
           onUpdateUrl = ::updateSubmoduleUrl,
+          onClone = ::cloneSubmodule,
+          onUpdate = ::updateSubmodule,
+          onCloneAll = ::cloneAllSubmodules,
+          onUpdateAll = ::updateAllSubmodules,
           onRefresh = { refreshTrigger.value++ },
       )
     }
@@ -195,6 +221,95 @@ class GitSubmoduleFragment : BaseGitPageFragment() {
     }
   }
 
+  /**
+   * 克隆单个子模块. 若已克隆则跳过 (由 [Libgit2Helper.cloneSubmodules] 内部判断).
+   * 非递归, depth=0 (完整克隆).
+   */
+  private fun cloneSubmodule(dto: SubmoduleDto) {
+    cloneSubmodules(names = listOf(dto.name), recursive = false, successMsg = "已克隆子模块 ${dto.name}")
+  }
+
+  /**
+   * 更新单个子模块. 非递归.
+   */
+  private fun updateSubmodule(dto: SubmoduleDto) {
+    updateSubmodules(names = listOf(dto.name), recursive = false, successMsg = "已更新子模块 ${dto.name}")
+  }
+
+  /** 克隆全部子模块, 递归. */
+  private fun cloneAllSubmodules() {
+    cloneSubmodules(names = null, recursive = true, successMsg = "已克隆全部子模块")
+  }
+
+  /** 更新全部子模块, 递归. */
+  private fun updateAllSubmodules() {
+    updateSubmodules(names = null, recursive = true, successMsg = "已更新全部子模块")
+  }
+
+  /**
+   * 克隆子模块通用入口.
+   * @param names 指定子模块名列表, null 表示全部
+   */
+  private fun cloneSubmodules(names: List<String>?, recursive: Boolean, successMsg: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val ctx = context ?: return
+    GitCredentialManager.ensureConfigured(ctx) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val cred = GitCredentialManager.toHttpCredential(cfg)
+            val nameList = names ?: Libgit2Helper.getSubmoduleNameList(repo)
+            if (nameList.isEmpty()) throw RuntimeException("没有子模块")
+            Libgit2Helper.cloneSubmodules(
+                repo = repo,
+                recursive = recursive,
+                depth = 0,
+                specifiedCredential = cred,
+                submoduleNameList = nameList,
+                credentialDb = NoOpCredentialRepository,
+            )
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast(successMsg); refreshTrigger.value++ }
+          result.onFailure { toast(it.localizedMessage ?: "克隆子模块失败") }
+        }
+      }
+    }
+  }
+
+  /**
+   * 更新子模块通用入口.
+   * @param names 指定子模块名列表, null 表示全部
+   */
+  private fun updateSubmodules(names: List<String>?, recursive: Boolean, successMsg: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val ctx = context ?: return
+    GitCredentialManager.ensureConfigured(ctx) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val cred = GitCredentialManager.toHttpCredential(cfg)
+            val nameList = names ?: Libgit2Helper.getSubmoduleNameList(repo)
+            if (nameList.isEmpty()) throw RuntimeException("没有子模块")
+            Libgit2Helper.updateSubmodule(
+                parentRepo = repo,
+                specifiedCredential = cred,
+                submoduleNameList = nameList,
+                recursive = recursive,
+                credentialDb = NoOpCredentialRepository,
+                superParentRepo = repo,
+            )
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast(successMsg); refreshTrigger.value++ }
+          result.onFailure { toast(it.localizedMessage ?: "更新子模块失败") }
+        }
+      }
+    }
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
   }
@@ -220,15 +335,25 @@ private fun SubmoduleListContent(
     workdir: String?,
     refreshTrigger: Int,
     addDialogTrigger: Int,
+    cloneAllTrigger: Int,
+    updateAllTrigger: Int,
     onAdd: (remoteUrl: String, relativePath: String) -> Unit,
     onRemove: (SubmoduleDto) -> Unit,
     onUpdateUrl: (submoduleName: String, newUrl: String) -> Unit,
+    onClone: (SubmoduleDto) -> Unit,
+    onUpdate: (SubmoduleDto) -> Unit,
+    onCloneAll: () -> Unit,
+    onUpdateAll: () -> Unit,
     onRefresh: () -> Unit,
 ) {
   var uiState by remember { mutableStateOf<SubmoduleUiState>(SubmoduleUiState.Loading) }
   var showAddDialog by remember { mutableStateOf(false) }
   var removing by remember { mutableStateOf<SubmoduleDto?>(null) }
   var editingUrl by remember { mutableStateOf<SubmoduleDto?>(null) }
+  var cloning by remember { mutableStateOf<SubmoduleDto?>(null) }
+  var updating by remember { mutableStateOf<SubmoduleDto?>(null) }
+  var confirmCloneAll by remember { mutableStateOf(false) }
+  var confirmUpdateAll by remember { mutableStateOf(false) }
 
   LaunchedEffect(workdir, refreshTrigger) {
     if (workdir == null) {
@@ -252,6 +377,12 @@ private fun SubmoduleListContent(
   LaunchedEffect(addDialogTrigger) {
     if (addDialogTrigger > 0) showAddDialog = true
   }
+  LaunchedEffect(cloneAllTrigger) {
+    if (cloneAllTrigger > 0) confirmCloneAll = true
+  }
+  LaunchedEffect(updateAllTrigger) {
+    if (updateAllTrigger > 0) confirmUpdateAll = true
+  }
 
   when (val s = uiState) {
     SubmoduleUiState.Loading -> GitLoadingState()
@@ -265,6 +396,8 @@ private fun SubmoduleListContent(
             list = s.list,
             onRemoveRequest = { removing = it },
             onEditUrlRequest = { editingUrl = it },
+            onCloneRequest = { cloning = it },
+            onUpdateRequest = { updating = it },
         )
       }
     }
@@ -303,6 +436,62 @@ private fun SubmoduleListContent(
         onDismiss = { editingUrl = null },
     )
   }
+  cloning?.let { dto ->
+    AlertDialog(
+        onDismissRequest = { cloning = null },
+        title = { Text("克隆子模块") },
+        text = { Text("确认克隆子模块 ${dto.name}?\n将从 ${dto.remoteUrl} 拉取到 ${dto.relativePathUnderParent}") },
+        confirmButton = {
+          TextButton(onClick = {
+            cloning = null
+            onClone(dto)
+          }) { Text("克隆") }
+        },
+        dismissButton = { TextButton(onClick = { cloning = null }) { Text("取消") } },
+    )
+  }
+  updating?.let { dto ->
+    AlertDialog(
+        onDismissRequest = { updating = null },
+        title = { Text("更新子模块") },
+        text = { Text("确认更新子模块 ${dto.name} 到远程最新提交?") },
+        confirmButton = {
+          TextButton(onClick = {
+            updating = null
+            onUpdate(dto)
+          }) { Text("更新") }
+        },
+        dismissButton = { TextButton(onClick = { updating = null }) { Text("取消") } },
+    )
+  }
+  if (confirmCloneAll) {
+    AlertDialog(
+        onDismissRequest = { confirmCloneAll = false },
+        title = { Text("克隆全部子模块") },
+        text = { Text("将递归克隆所有未克隆的子模块，可能需要网络连接。继续?") },
+        confirmButton = {
+          TextButton(onClick = {
+            confirmCloneAll = false
+            onCloneAll()
+          }) { Text("克隆全部") }
+        },
+        dismissButton = { TextButton(onClick = { confirmCloneAll = false }) { Text("取消") } },
+    )
+  }
+  if (confirmUpdateAll) {
+    AlertDialog(
+        onDismissRequest = { confirmUpdateAll = false },
+        title = { Text("更新全部子模块") },
+        text = { Text("将递归更新所有子模块到远程最新提交，可能需要网络连接。继续?") },
+        confirmButton = {
+          TextButton(onClick = {
+            confirmUpdateAll = false
+            onUpdateAll()
+          }) { Text("更新全部") }
+        },
+        dismissButton = { TextButton(onClick = { confirmUpdateAll = false }) { Text("取消") } },
+    )
+  }
 }
 
 @Composable
@@ -310,6 +499,8 @@ private fun SubmoduleList(
     list: List<SubmoduleDto>,
     onRemoveRequest: (SubmoduleDto) -> Unit,
     onEditUrlRequest: (SubmoduleDto) -> Unit,
+    onCloneRequest: (SubmoduleDto) -> Unit,
+    onUpdateRequest: (SubmoduleDto) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -321,6 +512,8 @@ private fun SubmoduleList(
           dto = dto,
           onRemoveRequest = onRemoveRequest,
           onEditUrlRequest = onEditUrlRequest,
+          onCloneRequest = onCloneRequest,
+          onUpdateRequest = onUpdateRequest,
       )
     }
   }
@@ -331,6 +524,8 @@ private fun SubmoduleItem(
     dto: SubmoduleDto,
     onRemoveRequest: (SubmoduleDto) -> Unit,
     onEditUrlRequest: (SubmoduleDto) -> Unit,
+    onCloneRequest: (SubmoduleDto) -> Unit,
+    onUpdateRequest: (SubmoduleDto) -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
 
@@ -391,6 +586,20 @@ private fun SubmoduleItem(
       }
     }
     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+      DropdownMenuItem(
+          text = { Text(if (dto.cloned) "重新克隆" else "克隆") },
+          onClick = {
+            menuExpanded = false
+            onCloneRequest(dto)
+          },
+      )
+      DropdownMenuItem(
+          text = { Text("更新") },
+          onClick = {
+            menuExpanded = false
+            onUpdateRequest(dto)
+          },
+      )
       DropdownMenuItem(
           text = { Text("修改 URL") },
           onClick = {
@@ -472,4 +681,35 @@ private fun SubmoduleEditUrlDialog(
       },
       dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
   )
+}
+
+/**
+ * 空实现的 [CredentialRepository], 所有方法均抛 [UnsupportedOperationException].
+ *
+ * 用于 [Libgit2Helper.cloneSubmodules] / [Libgit2Helper.updateSubmodule] 的
+ * `credentialDb` 占位参数: 当传入一个具体的 `specifiedCredential` (id 非 "match_by_domain")
+ * 时, 这两个方法内部永远不会查询 `credentialDb`, 因此此占位实现不会被实际调用.
+ */
+private object NoOpCredentialRepository : CredentialRepository {
+  private fun unsupported(): Nothing = throw UnsupportedOperationException("NoOpCredentialRepository 不支持此操作")
+
+  override suspend fun getAllWithDecrypt(includeNone: Boolean, includeMatchByDomain: Boolean, masterPassword: String): List<CredentialEntity> = unsupported()
+  override suspend fun getAll(includeNone: Boolean, includeMatchByDomain: Boolean): List<CredentialEntity> = unsupported()
+  override suspend fun insertWithEncrypt(item: CredentialEntity, masterPassword: String) = unsupported()
+  override suspend fun insert(item: CredentialEntity) = unsupported()
+  override suspend fun delete(item: CredentialEntity) = unsupported()
+  override suspend fun updateWithEncrypt(item: CredentialEntity, touchTime: Boolean, masterPassword: String) = unsupported()
+  override suspend fun update(item: CredentialEntity, touchTime: Boolean) = unsupported()
+  override suspend fun isCredentialNameExist(name: String): Boolean = unsupported()
+  override suspend fun getByIdWithDecrypt(id: String, masterPassword: String): CredentialEntity? = unsupported()
+  override suspend fun getByIdWithDecryptAndMatchByDomain(id: String, url: String, masterPassword: String): CredentialEntity? = unsupported()
+  override suspend fun getByIdAndMatchByDomain(id: String, url: String): CredentialEntity? = unsupported()
+  override suspend fun getById(id: String, includeNone: Boolean, includeMatchByDomain: Boolean): CredentialEntity? = unsupported()
+  override suspend fun deleteAndUnlink(item: CredentialEntity) = unsupported()
+  override fun encryptPassIfNeed(item: CredentialEntity?, masterPassword: String) = unsupported()
+  override fun decryptPassIfNeed(item: CredentialEntity?, masterPassword: String) = unsupported()
+  override suspend fun updateMasterPassword(oldMasterPassword: String, newMasterPassword: String): List<String> = unsupported()
+  override suspend fun migrateEncryptVerIfNeed(masterPassword: String) = unsupported()
+  override suspend fun getByEncryptVerNotEqualsTo(encryptVer: Int): List<CredentialEntity> = unsupported()
+  override suspend fun subtractTimeOffset(offsetInSec: Long) = unsupported()
 }

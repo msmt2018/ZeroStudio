@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.catpuppyapp.puppygit.data.entity.RepoEntity
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.github.git24j.core.Repository
 import com.itsaky.androidide.R
@@ -129,6 +131,7 @@ class GitRemotesFragment : BaseGitPageFragment() {
           onCreate = ::createRemote,
           onDelete = ::deleteRemote,
           onEditUrl = ::editRemoteUrl,
+          onFetch = ::fetchRemote,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -192,6 +195,27 @@ class GitRemotesFragment : BaseGitPageFragment() {
     }
   }
 
+  /** Fetch 指定 remote. */
+  private fun fetchRemote(remoteName: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val context = context ?: return
+    GitCredentialManager.ensureConfigured(context) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val cred = GitCredentialManager.toHttpCredential(cfg)
+            val dummyRepo = RepoEntity()
+            Libgit2Helper.fetchRemoteForRepo(repo, remoteName, cred, dummyRepo)
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast("已 fetch $remoteName"); refreshTrigger.value++ }
+          result.onFailure { toast(it.localizedMessage ?: "Fetch 失败") }
+        }
+      }
+    }
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
   }
@@ -223,6 +247,7 @@ private fun RemoteListContent(
     onCreate: (String, String) -> Unit,
     onDelete: (String) -> Unit,
     onEditUrl: (String, String) -> Unit,
+    onFetch: (String) -> Unit,
 ) {
   val trigger = refreshTrigger.value
   val uiState by produceState<RemoteListUiState>(RemoteListUiState.Loading, trigger, workdir) {
@@ -273,6 +298,7 @@ private fun RemoteListContent(
                 remote = remote,
                 onDelete = { onDelete(remote.name) },
                 onEdit = { editing = remote },
+                onFetch = { onFetch(remote.name) },
             )
           }
         }
@@ -307,6 +333,7 @@ private fun RemoteItem(
     remote: RemoteItemData,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
+    onFetch: () -> Unit,
 ) {
   Card(
       modifier = Modifier.fillMaxWidth(),
@@ -338,6 +365,13 @@ private fun RemoteItem(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+      }
+      IconButton(onClick = onFetch) {
+        Icon(
+            imageVector = Icons.Outlined.CloudDownload,
+            contentDescription = "Fetch",
+            tint = MaterialTheme.colorScheme.primary,
         )
       }
       IconButton(onClick = onEdit) {

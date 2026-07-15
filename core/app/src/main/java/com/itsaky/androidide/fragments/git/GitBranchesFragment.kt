@@ -124,6 +124,7 @@ class GitBranchesFragment : BaseGitPageFragment() {
           onClearUpstream = ::clearUpstreamForBranch,
           onDeleteRemoteBranch = ::deleteRemoteBranch,
           onMerge = ::mergeBranch,
+          onRebase = ::rebaseBranch,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -349,6 +350,51 @@ class GitBranchesFragment : BaseGitPageFragment() {
     }
   }
 
+  /**
+   * 将当前分支 rebase 到 [targetBranchShortName]。
+   * 复刻 puppygit BranchListScreen 的 doMerge (requireRebase=true) 调用。
+   */
+  private fun rebaseBranch(targetBranchShortName: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val ctx = context ?: return
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
+          val settings = SettingsUtil.getSettingsSnapshot()
+          val ret = Libgit2Helper.mergeOrRebase(
+              repo = repo,
+              targetRefName = targetBranchShortName,
+              username = username,
+              email = email,
+              trueMergeFalseRebase = false,
+              settings = settings,
+          )
+          ret
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { ret ->
+          when {
+            ret.success() -> {
+              toast("Rebase 成功")
+              refreshTrigger.value++
+            }
+            ret.code == Ret.ErrCode.mergeFailedByAfterMergeHasConfilts -> {
+              toast("Rebase 存在冲突，请到「变更」页面解决后继续")
+              refreshTrigger.value++
+            }
+            ret.code == Ret.ErrCode.alreadyUpToDate -> {
+              toast("已经是最新的")
+            }
+            else -> toast(ret.msg.ifBlank { "Rebase 失败" })
+          }
+        }
+        result.onFailure { toast(it.localizedMessage ?: "Rebase 失败") }
+      }
+    }
+  }
+
   private fun toast(msg: String) {
     Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
   }
@@ -394,6 +440,7 @@ private fun BranchListContent(
     onClearUpstream: (String) -> Unit,
     onDeleteRemoteBranch: (String) -> Unit,
     onMerge: (String) -> Unit,
+    onRebase: (String) -> Unit,
 ) {
   val trigger = refreshTrigger.value
   val uiState by produceState<BranchListUiState>(BranchListUiState.Loading, trigger, workdir) {
@@ -434,6 +481,7 @@ private fun BranchListContent(
   var settingUpstream by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var confirmingDelete by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
   var confirmingMerge by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
+  var confirmingRebase by remember { mutableStateOf<BranchNameAndTypeDto?>(null) }
 
   when (val s = uiState) {
     BranchListUiState.Loading -> GitLoadingState()
@@ -453,6 +501,7 @@ private fun BranchListContent(
             onClearUpstream = onClearUpstream,
             onDeleteRemoteBranch = { confirmingDelete = it },
             onMergeRequest = { confirmingMerge = it },
+            onRebaseRequest = { confirmingRebase = it },
         )
       }
     }
@@ -524,6 +573,22 @@ private fun BranchListContent(
         },
     )
   }
+  confirmingRebase?.let { branch ->
+    AlertDialog(
+        onDismissRequest = { confirmingRebase = null },
+        title = { Text("Rebase 分支") },
+        text = { Text("将当前分支 rebase 到 ${branch.shortName}?") },
+        confirmButton = {
+          TextButton(onClick = {
+            confirmingRebase = null
+            onRebase(branch.shortName)
+          }) { Text("Rebase") }
+        },
+        dismissButton = {
+          TextButton(onClick = { confirmingRebase = null }) { Text("取消") }
+        },
+    )
+  }
 }
 
 /** 卡片式分支列表，分 "本地分支" / "远程分支" 两个 section。 */
@@ -538,6 +603,7 @@ private fun BranchList(
     onClearUpstream: (String) -> Unit,
     onDeleteRemoteBranch: (BranchNameAndTypeDto) -> Unit,
     onMergeRequest: (BranchNameAndTypeDto) -> Unit,
+    onRebaseRequest: (BranchNameAndTypeDto) -> Unit,
 ) {
   LazyColumn(
       modifier = Modifier.fillMaxSize(),
@@ -555,6 +621,7 @@ private fun BranchList(
             onSetUpstreamRequest = onSetUpstreamRequest,
             onClearUpstream = onClearUpstream,
             onMergeRequest = onMergeRequest,
+            onRebaseRequest = onRebaseRequest,
         )
       }
     }
@@ -570,6 +637,7 @@ private fun BranchList(
             onClearUpstream = onClearUpstream,
             onDeleteRemoteBranch = onDeleteRemoteBranch,
             onMergeRequest = onMergeRequest,
+            onRebaseRequest = onRebaseRequest,
         )
       }
     }
@@ -602,6 +670,7 @@ private fun BranchItem(
     onSetUpstreamRequest: (BranchNameAndTypeDto) -> Unit,
     onClearUpstream: (String) -> Unit,
     onMergeRequest: (BranchNameAndTypeDto) -> Unit,
+    onRebaseRequest: (BranchNameAndTypeDto) -> Unit,
     onDeleteRemoteBranch: (BranchNameAndTypeDto) -> Unit = null,
 ) {
   val isLocal = branch.type == Branch.BranchType.LOCAL
@@ -688,6 +757,13 @@ private fun BranchItem(
               onClick = {
                 menuExpanded = false
                 onMergeRequest(branch)
+              },
+          )
+          DropdownMenuItem(
+              text = { Text("Rebase 到此分支") },
+              onClick = {
+                menuExpanded = false
+                onRebaseRequest(branch)
               },
           )
           DropdownMenuItem(

@@ -71,6 +71,7 @@ import java.util.EnumSet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.material3.OutlinedTextField
 
 /**
  * Git 提交历史页面 —— 独立设计的 Compose UI。
@@ -122,6 +123,7 @@ class GitHistoryFragment : BaseGitPageFragment() {
           onResetToCommit = ::resetToCommit,
           onCherryPick = ::cherryPickCommit,
           onCheckoutCommit = ::checkoutCommit,
+          onCreateTag = ::createTagForCommit,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -212,6 +214,40 @@ class GitHistoryFragment : BaseGitPageFragment() {
     }
   }
 
+  /** 基于指定 commit 创建轻量 tag. */
+  private fun createTagForCommit(commitHash: String, tagName: String) {
+    if (tagName.isBlank()) return
+    val workdir = resolveWorkspaceDirPath() ?: return
+    emitGitOperation("history", "create_tag:$commitHash")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val oid = com.github.git24j.core.Oid.of(commitHash)
+          val commit = Commit.lookup(repo, oid)
+              ?: throw RuntimeException("找不到 commit $commitHash")
+          try {
+            Libgit2Helper.createTagLight(repo, tagName, commit, force = false)
+          } finally {
+            commit.close()
+          }
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          Toast.makeText(requireContext(), "已创建 tag $tagName", Toast.LENGTH_SHORT).show()
+        }
+        result.onFailure {
+          Toast.makeText(
+                  requireContext(),
+                  it.localizedMessage ?: "创建 tag 失败",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
+  }
+
   override fun onDestroyView() {
     binding.gitContentContainer.removeAllViews()
     super.onDestroyView()
@@ -249,6 +285,7 @@ private fun CommitHistoryContent(
     onResetToCommit: (String) -> Unit,
     onCherryPick: (String) -> Unit,
     onCheckoutCommit: (String) -> Unit,
+    onCreateTag: (commitHash: String, tagName: String) -> Unit,
 ) {
   if (workdir == null) {
     GitEmptyState("未打开项目")
@@ -258,6 +295,8 @@ private fun CommitHistoryContent(
   var uiState by remember { mutableStateOf<HistoryUiState>(HistoryUiState.Loading) }
   var isRefreshing by remember { mutableStateOf(false) }
   var confirmReset by remember { mutableStateOf<CommitDto?>(null) }
+  var detailsCommit by remember { mutableStateOf<CommitDto?>(null) }
+  var tagForCommit by remember { mutableStateOf<CommitDto?>(null) }
 
   LaunchedEffect(workdir, refreshKey.value) {
     if (uiState is HistoryUiState.Loaded) {
@@ -286,6 +325,8 @@ private fun CommitHistoryContent(
                   onResetToCommit = { confirmReset = commit },
                   onCherryPick = { onCherryPick(commit.oidStr) },
                   onCheckoutCommit = { onCheckoutCommit(commit.oidStr) },
+                  onShowDetails = { detailsCommit = commit },
+                  onCreateTag = { tagForCommit = commit },
               )
             }
           }
@@ -311,6 +352,81 @@ private fun CommitHistoryContent(
         },
     )
   }
+
+  // 提交详情对话框
+  detailsCommit?.let { commit ->
+    AlertDialog(
+        onDismissRequest = { detailsCommit = null },
+        title = { Text("提交详情") },
+        text = {
+          Column {
+            DetailRow("Hash", commit.oidStr)
+            DetailRow("作者", commit.author)
+            DetailRow("邮箱", commit.email)
+            DetailRow("日期", commit.dateTime)
+            Spacer(Modifier.height(8.dp))
+            Text("消息:", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(commit.msg, style = MaterialTheme.typography.bodySmall)
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = { detailsCommit = null }) { Text("关闭") }
+        },
+    )
+  }
+
+  // 基于 commit 创建 tag 对话框
+  tagForCommit?.let { commit ->
+    var tagName by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { tagForCommit = null },
+        title = { Text("基于此提交创建 Tag") },
+        text = {
+          Column {
+            Text("提交: ${commit.shortOidStr} ${commit.shortMsg}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = tagName,
+                onValueChange = { tagName = it },
+                label = { Text("Tag 名称") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = {
+            val name = tagName.trim()
+            tagForCommit = null
+            if (name.isNotEmpty()) onCreateTag(commit.oidStr, name)
+          }) { Text("创建") }
+        },
+        dismissButton = {
+          TextButton(onClick = { tagForCommit = null }) { Text("取消") }
+        },
+    )
+  }
+}
+
+/** 详情对话框中的键值对行. */
+@Composable
+private fun DetailRow(label: String, value: String) {
+  Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    Text(
+        text = "$label: ",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = value,
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+  }
 }
 
 /**
@@ -323,13 +439,15 @@ private fun CommitItem(
     onResetToCommit: () -> Unit,
     onCherryPick: () -> Unit,
     onCheckoutCommit: () -> Unit,
+    onShowDetails: () -> Unit,
+    onCreateTag: () -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
 
   Card(
       modifier =
           Modifier.fillMaxWidth().padding(horizontal = 12.dp).combinedClickable(
-              onClick = {},
+              onClick = { onShowDetails() },
               onLongClick = { menuExpanded = true },
           ),
       shape = RoundedCornerShape(GitSpacing.cardCorner),
@@ -368,6 +486,20 @@ private fun CommitItem(
         )
       }
       DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        DropdownMenuItem(
+            text = { Text("查看详情") },
+            onClick = {
+              menuExpanded = false
+              onShowDetails()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("基于此提交创建 Tag") },
+            onClick = {
+              menuExpanded = false
+              onCreateTag()
+            },
+        )
         DropdownMenuItem(
             text = { Text("重置到此 commit") },
             onClick = {

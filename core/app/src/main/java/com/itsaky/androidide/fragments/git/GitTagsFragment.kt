@@ -41,6 +41,8 @@ import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -59,6 +61,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.catpuppyapp.puppygit.data.entity.CredentialEntity
+import com.catpuppyapp.puppygit.git.RemoteAndCredentials
 import com.catpuppyapp.puppygit.git.TagDto
 import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
@@ -126,12 +130,18 @@ class GitTagsFragment : BaseGitPageFragment() {
           onRefresh = { refreshTrigger.value++ },
           onCreate = ::createTag,
           onDelete = ::deleteTag,
+          onPushTag = ::pushTag,
       )
     }
     binding.gitContentContainer.addView(compose)
   }
 
-  private fun createTag(tagName: String) {
+  /**
+   * 创建 tag。支持轻量 tag 和附注 tag。
+   * @param tagName tag 名称
+   * @param message 附注消息, 为空则创建轻量 tag
+   */
+  private fun createTag(tagName: String, message: String) {
     if (tagName.isBlank()) return toast("Tag 名不能为空")
     val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
     viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
@@ -144,7 +154,15 @@ class GitTagsFragment : BaseGitPageFragment() {
           val commit = Commit.lookup(repo, headOid)
               ?: throw RuntimeException("无法查找 HEAD commit")
           try {
-            Libgit2Helper.createTagLight(repo, tagName, commit, force = false)
+            if (message.isBlank()) {
+              Libgit2Helper.createTagLight(repo, tagName, commit, force = false)
+            } else {
+              val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
+              val settings = SettingsUtil.getSettingsSnapshot()
+              Libgit2Helper.createTagAnnotated(
+                  repo, tagName, commit, message, username, email, force = false, settings = settings,
+              )
+            }
           } finally {
             commit.close()
           }
@@ -156,6 +174,33 @@ class GitTagsFragment : BaseGitPageFragment() {
           refreshTrigger.value++
         }
         result.onFailure { toast(it.localizedMessage ?: "创建 tag 失败") }
+      }
+    }
+  }
+
+  /** 推送单个 tag 到 origin remote. */
+  private fun pushTag(tagName: String) {
+    val workdir = resolveWorkspaceDirPath() ?: return toast("No opened project")
+    val context = context ?: return
+    GitCredentialManager.ensureConfigured(context) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val cred = GitCredentialManager.toHttpCredential(cfg)
+            val remoteAndCred = listOf(
+                RemoteAndCredentials("origin", fetchCredential = cred, pushCredential = cred),
+            )
+            val refspecs = listOf("refs/tags/$tagName")
+            val failed = Libgit2Helper.pushTags(repo, remoteAndCred, refspecs)
+            if (failed.isNotEmpty()) {
+              throw RuntimeException(failed.first().exception?.message ?: "推送 tag 失败")
+            }
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast("已推送 tag $tagName"); refreshTrigger.value++ }
+          result.onFailure { toast(it.localizedMessage ?: "推送 tag 失败") }
+        }
       }
     }
   }
@@ -204,8 +249,9 @@ private fun TagListContent(
     refreshTrigger: State<Int>,
     newTagTrigger: State<Int>,
     onRefresh: () -> Unit,
-    onCreate: (String) -> Unit,
+    onCreate: (String, String) -> Unit,
     onDelete: (String) -> Unit,
+    onPushTag: (String) -> Unit,
 ) {
   val trigger = refreshTrigger.value
   val uiState by produceState<TagListUiState>(TagListUiState.Loading, trigger, workdir) {
@@ -247,7 +293,7 @@ private fun TagListContent(
             verticalArrangement = Arrangement.spacedBy(GitSpacing.itemSpacing),
         ) {
           items(s.tags, key = { it.name }) { tag ->
-            TagItem(tag = tag, onDelete = onDelete)
+            TagItem(tag = tag, onDelete = onDelete, onPush = onPushTag)
           }
         }
       }
@@ -255,33 +301,66 @@ private fun TagListContent(
   }
 
   if (showCreateDialog) {
-    TextInputDialog(
-        title = "新建 Tag",
-        confirmText = "创建",
-        initial = "",
-        onConfirm = { name ->
+    CreateTagDialog(
+        onConfirm = { name, msg ->
           showCreateDialog = false
-          onCreate(name.trim())
+          onCreate(name.trim(), msg.trim())
         },
         onDismiss = { showCreateDialog = false },
     )
   }
 }
 
+/** 创建 Tag 对话框: 支持轻量 tag 和附注 tag. */
 @Composable
-private fun TagItem(tag: TagDto, onDelete: (String) -> Unit) {
+private fun CreateTagDialog(
+    onConfirm: (name: String, message: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+  var name by remember { mutableStateOf("") }
+  var message by remember { mutableStateOf("") }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("新建 Tag") },
+      text = {
+        Column {
+          OutlinedTextField(
+              value = name,
+              onValueChange = { name = it },
+              label = { Text("Tag 名称") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
+          Spacer(Modifier.height(8.dp))
+          OutlinedTextField(
+              value = message,
+              onValueChange = { message = it },
+              label = { Text("附注消息 (留空创建轻量 tag)") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { onConfirm(name, message) }) { Text("创建") }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+  )
+}
+
+@Composable
+private fun TagItem(tag: TagDto, onDelete: (String) -> Unit, onPush: (String) -> Unit) {
+  var menuExpanded by remember { mutableStateOf(false) }
   Card(
-      modifier = Modifier.fillMaxWidth(),
+      modifier = Modifier.fillMaxWidth().combinedClickable(
+          onClick = { menuExpanded = true },
+          onLongClick = { menuExpanded = true },
+      ),
       shape = RoundedCornerShape(GitSpacing.cardCorner),
       elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
   ) {
     Row(
-        modifier =
-            Modifier.fillMaxWidth().combinedClickable(
-                    onClick = {},
-                    onLongClick = { onDelete(tag.shortName) },
-                )
-                .padding(GitSpacing.cardPadding),
+        modifier = Modifier.fillMaxWidth().padding(GitSpacing.cardPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
       Column(modifier = Modifier.weight(1f)) {
@@ -322,6 +401,16 @@ private fun TagItem(tag: TagDto, onDelete: (String) -> Unit) {
             imageVector = Icons.Outlined.Delete,
             contentDescription = "删除 Tag",
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        )
+      }
+      DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        DropdownMenuItem(
+            text = { Text("推送到 origin") },
+            onClick = { menuExpanded = false; onPush(tag.shortName) },
+        )
+        DropdownMenuItem(
+            text = { Text("删除") },
+            onClick = { menuExpanded = false; onDelete(tag.shortName) },
         )
       }
     }

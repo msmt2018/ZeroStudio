@@ -176,7 +176,31 @@ class GitChangesFragment : BaseGitPageFragment() {
 
     addToolbarSeparator()
 
-    // 分组4: 刷新
+    // 分组4: Merge/Rebase 进行中状态管理
+    addToolbarAction(R.drawable.ic_check_24, "Merge Continue") {
+      emitGitOperation("changes", "merge_continue")
+      mergeContinue()
+    }
+    addToolbarAction(R.drawable.ic_warning_24, "Merge Abort") {
+      emitGitOperation("changes", "merge_abort")
+      mergeAbort()
+    }
+    addToolbarAction(R.drawable.ic_check_24, "Rebase Continue") {
+      emitGitOperation("changes", "rebase_continue")
+      rebaseContinue()
+    }
+    addToolbarAction(R.drawable.ic_remove_circle_outline_24, "Rebase Skip") {
+      emitGitOperation("changes", "rebase_skip")
+      rebaseSkip()
+    }
+    addToolbarAction(R.drawable.ic_warning_24, "Rebase Abort") {
+      emitGitOperation("changes", "rebase_abort")
+      rebaseAbort()
+    }
+
+    addToolbarSeparator()
+
+    // 分组5: 刷新
     addToolbarAction(R.drawable.ic_refresh_24, getString(R.string.refresh)) {
       emitGitOperation("changes", "refresh")
       triggerRefresh()
@@ -369,6 +393,115 @@ class GitChangesFragment : BaseGitPageFragment() {
   /** 仅 fetch (不 merge), 拉取远程更新但不改变工作区. */
   private fun fetchFromOrigin() {
     pullFromOrigin()
+  }
+
+  // ---- Merge/Rebase 进行中状态管理 ----
+
+  /** Merge Continue: 解决冲突后提交以继续合并. */
+  private fun mergeContinue() {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    val ctx = context ?: return
+    GitCredentialManager.ensureConfigured(ctx) { cfg ->
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        val result = runCatching {
+          Repository.open(workdir).use { repo ->
+            val readyCheck = Libgit2Helper.readyForContinueMerge(repo, ctx)
+            if (readyCheck.hasError()) throw RuntimeException(readyCheck.msg)
+            val settings = SettingsUtil.getSettingsSnapshot()
+            val msg = "Merge"  // 默认 merge commit 消息
+            val ret = Libgit2Helper.createCommit(
+                repo = repo, msg = msg,
+                username = cfg.username, email = cfg.email,
+                amend = false, cleanRepoStateIfSuccess = true,
+                settings = settings,
+            )
+            if (ret.hasError()) throw RuntimeException(ret.msg)
+          }
+        }
+        withContext(Dispatchers.Main) {
+          result.onSuccess { toast("Merge continue 完成"); triggerRefresh() }
+              .onFailure { toast(it.localizedMessage ?: "Merge continue 失败") }
+        }
+      }
+    }
+  }
+
+  /** Merge Abort: 中止合并, 回到合并前状态. */
+  private fun mergeAbort() {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ret = Libgit2Helper.resetHardToHead(repo)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已中止合并"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "中止合并失败") }
+      }
+    }
+  }
+
+  /** Rebase Continue: 解决冲突后继续变基. */
+  private fun rebaseContinue() {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    val ctx = context ?: return
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
+          val settings = SettingsUtil.getSettingsSnapshot()
+          val ret = Libgit2Helper.rebaseContinue(repo, ctx, username, email, settings = settings)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("Rebase continue 完成"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "Rebase continue 失败") }
+      }
+    }
+  }
+
+  /** Rebase Skip: 跳过当前冲突的 commit. */
+  private fun rebaseSkip() {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    val ctx = context ?: return
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val (username, email) = Libgit2Helper.getGitUserNameAndEmailFromRepo(repo)
+          val settings = SettingsUtil.getSettingsSnapshot()
+          val ret = Libgit2Helper.rebaseSkip(repo, ctx, username, email, settings = settings)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已跳过当前 commit"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "Rebase skip 失败") }
+      }
+    }
+  }
+
+  /** Rebase Abort: 中止变基, 回到变基前状态. */
+  private fun rebaseAbort() {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val ret = Libgit2Helper.rebaseAbort(repo)
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess { toast("已中止 rebase"); triggerRefresh() }
+            .onFailure { toast(it.localizedMessage ?: "中止 rebase 失败") }
+      }
+    }
+  }
+
+  private fun toast(msg: String) {
+    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
   }
 
   /** 在 IO 线程执行 git 操作, 成功后刷新列表. */
