@@ -28,8 +28,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -39,15 +41,29 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.catpuppyapp.puppygit.constants.Cons
+import com.catpuppyapp.puppygit.constants.LineNum
 import com.catpuppyapp.puppygit.screen.BranchListScreen
+import com.catpuppyapp.puppygit.screen.CloneScreen
 import com.catpuppyapp.puppygit.screen.CommitListScreen
+import com.catpuppyapp.puppygit.screen.CredentialManagerScreen
+import com.catpuppyapp.puppygit.screen.CredentialNewOrEdit
+import com.catpuppyapp.puppygit.screen.CredentialRemoteListScreen
+import com.catpuppyapp.puppygit.screen.DiffScreen
+import com.catpuppyapp.puppygit.screen.DomainCredentialListScreen
+import com.catpuppyapp.puppygit.screen.ErrorListScreen
+import com.catpuppyapp.puppygit.screen.FileChooserScreen
+import com.catpuppyapp.puppygit.screen.FileHistoryScreen
 import com.catpuppyapp.puppygit.screen.IndexScreen
 import com.catpuppyapp.puppygit.screen.ReflogListScreen
 import com.catpuppyapp.puppygit.screen.RemoteListScreen
 import com.catpuppyapp.puppygit.screen.StashListScreen
+import com.catpuppyapp.puppygit.screen.SubPageEditor
 import com.catpuppyapp.puppygit.screen.SubmoduleListScreen
 import com.catpuppyapp.puppygit.screen.TagListScreen
+import com.catpuppyapp.puppygit.screen.TreeToTreeChangeListScreen
 import com.catpuppyapp.puppygit.screen.shared.CommitListFrom
+import com.catpuppyapp.puppygit.screen.shared.DiffFromScreen
+import com.catpuppyapp.puppygit.screen.shared.FileChooserType
 import com.catpuppyapp.puppygit.ui.theme.InitContent
 import com.catpuppyapp.puppygit.utils.AppModel
 import com.catpuppyapp.puppygit.utils.cache.NaviCache
@@ -101,6 +117,11 @@ fun GitHostScreen() {
   val repoId = RepoIdResolver.rememberRepoIdForWorkdir(workdir)
 
   // 3. NavHost: 以 puppygit 的 Cons.nav_* 常量作为路由, 统一管理页面跳转栈。
+  //    路由注册与 puppygit AppScreenNavigator 保持一致, 使各 Screen 内部的
+  //    navController.navigate(Cons.nav_xxx) 调用能正确匹配。
+  //    不注册 HomeScreen (AndroidIDE 不需要 puppygit 的仓库列表页)。
+  val editorPageLastFilePath = rememberSaveable { mutableStateOf("") }
+
   InitContent(LocalContext.current) {
     NavHost(navController = navController, startDestination = NAV_GIT_HOME) {
       // 起始页: 8 个标签页聚合入口
@@ -108,14 +129,13 @@ fun GitHostScreen() {
         GitHomePage(repoId = repoId, navController = navController)
       }
 
-      // 子路由: 从标签页或菜单跳转的独立页面。
-      // CommitListScreen 路由与 puppygit AppScreenNavigator 保持一致 (5 个路径参数)。
-      // 这样 BranchListScreen / TagListScreen 等页面内部调用 goToCommitListScreen()
-      // 时, 导航能正确匹配本路由。
+      // ---- 以下路由与 puppygit AppScreenNavigator 一致 ----
+
+      // 提交历史 (从分支/标签/变更页跳转)
       composable(
           Cons.nav_CommitListScreen +
-              "/{repoId}/{isHEAD}/{from}/{fullOidCacheKey}/{shortBranchNameCacheKey}") { backStackEntry ->
-        val args = backStackEntry.arguments
+              "/{repoId}/{isHEAD}/{from}/{fullOidCacheKey}/{shortBranchNameCacheKey}") { entry ->
+        val args = entry.arguments
         val fullOidCacheKey = args?.getString("fullOidCacheKey") ?: ""
         val shortBranchNameCacheKey = args?.getString("shortBranchNameCacheKey") ?: ""
         CommitListScreen(
@@ -123,7 +143,9 @@ fun GitHostScreen() {
             isHEAD = args?.getString("isHEAD") != "0",
             fullOidCacheKey = fullOidCacheKey,
             shortBranchNameCacheKey = shortBranchNameCacheKey,
-            from = CommitListFrom.fromCode(args?.getString("from") ?: "") ?: CommitListFrom.OTHER,
+            from =
+                CommitListFrom.fromCode(args?.getString("from") ?: "")
+                    ?: CommitListFrom.OTHER,
             naviUp = {
               navController.navigateUp()
               NaviCache.del(fullOidCacheKey)
@@ -132,12 +154,150 @@ fun GitHostScreen() {
         )
       }
 
-      // DiffScreen 参数复杂(双 tree / file path / commit list 等), 占位待接入。
-      composable(Cons.nav_DiffScreen) { PlaceholderScreen("Diff Screen (TODO)") }
+      // Diff (从变更页/Stash/提交历史点击文件差异跳转)
+      composable(
+          Cons.nav_DiffScreen +
+              "/{repoId}/{fromTo}/{treeOid1Str}/{treeOid2Str}/{isDiffToLocal}/{curItemIndexAtDiffableList}/{localAtDiffRight}/{fromScreen}/{diffableListCacheKey}/{isMultiMode}") { entry ->
+        val args = entry.arguments
+        val diffableListCacheKey = args?.getString("diffableListCacheKey") ?: ""
+        DiffScreen(
+            repoId = args?.getString("repoId") ?: "",
+            fromTo = args?.getString("fromTo") ?: "",
+            treeOid1Str = args?.getString("treeOid1Str") ?: "",
+            treeOid2Str = args?.getString("treeOid2Str") ?: "",
+            localAtDiffRight = (args?.getString("localAtDiffRight")?.toInt() ?: 0) != 0,
+            isDiffToLocal = (args?.getString("isDiffToLocal")?.toInt() ?: 0) != 0,
+            fromScreen = DiffFromScreen.fromCode(args?.getString("fromScreen")!!)!!,
+            diffableListCacheKey = diffableListCacheKey,
+            isMultiMode = args?.getString("isMultiMode") == "1",
+            curItemIndexAtDiffableItemList =
+                try {
+                  (args?.getString("curItemIndexAtDiffableList") ?: "").toInt()
+                } catch (_: Exception) {
+                  -1
+                },
+            naviUp = {
+              navController.navigateUp()
+              NaviCache.del(diffableListCacheKey)
+            },
+        )
+      }
 
-      // CredentialManagerScreen 占位待接入。
-      composable(Cons.nav_CredentialManagerScreen) {
-        PlaceholderScreen("Credential Manager (TODO)")
+      // 凭据管理 (从远程页跳转)
+      composable(Cons.nav_CredentialManagerScreen + "/{remoteId}") { entry ->
+        val remoteId = entry.arguments?.getString("remoteId") ?: ""
+        CredentialManagerScreen(
+            remoteId = if (remoteId == Cons.dbInvalidNonEmptyId) "" else remoteId,
+            naviUp = { navController.navigateUp() },
+        )
+      }
+
+      // 新建/编辑凭据
+      composable(Cons.nav_CredentialNewOrEditScreen + "/{credentialId}") { entry ->
+        CredentialNewOrEdit(
+            credentialId = entry.arguments?.getString("credentialId") ?: "",
+            naviUp = { navController.navigateUp() },
+        )
+      }
+
+      // 凭据关联的远程列表
+      composable(Cons.nav_CredentialRemoteListScreen + "/{credentialId}/{isShowLink}") { entry ->
+        CredentialRemoteListScreen(
+            credentialId = entry.arguments?.getString("credentialId") ?: "",
+            isShowLink = entry.arguments?.getString("isShowLink") != "0",
+            naviUp = { navController.navigateUp() },
+        )
+      }
+
+      // 域名凭据列表
+      composable(Cons.nav_DomainCredentialListScreen) {
+        DomainCredentialListScreen(naviUp = { navController.navigateUp() })
+      }
+
+      // 错误列表
+      composable(Cons.nav_ErrorListScreen + "/{repoId}") { entry ->
+        ErrorListScreen(
+            entry.arguments?.getString("repoId") ?: "",
+            naviUp = { navController.navigateUp() },
+        )
+      }
+
+      // Clone (从子模块等页面跳转)
+      composable(Cons.nav_CloneScreen + "/{repoId}") { entry ->
+        CloneScreen(
+            entry.arguments?.getString("repoId") ?: "",
+            naviUp = { navController.navigateUp() },
+        )
+      }
+
+      // 两个 commit/tree 之间的变更列表
+      composable(
+          Cons.nav_TreeToTreeChangeListScreen +
+              "/{repoId}/{commit1OidStrCacheKey}/{commit2OidStrCacheKey}/{commitForQueryParentsCacheKey}/{titleCacheKey}") { entry ->
+        val args = entry.arguments
+        val commit1OidStrCacheKey = args?.getString("commit1OidStrCacheKey") ?: ""
+        val commit2OidStrCacheKey = args?.getString("commit2OidStrCacheKey") ?: ""
+        val commitForQueryParentsCacheKey = args?.getString("commitForQueryParentsCacheKey") ?: ""
+        val titleCacheKey = args?.getString("titleCacheKey") ?: ""
+        TreeToTreeChangeListScreen(
+            repoId = args?.getString("repoId") ?: "",
+            commit1OidStrCacheKey = commit1OidStrCacheKey,
+            commit2OidStrCacheKey = commit2OidStrCacheKey,
+            commitForQueryParentsCacheKey = commitForQueryParentsCacheKey,
+            titleCacheKey = titleCacheKey,
+            naviUp = {
+              navController.navigateUp()
+              NaviCache.del(commit1OidStrCacheKey)
+              NaviCache.del(commit2OidStrCacheKey)
+              NaviCache.del(commitForQueryParentsCacheKey)
+              NaviCache.del(titleCacheKey)
+            },
+        )
+      }
+
+      // 文件历史
+      composable(Cons.nav_FileHistoryScreen + "/{repoId}/{fileRelativePathKey}") { entry ->
+        val fileRelativePathKey = entry.arguments?.getString("fileRelativePathKey") ?: ""
+        FileHistoryScreen(
+            repoId = entry.arguments?.getString("repoId") ?: "",
+            fileRelativePathKey = fileRelativePathKey,
+            naviUp = {
+              navController.navigateUp()
+              NaviCache.del(fileRelativePathKey)
+            },
+        )
+      }
+
+      // 子页面编辑器 (编辑 commit message / .gitignore 等)
+      composable(
+          Cons.nav_SubPageEditor +
+              "/{goToLine}/{initMergeMode}/{initReadOnly}/{filePathKey}") { entry ->
+        val args = entry.arguments
+        val filePathKey = args?.getString("filePathKey") ?: ""
+        SubPageEditor(
+            goToLine =
+                try {
+                  (args?.getString("goToLine") ?: "").toInt()
+                } catch (_: Exception) {
+                  LineNum.lastPosition
+                },
+            initMergeMode = args?.getString("initMergeMode") == "1",
+            initReadOnly = args?.getString("initReadOnly") == "1",
+            editorPageLastFilePath = editorPageLastFilePath,
+            filePathKey = filePathKey,
+            naviUp = {
+              navController.navigateUp()
+              NaviCache.del(filePathKey)
+            },
+        )
+      }
+
+      // 文件选择器
+      composable(Cons.nav_FileChooserScreen + "/{type}") { entry ->
+        FileChooserScreen(
+            type = FileChooserType.fromCode(entry.arguments!!.getString("type")!!)!!,
+            naviUp = { navController.navigateUp() },
+        )
       }
     }
   }
@@ -265,19 +425,6 @@ private fun GitHomePage(repoId: String?, navController: NavHostController) {
       }
     }
   }
-}
-
-/**
- * 简易占位页: 居中显示一行文本。用于尚未接入的复杂页面(Diff / CommitList 等)。
- */
-@Composable
-private fun PlaceholderScreen(text: String) {
-  Text(
-      text = text,
-      modifier = Modifier.fillMaxSize().padding(16.dp),
-      textAlign = TextAlign.Center,
-      style = MaterialTheme.typography.bodyMedium,
-  )
 }
 
 /**
