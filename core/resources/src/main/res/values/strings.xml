@@ -888,6 +888,60 @@
   <string name="git_token_dialog_message">Only edit the token used for HTTPS Push/Pull.</string>
   <string name="git_save">Save</string>
 
+  <!-- 文件树 git 操作 (file tree git actions) -->
+  <string name="git_action_add">Git Add</string>
+  <string name="git_action_unstage">Git Unstage</string>
+  <string name="git_action_revert">Discard Changes</string>
+  <string name="git_action_revert_force">Force Discard Changes</string>
+  <string name="git_action_diff">View Diff</string>
+  <string name="git_action_status">Git Status</string>
+  <string name="git_action_pull">Git Pull</string>
+  <string name="git_action_push">Git Push</string>
+  <string name="git_action_force_push">Force Push</string>
+  <string name="git_action_fetch">Git Fetch</string>
+  <string name="git_action_commit">Git Commit</string>
+  <string name="git_action_commit_amend">Amend Last Commit</string>
+  <string name="git_action_branch_switch">Switch Branch</string>
+  <string name="git_action_branch_new">New Branch</string>
+  <string name="git_action_branches_list">All Branches</string>
+  <string name="git_action_log">Commit Log</string>
+  <string name="git_action_open_full_git_ui">Open Git UI</string>
+  <string name="git_action_clone">Clone Repository</string>
+  <string name="git_action_init">Init Repository</string>
+  <string name="git_action_history">File History</string>
+
+  <string name="git_msg_no_repo">Current project is not a git repository</string>
+  <string name="git_msg_op_success">Git operation succeeded</string>
+  <string name="git_msg_op_failed">Git operation failed: %1$s</string>
+  <string name="git_msg_add_success">File added to index</string>
+  <string name="git_msg_unstage_success">File unstaged</string>
+  <string name="git_msg_revert_success">File reverted</string>
+  <string name="git_msg_pull_success">Pull completed</string>
+  <string name="git_msg_push_success">Push completed</string>
+  <string name="git_msg_fetch_success">Fetch completed</string>
+  <string name="git_msg_commit_success">Commit created</string>
+  <string name="git_msg_switch_branch_success">Switched to branch: %1$s</string>
+  <string name="git_msg_switch_branch_failed">Switch branch failed: %1$s</string>
+  <string name="git_msg_commit_message_hint">Commit message</string>
+  <string name="git_msg_commit_message_title">Enter commit message</string>
+  <string name="git_msg_commit_empty_index">No staged files. Use \"Git Add\" first.</string>
+  <string name="git_msg_branch_dialog_title">Switch Branch</string>
+  <string name="git_msg_new_branch_dialog_title">Create New Branch</string>
+  <string name="git_msg_new_branch_name_hint">Branch name</string>
+  <string name="git_msg_local_branches">Local Branches</string>
+  <string name="git_msg_remote_branches">Remote Branches</string>
+  <string name="git_msg_force_checkout_confirm">This will discard all local changes. Continue?</string>
+  <string name="git_msg_force_push_confirm">Force push will overwrite remote history. Continue?</string>
+  <string name="git_msg_detached_head_cannot_op">Cannot perform this action on detached HEAD</string>
+  <string name="git_msg_no_upstream">No upstream configured for current branch</string>
+  <string name="git_msg_no_remote">No remote configured</string>
+  <string name="git_msg_clone_dialog_title">Clone Git Repository</string>
+
+  <string name="git_status_bar_no_repo">No git repo</string>
+  <string name="git_status_bar_detached">detached</string>
+  <string name="git_status_bar_ahead_behind">↑%1$d ↓%2$d</string>
+  <string name="git_status_bar_changes">%1$d changes</string>
+
   <!--
     Editor bottom sheet onboarding tutorial (操作引导气泡文案).
     Used by EditorBottomSheetOnboardingController in core/app.
