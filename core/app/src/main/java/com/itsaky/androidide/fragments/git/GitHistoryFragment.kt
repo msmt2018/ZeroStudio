@@ -41,9 +41,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -61,16 +63,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.catpuppyapp.puppygit.constants.Cons
 import com.catpuppyapp.puppygit.git.CommitDto
 import com.catpuppyapp.puppygit.settings.SettingsUtil
+import com.catpuppyapp.puppygit.utils.FsUtils
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.github.git24j.core.Commit
 import com.github.git24j.core.Repository
 import com.github.git24j.core.Reset
 import com.github.git24j.core.Revwalk
 import com.github.git24j.core.SortT
+import com.github.git24j.core.Tree
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentGitHistoryComposeBinding
+import java.io.File
 import java.util.EnumSet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -129,6 +135,9 @@ class GitHistoryFragment : BaseGitPageFragment() {
           onCheckoutCommit = ::checkoutCommit,
           onCreateTag = ::createTagForCommit,
           onCopyHash = ::copyCommitHash,
+          onSavePatch = ::savePatchForCommit,
+          onCherryPickWithOptions = ::cherryPickWithOptions,
+          onSquashToCommit = ::squashToCommit,
       )
     }
     binding.gitContentContainer.addView(compose)
@@ -277,6 +286,171 @@ class GitHistoryFragment : BaseGitPageFragment() {
     }
   }
 
+  /**
+   * 保存 commit 与其父提交之间的差异为 patch 文件。对齐 puppygit
+   * CommitListScreen 的 create_patch 操作: 调用
+   * [Libgit2Helper.savePatchToFileAndGetContent] 写入 patch 文件.
+   *
+   * @param commitHash 目标 commit hash
+   * @param parentHash 父 commit hash (用于 diff). 若为空且 commit 无父, 则报错.
+   */
+  private fun savePatchForCommit(commitHash: String, parentHash: String) {
+    if (parentHash.isBlank()) {
+      toast("此提交无父提交, 无法生成 patch")
+      return
+    }
+    val workdir = resolveWorkspaceDirPath() ?: return
+    emitGitOperation("history", "save_patch:$commitHash")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val repoName = File(workdir).name
+          val outFile = FsUtils.Patch.newPatchFile(repoName, parentHash, commitHash)
+          val tree1 = Libgit2Helper.resolveTree(repo, parentHash)
+          val tree2 = Libgit2Helper.resolveTree(repo, commitHash)
+          val ret = Libgit2Helper.savePatchToFileAndGetContent(
+              outFile = outFile,
+              repo = repo,
+              tree1 = tree1,
+              tree2 = tree2,
+              fromTo = Cons.gitDiffFromTreeToTree,
+              reverse = false,
+              treeToWorkTree = false,
+              returnDiffContent = false,
+          )
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+          outFile.absolutePath
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          Toast.makeText(requireContext(), "已保存 patch: $it", Toast.LENGTH_LONG).show()
+        }
+        result.onFailure {
+          Toast.makeText(
+                  requireContext(),
+                  it.localizedMessage ?: "保存 patch 失败",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
+  }
+
+  /**
+   * Cherry-pick 指定 commit (带父提交选择 / autoCommit 选项).
+   * 对齐 puppygit CommitListScreen: 当目标 commit 是 merge commit (多个父提交)
+   * 时需指定 mainline; autoCommit=false 时只 pick 到 index 不创建提交.
+   *
+   * @param commitHash 目标 commit hash
+   * @param parentHash 父 commit hash, 用于 mainline 选择 (单父提交时可传空)
+   * @param autoCommit true=自动提交, false=只 pick 到 index
+   */
+  private fun cherryPickWithOptions(commitHash: String, parentHash: String, autoCommit: Boolean) {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    emitGitOperation("history", "cherrypick_opts:$commitHash")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          val settings = SettingsUtil.getSettingsSnapshot()
+          val ret = Libgit2Helper.cherrypick(
+              repo = repo,
+              targetCommitFullHash = commitHash,
+              parentCommitFullHash = parentHash,
+              autoCommit = autoCommit,
+              settings = settings,
+          )
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          val msg = if (autoCommit) "Cherry-pick 完成: $commitHash"
+              else "Cherry-pick 到 index 完成 (未提交): $commitHash"
+          Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+          refreshTrigger.value++
+        }
+        result.onFailure {
+          Toast.makeText(
+                  requireContext(),
+                  it.localizedMessage ?: "Cherry-pick 失败",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
+  }
+
+  /**
+   * Squash HEAD 到目标 commit (含 target, 不含 HEAD). 对齐 puppygit
+   * CommitListScreen 的 squash 操作: soft reset HEAD 到 target, 然后创建一个
+   * 新提交合并所有变更.
+   *
+   * 前置: 仅 HEAD 视图可用 (本 Fragment 始终从 HEAD 加载, 故恒满足);
+   * 仓库状态必须 NONE; index 为空 (除非 force); 用户名/邮箱必须已设置.
+   *
+   * @param targetHash 目标 commit hash
+   * @param commitMsg 新提交消息, 为空时使用自动生成的 "Squash: target..head"
+   * @param force true 时即使 index 有变更也强制执行
+   */
+  private fun squashToCommit(targetHash: String, commitMsg: String, force: Boolean) {
+    val workdir = resolveWorkspaceDirPath() ?: return
+    emitGitOperation("history", "squash:$targetHash")
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val result = runCatching {
+        Repository.open(workdir).use { repo ->
+          // 前置检查: 用户名/邮箱/状态/冲突
+          val checkRet = Libgit2Helper.squashCommitsCheckBeforeShowDialog(
+              repo, targetHash, isShowingCommitListForHEAD = true,
+          )
+          if (checkRet.hasError()) throw RuntimeException(checkRet.msg)
+          val data = checkRet.data ?: throw RuntimeException("squash 数据为空")
+          // 执行前检查: index 状态
+          val execCheck = Libgit2Helper.squashCommitsCheckBeforeExecute(repo, force)
+          if (execCheck.hasError()) {
+            throw RuntimeException("index 含未提交变更, 请勾选 force 或先提交/暂存")
+          }
+          val msg = if (commitMsg.isBlank()) {
+            Libgit2Helper.squashCommitsGenCommitMsg(
+                Libgit2Helper.getShortOidStrByFull(targetHash),
+                Libgit2Helper.getShortOidStrByFull(data.headFullOid),
+            )
+          } else commitMsg
+          val ret = Libgit2Helper.squashCommits(
+              repo = repo,
+              targetFullOidStr = targetHash,
+              commitMsg = msg,
+              username = data.username,
+              email = data.email,
+              currentBranchFullNameOrHEAD = data.headFullName.ifBlank { "HEAD" },
+              settings = SettingsUtil.getSettingsSnapshot(),
+          )
+          if (ret.hasError()) throw RuntimeException(ret.msg)
+        }
+      }
+      withContext(Dispatchers.Main) {
+        result.onSuccess {
+          Toast.makeText(requireContext(), "已 Squash 到 $targetHash", Toast.LENGTH_SHORT).show()
+          refreshTrigger.value++
+        }
+        result.onFailure {
+          Toast.makeText(
+                  requireContext(),
+                  it.localizedMessage ?: "Squash 失败",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
+  }
+
+  private fun toast(msg: String) {
+    Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+  }
+
   override fun onDestroyView() {
     binding.gitContentContainer.removeAllViews()
     super.onDestroyView()
@@ -303,10 +477,13 @@ private sealed interface HistoryUiState {
  * @param refreshKey 刷新触发器，值变化时重新加载
  * @param onRefresh 触发刷新（下拉刷新 / 重试按钮调用）
  * @param onResetToCommit 重置到指定 commit (指定 soft/mixed/hard 模式)
- * @param onCherryPick Cherry-pick 指定 commit
+ * @param onCherryPick Cherry-pick 指定 commit (无选项, 直接自动提交)
  * @param onCheckoutCommit Checkout 到指定 commit (detached HEAD)
  * @param onCreateTag 基于指定 commit 创建 tag (附注消息为空则轻量 tag)
  * @param onCopyHash 复制 commit hash 到剪贴板
+ * @param onSavePatch 保存 commit 与父提交之间的 diff 为 patch 文件
+ * @param onCherryPickWithOptions Cherry-pick 带父提交选择 / autoCommit 选项
+ * @param onSquashToCommit Squash HEAD 到指定 commit
  */
 @Composable
 private fun CommitHistoryContent(
@@ -318,6 +495,9 @@ private fun CommitHistoryContent(
     onCheckoutCommit: (String) -> Unit,
     onCreateTag: (commitHash: String, tagName: String, message: String) -> Unit,
     onCopyHash: (String) -> Unit,
+    onSavePatch: (commitHash: String, parentHash: String) -> Unit,
+    onCherryPickWithOptions: (commitHash: String, parentHash: String, autoCommit: Boolean) -> Unit,
+    onSquashToCommit: (targetHash: String, commitMsg: String, force: Boolean) -> Unit,
 ) {
   if (workdir == null) {
     GitEmptyState("未打开项目")
@@ -329,6 +509,9 @@ private fun CommitHistoryContent(
   var confirmReset by remember { mutableStateOf<CommitDto?>(null) }
   var detailsCommit by remember { mutableStateOf<CommitDto?>(null) }
   var tagForCommit by remember { mutableStateOf<CommitDto?>(null) }
+  var patchForCommit by remember { mutableStateOf<CommitDto?>(null) }
+  var cherryPickForCommit by remember { mutableStateOf<CommitDto?>(null) }
+  var squashTarget by remember { mutableStateOf<CommitDto?>(null) }
   var filterText by remember { mutableStateOf("") }
 
   LaunchedEffect(workdir, refreshKey.value) {
@@ -372,11 +555,13 @@ private fun CommitHistoryContent(
                 CommitItem(
                     commit = commit,
                     onResetToCommit = { confirmReset = commit },
-                    onCherryPick = { onCherryPick(commit.oidStr) },
+                    onCherryPick = { cherryPickForCommit = commit },
                     onCheckoutCommit = { onCheckoutCommit(commit.oidStr) },
                     onShowDetails = { detailsCommit = commit },
                     onCreateTag = { tagForCommit = commit },
                     onCopyHash = { onCopyHash(commit.oidStr) },
+                    onSavePatch = { patchForCommit = commit },
+                    onSquashToCommit = { squashTarget = commit },
                 )
               }
             }
@@ -493,6 +678,151 @@ private fun CommitHistoryContent(
         },
     )
   }
+
+  // 保存 Patch 对话框: 选择父提交 (多父提交时), 然后 onSavePatch
+  patchForCommit?.let { commit ->
+    val parents = commit.parentOidStrList
+    var selectedParent by remember { mutableStateOf(parents.firstOrNull() ?: "") }
+    AlertDialog(
+        onDismissRequest = { patchForCommit = null },
+        title = { Text("保存为 Patch 文件") },
+        text = {
+          Column {
+            Text("提交: ${commit.shortOidStr} ${commit.shortMsg}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            if (parents.isEmpty()) {
+              Text("此提交无父提交, 无法生成 patch",
+                  color = MaterialTheme.colorScheme.error,
+                  style = MaterialTheme.typography.bodySmall)
+            } else if (parents.size == 1) {
+              Text("将生成 ${parents[0].take(7)}..${commit.shortOidStr} 的 patch 文件",
+                  style = MaterialTheme.typography.bodySmall)
+            } else {
+              Text("选择父提交 (作为 diff 左侧):",
+                  style = MaterialTheme.typography.labelMedium)
+              parents.forEach { p ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  RadioButton(
+                      selected = selectedParent == p,
+                      onClick = { selectedParent = p },
+                  )
+                  Text(p.take(7), style = MaterialTheme.typography.bodySmall,
+                      fontFamily = FontFamily.Monospace)
+                }
+              }
+            }
+          }
+        },
+        confirmButton = {
+          TextButton(
+              enabled = parents.isNotEmpty(),
+              onClick = {
+                patchForCommit = null
+                onSavePatch(commit.oidStr, selectedParent)
+              },
+          ) { Text("保存") }
+        },
+        dismissButton = {
+          TextButton(onClick = { patchForCommit = null }) { Text("取消") }
+        },
+    )
+  }
+
+  // Cherry-pick 选项对话框: 选择父提交 (merge commit) + autoCommit 选项
+  cherryPickForCommit?.let { commit ->
+    val parents = commit.parentOidStrList
+    var selectedParent by remember { mutableStateOf(parents.firstOrNull() ?: "") }
+    var autoCommit by remember { mutableStateOf(true) }
+    AlertDialog(
+        onDismissRequest = { cherryPickForCommit = null },
+        title = { Text("Cherry-pick 选项") },
+        text = {
+          Column {
+            Text("提交: ${commit.shortOidStr} ${commit.shortMsg}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            if (parents.size > 1) {
+              Text("此为 merge commit, 请选择 mainline 父提交:",
+                  style = MaterialTheme.typography.labelMedium)
+              parents.forEachIndexed { i, p ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  RadioButton(
+                      selected = selectedParent == p,
+                      onClick = { selectedParent = p },
+                  )
+                  Text("父 $i: ${p.take(7)}", style = MaterialTheme.typography.bodySmall,
+                      fontFamily = FontFamily.Monospace)
+                }
+              }
+              Spacer(Modifier.height(4.dp))
+            } else if (parents.isEmpty()) {
+              Text("无父提交 (根提交), 将直接 cherry-pick",
+                  style = MaterialTheme.typography.bodySmall)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Checkbox(checked = autoCommit, onCheckedChange = { autoCommit = it })
+              Text("自动提交 (取消勾选则只 pick 到 index)",
+                  style = MaterialTheme.typography.bodySmall)
+            }
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = {
+            cherryPickForCommit = null
+            onCherryPickWithOptions(commit.oidStr, selectedParent, autoCommit)
+          }) { Text("Cherry-pick") }
+        },
+        dismissButton = {
+          TextButton(onClick = { cherryPickForCommit = null }) { Text("取消") }
+        },
+    )
+  }
+
+  // Squash 对话框: 输入 commit msg + force 选项
+  squashTarget?.let { commit ->
+    var msg by remember { mutableStateOf("") }
+    var force by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { squashTarget = null },
+        title = { Text("Squash 到 ${commit.shortOidStr}") },
+        text = {
+          Column {
+            Text("将 Squash HEAD 到此提交 (含此提交, 不含 HEAD).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("即: soft reset HEAD 到此 commit, 再用一条新提交合并所有变更.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = msg,
+                onValueChange = { msg = it },
+                label = { Text("提交消息 (留空自动生成 'Squash: xxx..yyy')") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Checkbox(checked = force, onCheckedChange = { force = it })
+              Text("Force (index 含未提交变更时也执行)",
+                  style = MaterialTheme.typography.bodySmall)
+            }
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = {
+            val m = msg.trim()
+            squashTarget = null
+            onSquashToCommit(commit.oidStr, m, force)
+          }) { Text("Squash", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = {
+          TextButton(onClick = { squashTarget = null }) { Text("取消") }
+        },
+    )
+  }
 }
 
 /** 详情对话框中的键值对行. */
@@ -516,6 +846,9 @@ private fun DetailRow(label: String, value: String) {
 /**
  * 单条提交卡片：左侧短 hash（monospace, primary）+ 提交消息第一行（粗体）
  * + 作者名 + 日期（小字, onSurfaceVariant）。长按弹出操作菜单。
+ *
+ * 对齐 puppygit CommitListScreen 的 BottomSheet 操作项: 查看详情 / 复制 Hash /
+ * 创建 Tag / Reset / Cherry-pick(带选项) / Checkout / 保存 Patch / Squash.
  */
 @Composable
 private fun CommitItem(
@@ -526,6 +859,8 @@ private fun CommitItem(
     onShowDetails: () -> Unit,
     onCreateTag: () -> Unit,
     onCopyHash: () -> Unit,
+    onSavePatch: () -> Unit,
+    onSquashToCommit: () -> Unit,
 ) {
   var menuExpanded by remember { mutableStateOf(false) }
 
@@ -600,10 +935,24 @@ private fun CommitItem(
             },
         )
         DropdownMenuItem(
-            text = { Text("Cherry-pick") },
+            text = { Text("Cherry-pick (带选项)") },
             onClick = {
               menuExpanded = false
               onCherryPick()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Squash 到此提交") },
+            onClick = {
+              menuExpanded = false
+              onSquashToCommit()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("保存为 Patch 文件") },
+            onClick = {
+              menuExpanded = false
+              onSavePatch()
             },
         )
         DropdownMenuItem(
@@ -646,6 +995,15 @@ private suspend fun loadCommitHistory(workdir: String): HistoryUiState =
                   if (commit != null) {
                     try {
                       val oidStr = oid.toString()
+                      // 填充父提交列表, 供 Patch / Cherry-pick 选项对话框使用
+                      val parentOidStrList = mutableListOf<String>()
+                      val parentCount = commit.parentCount()
+                      for (i in 0 until parentCount) {
+                        val parentId = commit.parentId(i)
+                        if (parentId != null) {
+                          parentOidStrList.add(parentId.toString())
+                        }
+                      }
                       commits.add(
                           CommitDto(
                               oidStr = oidStr,
@@ -656,6 +1014,7 @@ private suspend fun loadCommitHistory(workdir: String): HistoryUiState =
                               email = commit.author().email,
                               dateTime =
                                   Libgit2Helper.getDateTimeStrOfCommit(commit, settings),
+                              parentOidStrList = parentOidStrList,
                           ))
                     } finally {
                       commit.close()
