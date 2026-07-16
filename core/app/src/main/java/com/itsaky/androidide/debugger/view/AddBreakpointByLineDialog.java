@@ -41,7 +41,7 @@ import com.itsaky.androidide.R;
 import com.itsaky.androidide.debugger.model.BreakpointTypeCatalog;
 import com.itsaky.androidide.debugger.model.BreakpointManager;
 import com.itsaky.androidide.utils.ILogger;
-import com.itsaky.androidide.utils.flashSuccess;
+import com.itsaky.androidide.utils.FlashbarUtilsKt;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -358,7 +358,7 @@ public class AddBreakpointByLineDialog extends DialogFragment {
                         }
                         // flash 提示应用了多少个
                         try {
-                            flashSuccess(activity.getString(
+                            FlashbarUtilsKt.flashSuccess(activity.getString(
                                     R.string.debugger_add_bp_by_line_applied, applied));
                         } catch (Throwable ignored) {
                         }
