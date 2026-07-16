@@ -180,7 +180,7 @@ object FileTreeGitOps {
   }
 
   /**
-   * 列出远程分支 (refs/remotes/origin/*)。
+   * 列出远程分支 (如 refs/remotes/origin/main)。
    */
   fun listRemoteBranches(): GitOpResult<List<BranchNameAndTypeDto>> = withRepo { repo ->
     Libgit2Helper.getBranchList(repo, Branch.BranchType.REMOTE, excludeRemoteHead = true)
