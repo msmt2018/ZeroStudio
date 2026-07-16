@@ -204,7 +204,7 @@ object FileTreeGitOps {
       Libgit2Helper.checkoutLocalBranchThenUpdateHead(repo, name, force)
     }
     if (ret.hasError()) {
-      throw RuntimeException(ret.errorMsg)
+      throw RuntimeException(ret.msg)
     }
   }
 
@@ -229,7 +229,7 @@ object FileTreeGitOps {
       settings = SettingsUtil.getSettingsSnapshot(),
     )
     if (ret.hasError()) {
-      throw RuntimeException(ret.errorMsg)
+      throw RuntimeException(ret.msg)
     }
     ret.data?.toString().orEmpty()
   }
@@ -294,7 +294,7 @@ object FileTreeGitOps {
       settings = SettingsUtil.getSettingsSnapshot(),
     )
     if (mergeRet.hasError()) {
-      throw RuntimeException(mergeRet.errorMsg)
+      throw RuntimeException(mergeRet.msg)
     }
   }
 

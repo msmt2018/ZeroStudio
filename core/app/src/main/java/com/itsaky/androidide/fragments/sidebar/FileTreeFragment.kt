@@ -35,7 +35,6 @@ import androidx.core.view.updatePadding
 import androidx.fragment.app.viewModels
 import com.blankj.utilcode.util.SizeUtils
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.LayoutEditorFileTreeBinding
 import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent

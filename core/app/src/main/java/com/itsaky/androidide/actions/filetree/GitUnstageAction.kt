@@ -18,6 +18,7 @@ package com.itsaky.androidide.actions.filetree
 
 import android.content.Context
 import com.itsaky.androidide.actions.ActionData
+import com.itsaky.androidide.actions.requireContext
 import com.itsaky.androidide.actions.requireFile
 import com.itsaky.androidide.fragments.git.tree.FileTreeGitOps
 import com.itsaky.androidide.resources.R

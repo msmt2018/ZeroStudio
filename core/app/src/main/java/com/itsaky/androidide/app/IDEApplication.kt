@@ -122,8 +122,11 @@ class IDEApplication : TermuxApplication() {
       // 下会从 resource table 中丢失, 导致 Resources$NotFoundException 崩溃.
       // RootViewWatcher 是 LeakCanary 中误报率最高的 watcher (Dialog/Toast
       // 都会触发), 关闭它不影响 Activity/Fragment/ViewModel 泄漏检测.
-      leakcanary.AppWatcher.config =
-          leakcanary.AppWatcher.config.copy(watchRootViews = false)
+      // LeakCanary 2.14 的 AppWatcher.Config 不再提供 watchRootViews 字段,
+      // RootViewWatcher 会自动安装且无法通过 config 关闭。此处保留注释说明意图:
+      // 若需禁用 RootViewWatcher, 应升级 LeakCanary 或通过反射操作内部开关。
+      // leakcanary.AppWatcher.config =
+      //     leakcanary.AppWatcher.config.copy(watchRootViews = false)
 
       if (DevOpsPreferences.dumpLogs) {
         startLogcatReader()

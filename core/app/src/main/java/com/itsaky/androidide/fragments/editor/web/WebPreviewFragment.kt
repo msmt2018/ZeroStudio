@@ -756,7 +756,7 @@ private fun DevToolsPanel(
                                     override fun onReceivedSslError(
                                         view: WebView?,
                                         handler: SslErrorHandler?,
-                                        error: android.net.SslError?,
+                                        error: android.net.http.SslError?,
                                     ) {
                                         // DevTools 是本地调试工具, 放行自签证书
                                         handler?.proceed()

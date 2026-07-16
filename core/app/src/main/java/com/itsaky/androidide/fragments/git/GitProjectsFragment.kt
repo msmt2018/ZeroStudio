@@ -167,7 +167,7 @@ class GitProjectsFragment :
           // 使用 primary 颜色 (与 toolbar 图标着色方式一致)
           val typedValue = android.util.TypedValue()
           ctx.theme.resolveAttribute(
-              com.google.android.material.R.attr.colorPrimary,
+              ResR.attr.colorPrimary,
               typedValue,
               true,
           )
@@ -273,7 +273,7 @@ class GitProjectsFragment :
 
           val typedValue = android.util.TypedValue()
           context.theme.resolveAttribute(
-              com.google.android.material.R.attr.colorOnSurface,
+              ResR.attr.colorOnSurface,
               typedValue,
               true,
           )
