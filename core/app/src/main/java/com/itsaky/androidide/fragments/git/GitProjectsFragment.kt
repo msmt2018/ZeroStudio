@@ -20,7 +20,6 @@ package com.itsaky.androidide.fragments.git
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.res.Resources
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
@@ -31,6 +30,7 @@ import android.view.ViewGroup
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import android.zero.studio.view.filetree.interfaces.FileClickListener
@@ -50,12 +50,15 @@ import com.itsaky.androidide.databinding.FragmentGitProjectsBinding
 import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
 import com.itsaky.androidide.fragments.git.menu.GitBranchPopupManager
+import com.itsaky.androidide.fragments.git.tree.FileTreeGitOps
 import com.itsaky.androidide.fragments.git.tree.ListProjectFilesRequestEvent
 import com.itsaky.androidide.fragments.git.tree.TreeStateManager
-import com.itsaky.androidide.projects.IProjectManager
+import com.itsaky.androidide.preferences.databinding.LayoutDialogTextInputBinding
 import com.itsaky.androidide.preferences.internal.GeneralPreferences
+import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.provider.IDEFileIconProvider
 import com.itsaky.androidide.resources.R as ResR
+import com.itsaky.androidide.utils.DialogUtils
 import com.itsaky.androidide.viewmodel.FileTreeViewModel
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -196,6 +199,11 @@ class GitProjectsFragment :
 
     addToolbarSeparator()
 
+    // ===== Git 操作 kebab 菜单 =====
+    addGitKebabMenu()
+
+    addToolbarSeparator()
+
     // ===== 文件树操作 =====
     addToolbarAction(ResR.drawable.ic_refresh_file_24dp, getString(R.string.refresh)) {
       if (GeneralPreferences.treeRememberExpandedState) {
@@ -328,6 +336,172 @@ class GitProjectsFragment :
 
   private fun addToolbarCustomView(view: View) {
     findToolbarContainer()?.addView(view)
+  }
+
+  // ============================================================
+  // Git 操作 kebab 菜单 (复刻 puppygit ChangeListPageActions)
+  // ============================================================
+
+  /**
+   * 添加 Git 操作的 kebab 菜单按钮 (三点菜单)。
+   *
+   * 菜单项复刻 puppygit `ChangeListPageActions.kt` 的 kebab 菜单:
+   * Stage All / Unstage All / Commit / Fetch / Pull / Push / Force Push /
+   * Status (打开完整 UI) / Log (提交历史) / Branches (分支列表)
+   */
+  private fun addGitKebabMenu() {
+    val ctx = context ?: return
+    val gitBtn =
+        ImageButton(ctx).apply {
+          layoutParams =
+              LinearLayout.LayoutParams(
+                  resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+                  resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+              )
+          setImageResource(ResR.drawable.ic_git)
+          val outValue = android.util.TypedValue()
+          ctx.theme.resolveAttribute(
+              android.R.attr.selectableItemBackgroundBorderless,
+              outValue,
+              true,
+          )
+          setBackgroundResource(outValue.resourceId)
+          contentDescription = "Git Operations"
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            tooltipText = "Git Operations"
+          }
+          val padding = resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_padding)
+          setPadding(padding, padding, padding, padding)
+          val typedValue = android.util.TypedValue()
+          ctx.theme.resolveAttribute(ResR.attr.colorOnSurface, typedValue, true)
+          setColorFilter(typedValue.data)
+        }
+    gitBtn.setOnClickListener { showGitOperationsMenu(gitBtn) }
+    findToolbarContainer()?.addView(gitBtn)
+  }
+
+  /** 弹出 Git 操作下拉菜单。 */
+  private fun showGitOperationsMenu(anchor: View) {
+    val popup = PopupMenu(requireContext(), anchor)
+    popup.menu.apply {
+      // 仓库级操作
+      add(0, 1, 0, getString(R.string.git_action_add) + " (All)").setOnMenuItemClickListener {
+        execGitOp("Stage All") { FileTreeGitOps.stageAll() }
+        true
+      }
+      add(0, 2, 0, getString(R.string.git_action_unstage) + " (All)").setOnMenuItemClickListener {
+        execGitOp("Unstage All") { FileTreeGitOps.unstageAll() }
+        true
+      }
+      add(0, 3, 0, getString(R.string.git_action_commit)).setOnMenuItemClickListener {
+        showCommitDialog()
+        true
+      }
+      addSubMenu(0, 4, 0, "Remote").apply {
+        add(getString(R.string.git_action_fetch)).setOnMenuItemClickListener {
+          execGitOp("Fetch") { FileTreeGitOps.fetch() }
+          true
+        }
+        add(getString(R.string.git_action_pull)).setOnMenuItemClickListener {
+          execGitOp("Pull") { FileTreeGitOps.pull() }
+          true
+        }
+        add(getString(R.string.git_action_push)).setOnMenuItemClickListener {
+          execGitOp("Push") { FileTreeGitOps.push(force = false) }
+          true
+        }
+        add(getString(R.string.git_action_force_push)).setOnMenuItemClickListener {
+          confirmAndExec(
+              "Force Push",
+              getString(R.string.git_msg_force_push_confirm),
+          ) { FileTreeGitOps.push(force = true) }
+          true
+        }
+      }
+      addSubMenu(0, 5, 0, "Branch").apply {
+        add(getString(R.string.git_action_branches_list)).setOnMenuItemClickListener {
+          branchPopupManager?.show(anchor)
+          true
+        }
+      }
+      add(0, 6, 0, getString(R.string.git_action_status)).setOnMenuItemClickListener {
+        GitScreenOpener.openGitUi(requireActivity())
+        true
+      }
+      add(0, 7, 0, getString(R.string.git_action_log)).setOnMenuItemClickListener {
+        GitScreenOpener.openGitUi(requireActivity())
+        true
+      }
+      add(0, 8, 0, getString(R.string.git_action_open_full_git_ui)).setOnMenuItemClickListener {
+        GitScreenOpener.openGitUi(requireActivity())
+        true
+      }
+    }
+    popup.show()
+  }
+
+  /** 弹出 commit 消息输入对话框, 确认后执行 commit。 */
+  private fun showCommitDialog() {
+    val activity = requireActivity()
+    val binding = LayoutDialogTextInputBinding.inflate(LayoutInflater.from(activity))
+    binding.name.editText?.hint = getString(R.string.git_msg_commit_message_hint)
+    binding.name.editText?.setText("")
+
+    val builder = DialogUtils.newMaterialDialogBuilder(activity)
+    builder.setTitle(R.string.git_msg_commit_message_title)
+        .setView(binding.root)
+        .setNegativeButton(android.R.string.cancel, null)
+        .setPositiveButton(R.string.git_action_commit) { d, _ ->
+          d.dismiss()
+          val msg = binding.name.editText?.text?.toString().orEmpty().trim()
+          if (msg.isEmpty()) {
+            Toast.makeText(activity, R.string.git_msg_commit_message_hint, Toast.LENGTH_SHORT).show()
+            return@setPositiveButton
+          }
+          execGitOp("Commit") { FileTreeGitOps.commit(msg) }
+        }
+        .show()
+  }
+
+  /**
+   * 在 IO 线程执行 git 操作, 主线程显示 toast 反馈。
+   * @param opName 操作名称 (用于 toast)
+   * @param block 返回 [FileTreeGitOps.GitOpResult] 的阻塞操作
+   */
+  private fun execGitOp(opName: String, block: () -> FileTreeGitOps.GitOpResult<*>) {
+    val ctx = context ?: return
+    Toast.makeText(ctx, "$opName...", Toast.LENGTH_SHORT).show()
+    CoroutineScope(Dispatchers.IO).launch {
+      val result = runCatching { block() }
+      withContext(Dispatchers.Main) {
+        if (!isAdded) return@withContext
+        result.onSuccess { ret ->
+          when (ret) {
+            is FileTreeGitOps.GitOpResult.Ok ->
+                Toast.makeText(ctx, "$opName succeeded", Toast.LENGTH_SHORT).show()
+            is FileTreeGitOps.GitOpResult.Err ->
+                Toast.makeText(ctx, "$opName failed: ${ret.msg}", Toast.LENGTH_LONG).show()
+          }
+        }
+        result.onFailure { e ->
+          Toast.makeText(ctx, "$opName failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        }
+      }
+    }
+  }
+
+  /** 弹出确认对话框, 确认后在 IO 线程执行 git 操作。 */
+  private fun confirmAndExec(opName: String, message: String, block: () -> FileTreeGitOps.GitOpResult<*>) {
+    val activity = requireActivity()
+    val builder = DialogUtils.newMaterialDialogBuilder(activity)
+    builder.setTitle(opName)
+        .setMessage(message)
+        .setNegativeButton(android.R.string.cancel, null)
+        .setPositiveButton(android.R.string.ok) { d, _ ->
+          d.dismiss()
+          execGitOp(opName, block)
+        }
+        .show()
   }
 
   private fun Int.dpToPx(): Int {

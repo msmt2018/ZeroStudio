@@ -122,6 +122,28 @@ object FileTreeGitOps {
   }
 
   /**
+   * git add -A  (stage all changes)
+   * 把工作区所有改动加入 index (暂存区)。
+   * 复刻 puppygit `Libgit2Helper.stageAll`。
+   */
+  fun stageAll(): GitOpResult<Unit> = withRepo { repo ->
+    val ret = Libgit2Helper.stageAll(repo, "")
+    if (ret.hasError()) {
+      throw RuntimeException(ret.msg)
+    }
+  }
+
+  /**
+   * git reset HEAD -- (unstage all)
+   * 把 index 重置到 HEAD 状态 (取消所有暂存, 不影响工作区)。
+   * 复刻 puppygit `Libgit2Helper.unStageItems` 对所有已暂存文件执行。
+   */
+  fun unstageAll(): GitOpResult<Unit> = withRepo { repo ->
+    // 用 "*" pathspec 调用 unStageItems, 等效于 git reset HEAD
+    Libgit2Helper.unStageItems(repo, listOf("*"))
+  }
+
+  /**
    * git restore --staged <file>
    * 取消暂存（从 index 移除，不影响工作区文件内容）。
    */
