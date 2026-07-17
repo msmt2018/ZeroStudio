@@ -16,7 +16,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import android.zero.studio.termux.settings.Settings
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
+import androidx.activity.ComponentActivity
 import android.zero.studio.termux.ui.animations.NavigationAnimationTransitions
 import android.zero.studio.termux.ui.routes.MainActivityRoutes
 import android.zero.studio.termux.ui.screens.downloader.Downloader
@@ -57,14 +57,14 @@ fun showStatusBar(show: Boolean,window: Window){
 
 
 @Composable
-fun UpdateStatusBar(mainActivityActivity: MainActivity,show: Boolean = true){
+fun UpdateStatusBar(mainActivityActivity: ComponentActivity,show: Boolean = true){
     LaunchedEffect(show) {
         showStatusBar(show = show, window = mainActivityActivity.window)
     }
 }
 
 @Composable
-fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostController,mainActivity: MainActivity) {
+fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostController,mainActivity: ComponentActivity) {
     NavHost(
         navController = navController,
         startDestination = MainActivityRoutes.MainScreen.route,

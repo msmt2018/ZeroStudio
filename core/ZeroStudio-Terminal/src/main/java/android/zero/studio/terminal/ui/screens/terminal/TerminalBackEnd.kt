@@ -13,7 +13,8 @@ import android.zero.studio.termux.libcommons.child
 import android.zero.studio.termux.libcommons.createFileIfNot
 import android.zero.studio.termux.libcommons.dpToPx
 import android.zero.studio.termux.settings.Settings
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
+import androidx.activity.ComponentActivity
+import android.zero.studio.termux.ui.fragments.TerminalSessionHolder
 import android.zero.studio.termux.ui.screens.settings.CloseLastSessionBehavior
 import android.zero.studio.termux.ui.screens.terminal.virtualkeys.SpecialButton
 import android.zero.studio.termux.ui.screens.terminal.virtualkeys.VirtualKeysView
@@ -28,7 +29,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
-class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : TerminalViewClient, TerminalSessionClient {
+class TerminalBackEnd(val terminal: TerminalView,val activity: ComponentActivity) : TerminalViewClient, TerminalSessionClient {
     override fun onTextChanged(changedSession: TerminalSession) {
         if (terminal.currentSession == changedSession) {
             terminal.onScreenUpdated()
@@ -37,8 +38,8 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
     
     override fun onTitleChanged(changedSession: TerminalSession) {
         val title = changedSession.title ?: return
-        val service = activity.sessionBinder?.getService() ?: return
-        val sessionId = activity.sessionBinder?.getSessionId(changedSession) ?: return
+        val service = TerminalSessionHolder.sessionBinder?.getService() ?: return
+        val sessionId = TerminalSessionHolder.sessionBinder?.getSessionId(changedSession) ?: return
         service.updateTerminalTitle(sessionId, title)
     }
     
@@ -173,7 +174,7 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_ENTER && !session.isRunning) {
-            val service = activity.sessionBinder!!.getService()
+            val service = TerminalSessionHolder.sessionBinder!!.getService()
             val currentId = service.currentSession.value.first
             val sessionKeys = service.sessionOrder.toList()
             
@@ -184,14 +185,14 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
                     val newSessionId = generateUniqueSessionId(service.sessionOrder.toList())
                     terminalView.get()?.let {
                         val client = TerminalBackEnd(it, activity)
-                        activity.sessionBinder!!.createSession(newSessionId, client, activity, workingMode = Settings.working_Mode)
+                        TerminalSessionHolder.sessionBinder!!.createSession(newSessionId, client, activity, workingMode = Settings.working_Mode)
                     }
                     changeSession(activity, newSessionId)
                     // Now safe to terminate the old session
-                    activity.sessionBinder?.terminateSession(currentId)
+                    TerminalSessionHolder.sessionBinder?.terminateSession(currentId)
                 } else {
                     // Exit app - terminate then finish
-                    activity.sessionBinder?.terminateSession(currentId)
+                    TerminalSessionHolder.sessionBinder?.terminateSession(currentId)
                     if (service.sessionOrder.isEmpty()) {
                         activity.finish()
                     }
@@ -199,7 +200,7 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
             } else {
                 // Not last session - switch to next and terminate current
                 changeSession(activity, service.sessionOrder.first { it != currentId })
-                activity.sessionBinder?.terminateSession(currentId)
+                TerminalSessionHolder.sessionBinder?.terminateSession(currentId)
             }
             return true
         }

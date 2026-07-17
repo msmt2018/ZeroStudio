@@ -3,7 +3,8 @@ package android.zero.studio.termux.ui.screens.terminal
 import android.view.KeyEvent
 import com.blankj.utilcode.util.ClipboardUtils
 import android.zero.studio.termux.settings.Settings
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
+import androidx.activity.ComponentActivity
+import android.zero.studio.termux.ui.fragments.TerminalSessionHolder
 import android.zero.studio.termux.ui.screens.settings.CloseLastSessionBehavior
 
 /**
@@ -15,7 +16,7 @@ object KeyShortcutHandler {
     /**
      * Handle a key event. Returns true if the key was consumed by a shortcut.
      */
-    fun handle(keyCode: Int, event: KeyEvent, activity: MainActivity): Boolean {
+    fun handle(keyCode: Int, event: KeyEvent, activity: ComponentActivity): Boolean {
         if (!Settings.shortcuts_enabled) return false
 
         val numberIndex = getNumberKeyIndex(keyCode)
@@ -33,7 +34,7 @@ object KeyShortcutHandler {
         return false
     }
 
-    private fun dispatch(action: ShortcutAction, activity: MainActivity): Boolean {
+    private fun dispatch(action: ShortcutAction, activity: ComponentActivity): Boolean {
         return when (action) {
             ShortcutAction.PASTE -> handlePaste()
             ShortcutAction.NEW_SESSION -> handleNewSession(activity)
@@ -51,8 +52,8 @@ object KeyShortcutHandler {
         return true
     }
 
-    private fun handleNewSession(activity: MainActivity): Boolean {
-        val binder = activity.sessionBinder ?: return true
+    private fun handleNewSession(activity: ComponentActivity): Boolean {
+        val binder = TerminalSessionHolder.sessionBinder ?: return true
         val service = binder.getService()
 
         val sessionId = generateUniqueSessionId(service.sessionOrder.toList())
@@ -64,8 +65,8 @@ object KeyShortcutHandler {
         return true
     }
 
-    private fun handleCloseSession(activity: MainActivity): Boolean {
-        val binder = activity.sessionBinder ?: return true
+    private fun handleCloseSession(activity: ComponentActivity): Boolean {
+        val binder = TerminalSessionHolder.sessionBinder ?: return true
         val service = binder.getService()
         val currentId = service.currentSession.value.first
         val sessionKeys = service.sessionOrder.toList()
@@ -102,8 +103,8 @@ object KeyShortcutHandler {
         return true
     }
 
-    private fun handleSwitchSession(activity: MainActivity, forward: Boolean): Boolean {
-        val binder = activity.sessionBinder ?: return true
+    private fun handleSwitchSession(activity: ComponentActivity, forward: Boolean): Boolean {
+        val binder = TerminalSessionHolder.sessionBinder ?: return true
         val service = binder.getService()
         val sessionKeys = service.sessionOrder.toList()
 
@@ -149,8 +150,8 @@ object KeyShortcutHandler {
                 && event.isAltPressed == binding.alt
     }
 
-    private fun handleSwitchToSession(activity: MainActivity, index: Int): Boolean {
-        val binder = activity.sessionBinder ?: return true
+    private fun handleSwitchToSession(activity: ComponentActivity, index: Int): Boolean {
+        val binder = TerminalSessionHolder.sessionBinder ?: return true
         val service = binder.getService()
         val sessionKeys = service.sessionOrder.toList()
 

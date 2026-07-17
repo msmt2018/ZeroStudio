@@ -50,6 +50,7 @@ import com.itsaky.androidide.actions.sidebar.FileTreeSidebarAction
 import com.itsaky.androidide.actions.sidebar.GitSidebarAction
 import com.itsaky.androidide.actions.sidebar.PreferencesSidebarAction
 import com.itsaky.androidide.actions.sidebar.TerminalSidebarAction
+import com.itsaky.androidide.actions.sidebar.TerminalHostSidebarAction
 import com.itsaky.androidide.fragments.sidebar.EditorSidebarFragment
 import java.lang.ref.WeakReference
 
@@ -75,6 +76,7 @@ internal object EditorSidebarActions {
     EditorToolboxActions.registerActions(context)
     registry.registerAction(EditorToolboxSidebarAction(context, ++order))
     registry.registerAction(TerminalSidebarAction(context, ++order))
+    registry.registerAction(TerminalHostSidebarAction(context, ++order))
     registry.registerAction(PreferencesSidebarAction(context, ++order))
     registry.registerAction(CloseProjectSidebarAction(context, ++order))
   }

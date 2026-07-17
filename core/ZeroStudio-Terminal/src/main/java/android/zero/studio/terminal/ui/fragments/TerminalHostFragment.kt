@@ -13,7 +13,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
-import androidx.activity.enableEdgeToEdge
+import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -31,7 +31,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import android.zero.studio.termux.service.SessionService
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
 import android.zero.studio.termux.ui.navHosts.MainActivityNavHost
 import android.zero.studio.termux.ui.routes.MainActivityRoutes
 import android.zero.studio.termux.ui.screens.terminal.terminalView
@@ -41,44 +40,42 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * 终端宿主 Fragment — 一比一复刻 [MainActivity] 的生命周期与 Compose 承载逻辑。
+ * 终端宿主 Fragment — 拥有完整的 Fragment 生命周期, 承载终端 Compose UI。
  *
- * 复刻自 [android.zero.studio.termux.ui.activities.terminal.MainActivity]，适配 Fragment 生命周期:
+ * 复刻自 [android.zero.studio.termux.ui.activities.terminal.MainActivity] 的全部逻辑,
+ * 适配 Fragment 生命周期:
  *  - [onCreateView]: 构建 [ComposeView] 承载终端 Compose UI
  *  - [onStart]: 启动并绑定 [SessionService] (与 MainActivity.onStart 一致)
  *  - [onStop]: 解绑 [SessionService]
  *  - [onResume]: 注册键盘可见性监听 + 恢复 IME (与 MainActivity.onResume 一致)
  *  - [onPause]: 记录键盘状态 (与 MainActivity.onPause 一致)
  *
- * 与 MainActivity 的差异:
+ * 与旧 MainActivity 的差异:
  *  1. 用 [ComposeView] + [ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed]
  *     替代 Activity 的 setContent; Compose 内容在 ServiceConnection 回调中设置
  *     (与 MainActivity 一致: 绑定成功后才 setContent, 因为终端 UI 依赖 SessionBinder)
- *  2. Fragment 无法直接 registerForActivityResult, 在 [onCreate] 中注册
- *  3. 宿主 Activity 必须是 [MainActivity] (终端 UI 强依赖 sessionBinder)
+ *  2. [sessionBinder] 通过 [TerminalSessionHolder] 全局持有, 不再依赖宿主 Activity 类型
+ *  3. 宿主 Activity 只需是 [ComponentActivity] (提供 lifecycleScope / window 等),
+ *     不再强制要求 [android.zero.studio.termux.ui.activities.terminal.MainActivity]
+ *
+ * 此 Fragment 既可被 [android.zero.studio.termux.ui.activities.terminal.MainActivity]
+ * (空壳) 承载, 也可被 IDE 的 [com.itsaky.androidide.activities.editor.EditorActivityKt]
+ * 通过 sidebar action 嵌入。
  *
  * @author android_zero
  */
-class TerminalHostFragment : Fragment() {
-
-    /** 从宿主 [MainActivity] 获取的 SessionService 绑定器。 */
-    private val sessionBinder: SessionService.SessionBinder?
-        get() = (activity as? MainActivity)?.sessionBinder
+class TerminalHostFragment : Fragment(), TerminalHost {
 
     private var isBound = false
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            // 让宿主 MainActivity 持有 binder, 与 MainActivity.onServiceConnected 行为一致
             val binder = service as SessionService.SessionBinder
-            (activity as? MainActivity)?.let { host ->
-                host.sessionBinder = binder
-                host.isBound = true
-            }
+            // 全局持有 binder, 终端 UI 代码通过 TerminalSessionHolder 访问
+            TerminalSessionHolder.sessionBinder = binder
             isBound = true
 
             // 与 MainActivity 一致: 绑定成功后在主线程 setContent
-            // 但 Fragment 用 ComposeView, 这里只需触发 recomposition
             lifecycleScope.launch(Dispatchers.Main) {
                 composeView?.setContent {
                     // 与 MainActivity 一致: 在 Compose 树根部读取配色状态
@@ -87,19 +84,11 @@ class TerminalHostFragment : Fragment() {
                     TermixTheme(terminalColorScheme = currentColorScheme) {
                         Surface(modifier = Modifier.fillMaxSize()) {
                             val navController = rememberNavController()
-                            val hostActivity = activity as? MainActivity
-                            if (hostActivity != null) {
-                                MainActivityNavHost(
-                                    navController = navController,
-                                    mainActivity = hostActivity,
-                                )
-                            } else {
-                                // 宿主不是 MainActivity, 显示错误提示
-                                Text(
-                                    text = "TerminalHostFragment requires MainActivity as host",
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
+                            val hostActivity = requireActivity() as ComponentActivity
+                            MainActivityNavHost(
+                                navController = navController,
+                                mainActivity = hostActivity,
+                            )
 
                             val backStackEntry by navController.currentBackStackEntryAsState()
 
@@ -122,10 +111,7 @@ class TerminalHostFragment : Fragment() {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
-            (activity as? MainActivity)?.let { host ->
-                host.isBound = false
-                host.sessionBinder = null
-            }
+            TerminalSessionHolder.sessionBinder = null
         }
     }
 
@@ -143,15 +129,6 @@ class TerminalHostFragment : Fragment() {
     private var isKeyboardVisible = false
     private var wasKeyboardOpen = false
 
-    override fun onAttach(context: Context) {
-        super.onAttach(context)
-        if (context !is MainActivity) {
-            throw IllegalStateException(
-                "TerminalHostFragment must be hosted by MainActivity, but got ${context.javaClass.name}"
-            )
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestPermission()
@@ -162,10 +139,6 @@ class TerminalHostFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?,
     ): View {
-        // 与 MainActivity.onCreate 一致: 启用 edge-to-edge
-        // Fragment 没有 enableEdgeToEdge, 通过宿主 Activity 调用
-        (activity as? MainActivity)?.enableEdgeToEdge()
-
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(
                 ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
@@ -190,7 +163,6 @@ class TerminalHostFragment : Fragment() {
             ctx.startService(Intent(ctx, SessionService::class.java))
         }
         Intent(ctx, SessionService::class.java).also { intent ->
-            // 注意: Fragment 用 context.bindService 而非 activity.bindService
             // BIND_AUTO_CREATE 与 MainActivity 一致
             ctx.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
@@ -202,6 +174,7 @@ class TerminalHostFragment : Fragment() {
         if (isBound) {
             context?.unbindService(serviceConnection)
             isBound = false
+            TerminalSessionHolder.sessionBinder = null
         }
     }
 

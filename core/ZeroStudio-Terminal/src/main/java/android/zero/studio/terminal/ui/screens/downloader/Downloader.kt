@@ -23,7 +23,7 @@ import android.zero.studio.termux.libcommons.*
 import android.zero.studio.termux.resources.strings
 import android.zero.studio.termux.settings.Settings
 import android.zero.studio.termux.App
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
+import androidx.activity.ComponentActivity
 import android.zero.studio.termux.model.WorkingMode
 import android.zero.studio.termux.ui.screens.terminal.Rootfs
 import android.zero.studio.termux.ui.screens.terminal.TerminalScreen
@@ -40,7 +40,7 @@ import kotlin.math.roundToLong
 @Composable
 fun Downloader(
     modifier: Modifier = Modifier,
-    mainActivity: MainActivity,
+    mainActivity: ComponentActivity,
     navController: NavHostController
 ) {
     var progress by remember { mutableFloatStateOf(0f) }

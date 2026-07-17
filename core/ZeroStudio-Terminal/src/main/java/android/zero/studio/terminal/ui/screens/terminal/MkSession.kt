@@ -15,7 +15,7 @@ import android.zero.studio.termux.settings.Settings
 import android.zero.studio.termux.App
 import android.zero.studio.termux.App.Companion.getTempDir
 import android.zero.studio.termux.core.BuildConfig
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
+import androidx.activity.ComponentActivity
 import android.zero.studio.termux.model.WorkingMode
 import android.zero.studio.termux.ui.screens.settings.ShellType
 import com.termux.terminal.TerminalEmulator
@@ -26,7 +26,7 @@ import java.io.FileOutputStream
 
 object MkSession {
     fun createSession(
-        activity: MainActivity, sessionClient: TerminalSessionClient, session_id: String,workingMode:Int
+        activity: ComponentActivity, sessionClient: TerminalSessionClient, session_id: String,workingMode:Int
     ): TerminalSession {
         with(activity) {
             val envVariables = mapOf(
