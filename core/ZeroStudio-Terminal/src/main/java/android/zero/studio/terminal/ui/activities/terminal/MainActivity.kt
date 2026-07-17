@@ -32,6 +32,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import android.zero.studio.termux.service.SessionService
+import android.zero.studio.termux.ui.fragments.TerminalHost
 import android.zero.studio.termux.ui.navHosts.MainActivityNavHost
 import android.zero.studio.termux.ui.routes.MainActivityRoutes
 import android.zero.studio.termux.ui.screens.terminal.TerminalScreen
@@ -42,7 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), TerminalHost {
     var sessionBinder:SessionService.SessionBinder? = null
     var isBound = false
 
