@@ -296,6 +296,11 @@ dependencies {
   implementation(projects.core.layoutEditor)
   implementation(project(":core:ZeroStudio-Terminal"))
   implementation(projects.core.chatai.app)
+  // QuickJS 原生库 —— IDEApplication.onCreate() 调用 QuickJSLoader.init() 加载 .so,
+  // chatai 模块 (highlight/common/search) 虽然用 api(libs.quickjs) 声明,
+  // 但 core/app 是通过 implementation(projects.core.chatai.app) 引入它们的,
+  // implementation 不传递 api 依赖, 所以 core/app 自己也要声明一条。
+  implementation(libs.quickjs)
   implementation(projects.modules.zeroRegularPreview)
   implementation(projects.modules.composePreview)
   implementation(projects.modules.colorpicker)
