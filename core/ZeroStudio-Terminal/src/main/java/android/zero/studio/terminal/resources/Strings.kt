@@ -4,6 +4,7 @@ import android.zero.studio.termux.R
 
 object strings {
     val settings = R.string.settings
+    val session = R.string.session
     val default_working_mode = R.string.default_working_mode
     val alpine_desc = R.string.alpine_desc
     val arch_desc = R.string.arch_desc

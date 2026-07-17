@@ -160,7 +160,7 @@ class TerminalBackEnd(val terminal: TerminalView, val context: Context) : Termin
         return Settings.input_mode != 1 // TYPE_NULL mode uses TYPE_NULL inputType
     }
 
-    override fun getInputMode(): Int {
+    fun getInputMode(): Int {
         return Settings.input_mode
     }
     
