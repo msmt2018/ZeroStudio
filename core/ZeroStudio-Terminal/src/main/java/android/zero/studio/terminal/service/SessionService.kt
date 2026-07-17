@@ -13,7 +13,6 @@ import androidx.core.app.NotificationCompat
 import android.zero.studio.termux.resources.drawables
 import android.zero.studio.termux.resources.strings
 import android.zero.studio.termux.App.Companion.getTempDir
-import androidx.activity.ComponentActivity
 import android.zero.studio.termux.ui.activities.terminal.MainActivity
 import android.zero.studio.termux.ui.screens.settings.Settings
 import android.zero.studio.termux.ui.screens.terminal.MkSession
@@ -99,8 +98,8 @@ class SessionService : Service() {
             sessionCustomNames.clear()
             updateNotification()
         }
-        fun createSession(id: String, client: TerminalSessionClient, activity: ComponentActivity,workingMode:Int): TerminalSession {
-            return MkSession.createSession(activity, client, id, workingMode = workingMode).also {
+        fun createSession(id: String, client: TerminalSessionClient, context: Context,workingMode:Int): TerminalSession {
+            return MkSession.createSession(context, client, id, workingMode = workingMode).also {
                 sessions[id] = it
                 sessionOrder.add(id)
                 sessionList[id] = workingMode

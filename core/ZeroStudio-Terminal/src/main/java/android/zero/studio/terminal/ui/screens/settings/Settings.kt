@@ -54,7 +54,6 @@ import android.zero.studio.termux.libcommons.createFileIfNot
 import android.zero.studio.termux.libcommons.dpToPx
 import android.zero.studio.termux.settings.Settings
 import android.zero.studio.termux.model.WorkingMode
-import androidx.activity.ComponentActivity
 import android.zero.studio.termux.ui.components.SettingsToggle
 import android.zero.studio.termux.ui.components.TerminalEnvironmentOption
 import android.zero.studio.termux.ui.components.TerminalEnvironmentSegmentedSelector
@@ -159,7 +158,7 @@ private fun getFileNameFromUri(context: Context, uri: Uri): String? {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActivity: ComponentActivity) {
+fun Settings(modifier: Modifier = Modifier,navController: NavController) {
     val context = LocalContext.current
     val initialTerminalEnvironment = remember {
         terminalEnvironmentFromWorkingMode(Settings.working_Mode)

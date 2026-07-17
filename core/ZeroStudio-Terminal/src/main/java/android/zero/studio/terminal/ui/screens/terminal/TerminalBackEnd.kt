@@ -1,19 +1,19 @@
 package android.zero.studio.termux.ui.screens.terminal
 
+import android.app.Activity
+import android.content.Context
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.media.MediaPlayer
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
-import androidx.lifecycle.lifecycleScope
 import com.blankj.utilcode.util.ClipboardUtils
 import com.blankj.utilcode.util.KeyboardUtils
 import android.zero.studio.termux.libcommons.child
 import android.zero.studio.termux.libcommons.createFileIfNot
 import android.zero.studio.termux.libcommons.dpToPx
 import android.zero.studio.termux.settings.Settings
-import androidx.activity.ComponentActivity
 import android.zero.studio.termux.ui.fragments.TerminalSessionHolder
 import android.zero.studio.termux.ui.screens.settings.CloseLastSessionBehavior
 import android.zero.studio.termux.ui.screens.terminal.virtualkeys.SpecialButton
@@ -23,13 +23,18 @@ import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
-class TerminalBackEnd(val terminal: TerminalView,val activity: ComponentActivity) : TerminalViewClient, TerminalSessionClient {
+class TerminalBackEnd(val terminal: TerminalView, val context: Context) : TerminalViewClient, TerminalSessionClient {
+
+    /** 自管理的协程作用域, 不依赖 Activity/Fragment 的生命周期。 */
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     override fun onTextChanged(changedSession: TerminalSession) {
         if (terminal.currentSession == changedSession) {
             terminal.onScreenUpdated()
@@ -66,12 +71,12 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: ComponentActivity
 
     override fun onBell(session: TerminalSession) {
         if (Settings.bell){
-            activity.lifecycleScope.launch{
-                val bellFile = activity.cacheDir.child("bell.oga")
+            scope.launch{
+                val bellFile = context.cacheDir.child("bell.oga")
                 if (bellFile.exists().not()){
                     bellFile.createNewFile()
                     withContext(Dispatchers.IO){
-                        activity.assets.open("bell.oga").use { assetIS ->
+                        context.assets.open("bell.oga").use { assetIS ->
                             FileOutputStream(bellFile).use { bellFileOutS ->
                                 assetIS.copyTo(bellFileOutS)
                             }
@@ -170,7 +175,7 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: ComponentActivity
     override fun copyModeChanged(copyMode: Boolean) {}
     
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
-        if (KeyShortcutHandler.handle(keyCode, e, activity)) {
+        if (KeyShortcutHandler.handle(keyCode, e, context)) {
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_ENTER && !session.isRunning) {
@@ -184,22 +189,22 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: ComponentActivity
                     // Create new session BEFORE terminating old one to prevent service stopSelf()
                     val newSessionId = generateUniqueSessionId(service.sessionOrder.toList())
                     terminalView.get()?.let {
-                        val client = TerminalBackEnd(it, activity)
-                        TerminalSessionHolder.sessionBinder!!.createSession(newSessionId, client, activity, workingMode = Settings.working_Mode)
+                        val client = TerminalBackEnd(it, context)
+                        TerminalSessionHolder.sessionBinder!!.createSession(newSessionId, client, context, workingMode = Settings.working_Mode)
                     }
-                    changeSession(activity, newSessionId)
+                    changeSession(context, newSessionId)
                     // Now safe to terminate the old session
                     TerminalSessionHolder.sessionBinder?.terminateSession(currentId)
                 } else {
-                    // Exit app - terminate then finish
+                    // Exit - terminate then finish host Activity if available
                     TerminalSessionHolder.sessionBinder?.terminateSession(currentId)
                     if (service.sessionOrder.isEmpty()) {
-                        activity.finish()
+                        (context as? Activity)?.finish()
                     }
                 }
             } else {
                 // Not last session - switch to next and terminate current
-                changeSession(activity, service.sessionOrder.first { it != currentId })
+                changeSession(context, service.sessionOrder.first { it != currentId })
                 TerminalSessionHolder.sessionBinder?.terminateSession(currentId)
             }
             return true

@@ -13,7 +13,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
-import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -55,8 +54,9 @@ import kotlinx.coroutines.launch
  *     替代 Activity 的 setContent; Compose 内容在 ServiceConnection 回调中设置
  *     (与 MainActivity 一致: 绑定成功后才 setContent, 因为终端 UI 依赖 SessionBinder)
  *  2. [sessionBinder] 通过 [TerminalSessionHolder] 全局持有, 不再依赖宿主 Activity 类型
- *  3. 宿主 Activity 只需是 [ComponentActivity] (提供 lifecycleScope / window 等),
- *     不再强制要求 [android.zero.studio.termux.ui.activities.terminal.MainActivity]
+ *  3. 终端 UI 代码 (TerminalScreen / TerminalBackEnd / KeyShortcutHandler 等) 已完全解耦,
+ *     不接收任何 Activity 参数 — Composable 用 [LocalContext], 非 Composable 用 [Context],
+ *     需要协程的自建 scope, 需要 window 的用 [LocalView]。宿主 Activity 类型无要求。
  *
  * 此 Fragment 既可被 [android.zero.studio.termux.ui.activities.terminal.MainActivity]
  * (空壳) 承载, 也可被 IDE 的 [com.itsaky.androidide.activities.editor.EditorActivityKt]
@@ -84,10 +84,9 @@ class TerminalHostFragment : Fragment(), TerminalHost {
                     TermixTheme(terminalColorScheme = currentColorScheme) {
                         Surface(modifier = Modifier.fillMaxSize()) {
                             val navController = rememberNavController()
-                            val hostActivity = requireActivity() as ComponentActivity
+                            // 终端 UI 代码已完全解耦, 不再需要传入 Activity
                             MainActivityNavHost(
                                 navController = navController,
-                                mainActivity = hostActivity,
                             )
 
                             val backStackEntry by navController.currentBackStackEntryAsState()
