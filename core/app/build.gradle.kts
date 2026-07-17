@@ -294,6 +294,7 @@ dependencies {
   implementation(projects.modules.zeroSymbolInputView)
   implementation(projects.core.git)
   implementation(projects.core.layoutEditor)
+  implementation(project(":core:ZeroStudio-Terminal"))
   implementation(projects.core.chatai.app)
   implementation(projects.modules.zeroRegularPreview)
   implementation(projects.modules.composePreview)

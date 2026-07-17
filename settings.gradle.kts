@@ -143,6 +143,7 @@ include(
     ":core:resources",
     ":core:git",
     ":core:layout-editor",
+    ":core:ZeroStudio-Terminal",
     
     ":core:chatai:ai",
     ":core:chatai:app",

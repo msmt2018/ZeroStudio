@@ -1,8 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application>
+        <activity
+            android:name="android.zero.studio.termux.ui.activities.terminal.MainActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
+
+        <service
+            android:name="android.zero.studio.termux.service.SessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Terminal session management" />
+        </service>
+
+        <service
+            android:name="android.zero.studio.termux.service.RunCommandService"
+            android:exported="false" />
+
         <provider
-            android:name="com.termix.AlpineDocumentProvider"
+            android:name="android.zero.studio.termux.AlpineDocumentProvider"
             android:authorities="${applicationId}.documents"
             android:exported="true"
             android:grantUriPermissions="true"
