@@ -148,6 +148,9 @@ matrix = "2.1.0"
 tree-sitter = "4.3.2"
 antlr4 = "4.13.1"
 
+# ANR watchdog
+anrwatchdog = "1.4.0"
+
 # root/build.gradle.kts > plugins || Classpaths
 maven-publish-plugin = "0.29.0"
 
@@ -539,6 +542,7 @@ floatingx = { module = "io.github.petterpx:floatingx", version.ref = "floatingx"
 floatingx-compose = { module = "io.github.petterpx:floatingx-compose", version.ref = "floatingx" }
 huge-icons = { group = "com.github.rikkahub", name = "hugeicons-compose", version.ref = "huge-icons" }
 com-github-fwcd-ktfmt = { module = "com.github.fwcd.ktfmt:ktfmt", version = "b5d31d1" }
+anrwatchdog = { module = "com.github.anrwatchdog:anrwatchdog", version.ref = "anrwatchdog" }
 
 
 [bundles]

@@ -1,9 +1,9 @@
 import java.io.ByteArrayOutputStream
 
 plugins {
-    alias(libs.plugins.androidLibrary)
-    alias(libs.plugins.kotlinAndroid)
-    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 
 android {
@@ -38,29 +38,29 @@ android {
 }
 
 dependencies {
-    api(libs.appcompat)
-    api(libs.material)
-    api(libs.constraintlayout)
-    api(libs.navigation.fragment)
-    api(libs.navigation.ui)
-    api(libs.navigation.fragment.ktx)
-    api(libs.navigation.ui.ktx)
-    api(libs.activity)
-    api(libs.lifecycle.viewmodel.ktx)
-    api(libs.lifecycle.runtime.ktx)
-    api(libs.activity.compose)
-    api(platform(libs.compose.bom))
-    api(libs.ui)
-    api(libs.ui.graphics)
-    api(libs.material3)
-    api(libs.navigation.compose)
+    // AndroidX
+    api(libs.androidx.appcompat)
+    api(libs.androidx.constraintlayout)
+    api(libs.androidx.activity.ktx)
+    api(libs.androidx.lifecycle.viewmodel.ktx)
+    api(libs.androidx.lifecycle.runtime.ktx)
+    api(libs.androidx.palette.ktx)
+
+    // Compose
+    api(libs.androidx.activity.compose)
+    api(platform(libs.androidx.compose.bom))
+    api(libs.androidx.compose.ui)
+    api(libs.androidx.compose.ui.graphics)
+    api(libs.androidx.compose.material3)
+    api(libs.androidx.compose.material.icons.extended)
+    api(libs.androidx.navigation.compose)
+
+    // Project modules
     api(project(":core:terminal-view"))
     api(project(":core:terminal-emulator"))
-    api(libs.utilcode)
+
+    // Other
+    api(libs.common.utilcode)
     api(libs.okhttp)
     api(libs.anrwatchdog)
-    api(libs.androidx.material.icons.core)
-    api(libs.androidx.palette)
-    api(libs.accompanist.systemuicontroller)
-
 }
