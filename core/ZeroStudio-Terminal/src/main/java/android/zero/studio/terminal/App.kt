@@ -4,7 +4,7 @@ import android.app.Application
 import android.os.Build
 import android.os.StrictMode
 import com.github.anrwatchdog.ANRWatchDog
-import android.zero.studio.termux.core.BuildConfig
+import android.zero.studio.termux.BuildConfig
 import android.zero.studio.termux.libcommons.application
 import android.zero.studio.termux.resources.Res
 import android.zero.studio.termux.update.UpdateManager

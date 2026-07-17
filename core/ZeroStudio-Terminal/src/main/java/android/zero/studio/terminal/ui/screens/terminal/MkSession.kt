@@ -14,7 +14,7 @@ import android.zero.studio.termux.libcommons.pendingCommand
 import android.zero.studio.termux.settings.Settings
 import android.zero.studio.termux.App
 import android.zero.studio.termux.App.Companion.getTempDir
-import android.zero.studio.termux.core.BuildConfig
+import android.zero.studio.termux.BuildConfig
 import android.content.Context
 import android.zero.studio.termux.model.WorkingMode
 import android.zero.studio.termux.ui.screens.settings.ShellType

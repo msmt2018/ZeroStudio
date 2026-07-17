@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "android.zero.studio.terminal"
+    namespace = "android.zero.studio.termux"
     android.buildFeatures.buildConfig = true
     compileSdk = 36
 

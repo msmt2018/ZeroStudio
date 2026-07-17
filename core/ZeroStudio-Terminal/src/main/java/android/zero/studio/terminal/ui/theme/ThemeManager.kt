@@ -7,7 +7,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import com.google.android.material.color.DynamicColors
 import android.zero.studio.termux.libcommons.isDarkMode
 import android.zero.studio.termux.settings.Settings
-import android.zero.studio.termux.core.R
+import android.zero.studio.termux.R
 
 /**
  * A basic helper for applying the correct theme in the app. it manage XML Theme.

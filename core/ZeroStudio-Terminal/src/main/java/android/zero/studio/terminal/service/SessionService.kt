@@ -1,6 +1,7 @@
 package android.zero.studio.termux.service
 
 import android.app.*
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Binder

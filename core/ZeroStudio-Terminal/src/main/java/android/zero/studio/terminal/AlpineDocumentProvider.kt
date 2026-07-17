@@ -24,7 +24,7 @@ import java.io.IOException
 import java.util.Collections
 import java.util.LinkedList
 import java.util.Locale
-import android.zero.studio.termux.core.R
+import android.zero.studio.termux.R
 import android.zero.studio.termux.model.WorkingMode
 
 class AlpineDocumentProvider : DocumentsProvider() {
@@ -47,7 +47,7 @@ class AlpineDocumentProvider : DocumentsProvider() {
         row.add(DocumentsContract.Root.COLUMN_TITLE, applicationName)
         row.add(DocumentsContract.Root.COLUMN_MIME_TYPES, ALL_MIME_TYPES)
         row.add(DocumentsContract.Root.COLUMN_AVAILABLE_BYTES, baseDir.freeSpace)
-        row.add(DocumentsContract.Root.COLUMN_ICON, R.mipmap.ic_launcher)
+        row.add(DocumentsContract.Root.COLUMN_ICON, R.drawable.terminal)
         return result
     }
 
@@ -237,7 +237,7 @@ class AlpineDocumentProvider : DocumentsProvider() {
         row.add(DocumentsContract.Document.COLUMN_MIME_TYPE, mimeType)
         row.add(DocumentsContract.Document.COLUMN_LAST_MODIFIED, file.lastModified())
         row.add(DocumentsContract.Document.COLUMN_FLAGS, flags)
-        row.add(DocumentsContract.Document.COLUMN_ICON, R.mipmap.ic_launcher)
+        row.add(DocumentsContract.Document.COLUMN_ICON, R.drawable.terminal)
     }
 
     companion object {

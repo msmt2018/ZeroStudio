@@ -6,7 +6,7 @@ import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import android.zero.studio.termux.core.R
+import android.zero.studio.termux.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope

@@ -82,9 +82,9 @@ import androidx.core.widget.doOnTextChanged
 import androidx.navigation.NavController
 import com.google.android.material.R
 import androidx.compose.ui.res.stringResource
-import com.rk.components.compose.preferences.base.PreferenceGroup
-import com.rk.components.compose.preferences.base.PreferenceTemplate
-import com.rk.components.compose.preferences.switch.PreferenceSwitch
+import android.zero.studio.termux.components.compose.preferences.base.PreferenceGroup
+import android.zero.studio.termux.components.compose.preferences.base.PreferenceTemplate
+import android.zero.studio.termux.components.compose.preferences.switch.PreferenceSwitch
 import android.zero.studio.termux.libcommons.application
 import android.zero.studio.termux.resources.strings
 import android.zero.studio.termux.libcommons.child
