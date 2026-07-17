@@ -46,6 +46,7 @@ import com.itsaky.androidide.ui.themes.IThemeManager
 import com.itsaky.androidide.utils.RecyclableObjectPool
 import com.itsaky.androidide.utils.flashError
 import com.termux.app.TermuxApplication
+import com.whl.quickjs.android.QuickJSLoader
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import java.lang.Thread.UncaughtExceptionHandler
 import kotlin.system.exitProcess
@@ -111,6 +112,15 @@ class IDEApplication : TermuxApplication() {
       workManagerFactory()
       modules(appModule, viewModelModule, dataSourceModule, repositoryModule)
     }
+
+    // 初始化 QuickJS 原生库。
+    // chatai 模块的 Highlighter / CustomJsSearchService / LocalTools 等会在运行时
+    // 通过 QuickJSContext.create() 创建 JS 运行时, 而 create() 要求 .so 已加载,
+    // 否则抛出 "The so library must be initialized before createContext!"。
+    // 原本这行在 RikkaHubApp.onCreate() 中, 但 RikkaHubApp 未注册到 manifest
+    // (manifest 里只有 IDEApplication), 所以这条初始化链路被漏掉了。
+    // 放在 startKoin 之后、其他业务初始化之前执行。
+    QuickJSLoader.init()
 
     uncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, th -> handleCrash(thread, th) }
