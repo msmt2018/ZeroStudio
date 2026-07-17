@@ -47,6 +47,8 @@ import com.itsaky.androidide.utils.RecyclableObjectPool
 import com.itsaky.androidide.utils.flashError
 import com.termux.app.TermuxApplication
 import com.whl.quickjs.android.QuickJSLoader
+import android.zero.studio.termux.libcommons.application as termuxApplication
+import android.zero.studio.termux.resources.Res as TermuxRes
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import java.lang.Thread.UncaughtExceptionHandler
 import kotlin.system.exitProcess
@@ -95,6 +97,19 @@ class IDEApplication : TermuxApplication() {
 
     instance = this
     super.onCreate()
+
+    // 初始化 ZeroStudio-Terminal 模块的全局 Application 引用。
+    // 该模块的 libcommons.application 和 resources.Res.application 两个全局变量
+    // 原本由 android.zero.studio.termux.App.onCreate() 赋值, 但 App 类未注册到
+    // 任何 AndroidManifest (最终 manifest 用的是 IDEApplication), 所以从未被
+    // 实例化, application 一直是 null。
+    // 当系统通过 AppComponentFactory 反射实例化 SessionService 时, SessionService
+    // 构造函数会访问 Settings.working_Mode, 触发 Preference object 的 <clinit>,
+    // 其中 `application!!.getSharedPreferences(...)` 会因 application 为 null 抛
+    // NullPointerException -> ExceptionInInitializerError, 导致 SessionService
+    // 创建失败。在 super.onCreate() 之后立即赋值, 保证后续所有代码路径都能拿到。
+    termuxApplication = this
+    TermuxRes.application = this
 
     applyPersistedLocale()
 
