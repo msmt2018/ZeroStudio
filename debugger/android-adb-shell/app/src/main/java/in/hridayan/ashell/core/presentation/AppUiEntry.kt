@@ -1,0 +1,116 @@
+@file:OptIn(ExperimentalSharedTransitionApi::class)
+
+package `in`.hridayan.ashell.core.presentation
+
+import android.util.Log
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import `in`.hridayan.ashell.BuildConfig
+import `in`.hridayan.ashell.R
+import `in`.hridayan.ashell.core.common.LocalSettings
+import `in`.hridayan.ashell.core.common.LocalSharedTransitionScope
+import `in`.hridayan.ashell.core.presentation.components.bottomsheet.ChangelogBottomSheet
+import `in`.hridayan.ashell.core.presentation.components.bottomsheet.UpdateBottomSheet
+import `in`.hridayan.ashell.core.utils.isNetworkAvailable
+import `in`.hridayan.ashell.core.utils.showToast
+import `in`.hridayan.ashell.navigation.Navigation
+import `in`.hridayan.ashell.settings.data.SettingsKeys
+import `in`.hridayan.ashell.settings.domain.model.UpdateResult
+import `in`.hridayan.ashell.settings.presentation.page.autoupdate.viewmodel.AutoUpdateViewModel
+import `in`.hridayan.ashell.settings.presentation.viewmodel.SettingsViewModel
+import `in`.hridayan.ashell.shell.otg_adb_shell.domain.model.OtgConnection
+import `in`.hridayan.ashell.shell.otg_adb_shell.domain.model.OtgState
+import kotlinx.coroutines.flow.collectLatest
+
+@Composable
+fun AppUiEntry(
+    autoUpdateViewModel: AutoUpdateViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel()
+) {
+    val context = LocalContext.current
+    val res = LocalResources.current
+    val isFirstLaunch = settingsViewModel.isFirstLaunch ?: return
+
+    var showUpdateSheet by rememberSaveable { mutableStateOf(false) }
+    var showChangelogSheet by rememberSaveable { mutableStateOf(false) }
+    var tagName by rememberSaveable { mutableStateOf(BuildConfig.VERSION_NAME) }
+    var apkUrl by rememberSaveable { mutableStateOf("") }
+    var changelog by rememberSaveable { mutableStateOf("") }
+    val savedVersionCode = LocalSettings.current[SettingsKeys.SavedVersionCode]
+    val firstLaunchFlow = LocalSettings.current[SettingsKeys.FirstLaunch]
+
+    LaunchedEffect(Unit, isNetworkAvailable(context)) {
+        autoUpdateViewModel.updateEvents.collectLatest { result ->
+            if (result is UpdateResult.Success && result.isUpdateAvailable) {
+                tagName = result.release.tagName
+                apkUrl = result.release.apkUrl.toString()
+                changelog = result.release.body.toString()
+                Log.d("AppEntry", result.release.apkUrl.toString())
+                showUpdateSheet = true
+            }
+        }
+    }
+
+    LaunchedEffect(savedVersionCode, firstLaunchFlow) {
+        showChangelogSheet = savedVersionCode < BuildConfig.VERSION_CODE && !firstLaunchFlow
+    }
+
+    LaunchedEffect(savedVersionCode, firstLaunchFlow) {
+        if (savedVersionCode < BuildConfig.VERSION_CODE && !firstLaunchFlow) {
+            settingsViewModel.setBoolean(SettingsKeys.NewCommandsAvailable, true)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        OtgConnection.state.collectLatest { otgState ->
+            if (otgState is OtgState.UsbManagerUnavailable) {
+                showToast(
+                    context,
+                    res.getString(R.string.usb_manager_unavailable)
+                )
+            }
+        }
+    }
+
+    Surface {
+        SharedTransitionLayout {
+            CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+                Navigation(
+                    isFirstLaunch = isFirstLaunch
+                )
+            }
+        }
+
+        if (showUpdateSheet) {
+            UpdateBottomSheet(
+                onDismiss = { showUpdateSheet = false },
+                latestVersion = tagName,
+                apkUrl = apkUrl,
+                body = changelog
+            )
+        }
+
+        if (showChangelogSheet) {
+            ChangelogBottomSheet(
+                onDismiss = {
+                    showChangelogSheet = false
+                    settingsViewModel.setInt(
+                        SettingsKeys.SavedVersionCode,
+                        BuildConfig.VERSION_CODE
+                    )
+                }
+            )
+        }
+    }
+}

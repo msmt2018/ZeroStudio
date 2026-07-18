@@ -1,0 +1,26 @@
+package `in`.hridayan.ashell.core.presentation.theme
+
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+object Dimens {
+    val paddingExtraSmall = 5.dp
+    val paddingSmall = 10.dp
+    val paddingMedium = 15.dp
+    val paddingLarge = 20.dp
+    val paddingExtraLarge = 25.dp
+
+    val undrawImgPadding = 100.dp
+
+    val iconSizeSmall = 16.dp
+    val iconSizeMedium = 20.dp
+    val iconSizeLarge = 24.dp
+    val iconSizeExtraLarge = 36.dp
+}
+
+@Immutable
+sealed interface CornerSize {
+    data class Absolute(val dp: Dp) : CornerSize
+    data class Percentage(val percent: Float) : CornerSize
+}
