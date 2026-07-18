@@ -101,12 +101,10 @@ tasks.withType<KotlinCompile>().configureEach {
 // Room kapt 参数 (因使用 kapt 而非 ksp, 通过 kapt 传递参数)
 // 注意: 必须放在顶层, 不能放在 tasks.withType 块内,
 // 否则 kapt{} 扩展会遮蔽 dependencies{} 块中的 kapt() 依赖函数导致编译错误
-kapt {
-    arguments {
-        arg("room.schemaLocation", "$projectDir/schemas")
-        arg("room.incremental", "true")
-    }
-}
+// 注意: 本模块不使用 kapt{} 配置块, 否则会遮蔽 dependencies{} 中的 kapt() 依赖函数
+// (Kotlin DSL 已知问题: kapt(Action<KaptExtension>) 扩展函数会优先匹配,
+//  导致 kapt(libs.xxx) 被错误解析为 Action<KaptExtension> 而非依赖声明)
+// Room schema 导出功能因此省略 (非必需, 仅用于 schema 版本迁移记录)
 
 dependencies {
     // 项目内 ADB 协议库
