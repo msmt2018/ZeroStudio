@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ZeroStudio IDE - 设备连接管理 connection 模块 AndroidManifest
+
+  复刻自 debugger/android-adb-shell/app/src/main/AndroidManifest.xml 的连接相关部分:
+    - 权限: 网络 / WiFi / USB / 通知 / 前台服务 / Shizuku 查询
+    - 前台服务: SelfPairingService (WiFi ADB 自配对)
+                AdbConnectionService (WiFi ADB 连接保活)
+    - ContentProvider: ShizukuProvider (接收 Shizuku server 下发的 binder)
+
+  注意: 包名已在源码中重命名为 android.zero.studio.*, 所以服务类路径相应调整。
+  ${applicationId} 占位符由消费方 app 模块的实际 applicationId 替换。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ============ 网络权限 (WiFi ADB mDNS 发现/TLS 连接用) ============ -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ WiFi ADB 配对需要 NEARBY_WIFI_DEVICES -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <!-- JmDNS 多播发现需要 -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- ============ 通知权限 (前台服务通知) ============ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:ignore="ForegroundServicesPolicy" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+    <!-- ============ USB OTG ADB 权限 ============ -->
+    <uses-feature android:name="android.hardware.usb.host" />
+    <uses-permission android:name="android.permission.USB_PERMISSION" />
+
+    <!-- ============ Shizuku 查询 (Local ADB 通道用) ============ -->
+    <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+    </queries>
+
+    <application>
+
+        <!-- ============ ShizukuProvider: 接收 Shizuku server 下发的 binder ============ -->
+        <!-- 没有这个 ContentProvider, Shizuku.pingBinder() 永远返回 false -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!-- ============ WiFi ADB 自配对服务 (前台服务保活) ============ -->
+        <!-- 用于在后台维持 mDNS 广播, 让其他设备可以发现并配对本机 -->
+        <service
+            android:name="android.zero.studio.shell.wifi_adb_shell.service.SelfPairingService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
+            tools:targetApi="30" />
+
+        <!-- ============ WiFi ADB 连接保活服务 ============ -->
+        <!-- 用于在后台维持已建立的 WiFi ADB 连接, 防止系统回收 -->
+        <service
+            android:name="android.zero.studio.shell.wifi_adb_shell.service.AdbConnectionService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+    </application>
+
+</manifest>
