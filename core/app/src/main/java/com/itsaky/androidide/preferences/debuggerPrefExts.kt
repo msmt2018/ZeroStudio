@@ -15,6 +15,7 @@ import com.itsaky.androidide.R
 import com.itsaky.androidide.debugger.connection.ConnectionType
 import com.itsaky.androidide.debugger.connection.DebugConnectionPreferences
 import com.itsaky.androidide.debugger.connection.ShizukuConfig
+import com.itsaky.androidide.fragments.debugger.DeviceConnectionBottomSheet
 import com.itsaky.androidide.fragments.shizuku.ShizukuManagerFragment
 import kotlinx.parcelize.Parcelize
 
@@ -30,6 +31,7 @@ class DebuggerPreferences(
 ) : IPreferenceScreen() {
 
   init {
+    addPreference(DeviceConnectionManagerEntry())
     addPreference(DebuggerConnectionTypeChoice())
     addPreference(DebuggerAutoRetrySwitch())
     addPreference(AidlSocketOptionsGroup())
@@ -166,6 +168,32 @@ private class ShizukuManagerEntry(
         .replace(R.id.fragmentContainer, ShizukuManagerFragment())
         .addToBackStack("shizuku_manager")
         .commit()
+    return true
+  }
+}
+
+/**
+ * 「设备连接管理」入口: 点击后弹出 [DeviceConnectionBottomSheet],
+ * 以 Shizuku 和 Root 两种 ADB 连接方式为核心, 检测状态 / 请求授权 / 切换活跃通道。
+ *
+ * 跟 [ShizukuManagerEntry] 的区别:
+ *   - ShizukuManagerEntry 打开的是全屏 Fragment, 只管 Shizuku
+ *   - DeviceConnectionManagerEntry 弹出 BottomSheet, 同时管 Shizuku + Root, 支持切换
+ */
+@Parcelize
+private class DeviceConnectionManagerEntry(
+    override val key: String = "idepref_debugger_device_connection",
+    override val title: Int = R.string.idepref_debugger_device_connection_title,
+    override val summary: Int? = R.string.idepref_debugger_device_connection_summary,
+) : SimplePreference() {
+
+  override fun onPreferenceClick(preference: Preference): Boolean {
+    val ctx = preference.context
+    val activity = ctx as? FragmentActivity ?: return false
+    DeviceConnectionBottomSheet().show(
+        activity.supportFragmentManager,
+        "device_connection_bottom_sheet",
+    )
     return true
   }
 }
