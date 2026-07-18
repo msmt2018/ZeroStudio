@@ -321,6 +321,18 @@ dependencies {
   // - Shell.Builder.setCommands() 支持自定义 su 路径 (DebugConnectionPreferences.rootSuBin)
   implementation(libs.libsu.core)
 
+  // ADB 连接管理模块 (复刻自 debugger/android-adb-shell 参考工程)
+  // - adblib: Cameron Gutman 的 ADB 协议 Java 实现 (OTG/USB ADB 用)
+  // - libadb: Muntashirakon 的 ADB 库 (WiFi/TLS ADB 用, 含 mDNS + SPAKE2 配对)
+  // - fastbootlib: Fastboot 协议 Kotlin 实现
+  // 设备连接管理 BottomSheet 通过这些模块实现 Local+WiFi+OTG+Fastboot 四种连接方式
+  implementation(projects.debugger.adbConnection.adblib)
+  implementation(projects.debugger.adbConnection.libadb)
+  implementation(projects.debugger.adbConnection.fastbootlib)
+
+  // JmDNS —— WiFi ADB mDNS 服务发现 (_adb-tls-connect._tcp / _adb-tls-pairing._tcp)
+  implementation(libs.jmdns)
+
   coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")
   testImplementation(projects.testing.unitTest)
