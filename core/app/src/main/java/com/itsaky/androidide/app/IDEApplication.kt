@@ -30,6 +30,7 @@ import com.itsaky.androidide.activities.editor.IDELogcatReader
 import com.itsaky.androidide.buildinfo.BuildInfo
 import com.itsaky.androidide.debugger.connection.DebugConnectionPreferences
 import com.itsaky.androidide.debugger.connection.host.AppReadyAutoConnect
+import dagger.hilt.android.HiltAndroidApp
 import com.itsaky.androidide.editor.schemes.IDEColorSchemeProvider
 import com.itsaky.androidide.eventbus.events.preferences.PreferenceChangeEvent
 import com.itsaky.androidide.events.AppEventsIndex
@@ -72,8 +73,14 @@ import org.slf4j.LoggerFactory
 /**
  * Main Application class for AndroidIDE. Initializes global environment, tools, and event bus.
  *
+ * 标注 @HiltAndroidApp 以启用 Hilt 依赖注入:
+ *   - 设备连接管理 connection 模块用 @HiltViewModel + @Inject + @Module 装配
+ *   - Hilt 在编译期生成 Hilt_IDEApplication 并注入到 onCreate 之前
+ *   - 所有 SingletonComponent 作用域的 @Provides 都会被装配
+ *
  * @author android_zero
  */
+@HiltAndroidApp
 class IDEApplication : TermuxApplication() {
 
   private var uncaughtExceptionHandler: UncaughtExceptionHandler? = null

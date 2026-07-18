@@ -162,10 +162,15 @@ include(
     // - adblib: Cameron Gutman 的 ADB 协议 Java 实现 (OTG/USB ADB 用)
     // - libadb: Muntashirakon 的 ADB 库 (WiFi/TLS ADB 用, 含 mDNS + SPAKE2 配对)
     // - fastbootlib: Fastboot 协议 Kotlin 实现
+    // - connection: 完整复刻 android-adb-shell/app 的 shell+core 源码, 包含
+    //   AdbConnectionManager/WifiAdbRepositoryImpl/OtgRepositoryImpl/FastbootRepositoryImpl
+    //   /ShellViewModel/WifiAdbViewModel/OtgViewModel/FastbootViewModel 等真正实现
+    //   Clean Architecture + Hilt + Room + JmDNS + Shizuku
     // 设备连接管理 BottomSheet 通过这些模块实现 Local+WiFi+OTG+Fastboot 四种连接方式
     ":debugger:adb-connection:adblib",
     ":debugger:adb-connection:libadb",
     ":debugger:adb-connection:fastbootlib",
+    ":debugger:adb-connection:connection",
 
     ":editor:api",
     ":editor:impl",

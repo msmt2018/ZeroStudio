@@ -165,6 +165,22 @@ bcprov-jdk15to18 = "1.85"
 spake2-android = "-SNAPSHOT"
 sun-security-android = "1.1"
 
+# ADB 连接管理 —— connection 模块需要的依赖 (复刻自 debugger/android-adb-shell 参考工程)
+# - hilt: 依赖注入 (com.google.dagger.hilt.android)
+# - hiltExt: androidx.hilt 扩展 (hilt-work / hilt-navigation-compose / hilt-compiler)
+# - nayukiQR: io.nayuki:qrcodegen QR 码生成 (WiFi ADB Pairing 二维码)
+# - shapeindicators: io.github.dp-hridayan:shapeindicators 形状指示器组件
+# - aboutlibraries: com.mikepenz 开源协议清单
+# - securityCrypto: androidx.security:security-crypto 加密 SharedPreferences
+# - shizuku: dev.rikka.shizuku 系统级 API 桥接 (Local ADB 通道)
+hilt = "2.60.1"
+hiltExt = "1.4.0"
+nayukiQR = "1.8.0"
+shapeindicators = "2.1.1"
+aboutlibraries = "15.0.3"
+securityCrypto = "1.1.0"
+shizuku = "13.1.0"
+
 # root/build.gradle.kts > plugins || Classpaths
 maven-publish-plugin = "0.29.0"
 
@@ -176,7 +192,7 @@ com-github-Juniversalchardet = "2.5.0"
 junit = "4.13.2"
 androidxTestExtJunit = "1.3.0"
 espressoCore = "3.7.0"
-androidx-junit-jupiter = "5.10.2"
+junit-jupiter = "5.10.2"
 
 
 [libraries]
@@ -415,7 +431,7 @@ xml-javax-stream = { module = "zerostudio:javax-stream", version = "1.0" }
 
 # Tests
 tests-junit = { module = "junit:junit", version.ref = "junit" }
-tests-junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "androidx-junit-jupiter" }
+tests-junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
 tests-junit-platformLauncher = { module = "org.junit.platform:junit-platform-launcher" }
 tests-google-truth = { module = "com.google.truth:truth", version = "1.4.4" }
 tests-robolectric = { module = "org.robolectric:robolectric", version = "4.11.1" }
@@ -576,6 +592,31 @@ bcprov-jdk15to18 = { module = "org.bouncycastle:bcprov-jdk15to18", version.ref =
 spake2-android = { module = "com.github.Mahmud0808.spake2-java:spake2-android", version.ref = "spake2-android" }
 sun-security-android = { module = "com.github.MuntashirAkon:sun-security-android", version.ref = "sun-security-android" }
 
+# ADB 连接管理 —— connection 模块依赖 (复刻自 debugger/android-adb-shell 参考工程)
+# Hilt: 依赖注入框架
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltExt" }
+hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hiltExt" }
+hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltExt" }
+# QR 码生成: io.nayuki:qrcodegen (WiFi ADB 配对二维码)
+nayuki-qrcode = { group = "io.nayuki", name = "qrcodegen", version.ref = "nayukiQR" }
+# 形状指示器组件
+shapeindicators = { group = "io.github.dp-hridayan", name = "shapeindicators", version.ref = "shapeindicators" }
+# 开源协议清单
+aboutlibraries-core = { module = "com.mikepenz:aboutlibraries-core", version.ref = "aboutlibraries" }
+# Lottie Compose 动画
+lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "lottie-animation" }
+# 加密 SharedPreferences (用于存储 ADB 配对凭据)
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+# Compose Animation (BOM 之外的显式版本)
+androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
+# Ktor CIO client (mDNS discovery 心跳/HTTP 用)
+io-ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "io-ktor" }
+# Shizuku 系统级 API 桥接 (Local ADB 通道)
+shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
+shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
+
 
 [bundles]
 androidx-lifecycle = ["androidx-lifecycle-runtime-compose", "androidx-lifecycle-runtime-ktx"]
@@ -626,7 +667,7 @@ io-insert-koin = [
 ]
 
 [plugins]
-# android ，androidx , Google 相关
+# android ， androidx , Google 相关
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 android-test = { id = "com.android.test", version.ref = "agp" }
@@ -651,6 +692,11 @@ org-jetbrains-kotlin-plugin-serialization = { id = "org.jetbrains.kotlin.plugin.
 
 # github
 com-github-jk1-tcdeps = { id = "com.github.jk1.tcdeps", version = "1.2" }
+
+# Hilt 依赖注入插件 (设备连接管理 connection 模块用)
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+# AboutLibraries 开源协议清单插件
+aboutlibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutlibraries" }
 
 # other
 maven-publish = { id = "com.vanniktech.maven.publish.base", version.ref = "maven-publish-plugin" }

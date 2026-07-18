@@ -15,6 +15,10 @@ plugins {
   alias(libs.plugins.google.services)
   alias(libs.plugins.firebase.crashlytics)
   id("org.jetbrains.kotlin.plugin.compose")
+  // Hilt 依赖注入 (设备连接管理 connection 模块需要)
+  alias(libs.plugins.hilt)
+  alias(libs.plugins.com.google.devtools.ksp)
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
 }
 
 apply { plugin(AndroidIDEAssetsPlugin::class.java) }
@@ -325,13 +329,38 @@ dependencies {
   // - adblib: Cameron Gutman 的 ADB 协议 Java 实现 (OTG/USB ADB 用)
   // - libadb: Muntashirakon 的 ADB 库 (WiFi/TLS ADB 用, 含 mDNS + SPAKE2 配对)
   // - fastbootlib: Fastboot 协议 Kotlin 实现
+  // - connection: 完整复刻 app/shell+core 源码, 提供 AdbConnectionManager/Repositories
+  //   /ViewModels/Services 等真正实现 (Clean Architecture + Hilt + Room)
   // 设备连接管理 BottomSheet 通过这些模块实现 Local+WiFi+OTG+Fastboot 四种连接方式
   implementation(projects.debugger.adbConnection.adblib)
   implementation(projects.debugger.adbConnection.libadb)
   implementation(projects.debugger.adbConnection.fastbootlib)
+  implementation(projects.debugger.adbConnection.connection)
 
   // JmDNS —— WiFi ADB mDNS 服务发现 (_adb-tls-connect._tcp / _adb-tls-pairing._tcp)
   implementation(libs.jmdns)
+
+  // Hilt 依赖注入 (设备连接管理 connection 模块需要 @HiltAndroidApp + @HiltViewModel)
+  implementation(libs.hilt.android)
+  ksp(libs.hilt.android.compiler)
+  implementation(libs.hilt.navigation.compose)
+  implementation(libs.hilt.work)
+  ksp(libs.hilt.compiler)
+
+  // Room (connection 模块的 WifiAdbDeviceDao/BookmarkDao 在 app 进程内运行)
+  implementation(libs.androidx.room.ktx)
+  ksp(libs.androidx.room.compiler)
+
+  // QR 码生成 (WiFi ADB Pairing 二维码 UI)
+  implementation(libs.nayuki.qrcode)
+  // 形状指示器组件
+  implementation(libs.shapeindicators)
+  // Lottie Compose 动画
+  implementation(libs.lottie.compose)
+  // 加密 SharedPreferences (ADB 配对凭据)
+  implementation(libs.androidx.security.crypto)
+  // Ktor CIO client
+  implementation(libs.io.ktor.client.cio)
 
   coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")
