@@ -28,6 +28,8 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.com.google.devtools.ksp)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
+    // kapt: Hilt 注解处理器使用 kapt 而非 ksp, 规避 Dagger #3965 类加载器冲突
+    id("kotlin-kapt")
 }
 
 android {
@@ -152,12 +154,12 @@ dependencies {
     implementation(libs.androidx.room.paging)
     ksp(libs.androidx.room.compiler)
 
-    // Hilt 依赖注入
+    // Hilt 依赖注入 (使用 kapt 而非 ksp, 规避 Dagger #3965 类加载器冲突)
     implementation(libs.hilt.android)
-    ksp(libs.hilt.android.compiler)
+    kapt(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
-    ksp(libs.hilt.compiler)
+    kapt(libs.hilt.compiler)
 
     // 序列化
     implementation(libs.kotlinx.serialization.json)

@@ -37,9 +37,8 @@ plugins {
   alias(libs.plugins.android.test) apply false
   alias(libs.plugins.protobuf) apply false
   alias(libs.plugins.com.google.devtools.ksp) apply false
-  // Hilt 必须在根项目与 KSP 同一作用域声明 (apply false),
-  // 否则 Hilt 插件类加载器与 KSP 不一致, 会报 "KSP plugin was detected to be applied
-  // but its task class could not be found" (见 https://github.com/google/dagger/issues/3965)
+  // Hilt 插件必须在根项目与 KSP 同一作用域声明 (apply false),
+  // 否则 Hilt 插件检测 KSP 时会因 classloader 不一致报错 (Dagger #3965)
   alias(libs.plugins.hilt) apply false
   alias(libs.plugins.google.services) apply false
   alias(libs.plugins.firebase.crashlytics) apply false

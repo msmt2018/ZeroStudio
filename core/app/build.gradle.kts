@@ -341,11 +341,13 @@ dependencies {
   implementation(libs.jmdns)
 
   // Hilt 依赖注入 (设备连接管理 connection 模块需要 @HiltAndroidApp + @HiltViewModel)
+  // 使用 kapt 而非 ksp 处理 Hilt 注解, 规避 Dagger #3965 类加载器冲突
+  // (Hilt 插件与 KSP 插件在不同作用域声明导致 classloader 不一致)
   implementation(libs.hilt.android)
-  ksp(libs.hilt.android.compiler)
+  kapt(libs.hilt.android.compiler)
   implementation(libs.hilt.navigation.compose)
   implementation(libs.hilt.work)
-  ksp(libs.hilt.compiler)
+  kapt(libs.hilt.compiler)
 
   // Room (connection 模块的 WifiAdbDeviceDao/BookmarkDao 在 app 进程内运行)
   implementation(libs.androidx.room.ktx)
