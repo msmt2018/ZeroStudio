@@ -173,8 +173,9 @@ sun-security-android = "1.1"
 # - aboutlibraries: com.mikepenz 开源协议清单
 # - securityCrypto: androidx.security:security-crypto 加密 SharedPreferences
 # - shizuku: dev.rikka.shizuku 系统级 API 桥接 (Local ADB 通道)
-hilt = "2.60.1"
-hiltExt = "1.4.0"
+# Hilt 2.60.1 要求 AGP 9.0+; 项目使用 AGP 8.13.2, 故降级到 2.51.1 (兼容 AGP 8.x 的稳定版)
+hilt = "2.51.1"
+hiltExt = "1.2.0"
 nayukiQR = "1.8.0"
 shapeindicators = "2.1.1"
 aboutlibraries = "15.0.3"
