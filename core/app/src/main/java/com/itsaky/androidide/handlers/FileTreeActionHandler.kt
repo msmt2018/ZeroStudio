@@ -83,16 +83,6 @@ class FileTreeActionHandler : BaseEventHandler() {
       return
     }
 
-    if (MB_10 < event.file.length()) {
-      flashError("File is too big!")
-      log.warn(
-          "Cannot open {} as it is too big. File size: {} bytes",
-          event.file,
-          event.file.length(),
-      )
-      return
-    }
-
     // === 图片预览路由 ===
     // 文件后缀命中 ImagePreviewFragment.RASTER_DECODER_FORMATS (PNG / JPG /
     // WebP / GIF / HEIC / BMP / AVIF / ICO / TIFF 等位图) 时, 直接在 IDE
@@ -104,6 +94,9 @@ class FileTreeActionHandler : BaseEventHandler() {
     // 工具栏的 "Render As Image" action (ImagePreviewAction) 转换到
     // ImagePreviewFragment tab. 这与 PreviewLayoutAction (布局 XML 先
     // 编辑后预览) 的交互模式一致.
+    //
+    // 媒体文件 (图片/音频/视频) 不受下面的 10MB 大小限制 —— Coil/Media3
+    // 都是流式按需解码, 不需要把整个文件读进内存, 大文件也能正常预览.
     if (isSupportedImageFile(event.file)) {
       val ext = event.file.extension.lowercase()
       val tabId = context.fragmentTabManager?.openFileTab(
@@ -155,6 +148,18 @@ class FileTreeActionHandler : BaseEventHandler() {
     // 按钮 (WebPreviewAction / MarkdownPreviewAction / ImagePreviewAction 等)
     // 切换到预览 Fragment tab. 只有音频 / 视频 / 图片 (位图) 等二进制 / 不可
     // 文本编辑的特殊格式才直接走 Fragment 预览.
+    //
+    // 文本编辑器需要把整个文件读进内存做语法高亮 / 编辑, 对超大文件会 OOM,
+    // 所以这里保留 10MB 上限. 媒体文件已在上面分流走预览 Fragment, 不会走到这里.
+    if (MB_10 < event.file.length()) {
+      flashError("File is too big!")
+      log.warn(
+          "Cannot open {} as it is too big. File size: {} bytes",
+          event.file,
+          event.file.length(),
+      )
+      return
+    }
 
     context.openFile(event.file)
   }
@@ -247,13 +252,3 @@ class FileTreeActionHandler : BaseEventHandler() {
     EventBus.getDefault().post(ListProjectFilesRequestEvent())
     EventBus.getDefault()
         .post(com.itsaky.androidide.fragments.git.tree.ListProjectFilesRequestEvent())
-  }
-
-  private fun requestExpandHeldNode() {
-    lastHeld?.let { requestExpandNode(it) }
-  }
-
-  private fun requestExpandNode(node: Node<FileObject>) {
-    EventBus.getDefault().post(ExpandTreeNodeRequestEvent(node))
-  }
-}
