@@ -153,16 +153,19 @@ dependencies {
     implementation(libs.google.material)
 
     // Room 数据库 (使用 kapt 而非 ksp, 规避 Hilt + KSP classloader 冲突)
+    // 注意: 使用 add("kapt", ...) 而非 kapt(...), 因为 Hilt 插件环境下
+    // kapt() 函数会被解析为 Action<KaptExtension> 而非依赖声明函数
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.paging)
-    kapt(libs.androidx.room.compiler)
+    add("kapt", libs.androidx.room.compiler)
 
     // Hilt 依赖注入 (使用 kapt 而非 ksp, 规避 Dagger #3965 类加载器冲突)
+    // 同样使用 add("kapt", ...) 避免 kapt() 函数解析歧义
     implementation(libs.hilt.android)
-    kapt(libs.hilt.android.compiler)
+    add("kapt", libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
-    kapt(libs.hilt.compiler)
+    add("kapt", libs.hilt.compiler)
 
     // 序列化
     implementation(libs.kotlinx.serialization.json)
