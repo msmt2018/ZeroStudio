@@ -1,0 +1,36 @@
+package android.zero.studio.qstiles.di
+
+import android.content.Context
+import androidx.room.Room
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import android.zero.studio.qstiles.data.dao.TileLogDao
+import android.zero.studio.qstiles.data.database.TileLogDatabase
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+object TileLogModule {
+
+    @Provides
+    @Singleton
+    fun provideDatabase(
+        @ApplicationContext context: Context
+    ): TileLogDatabase {
+        return Room.databaseBuilder(
+            context,
+            TileLogDatabase::class.java,
+            "tile_logs_db"
+        )
+            .fallbackToDestructiveMigration(true)
+            .build()
+    }
+
+    @Provides
+    fun provideDao(db: TileLogDatabase): TileLogDao {
+        return db.dao()
+    }
+}
