@@ -153,6 +153,10 @@ antlr4 = "4.13.1"
 # ANR watchdog
 anrwatchdog = "1.4.0"
 
+# Root shell (libsu) —— 设备连接管理 BottomSheet 的 Root 通道探测/执行用,
+# 跟 debugger/android-adb-shell 参考工程保持一致 (6.0.0)。
+libsu = "6.0.0"
+
 # root/build.gradle.kts > plugins || Classpaths
 maven-publish-plugin = "0.29.0"
 
@@ -550,6 +554,11 @@ floatingx-compose = { module = "io.github.petterpx:floatingx-compose", version.r
 huge-icons = { group = "com.github.rikkahub", name = "hugeicons-compose", version.ref = "huge-icons" }
 com-github-fwcd-ktfmt = { module = "com.github.fwcd.ktfmt:ktfmt", version = "b5d31d1" }
 anrwatchdog = { module = "com.github.anrwatchdog:anrwatchdog", version.ref = "anrwatchdog" }
+# libsu: com.topjohnwu 的 root shell 库, Java 包名 com.topjohnwu.superuser (历史遗留)
+# - Shell.setDefaultBuilder() 配置全局 Builder (FLAG_REDIRECT_STDERR / setCommands(suBin))
+# - Shell.getShell().isRoot 检测 root
+# - Shell.cmd(...).exec() / .submit() 执行 root 命令
+libsu-core = { module = "com.github.topjohnwu.libsu:core", version.ref = "libsu" }
 
 
 [bundles]

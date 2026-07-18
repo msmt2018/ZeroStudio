@@ -315,6 +315,12 @@ dependencies {
   //   没有它 Shizuku.pingBinder() 永远返回 false (设备连接管理 BottomSheet 用)
   implementation(projects.modules.shizuku.provider)
 
+  // libsu: Root 通道探测/执行用, 跟 debugger/android-adb-shell 参考工程一致。
+  // - Shell.getShell().isRoot 检测 root 可用性
+  // - Shell.cmd(...).exec() / .submit() 执行 root 命令
+  // - Shell.Builder.setCommands() 支持自定义 su 路径 (DebugConnectionPreferences.rootSuBin)
+  implementation(libs.libsu.core)
+
   coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")
   testImplementation(projects.testing.unitTest)
