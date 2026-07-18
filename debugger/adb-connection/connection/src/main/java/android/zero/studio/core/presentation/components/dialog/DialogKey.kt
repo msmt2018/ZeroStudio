@@ -1,0 +1,78 @@
+package android.zero.studio.core.presentation.components.dialog
+
+import androidx.compose.runtime.Composable
+import android.zero.studio.core.common.LocalDialogManager
+import android.zero.studio.core.presentation.viewmodel.DialogViewModel
+import android.zero.studio.settings.domain.model.BackupType
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbDevice
+
+sealed class DialogKey {
+    object None : DialogKey()
+
+    object Shell {
+        object None : DialogKey()
+        object ClearOutput : DialogKey()
+        object Bookmark : DialogKey()
+        object DeleteBookmarks : DialogKey()
+        object BookmarkSort : DialogKey()
+        object FileSaved : DialogKey()
+    }
+
+    sealed class CommandExamples {
+        object Add : DialogKey()
+        data class Edit(val commandId: Int) : DialogKey()
+        object SortCommands : DialogKey()
+        object LoadDefaultCommands : DialogKey()
+    }
+
+    sealed class Home {
+        object OtgDeviceWaiting : DialogKey()
+        object ChooseWifiAdbPairMode : DialogKey()
+        object RebootOptions : DialogKey()
+        object FastbootDeviceWaiting : DialogKey()
+    }
+
+    sealed class Settings {
+        object ConfigureSaveDir : DialogKey()
+        object LatestVersion : DialogKey()
+        object ResetSettings : DialogKey()
+        object RestoreBackup : DialogKey()
+        data class BackupDestination(val backupType: BackupType) : DialogKey()
+        object RestoreSource : DialogKey()
+        object ConfirmGoogleSignOut : DialogKey()
+        object NoGoogleAccount : DialogKey()
+        object PaletteStyle : DialogKey()
+        object AiCacheDays : DialogKey()
+        object AiCacheClearConfirmation : DialogKey()
+        object AutoBackupTimePicker : DialogKey()
+    }
+
+    sealed class Pair {
+        object GrantNotificationAccess : DialogKey()
+        data class ForgetDeviceConfirmation(val device: WifiAdbDevice) : DialogKey()
+        data class ReconnectFailed(val showDevOptionsButton: Boolean) : DialogKey()
+        object ConnectionSuccess : DialogKey()
+        object PairConnectFailed : DialogKey()
+    }
+}
+
+@Composable
+fun DialogKey.createDialog(content: @Composable (DialogViewModel) -> Unit) {
+    val dialogManager = LocalDialogManager.current
+    val active = dialogManager.activeDialog
+
+    if (this.matches(active)) {
+        content(dialogManager)
+    }
+}
+
+private fun DialogKey.matches(other: DialogKey): Boolean {
+    // For data classes, match by type (class) to allow different parameters
+    return when (this) {
+        is DialogKey.Pair.ReconnectFailed if other is DialogKey.Pair.ReconnectFailed -> true
+        is DialogKey.Pair.ForgetDeviceConfirmation if other is DialogKey.Pair.ForgetDeviceConfirmation -> true
+        is DialogKey.CommandExamples.Edit if other is DialogKey.CommandExamples.Edit -> true
+        is DialogKey.Settings.BackupDestination if other is DialogKey.Settings.BackupDestination -> true
+        else -> this == other
+    }
+}
