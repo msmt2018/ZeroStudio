@@ -346,15 +346,15 @@ dependencies {
   // 使用 kapt 而非 ksp 处理 Hilt 注解, 规避 Dagger #3965 类加载器冲突
   // (Hilt 插件与 KSP 插件在不同作用域声明导致 classloader 不一致)
   implementation(libs.hilt.android)
-  kapt(libs.hilt.android.compiler)
+  add("kapt", libs.hilt.android.compiler)
   implementation(libs.hilt.navigation.compose)
   implementation(libs.hilt.work)
-  kapt(libs.hilt.compiler)
+  add("kapt", libs.hilt.compiler)
 
   // Room (connection 模块的 WifiAdbDeviceDao/BookmarkDao 在 app 进程内运行)
   // 使用 kapt 而非 ksp, 因为本模块未应用 KSP 插件 (规避 Hilt + KSP classloader 冲突)
   implementation(libs.androidx.room.ktx)
-  kapt(libs.androidx.room.compiler)
+  add("kapt", libs.androidx.room.compiler)
 
   // QR 码生成 (WiFi ADB Pairing 二维码 UI)
   implementation(libs.nayuki.qrcode)
