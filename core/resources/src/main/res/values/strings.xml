@@ -165,7 +165,7 @@
      <string name="view_apm_panel">APM Panel</string>
      <string name="title_installation_failed">Installation failed</string>
      <string name="msg_picked_isnt_dir">Picked file is not a directory!</string>
-     <string name="please_wait">Please wait for a moment …</string>
+     <string name="please_wait">Please wait for a moment …</string>
 
      <!-- Project Builder -->
      <string name="title_unsupported_device">Device Not Supported</string>
@@ -184,7 +184,7 @@
 
      <!-- Project -->
      <string name="title_first_build">First Build</string>
-     <string name="msg_first_build">This is the first time build after you installed ZeroStudio. First build usually takes time as Gradle downloads all dependencies and plugins. This process may take about 10–15 minutes. But this totally depends on your network connection.\n\nPlease be patient …</string>
+     <string name="msg_first_build">This is the first time build after you installed ZeroStudio. First build usually takes time as Gradle downloads all dependencies and plugins. This process may take about 10–15 minutes. But this totally depends on your network connection.\n\nPlease be patient …</string>
      <string name="create_project">Create project</string>
      <string name="minimum_sdk">Minimum SDK</string>
      <string name="new_project">New project</string>
@@ -311,6 +311,8 @@
      <string name="idepref_debugger_shizuku_sub_path_summary">Auto picks the first working strategy. Lock to one only for advanced use.</string>
      <string name="idepref_debugger_shizuku_manager_title">打开 Shizuku 管理器</string>
      <string name="idepref_debugger_shizuku_manager_summary">查看 Shizuku 状态, 启动 server, 授权 IDE, 配对无线 ADB 调试。</string>
+     <string name="idepref_debugger_device_connection_title">设备连接管理</string>
+     <string name="idepref_debugger_device_connection_summary">Shizuku / Root ADB 连接通道状态检测与切换 (底部弹窗)。</string>
      <string name="idepref_debugger_root_su_bin_title">su binary path</string>
      <string name="idepref_debugger_innet_socks_host_title">SOCKS5 host</string>
      <string name="idepref_debugger_innet_socks_port_title">SOCKS5 port</string>
@@ -481,7 +483,7 @@
      <string name="xml_formatting_options">XML formatting options</string>
      <string name="xml_formatting_options_summary">Configure the XML formatter</string>
      <string name="idepref_customFont_title">Use custom font</string>
-     <string name="idepref_customFont_summary">If enabled, the file at \"/data/data/com.itsaky.ZeroStudio/files/home/.ZeroStudio/ui/font.ttf\" will be used as Editor font.</string>
+     <string name="idepref_customFont_summary">If enabled, the file at "/data/data/com.itsaky.ZeroStudio/files/home/.ZeroStudio/ui/font.ttf" will be used as Editor font.</string>
      <string name="msg_installing_apk">Installing APK...</string>
      <string name="msg_action_open_application">Do you want to open the application?</string>
 
