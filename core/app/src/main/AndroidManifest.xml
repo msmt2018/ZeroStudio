@@ -107,6 +107,19 @@
                     android:resource="@xml/ide_file_provider_paths" />
           </provider>
 
+          <!-- ShizukuProvider: 接收 Shizuku server 下发的 binder。
+               没有此 provider 注册, Shizuku.pingBinder() 永远返回 false,
+               设备连接管理 BottomSheet 的 Shizuku 通道永远显示「未运行」。
+               android:permission 必须是 Shell (com.android.shell) 持有但普通 app 没有的权限,
+               android:exported 必须为 true (Shizuku server 在 adb/root 下运行需跨进程访问),
+               android:multiprocess 必须为 false (Shizuku server 在 app 启动时拿 uid)。 -->
+          <provider
+               android:name="rikka.shizuku.ShizukuProvider"
+               android:authorities="${applicationId}.shizuku"
+               android:exported="true"
+               android:multiprocess="false"
+               android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
           <receiver
                android:enabled="true"
                android:exported="true"
