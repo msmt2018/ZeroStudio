@@ -40,7 +40,6 @@ import com.itsaky.androidide.fragments.sheets.OptionsListFragment
 import com.itsaky.androidide.models.SheetOption
 import com.itsaky.androidide.utils.ApkInstaller
 import com.itsaky.androidide.utils.InstallationResultHandler
-import com.itsaky.androidide.utils.flashError
 import java.io.File
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
@@ -59,9 +58,23 @@ class FileTreeActionHandler : BaseEventHandler() {
   companion object {
 
     const val TAG_FILE_OPTIONS_FRAGMENT = "file_options_fragment"
-    const val MB_10: Long = 10 * 1024 * 1024
   }
 
+  /**
+   * 文件点击路由分发。
+   *
+   * 设计原则:
+   * 1. **特殊二进制文件** (图片/音频/视频/apk 等) —— 通过文件扩展名匹配走对应
+   *    预览 Fragment 或安装器。这类文件的解码器只支持特定格式, 扩展名匹配就
+   *    足够, 不需要也不应该尝试用文本编辑器打开。
+   * 2. **文本类型文件** —— 不通过扩展名判断 (文本文件后缀极其广泛, 无法穷举),
+   *    而是作为默认 fallback 走 [EditorHandlerActivity.openFile]。无论是否有
+   *    扩展名、扩展名是否已知, 只要没被上面的二进制路由命中, 都交给文本编辑器。
+   *
+   * 不在前置做文件大小硬性拦截。文本文件是否 OOM 取决于 openFile 内部的
+   * 内存管理 (分块读取 / 流式渲染 / 懒加载等) 以及设备内存极限, 由 openFile
+   * 自身负责, 不在此处用固定阈值一刀切。
+   */
   @Subscribe(threadMode = MAIN)
   fun onFileClicked(event: FileClickEvent) {
     if (!checkIsEditorActivity(event)) {
@@ -73,6 +86,9 @@ class FileTreeActionHandler : BaseEventHandler() {
 
     val context = event[Context::class.java]!! as EditorHandlerActivity
     context.binding.root.closeDrawer(GravityCompat.START)
+
+    // === APK 安装路由 ===
+    // apk 是二进制安装包, 按扩展名匹配走系统安装器。
     if (event.file.name.endsWith(".apk")) {
       ApkInstaller.installApk(
           context,
@@ -84,7 +100,7 @@ class FileTreeActionHandler : BaseEventHandler() {
     }
 
     // === 图片预览路由 ===
-    // 文件后缀命中 ImagePreviewFragment.RASTER_DECODER_FORMATS (PNG / JPG /
+    // 文件后缀命中 [ImagePreviewFragment.RASTER_DECODER_FORMATS] (PNG / JPG /
     // WebP / GIF / HEIC / BMP / AVIF / ICO / TIFF 等位图) 时, 直接在 IDE
     // 内的 Image Preview tab 里打开, 不再走系统 Intent.ACTION_VIEW 调外部
     // viewer (老逻辑会把用户切出 IDE).
@@ -94,9 +110,6 @@ class FileTreeActionHandler : BaseEventHandler() {
     // 工具栏的 "Render As Image" action (ImagePreviewAction) 转换到
     // ImagePreviewFragment tab. 这与 PreviewLayoutAction (布局 XML 先
     // 编辑后预览) 的交互模式一致.
-    //
-    // 媒体文件 (图片/音频/视频) 不受下面的 10MB 大小限制 —— Coil/Media3
-    // 都是流式按需解码, 不需要把整个文件读进内存, 大文件也能正常预览.
     if (isSupportedImageFile(event.file)) {
       val ext = event.file.extension.lowercase()
       val tabId = context.fragmentTabManager?.openFileTab(
@@ -107,13 +120,14 @@ class FileTreeActionHandler : BaseEventHandler() {
         log.info("Opened image preview tab {} for {}", tabId, event.file)
         return
       }
-      // tab 没注册 (理论不会, 走不到这里) → fall through 到普通 openFile
+      // tab 没注册 (理论不会, 走不到这里) → fall through 到默认文本路由
     }
 
     // === 音频预览路由 ===
-    // 文件后缀命中 AudioPreviewFragment.SUPPORTED_EXTENSIONS (mp3 / wav / ogg /
+    // 文件后缀命中 [AudioPreviewFragment.SUPPORTED_EXTENSIONS] (mp3 / wav / ogg /
     // flac / aac / m4a / opus / mid / midi / amr / pcm / aiff / ape / wma) 时,
-    // 直接在 IDE 内的 Audio Preview tab 里打开.
+    // 直接在 IDE 内的 Audio Preview tab 里打开。Media3 ExoPlayer 流式按需解码,
+    // 不需要把整个文件读进内存, 大文件也能正常播放。
     if (isSupportedAudioFile(event.file)) {
       val ext = event.file.extension.lowercase()
       val tabId = context.fragmentTabManager?.openFileTab(
@@ -127,9 +141,9 @@ class FileTreeActionHandler : BaseEventHandler() {
     }
 
     // === 视频预览路由 ===
-    // 文件后缀命中 VideoPreviewFragment.SUPPORTED_EXTENSIONS (mp4 / mkv / webm /
+    // 文件后缀命中 [VideoPreviewFragment.SUPPORTED_EXTENSIONS] (mp4 / mkv / webm /
     // avi / mov / 3gp / mpg / mpeg / ts / m2ts / flv / wmv / m4v / vob / ogv) 时,
-    // 直接在 IDE 内的 Video Preview tab 里打开.
+    // 直接在 IDE 内的 Video Preview tab 里打开。同样流式解码, 无大小限制。
     if (isSupportedVideoFile(event.file)) {
       val ext = event.file.extension.lowercase()
       val tabId = context.fragmentTabManager?.openFileTab(
@@ -142,25 +156,16 @@ class FileTreeActionHandler : BaseEventHandler() {
       }
     }
 
-    // === 文本文件路由 ===
-    // HTML / HTM / XML / Markdown / JSON / 源码等所有文本类文件均以文本编辑器
-    // 打开 (可编辑状态), 用户需要预览渲染效果时通过编辑器工具栏的对应 Action
-    // 按钮 (WebPreviewAction / MarkdownPreviewAction / ImagePreviewAction 等)
-    // 切换到预览 Fragment tab. 只有音频 / 视频 / 图片 (位图) 等二进制 / 不可
-    // 文本编辑的特殊格式才直接走 Fragment 预览.
+    // === 默认文本路由 (fallback) ===
+    // 所有未被上面二进制路由命中的文件 (包括无扩展名、未知扩展名、HTML / HTM /
+    // XML / Markdown / JSON / 各类源码等文本文件) 均以文本编辑器打开。
+    // 文本文件后缀极其广泛无法穷举, 故不在此做扩展名判断, 统一交给 openFile。
+    // 用户需要预览渲染效果时通过编辑器工具栏的对应 Action 按钮
+    // (WebPreviewAction / MarkdownPreviewAction / ImagePreviewAction 等)
+    // 切换到预览 Fragment tab。
     //
-    // 文本编辑器需要把整个文件读进内存做语法高亮 / 编辑, 对超大文件会 OOM,
-    // 所以这里保留 10MB 上限. 媒体文件已在上面分流走预览 Fragment, 不会走到这里.
-    if (MB_10 < event.file.length()) {
-      flashError("File is too big!")
-      log.warn(
-          "Cannot open {} as it is too big. File size: {} bytes",
-          event.file,
-          event.file.length(),
-      )
-      return
-    }
-
+    // 不做前置大小拦截 —— 文件能否打开由 openFile 内部的内存管理决定
+    // (分块读取 / 流式渲染 / 懒加载等), 而非固定阈值。
     context.openFile(event.file)
   }
 
@@ -252,3 +257,13 @@ class FileTreeActionHandler : BaseEventHandler() {
     EventBus.getDefault().post(ListProjectFilesRequestEvent())
     EventBus.getDefault()
         .post(com.itsaky.androidide.fragments.git.tree.ListProjectFilesRequestEvent())
+  }
+
+  private fun requestExpandHeldNode() {
+    lastHeld?.let { requestExpandNode(it) }
+  }
+
+  private fun requestExpandNode(node: Node<FileObject>) {
+    EventBus.getDefault().post(ExpandTreeNodeRequestEvent(node))
+  }
+}
