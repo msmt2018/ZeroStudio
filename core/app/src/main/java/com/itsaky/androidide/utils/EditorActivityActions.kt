@@ -39,6 +39,7 @@ import com.itsaky.androidide.actions.editor.SystemTextMenuAction
 import com.itsaky.androidide.actions.etc.DisconnectLogSendersAction
 import com.itsaky.androidide.actions.etc.FindActionMenu
 import com.itsaky.androidide.actions.etc.LaunchAppAction
+import com.itsaky.androidide.actions.etc.OpenDeviceConnectionAction
 import com.itsaky.androidide.actions.etc.PreviewComposeAction
 import com.itsaky.androidide.actions.etc.PreviewLayoutAction
 import com.itsaky.androidide.actions.etc.ReloadColorSchemesAction
@@ -117,6 +118,7 @@ class EditorActivityActions {
       registry.registerAction(ReloadColorSchemesAction(context, order++))
       registry.registerAction(DisconnectLogSendersAction(context, order++))
       registry.registerAction(LaunchAppAction(context, order++))
+      registry.registerAction(OpenDeviceConnectionAction(context, order++))
       registry.registerAction(ColorQueryToolbarAction(context, order++))
 
       // editor text actions
