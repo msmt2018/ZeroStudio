@@ -22,6 +22,6 @@ android {
 }
 
 dependencies {
-	implementation(projects.subprojects.shizukuApi)
+	implementation(projects.modules.shizuku.api)
 	implementation(libs.androidx.annotation)
 }

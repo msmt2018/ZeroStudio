@@ -311,6 +311,9 @@ dependencies {
   // Shizuku 客户端 API (子项目 3 断点调试连接层用)
   // 不依赖 Shizuku server / manager, 只用 rikka.shizuku.Shizuku 静态 API
   implementation(projects.modules.shizuku.api)
+  // ShizukuProvider: ContentProvider 接收 Shizuku server 下发的 binder,
+  //   没有它 Shizuku.pingBinder() 永远返回 false (设备连接管理 BottomSheet 用)
+  implementation(projects.modules.shizuku.provider)
 
   coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")
