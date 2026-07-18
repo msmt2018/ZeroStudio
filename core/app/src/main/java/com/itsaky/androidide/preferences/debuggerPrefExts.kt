@@ -14,6 +14,7 @@ import androidx.preference.Preference
 import com.itsaky.androidide.R
 import com.itsaky.androidide.debugger.connection.ConnectionType
 import com.itsaky.androidide.debugger.connection.DebugConnectionPreferences
+import com.itsaky.androidide.debugger.connection.DeviceConnectionManager
 import com.itsaky.androidide.debugger.connection.ShizukuConfig
 import com.itsaky.androidide.fragments.debugger.DeviceConnectionBottomSheet
 import com.itsaky.androidide.fragments.shizuku.ShizukuManagerFragment
@@ -247,6 +248,8 @@ private class RootSuBinEdit(
 ) : EditTextPreference() {
   override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
     DebugConnectionPreferences.rootSuBin = (newValue as? String) ?: "/system/bin/su"
+    // su 路径变更后, 清掉 libsu 缓存的 Shell, 下次 probeRoot() 会用新路径重建
+    DeviceConnectionManager.invalidateCachedShell()
     return true
   }
   override fun onConfigureTextInput(input: com.google.android.material.textfield.TextInputLayout) {

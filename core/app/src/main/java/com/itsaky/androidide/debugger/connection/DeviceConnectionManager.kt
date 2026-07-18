@@ -3,12 +3,13 @@
  *
  * DeviceConnectionManager: 统一管理 Shizuku 和 Root 两种 ADB 连接方式。
  *
- * 设计参考 debugger/android-adb-shell 的 ShellCommandExecutor + ShizukuPermissionHandler
- * + ShellRepositoryImpl 架构,但源码自主编写,API 设计贴合项目已有的 ConnectionType /
+ * 设计参考 debugger/android-adb-shell 的 RootExecutor + ShizukuPermissionHandler
+ * 架构,但源码自主编写,API 设计贴合项目已有的 ConnectionType /
  * DebugConnectionPreferences 连接层。
  *
  * - Shizuku: 通过 rikka.shizuku.Shizuku 静态 API 检测服务状态和权限
- * - Root:    通过 Runtime.exec("su") 检测 root 可用性
+ * - Root:    通过 libsu.core (com.topjohnwu.superuser.Shell) 检测 root 可用性
+ *            跟参考工程 debugger/android-adb-shell 保持一致 (不再用 Runtime.exec("su"))
  *
  * 两种方式都暴露为 StateFlow,供 UI 响应式观察。
  */
@@ -17,6 +18,7 @@ package com.itsaky.androidide.debugger.connection
 
 import android.content.pm.PackageManager
 import androidx.compose.runtime.Stable
+import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -131,30 +133,63 @@ object DeviceConnectionManager {
     val rootState: StateFlow<RootProbeState> = _rootState.asStateFlow()
 
     /**
+     * 配置 libsu Shell 的默认 Builder。
+     *
+     * 必须在首次 [Shell.getShell] 之前调用 —— Shell 实例一旦创建就会被缓存,
+     * 后续 getShell() 都返回同一个实例, 所以 Builder 只能生效一次。
+     *
+     * 消费 [DebugConnectionPreferences.rootSuBin]:
+     *   - 默认 "/system/bin/su", 用户可在偏好设置 → Debugger → Root → su binary path 修改
+     *   - 通过 [Shell.Builder.setCommands] 传入, 让 libsu 用自定义路径拉起 root shell
+     *
+     * 参考: modules/shizuku/manager/ShizukuApplication.kt 的 Shell.setDefaultBuilder 用法。
+     */
+    private fun ensureShellBuilderConfigured() {
+        val suBin = DebugConnectionPreferences.rootSuBin
+        Shell.setDefaultBuilder(
+            Shell.Builder.create()
+                .setFlags(Shell.FLAG_REDIRECT_STDERR)
+                .setCommands(arrayOf(suBin))
+        )
+    }
+
+    /**
      * 探测设备是否已 root。
      *
-     * 原理: 启动 su 进程, 写入 `id\nexit\n`, 若 exit code == 0 则 root 可用。
-     * 在 IO 线程执行, 避免阻塞主线程。
+     * 使用 libsu.core 的官方推荐方式 (跟参考工程 debugger/android-adb-shell 的
+     * RootExecutor 一致):
+     *   1. [Shell.getShell] 同步拉起 su 进程 (首次会弹 root 授权框, 必须在 IO 线程)
+     *   2. [Shell.isRoot] 直接反映底层 su 是否启动成功
+     *   3. 第一次失败时主动 close 缓存的 Shell 再重试一次 (参考 Shizuku StarterActivity)
+     *
+     * 不用 Shell.cmd("id").exec() —— isRoot 已经足够, 而且不会污染 Shell 的 last result。
      */
     suspend fun probeRoot() {
         _rootState.value = RootProbeState.Probing
         val available = withContext(Dispatchers.IO) {
             try {
-                val process = Runtime.getRuntime().exec("su")
-                val os = process.outputStream
-                os.write("id\n".toByteArray())
-                os.flush()
-                os.write("exit\n".toByteArray())
-                os.flush()
-                os.close()
-                val exitCode = process.waitFor()
-                process.destroy()
-                exitCode == 0
-            } catch (e: Exception) {
+                ensureShellBuilderConfigured()
+                // 首次 getShell() 会同步拉起 su, 可能弹授权框, 必须在 IO 线程
+                var isRoot = Shell.getShell().isRoot
+                if (!isRoot) {
+                    // 第一次失败: 清缓存重试一次 (参考 Shizuku StarterActivity.startRoot)
+                    Shell.getCachedShell()?.close()
+                    isRoot = Shell.getShell().isRoot
+                }
+                isRoot
+            } catch (e: Throwable) {
                 false
             }
         }
         _rootState.value = if (available) RootProbeState.Available else RootProbeState.Unavailable
+    }
+
+    /**
+     * 当用户在偏好设置里修改了 su binary 路径后, 需要调用此方法清掉已缓存的 Shell,
+     * 否则 [Shell.getShell] 仍返回旧 Shell (用的是旧 suBin 拉起的)。
+     */
+    fun invalidateCachedShell() {
+        Shell.getCachedShell()?.close()
     }
 
     /** Root 是否可用。 */
