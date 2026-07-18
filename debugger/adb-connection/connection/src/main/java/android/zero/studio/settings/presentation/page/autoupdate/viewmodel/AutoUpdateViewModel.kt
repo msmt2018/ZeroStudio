@@ -1,0 +1,63 @@
+﻿package android.zero.studio.settings.presentation.page.autoupdate.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.compose.runtime.Stable
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import android.zero.studio.BuildConfig
+import android.zero.studio.core.domain.model.DownloadState
+import android.zero.studio.core.domain.usecase.DownloadApkUseCase
+import android.zero.studio.settings.data.SettingsKeys
+import android.zero.studio.settings.domain.model.UpdateResult
+import android.zero.studio.core.domain.model.GithubReleaseType
+import android.zero.studio.settings.domain.repository.SettingsRepository
+import android.zero.studio.settings.domain.usecase.CheckUpdateUseCase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@Stable
+@HiltViewModel
+class AutoUpdateViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+    private val checkUpdateUseCase: CheckUpdateUseCase,
+    private val downloadApkUseCase: DownloadApkUseCase
+) : ViewModel() {
+    private val _updateEvents = MutableSharedFlow<UpdateResult>()
+    val updateEvents = _updateEvents.asSharedFlow()
+
+    fun checkForUpdates() {
+        viewModelScope.launch {
+            val releaseType = settingsRepository.getInt(SettingsKeys.GithubReleaseType).first()
+            val includePrerelease = releaseType == GithubReleaseType.PRE_RELEASE_GITHUB
+            val result = checkUpdateUseCase(BuildConfig.VERSION_NAME, includePrerelease, releaseType)
+            _updateEvents.emit(result)
+        }
+    }
+
+    fun select(option: Int) {
+        viewModelScope.launch {
+            settingsRepository.setInt(SettingsKeys.GithubReleaseType, option)
+        }
+    }
+
+    private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
+    val downloadState = _downloadState.asStateFlow()
+
+    fun downloadApk(url: String, fileName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            downloadApkUseCase(url, fileName) {
+                _downloadState.value = it
+            }
+        }
+    }
+
+    fun cancelDownload() {
+        downloadApkUseCase.cancel()
+    }
+}

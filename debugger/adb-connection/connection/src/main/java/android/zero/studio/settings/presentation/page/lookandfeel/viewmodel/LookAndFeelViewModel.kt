@@ -1,0 +1,79 @@
+package android.zero.studio.settings.presentation.page.lookandfeel.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.compose.runtime.Stable
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import android.zero.studio.core.data.local.provider.SeedColor
+import android.zero.studio.core.domain.model.PaletteStyle
+import android.zero.studio.settings.data.SettingsKeys
+import android.zero.studio.settings.domain.repository.SettingsRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@Stable
+@HiltViewModel
+class LookAndFeelViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+) : ViewModel() {
+    private var lastSeed: SeedColor? = null
+
+    private val _isCheckedMatchCase = MutableStateFlow(false)
+    val isCheckedMatchCase: StateFlow<Boolean> = _isCheckedMatchCase
+
+    private val _isCheckedBold = MutableStateFlow(false)
+    val isCheckedBold: StateFlow<Boolean> = _isCheckedBold
+
+    private val _isCheckedItalic = MutableStateFlow(false)
+    val isCheckedItalic: StateFlow<Boolean> = _isCheckedItalic
+
+    private val _isCheckedUnderline = MutableStateFlow(false)
+    val isCheckedUnderline: StateFlow<Boolean> = _isCheckedUnderline
+
+    fun toggleMatchCase() {
+        _isCheckedMatchCase.value = !_isCheckedMatchCase.value
+    }
+
+    fun toggleBold() {
+        _isCheckedBold.value = !_isCheckedBold.value
+    }
+
+    fun toggleItalic() {
+        _isCheckedItalic.value = !_isCheckedItalic.value
+    }
+
+    fun toggleUnderline() {
+        _isCheckedUnderline.value = !_isCheckedUnderline.value
+    }
+
+    fun formatClear() {
+        _isCheckedMatchCase.value = false
+        _isCheckedBold.value = false
+        _isCheckedItalic.value = false
+        _isCheckedUnderline.value = false
+    }
+
+    fun setSeedColor(seed: SeedColor) {
+        if (seed == lastSeed) return
+        lastSeed = seed
+
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.setInt(SettingsKeys.PrimarySeed, seed.primary)
+        }
+    }
+
+    fun setPaletteStyle(style: PaletteStyle) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.setInt(SettingsKeys.PaletteStyle, style.ordinal)
+        }
+    }
+
+    fun disableDynamicColors() {
+        viewModelScope.launch(Dispatchers.IO) {
+            settingsRepository.setBoolean(SettingsKeys.DynamicColors, false)
+        }
+    }
+}
