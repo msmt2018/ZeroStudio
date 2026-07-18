@@ -58,6 +58,7 @@
     "@json.json",
     "@kotlin.json",
     "@xml.json",
+    "@html.json",
     "@toml.json",
     "@clang.json",
     "@cmake.json",

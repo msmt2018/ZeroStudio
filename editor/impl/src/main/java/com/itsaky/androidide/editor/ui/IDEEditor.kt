@@ -858,7 +858,15 @@ constructor(
       setupTsLanguageJob =
           editorScope
               .launch {
-                val lang = TreeSitterLanguageProvider.forFile(file, context)
+                // 包一层 try-catch 防御: 即使 forFile 内部漏掉了某个 Error
+                // (如 ExceptionInInitializerError), 也要保证 callback 被调用,
+                // 否则 editor 永远不切换 language, 文件全黑字.
+                val lang = try {
+                  TreeSitterLanguageProvider.forFile(file, context)
+                } catch (t: Throwable) {
+                  log.error("Failed to create tree sitter language for file: {}", file, t)
+                  null
+                }
                 withContext(Dispatchers.Main) { callback(lang) }
               }
               .also { job ->

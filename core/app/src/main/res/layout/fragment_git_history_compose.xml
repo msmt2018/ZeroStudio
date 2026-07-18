@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Git 提交历史页面: 由 puppygit 的 CommitListScreen 渲染
-  容器内通过 setGitContent() 动态注入 ComposeView,顶部 TopAppBar 由 puppygit 提供
+  Git 提交历史页面: 独立 Compose UI 渲染 (不再套娃 puppygit CommitListScreen)
+  顶部 mini-toolbar 由 BaseGitPageFragment.setupToolbar() 填充按钮;
+  下方 git_content_container 是 ComposeView 的占位 (运行时挂入).
 -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/git_content_container"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface" />
+    android:orientation="vertical"
+    android:background="?attr/colorSurface">
+
+    <include layout="@layout/layout_git_mini_toolbar" />
+
+    <FrameLayout
+        android:id="@+id/git_content_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</LinearLayout>

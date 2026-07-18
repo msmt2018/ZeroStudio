@@ -44,17 +44,16 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.rk.components.compose.preferences.base.PreferenceGroup
-import com.rk.components.compose.preferences.base.PreferenceLayout
-import com.rk.components.compose.preferences.base.PreferenceTemplate
-import com.rk.components.compose.preferences.switch.PreferenceSwitch
+import android.zero.studio.termux.components.compose.preferences.base.PreferenceGroup
+import android.zero.studio.termux.components.compose.preferences.base.PreferenceLayout
+import android.zero.studio.termux.components.compose.preferences.base.PreferenceTemplate
+import android.zero.studio.termux.components.compose.preferences.switch.PreferenceSwitch
 import android.zero.studio.termux.resources.strings
 import android.zero.studio.termux.libcommons.child
 import android.zero.studio.termux.libcommons.createFileIfNot
 import android.zero.studio.termux.libcommons.dpToPx
 import android.zero.studio.termux.settings.Settings
 import android.zero.studio.termux.model.WorkingMode
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
 import android.zero.studio.termux.ui.components.SettingsToggle
 import android.zero.studio.termux.ui.components.TerminalEnvironmentOption
 import android.zero.studio.termux.ui.components.TerminalEnvironmentSegmentedSelector
@@ -159,7 +158,7 @@ private fun getFileNameFromUri(context: Context, uri: Uri): String? {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActivity: MainActivity) {
+fun Settings(modifier: Modifier = Modifier,navController: NavController) {
     val context = LocalContext.current
     val initialTerminalEnvironment = remember {
         terminalEnvironmentFromWorkingMode(Settings.working_Mode)

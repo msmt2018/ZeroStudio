@@ -143,6 +143,7 @@ include(
     ":core:resources",
     ":core:git",
     ":core:layout-editor",
+    ":core:ZeroStudio-Terminal",
     
     ":core:chatai:ai",
     ":core:chatai:app",
@@ -172,6 +173,7 @@ include(
     ":editor:tree-sitter-ndk:yaml",
     ":editor:tree-sitter-ndk:aidl",
     ":editor:tree-sitter-ndk:cpp",
+    ":editor:tree-sitter-ndk:html",
 
     ":event:eventbus",
     ":event:eventbus-android",

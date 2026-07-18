@@ -1,13 +1,13 @@
 import java.io.ByteArrayOutputStream
 
 plugins {
-    alias(libs.plugins.androidLibrary)
-    alias(libs.plugins.kotlinAndroid)
-    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 
 android {
-    namespace = "android.zero.studio.terminal"
+    namespace = "android.zero.studio.termux"
     android.buildFeatures.buildConfig = true
     compileSdk = 36
 
@@ -38,29 +38,35 @@ android {
 }
 
 dependencies {
-    api(libs.appcompat)
-    api(libs.material)
-    api(libs.constraintlayout)
-    api(libs.navigation.fragment)
-    api(libs.navigation.ui)
-    api(libs.navigation.fragment.ktx)
-    api(libs.navigation.ui.ktx)
-    api(libs.activity)
-    api(libs.lifecycle.viewmodel.ktx)
-    api(libs.lifecycle.runtime.ktx)
-    api(libs.activity.compose)
-    api(platform(libs.compose.bom))
-    api(libs.ui)
-    api(libs.ui.graphics)
-    api(libs.material3)
-    api(libs.navigation.compose)
-    api(project(":core:terminal-view"))
-    api(project(":core:terminal-emulator"))
-    api(libs.utilcode)
+    // AndroidX
+    api(libs.androidx.appcompat)
+    api(libs.google.material)
+    api(libs.androidx.constraintlayout)
+    api(libs.androidx.navigation.fragment)
+    api(libs.androidx.navigation.ui)
+    api(libs.androidx.nav.fragment)
+    api(libs.androidx.nav.ui)
+    api(libs.androidx.activity)
+    api(libs.androidx.lifecycle.viewmodel.ktx)
+    api(libs.androidx.lifecycle.runtime.ktx)
+
+    // Compose
+    api(libs.androidx.activity.compose)
+    api(platform(libs.androidx.compose.bom))
+    api(libs.androidx.compose.ui)
+    api(libs.androidx.compose.ui.graphics)
+    api(libs.androidx.compose.material3)
+    api(libs.androidx.navigation.compose)
+    api(libs.androidx.compose.material.icons.core)
+    api(libs.androidx.palette.ktx)
+    api(libs.com.google.accompanist.systemuicontroller)
+
+    // Project modules (termux)
+    api(project(":termux:view"))
+    api(project(":termux:emulator"))
+
+    // Other
+    api(libs.common.utilcode)
     api(libs.okhttp)
     api(libs.anrwatchdog)
-    api(libs.androidx.material.icons.core)
-    api(libs.androidx.palette)
-    api(libs.accompanist.systemuicontroller)
-
 }

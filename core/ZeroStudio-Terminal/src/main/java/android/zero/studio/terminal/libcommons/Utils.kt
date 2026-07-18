@@ -6,7 +6,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.annotation.StringRes
 import android.zero.studio.termux.resources.getString
-import android.zero.studio.termux.core.BuildConfig
+import android.zero.studio.termux.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers

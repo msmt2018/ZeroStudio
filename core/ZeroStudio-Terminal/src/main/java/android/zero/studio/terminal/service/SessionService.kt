@@ -1,6 +1,7 @@
 package android.zero.studio.termux.service
 
 import android.app.*
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Binder
@@ -98,8 +99,8 @@ class SessionService : Service() {
             sessionCustomNames.clear()
             updateNotification()
         }
-        fun createSession(id: String, client: TerminalSessionClient, activity: MainActivity,workingMode:Int): TerminalSession {
-            return MkSession.createSession(activity, client, id, workingMode = workingMode).also {
+        fun createSession(id: String, client: TerminalSessionClient, context: Context,workingMode:Int): TerminalSession {
+            return MkSession.createSession(context, client, id, workingMode = workingMode).also {
                 sessions[id] = it
                 sessionOrder.add(id)
                 sessionList[id] = workingMode

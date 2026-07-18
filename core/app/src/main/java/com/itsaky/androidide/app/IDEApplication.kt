@@ -46,6 +46,9 @@ import com.itsaky.androidide.ui.themes.IThemeManager
 import com.itsaky.androidide.utils.RecyclableObjectPool
 import com.itsaky.androidide.utils.flashError
 import com.termux.app.TermuxApplication
+import com.whl.quickjs.android.QuickJSLoader
+import android.zero.studio.termux.libcommons.application as termuxApplication
+import android.zero.studio.termux.resources.Res as TermuxRes
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import java.lang.Thread.UncaughtExceptionHandler
 import kotlin.system.exitProcess
@@ -95,6 +98,19 @@ class IDEApplication : TermuxApplication() {
     instance = this
     super.onCreate()
 
+    // 初始化 ZeroStudio-Terminal 模块的全局 Application 引用。
+    // 该模块的 libcommons.application 和 resources.Res.application 两个全局变量
+    // 原本由 android.zero.studio.termux.App.onCreate() 赋值, 但 App 类未注册到
+    // 任何 AndroidManifest (最终 manifest 用的是 IDEApplication), 所以从未被
+    // 实例化, application 一直是 null。
+    // 当系统通过 AppComponentFactory 反射实例化 SessionService 时, SessionService
+    // 构造函数会访问 Settings.working_Mode, 触发 Preference object 的 <clinit>,
+    // 其中 `application!!.getSharedPreferences(...)` 会因 application 为 null 抛
+    // NullPointerException -> ExceptionInInitializerError, 导致 SessionService
+    // 创建失败。在 super.onCreate() 之后立即赋值, 保证后续所有代码路径都能拿到。
+    termuxApplication = this
+    TermuxRes.application = this
+
     applyPersistedLocale()
 
     // 启动 chatai 模块的 Koin 容器。
@@ -112,10 +128,31 @@ class IDEApplication : TermuxApplication() {
       modules(appModule, viewModelModule, dataSourceModule, repositoryModule)
     }
 
+    // 初始化 QuickJS 原生库。
+    // chatai 模块的 Highlighter / CustomJsSearchService / LocalTools 等会在运行时
+    // 通过 QuickJSContext.create() 创建 JS 运行时, 而 create() 要求 .so 已加载,
+    // 否则抛出 "The so library must be initialized before createContext!"。
+    // 原本这行在 RikkaHubApp.onCreate() 中, 但 RikkaHubApp 未注册到 manifest
+    // (manifest 里只有 IDEApplication), 所以这条初始化链路被漏掉了。
+    // 放在 startKoin 之后、其他业务初始化之前执行。
+    QuickJSLoader.init()
+
     uncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, th -> handleCrash(thread, th) }
 
     if (BuildConfig.DEBUG) {
+      // LeakCanary 2.14 的 RootViewWatcher 在监听到 WebView 的 SelectPopup
+      // 弹窗 (chromium 内部 Dialog.show) 时, 会尝试读取一个 bool 资源
+      // (leak_canary_watcher_ignore_select_popup), 该资源在某些打包配置
+      // 下会从 resource table 中丢失, 导致 Resources$NotFoundException 崩溃.
+      // RootViewWatcher 是 LeakCanary 中误报率最高的 watcher (Dialog/Toast
+      // 都会触发), 关闭它不影响 Activity/Fragment/ViewModel 泄漏检测.
+      // LeakCanary 2.14 的 AppWatcher.Config 不再提供 watchRootViews 字段,
+      // RootViewWatcher 会自动安装且无法通过 config 关闭。此处保留注释说明意图:
+      // 若需禁用 RootViewWatcher, 应升级 LeakCanary 或通过反射操作内部开关。
+      // leakcanary.AppWatcher.config =
+      //     leakcanary.AppWatcher.config.copy(watchRootViews = false)
+
       if (DevOpsPreferences.dumpLogs) {
         startLogcatReader()
       }

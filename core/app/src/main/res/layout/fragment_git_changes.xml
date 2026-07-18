@@ -1,87 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Git 变更与提交页面: 独立 Compose UI 渲染 (commit 工作流)
+  顶部 mini-toolbar 由 BaseGitPageFragment.setupToolbar() 填充按钮;
+  下方 git_content_container 是 ComposeView 的占位 (运行时挂入).
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="?attr/colorSurface">
 
     <include layout="@layout/layout_git_mini_toolbar" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_changes"
+    <FrameLayout
+        android:id="@+id/git_content_container"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingBottom="8dp" />
+        android:layout_height="match_parent" />
 
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/card_commit_input"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="12dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="12dp"
-        app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-        app:cardCornerRadius="12dp"
-        app:cardElevation="2dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="12dp">
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/input_your_commit_message"
-                app:boxBackgroundMode="filled"
-                app:boxStrokeWidth="0dp">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/et_commit_message"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@android:color/transparent"
-                    android:gravity="top|start"
-                    android:inputType="textMultiLine|textCapSentences"
-                    android:minLines="3"
-                    android:textColor="?attr/colorOnSurface"
-                    android:textColorHint="?attr/colorOnSurfaceVariant"
-                    android:textSize="14sp" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <CheckBox
-                    android:id="@+id/cb_amend"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:buttonTint="?attr/colorSecondary"
-                    android:text="@string/amend"
-                    android:textColor="?attr/colorOnSurface" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_commit_and_push_inline"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:contentDescription="Commit and push"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:minWidth="40dp"
-                    android:minHeight="40dp"
-                    app:backgroundTint="?attr/colorSecondaryContainer"
-                    app:icon="@drawable/ic_cloud_download_24"
-                    app:iconTint="?attr/colorOnSecondaryContainer" />
-            </LinearLayout>
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
 </LinearLayout>

@@ -21,6 +21,20 @@ android {
   defaultConfig {
     minSdk = 21
     consumerProguardFiles("consumer-rules.pro")
+    // 提供 manifest placeholder 默认值, 这样 AAR 的 merged manifest 在库构建时
+    // 就把 ${ideLocalServerName} 替换为字面值 "ide-debug-bridge", 消费方 (用户
+    // app) 不需要再自己提供这个 placeholder.
+    //
+    // 之前这个默认值只在 IdeDebuggerInitScriptPlugin 里通过 reflection 注入到
+    // host app 的 defaultConfig.manifestPlaceholders, 但 IDE 写给用户工程的
+    // init script (GradleBuildService.createLoggerInitScript) 并没有 apply 这个
+    // plugin, 导致 ${ideLocalServerName} 在用户 app 构建时无人解析, 报:
+    //   "requires a placeholder substitution but no value for <ideLocalServerName>
+    //    is provided"
+    //
+    // 值 "ide-debug-bridge" 与 IdeDebuggerInitScriptPlugin.computeLocalServerName()
+    // 返回的固定常量一致, 也与 IDE 端 HostBridgeServer.WELL_KNOWN_NAME 对齐.
+    manifestPlaceholders["ideLocalServerName"] = "ide-debug-bridge"
   }
 
   compileOptions {

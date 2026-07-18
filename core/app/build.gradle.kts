@@ -207,7 +207,12 @@ dependencies {
   implementation(libs.androidx.compose.material.icons.extended)
 
   // UI/UX
+  implementation(platform(libs.androidx.compose.bom))
   implementation(libs.bundles.compose) // androidx compose
+  // Compose Navigation — 用于 GitHostScreen 的 NavHost (puppygit Screen 跳转栈)
+  implementation(libs.androidx.navigation.compose)
+  // Compose Foundation — HorizontalPager / rememberPagerState (GitHostScreen 标签页)
+  implementation(libs.androidx.compose.foundation)
   // 磨砂玻璃 (Frosted glass) - 音频/视频预览 fragment 控件
   implementation(libs.haze)
   implementation(libs.haze.blur)
@@ -243,7 +248,7 @@ dependencies {
   implementation(projects.core.lspApi)
   implementation(projects.core.projects)
   implementation(projects.core.resources)
-  implementation(projects.debugger.library)
+  implementation(projects.debugger.breakpointDebugger.library)
   implementation(projects.modules.zeroMcpServer)
   implementation(projects.modules.zeroOnboardingGuide)
   implementation(projects.editor.impl)
@@ -268,7 +273,7 @@ dependencies {
   implementation(projects.tooling.api)
  
   implementation(projects.tooling.pluginConfig)
-  implementation(projects.debugger.logRuntime.logwire)
+  implementation(projects.debugger.breakpointDebugger.logwire)
   implementation(projects.utilities.buildInfo)
   implementation(projects.utilities.lookup)
   implementation(projects.utilities.flashbar)
@@ -289,7 +294,13 @@ dependencies {
   implementation(projects.modules.zeroSymbolInputView)
   implementation(projects.core.git)
   implementation(projects.core.layoutEditor)
+  implementation(project(":core:ZeroStudio-Terminal"))
   implementation(projects.core.chatai.app)
+  // QuickJS 原生库 —— IDEApplication.onCreate() 调用 QuickJSLoader.init() 加载 .so,
+  // chatai 模块 (highlight/common/search) 虽然用 api(libs.quickjs) 声明,
+  // 但 core/app 是通过 implementation(projects.core.chatai.app) 引入它们的,
+  // implementation 不传递 api 依赖, 所以 core/app 自己也要声明一条。
+  implementation(libs.quickjs)
   implementation(projects.modules.zeroRegularPreview)
   implementation(projects.modules.composePreview)
   implementation(projects.modules.colorpicker)

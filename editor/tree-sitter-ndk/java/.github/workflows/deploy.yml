@@ -1,0 +1,69 @@
+name: Deploy
+
+on:
+  push:
+    tags: ["*"]
+
+jobs:
+  deploy:
+    name: Deploy package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    environment:
+      name: maven-central
+      url: https://central.sonatype.com/artifact/io.github.tree-sitter/jtreesitter
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+          server-id: central
+          server-username: SONATYPE_USERNAME
+          server-password: SONATYPE_TOKEN
+          gpg-private-key: ${{secrets.GPG_KEY}}
+      - name: Get tree-sitter commit
+        run: printf 'TREE_SITTER_REF=%s\n' "$(git rev-parse HEAD:core)" >> "$GITHUB_ENV"
+      - name: Set up tree-sitter CLI
+        uses: tree-sitter/setup-action/cli@v2
+      - name: Set up tree-sitter library
+        uses: tree-sitter/setup-action/lib@v2
+        with:
+          tree-sitter-ref: ${{env.TREE_SITTER_REF}}
+      - name: Set up tree-sitter-java
+        run: |-
+          git clone --depth=1 https://github.com/tree-sitter/tree-sitter-java
+          cd tree-sitter-java
+          tree-sitter generate --abi=15
+          make all install PREFIX="$RUNNER_TOOL_CACHE/tree-sitter/lib"
+      - name: Set up jextract
+        run: |-
+          curl -LSs '${{env.JEXTRACT_URL}}_linux-x64_bin.tar.gz' | tar xzf - -C "$RUNNER_TOOL_CACHE"
+          printf '%s/jextract-25/bin\n' "$RUNNER_TOOL_CACHE" >> "$GITHUB_PATH"
+        env:
+          # NOTE: keep this in sync with ci, docs
+          JEXTRACT_URL: https://download.java.net/java/early_access/jextract/25/2/openjdk-25-jextract+2-4
+      - name: Generate code with jextract
+        run: |-
+          mvn --no-transfer-progress antrun:run@jextract
+          sed -i '${{env.TS_SHARED}}' -e '/C_LONG =/s/"long"/"long long"/'
+        env:
+          TS_SHARED: target/generated-sources/jextract/io/github/treesitter/jtreesitter/internal/TreeSitter$shared.java
+      - name: Deploy to Maven Central
+        run: mvn --no-transfer-progress deploy -Dspotbugs.skip=true -Djextract.skip=true
+        env:
+          SONATYPE_USERNAME: ${{secrets.SONATYPE_USERNAME}}
+          SONATYPE_TOKEN: ${{secrets.SONATYPE_TOKEN}}
+          MAVEN_GPG_PASSPHRASE: ${{secrets.GPG_PASSPHRASE}}
+      - name: Create release
+        run: gh release create $GITHUB_REF_NAME --generate-notes
+        env:
+          GH_TOKEN: ${{github.token}}
+          GH_REPO: ${{github.repository}}

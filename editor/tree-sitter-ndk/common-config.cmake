@@ -24,6 +24,17 @@ set(TS_INCLUDES
 # 将这些目录添加到编译器的搜索路径中
 include_directories(${TS_INCLUDES})
 
+# 注意: 各语言子模块的 parser.c / scanner.c 通过 #include <tree_sitter/parser.h>
+# 引用内部头文件。tree-sitter 0.27 将这些头文件从 include/tree_sitter/ 移到了 src/
+# (不带 tree_sitter/ 前缀)。但 aidl/toml/cmake/cpp/yaml 等旧语法模块的 parser.c
+# 是用旧版 tree-sitter 生成的, 与 0.27 的 parser.h 不兼容 (REDUCE 宏参数数量不同、
+# TSFieldMapSlice 类型被移除等)。因此这些模块在各自 src/main/cpp/tree_sitter/ 下
+# 维护了兼容的旧版 parser.h 副本, 编译时通过 -I<module>/src/main/cpp 优先解析到
+# 本地副本。不要在 src/ 下创建 tree_sitter/ 符号链接指向 0.27 版本, 那会覆盖
+# 各模块的本地副本导致编译失败。
+# 新语法模块 (如 html, parser.c 由 tree-sitter 0.27 生成) 同样在本地维护
+# tree_sitter/ 头文件副本, 只需从 0.27 源码复制即可。
+
 # tree-sitter amalgamation 源码 (供各语言子模块编译引擎核心用)
 set(TS_LIB_SRC "${TS_DIR}/src/lib.c")
 

@@ -30,6 +30,8 @@ navigationCompose = "2.9.8"
 androidxCompose-livedata = "1.7.0"
 compose-compiler = "1.5.15"
 material3 = "1.5.0-alpha17"
+materialIconsCore = "1.7.8"
+accompanistSystemuicontroller = "0.36.0"
 
 # androidx相关
 androidxCore = "1.7.1"
@@ -147,6 +149,9 @@ matrix = "2.1.0"
 #语法解析分析
 tree-sitter = "4.3.2"
 antlr4 = "4.13.1"
+
+# ANR watchdog
+anrwatchdog = "1.4.0"
 
 # root/build.gradle.kts > plugins || Classpaths
 maven-publish-plugin = "0.29.0"
@@ -281,6 +286,8 @@ androidx-splashscreen = { module = "androidx.core:core-splashscreen", version.re
 androidx-transition = { module = "androidx.transition:transition-ktx", version = "1.5.0" }
 androidx-nav-fragment = { module = "androidx.navigation:navigation-fragment-ktx", version.ref = "androidx-navigation" }
 androidx-nav-ui = { module = "androidx.navigation:navigation-ui-ktx", version.ref = "androidx-navigation" }
+androidx-navigation-fragment = { module = "androidx.navigation:navigation-fragment", version.ref = "androidx-navigation" }
+androidx-navigation-ui = { module = "androidx.navigation:navigation-ui", version.ref = "androidx-navigation" }
 androidx-tracing = { module = "androidx.tracing:tracing", version = "1.2.0" }
 androidx-tracing-ktx = { module = "androidx.tracing:tracing-ktx", version = "1.2.0" }
 androidx-viewpager = { module = "androidx.viewpager:viewpager", version.ref = "androidxViewpager" }
@@ -295,6 +302,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "androidx-room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "androidx-room" }
 androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
+androidx-activity = { module = "androidx.activity:activity", version.ref = "activityKtx" }
 androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycleViewmodelKtx" }
 androidx-lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", version.ref = "lifecycleViewmodelKtx" }
 androidx-lifecycle-livedata-ktx = { module = "androidx.lifecycle:lifecycle-livedata-ktx", version.ref = "lifecycleViewmodelKtx" }
@@ -334,6 +342,7 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" , version.ref = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" , version = "1.7.8" }
+androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" , version.ref = "materialIconsCore" }
 androidx-google-fonts = { module = "androidx.compose.ui:ui-text-google-fonts" }
 androidx-compose-runtime-livedata = { module = "androidx.compose.runtime:runtime-livedata" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
@@ -357,6 +366,7 @@ google-java-format = { module = "com.google.googlejavaformat:google-java-format"
 google-flexbox = { module = "com.google.android.flexbox:flexbox", version = "3.0.0" }
 google-findbugs-jsr305 = { group = "com.google.code.findbugs", name = "jsr305", version.ref = "google-findbugsJsr305" }
 com-google-google-accompanist-pager = { group = "com.google.accompanist", name = "accompanist-pager", version.ref = "google-accompanist-pager" }
+com-google-accompanist-systemuicontroller = { group = "com.google.accompanist", name = "accompanist-systemuicontroller", version.ref = "accompanistSystemuicontroller" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
@@ -539,6 +549,7 @@ floatingx = { module = "io.github.petterpx:floatingx", version.ref = "floatingx"
 floatingx-compose = { module = "io.github.petterpx:floatingx-compose", version.ref = "floatingx" }
 huge-icons = { group = "com.github.rikkahub", name = "hugeicons-compose", version.ref = "huge-icons" }
 com-github-fwcd-ktfmt = { module = "com.github.fwcd.ktfmt:ktfmt", version = "b5d31d1" }
+anrwatchdog = { module = "com.github.anrwatchdog:anrwatchdog", version.ref = "anrwatchdog" }
 
 
 [bundles]

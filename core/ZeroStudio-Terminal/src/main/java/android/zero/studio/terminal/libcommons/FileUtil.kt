@@ -2,7 +2,7 @@ package android.zero.studio.termux.libcommons
 
 import android.content.Context
 import java.io.File
-import android.zero.studio.termux.core.BuildConfig
+import android.zero.studio.termux.BuildConfig
 
 private fun getFilesDir(): File{
     return if (application == null){

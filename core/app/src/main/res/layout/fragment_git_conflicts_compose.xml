@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Git 冲突解决页面: 独立 Compose UI 渲染
+  顶部 mini-toolbar 由 BaseGitPageFragment.setupToolbar() 填充按钮;
+  下方 git_content_container 是 ComposeView 的占位 (运行时挂入).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface">
+
+    <include layout="@layout/layout_git_mini_toolbar" />
+
+    <FrameLayout
+        android:id="@+id/git_content_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</LinearLayout>

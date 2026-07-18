@@ -16,8 +16,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.rk.components.compose.preferences.base.PreferenceTemplate
-import com.rk.components.compose.preferences.switch.PreferenceSwitch
+import android.zero.studio.termux.components.compose.preferences.base.PreferenceTemplate
+import android.zero.studio.termux.components.compose.preferences.switch.PreferenceSwitch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

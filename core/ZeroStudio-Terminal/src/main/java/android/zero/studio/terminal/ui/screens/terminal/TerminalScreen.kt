@@ -82,9 +82,9 @@ import androidx.core.widget.doOnTextChanged
 import androidx.navigation.NavController
 import com.google.android.material.R
 import androidx.compose.ui.res.stringResource
-import com.rk.components.compose.preferences.base.PreferenceGroup
-import com.rk.components.compose.preferences.base.PreferenceTemplate
-import com.rk.components.compose.preferences.switch.PreferenceSwitch
+import android.zero.studio.termux.components.compose.preferences.base.PreferenceGroup
+import android.zero.studio.termux.components.compose.preferences.base.PreferenceTemplate
+import android.zero.studio.termux.components.compose.preferences.switch.PreferenceSwitch
 import android.zero.studio.termux.libcommons.application
 import android.zero.studio.termux.resources.strings
 import android.zero.studio.termux.libcommons.child
@@ -92,7 +92,9 @@ import android.zero.studio.termux.libcommons.dpToPx
 import android.zero.studio.termux.libcommons.localDir
 import android.zero.studio.termux.libcommons.pendingCommand
 import android.zero.studio.termux.settings.Settings
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
+import android.app.Activity
+import android.content.Context
+import android.zero.studio.termux.ui.fragments.TerminalSessionHolder
 import android.zero.studio.termux.ui.components.InputDialog
 import android.zero.studio.termux.ui.components.SessionTabBar
 import android.zero.studio.termux.ui.components.TerminalEnvironmentOption
@@ -204,7 +206,6 @@ var showHorizontalToolbar = mutableStateOf(Settings.toolbar)
 @Composable
 fun TerminalScreen(
     modifier: Modifier = Modifier,
-    mainActivityActivity: MainActivity,
     navController: NavController
 ) {
     val context = LocalContext.current
@@ -265,7 +266,7 @@ fun TerminalScreen(
 
         // Helper function to generate unique session ID
         fun generateUniqueSessionId(): String {
-            val existingStrings = mainActivityActivity.sessionBinder?.getService()?.sessionOrder?.toList() ?: emptyList()
+            val existingStrings = TerminalSessionHolder.sessionBinder?.getService()?.sessionOrder?.toList() ?: emptyList()
             var index = 1
             var newString: String
             do {
@@ -288,15 +289,15 @@ fun TerminalScreen(
 
             val sessionId = generateUniqueSessionId()
             terminalView.get()?.let {
-                val client = TerminalBackEnd(it, mainActivityActivity)
-                mainActivityActivity.sessionBinder!!.createSession(
+                val client = TerminalBackEnd(it, context)
+                TerminalSessionHolder.sessionBinder!!.createSession(
                     sessionId,
                     client,
-                    mainActivityActivity,
+                    context,
                     workingMode = workingMode
                 )
             }
-            changeSession(mainActivityActivity, session_id = sessionId)
+            changeSession(context, session_id = sessionId)
         }
 
         fun openAddSessionDialog() {
@@ -308,7 +309,7 @@ fun TerminalScreen(
 
         // Helper function to handle closing a session
         fun handleCloseSession(sessionId: String, currentSessionId: String) {
-            val service = mainActivityActivity.sessionBinder?.getService() ?: return
+            val service = TerminalSessionHolder.sessionBinder?.getService() ?: return
             val keys = service.sessionOrder.toList()
             
             if (keys.size <= 1) {
@@ -317,12 +318,12 @@ fun TerminalScreen(
                     // Create new session BEFORE terminating old one to prevent service stopSelf()
                     createNewSession(Settings.working_Mode)
                     // Now safe to terminate the old session
-                    mainActivityActivity.sessionBinder?.terminateSession(sessionId)
+                    TerminalSessionHolder.sessionBinder?.terminateSession(sessionId)
                 } else {
-                    // Exit app - terminate then finish
-                    mainActivityActivity.sessionBinder?.terminateSession(sessionId)
+                    // Exit - terminate then finish host Activity if available
+                    TerminalSessionHolder.sessionBinder?.terminateSession(sessionId)
                     if (service.sessionOrder.isEmpty()) {
-                        mainActivityActivity.finish()
+                        (context as? Activity)?.finish()
                     }
                 }
             } else {
@@ -334,9 +335,9 @@ fun TerminalScreen(
                     } else {
                         keys[currentIndex - 1]
                     }
-                    changeSession(mainActivityActivity, nextId)
+                    changeSession(context, nextId)
                 }
-                mainActivityActivity.sessionBinder?.terminateSession(sessionId)
+                TerminalSessionHolder.sessionBinder?.terminateSession(sessionId)
             }
         }
         // Add session dialog (shared between wide and narrow layouts)
@@ -416,7 +417,7 @@ fun TerminalScreen(
 
         // Rename session dialog
         showRenameDialogFor?.let { sessionId ->
-            val service = mainActivityActivity.sessionBinder?.getService()
+            val service = TerminalSessionHolder.sessionBinder?.getService()
             val currentDisplayTitle = service?.getDisplayTitle(sessionId) ?: sessionId
             var renameValue by remember(sessionId) { mutableStateOf(currentDisplayTitle) }
             InputDialog(
@@ -433,7 +434,7 @@ fun TerminalScreen(
 
         if (isTabBarMode) {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                val service = mainActivityActivity.sessionBinder?.getService()
+                val service = TerminalSessionHolder.sessionBinder?.getService()
                 val sessionKeys = service?.sessionOrder?.toList() ?: emptyList()
                 val currentSessionId = service?.currentSession?.value?.first ?: ""
 
@@ -442,7 +443,7 @@ fun TerminalScreen(
                     currentSessionId = currentSessionId,
                     getDisplayTitle = { id -> service?.getDisplayTitle(id) ?: id },
                     getWorkingMode = { id -> service?.getWorkingMode(id) },
-                    onSelectSession = { id -> changeSession(mainActivityActivity, id) },
+                    onSelectSession = { id -> changeSession(context, id) },
                     onCloseSession = { id -> handleCloseSession(id, currentSessionId) },
                     onAddSession = { openAddSessionDialog() },
                     onRenameSession = { id -> showRenameDialogFor = id },
@@ -451,7 +452,6 @@ fun TerminalScreen(
                 )
 
                 TabBarTerminalContent(
-                    mainActivityActivity = mainActivityActivity,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -512,7 +512,7 @@ fun TerminalScreen(
 
                             }
 
-                            mainActivityActivity.sessionBinder?.getService()?.let { service ->
+                            TerminalSessionHolder.sessionBinder?.getService()?.let { service ->
                                 val sessionKeys = service.sessionOrder.toList()
                                 LazyColumn {
                                     itemsIndexed(sessionKeys) { index, session_id ->
@@ -520,7 +520,7 @@ fun TerminalScreen(
                                             selected = session_id == service.currentSession.value.first,
                                             onSelect = {
                                                 changeSession(
-                                                    mainActivityActivity,
+                                                    context,
                                                     session_id
                                                 )
                                             },
@@ -573,7 +573,7 @@ fun TerminalScreen(
                                                     IconButton(
                                                         onClick = {
                                                             println(session_id)
-                                                            mainActivityActivity.sessionBinder?.terminateSession(
+                                                            TerminalSessionHolder.sessionBinder?.terminateSession(
                                                                 session_id
                                                             )
                                                         },
@@ -600,7 +600,6 @@ fun TerminalScreen(
                 },
                 content = {
                     TerminalContent(
-                        mainActivityActivity = mainActivityActivity,
                         navController = navController,
                         showAddDialog = { openAddSessionDialog() },
                         openDrawer = { scope.launch { drawerState.open() } },
@@ -630,12 +629,12 @@ fun getSessionTextColor(workingMode: Int?): androidx.compose.ui.graphics.Color {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalContent(
-    mainActivityActivity: MainActivity,
     navController: NavController,
     showAddDialog: () -> Unit,
     openDrawer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     Box(
         modifier = modifier
             .fillMaxSize(),
@@ -649,7 +648,7 @@ fun TerminalContent(
             val showToolbarCondition = showToolbar.value && (LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE || showHorizontalToolbar.value)
 
             if (showToolbarCondition) {
-                val service = mainActivityActivity.sessionBinder?.getService()
+                val service = TerminalSessionHolder.sessionBinder?.getService()
                 val currentSessionId = service?.currentSession?.value?.first ?: ""
                 val displayTitle = service?.getDisplayTitle(currentSessionId) ?: currentSessionId
                 val currentWorkingMode = service?.getWorkingMode(currentSessionId)
@@ -684,7 +683,6 @@ fun TerminalContent(
 
             val density = LocalDensity.current
             TerminalPaneContent(
-                mainActivityActivity = mainActivityActivity,
                 modifier = Modifier
                     .imePadding()
                     .navigationBarsPadding()
@@ -705,9 +703,9 @@ fun TerminalContent(
 
 @Composable
 fun TabBarTerminalContent(
-    mainActivityActivity: MainActivity,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     Box(
         modifier = modifier
             .fillMaxSize(),
@@ -715,7 +713,6 @@ fun TabBarTerminalContent(
     ) {
         BackgroundImage()
         TerminalPaneContent(
-            mainActivityActivity = mainActivityActivity,
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding()
@@ -727,9 +724,9 @@ fun TabBarTerminalContent(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TerminalPaneContent(
-    mainActivityActivity: MainActivity,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     // Observe color scheme state to trigger recomposition when it changes
     val currentScheme = ColorSchemeManager.currentScheme.value
     val terminalBackgroundColor = currentScheme.background
@@ -753,28 +750,28 @@ private fun TerminalPaneContent(
                             context
                         )
                     )
-                    val client = TerminalBackEnd(this, mainActivityActivity)
+                    val client = TerminalBackEnd(this, context)
 
                     val session = if (pendingCommand != null) {
-                        mainActivityActivity.sessionBinder!!.getService().currentSession.value = Pair(
+                        TerminalSessionHolder.sessionBinder!!.getService().currentSession.value = Pair(
                             pendingCommand!!.id, pendingCommand!!.workingMode
                         )
-                        mainActivityActivity.sessionBinder!!.getSession(
+                        TerminalSessionHolder.sessionBinder!!.getSession(
                             pendingCommand!!.id
                         )
-                            ?: mainActivityActivity.sessionBinder!!.createSession(
+                            ?: TerminalSessionHolder.sessionBinder!!.createSession(
                                 pendingCommand!!.id,
                                 client,
-                                mainActivityActivity, workingMode = Settings.working_Mode
+                                context, workingMode = Settings.working_Mode
                             )
                     } else {
-                        mainActivityActivity.sessionBinder!!.getSession(
-                            mainActivityActivity.sessionBinder!!.getService().currentSession.value.first
+                        TerminalSessionHolder.sessionBinder!!.getSession(
+                            TerminalSessionHolder.sessionBinder!!.getService().currentSession.value.first
                         )
-                            ?: mainActivityActivity.sessionBinder!!.createSession(
-                                mainActivityActivity.sessionBinder!!.getService().currentSession.value.first,
+                            ?: TerminalSessionHolder.sessionBinder!!.createSession(
+                                TerminalSessionHolder.sessionBinder!!.getService().currentSession.value.first,
                                 client,
-                                mainActivityActivity, workingMode = Settings.working_Mode
+                                context, workingMode = Settings.working_Mode
                             )
                     }
 
@@ -1004,15 +1001,15 @@ fun SelectableCard(
 }
 
 
-fun changeSession(mainActivityActivity: MainActivity, session_id: String) {
+fun changeSession(context: Context, session_id: String) {
     terminalView.get()?.apply {
-        val client = TerminalBackEnd(this, mainActivityActivity)
+        val client = TerminalBackEnd(this, context)
         val session =
-            mainActivityActivity.sessionBinder!!.getSession(session_id)
-                ?: mainActivityActivity.sessionBinder!!.createSession(
+            TerminalSessionHolder.sessionBinder!!.getSession(session_id)
+                ?: TerminalSessionHolder.sessionBinder!!.createSession(
                     session_id,
                     client,
-                    mainActivityActivity,workingMode = Settings.working_Mode
+                    context,workingMode = Settings.working_Mode
                 )
         session.updateTerminalSessionClient(client)
         attachSession(session)
@@ -1043,7 +1040,7 @@ fun changeSession(mainActivityActivity: MainActivity, session_id: String) {
         }
 
     }
-    mainActivityActivity.sessionBinder!!.getService().currentSession.value = Pair(session_id,mainActivityActivity.sessionBinder!!.getService().sessionList[session_id]!!)
+    TerminalSessionHolder.sessionBinder!!.getService().currentSession.value = Pair(session_id,TerminalSessionHolder.sessionBinder!!.getService().sessionList[session_id]!!)
 
 }
 

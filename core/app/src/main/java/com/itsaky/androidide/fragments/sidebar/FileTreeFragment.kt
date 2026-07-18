@@ -35,21 +35,26 @@ import androidx.core.view.updatePadding
 import androidx.fragment.app.viewModels
 import com.blankj.utilcode.util.SizeUtils
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.LayoutEditorFileTreeBinding
 import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
 import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
 import com.itsaky.androidide.events.ListProjectFilesRequestEvent
+import com.itsaky.androidide.fragments.git.GitScreenOpener
+import com.itsaky.androidide.fragments.git.tree.FileTreeGitOps
 import com.itsaky.androidide.models.FileExtension
 import com.itsaky.androidide.projects.IProjectManager
+import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.utils.doOnApplyWindowInsets
+import com.itsaky.androidide.utils.flashError
+import com.itsaky.androidide.utils.flashSuccess
 import com.itsaky.androidide.viewmodel.FileTreeViewModel
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.lifecycleScope
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode.MAIN
@@ -85,6 +90,61 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
     listProjectFiles()
+    setupGitStatusBar()
+  }
+
+  /**
+   * 顶部 git 状态栏: 显示当前分支 + ahead/behind + 改动数; 绑定 Pull / Push 按钮;
+   * 点击分支文字打开完整 git UI。
+   */
+  private fun setupGitStatusBar() {
+    val b = binding ?: return
+    b.gitStatusBar.visibility = View.GONE  // 初始隐藏, 加载完仓库信息后显示
+    b.gitStatusBranch.setOnClickListener { openFullGitUi() }
+    b.gitStatusPull.setOnClickListener { doGitOp(R.string.git_action_pull) { FileTreeGitOps.pull() } }
+    b.gitStatusPush.setOnClickListener { doGitOp(R.string.git_action_push) { FileTreeGitOps.push() } }
+    refreshGitStatusBar()
+  }
+
+  /** 异步刷新顶部 git 状态栏内容。 */
+  private fun refreshGitStatusBar() {
+    val b = binding ?: return
+    viewLifecycleOwner.lifecycleScope.launch {
+      val isRepo = withContext(Dispatchers.IO) { FileTreeGitOps.isGitRepo() }
+      if (!isRepo) {
+        b.gitStatusBar.visibility = View.GONE
+        return@launch
+      }
+      b.gitStatusBar.visibility = View.VISIBLE
+      val branch = (withContext(Dispatchers.IO) { FileTreeGitOps.currentBranchShortName() } as? FileTreeGitOps.GitOpResult.Ok)?.data.orEmpty()
+      val oid = (withContext(Dispatchers.IO) { FileTreeGitOps.currentShortHeadHash() } as? FileTreeGitOps.GitOpResult.Ok)?.data.orEmpty()
+      b.gitStatusBranch.text = if (branch.isBlank()) {
+        // detached HEAD: 显示短 hash
+        if (oid.isNotBlank()) "detached @ $oid" else getString(R.string.git_status_bar_detached)
+      } else {
+        "$branch @ $oid"
+      }
+    }
+  }
+
+  private fun openFullGitUi() {
+    val activity = activity as? androidx.fragment.app.FragmentActivity ?: return
+    GitScreenOpener.openGitUi(activity)
+  }
+
+  /** 通用 git 操作包装: 协程中执行, 完成后刷新状态栏。 */
+  private fun doGitOp(
+      @Suppress("UNUSED_PARAMETER") labelRes: Int,
+      op: suspend () -> FileTreeGitOps.GitOpResult<*>,
+  ) {
+    viewLifecycleOwner.lifecycleScope.launch {
+      val r = withContext(Dispatchers.IO) { op() }
+      when (r) {
+        is FileTreeGitOps.GitOpResult.Ok -> flashSuccess(R.string.git_msg_op_success)
+        is FileTreeGitOps.GitOpResult.Err -> flashError(getString(R.string.git_msg_op_failed, r.msg))
+      }
+      refreshGitStatusBar()
+    }
   }
 
   override fun onDestroyView() {
@@ -129,6 +189,7 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
       return
     }
     listProjectFiles()
+    refreshGitStatusBar()
   }
 
   @Suppress("unused")

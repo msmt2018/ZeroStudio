@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -102,7 +104,7 @@ fun SwipeableProjectItem(
     isExpanded = false
   }
 
-  Box(modifier = modifier.fillMaxWidth().height(58.dp)) {
+  Box(modifier = modifier.fillMaxWidth().height(58.dp).clipToBounds()) {
     // ---- Background layer: action menu (Pin + Delete) ----
     // 背景层不再使用高斯模糊——高斯模糊会遮挡整个菜单区域，导致按钮不可见。
     // 高斯模糊改为设置在每个按钮的背景上（见 SwipeActionButton）。
@@ -253,8 +255,10 @@ fun SwipeableProjectItem(
                 fontSize = 10.sp,
                 color = Color(0xFF1E1E1E),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                // 不再用 Ellipsis 截断, 改用 basicMarquee 从右到左滚动,
+                // 这样长项目名也能完整显示.
+                softWrap = false,
+                modifier = Modifier.weight(1f).basicMarquee(),
             )
           }
           Text(
@@ -301,8 +305,9 @@ fun SwipeableProjectItem(
  * 缩放，保证只有当前景已经划开一段距离时才完全可见，未划开时是淡出
  * 的占位，触感更细腻。
  *
- * 按钮为圆形，背景使用半透明高斯模糊（红/蓝半透明毛玻璃），尺寸紧凑
- * （直径 28dp，较原来 64dp 宽减少约 56%）。
+ * 按钮为圆形，直径 36dp。背景与图标分层渲染：
+ * - 背景层：半透明颜色（红/蓝）+ 高斯模糊，模拟毛玻璃效果
+ * - 图标层：清晰显示在顶层，不受模糊影响
  */
 @Composable
 private fun SwipeActionButton(
@@ -315,11 +320,10 @@ private fun SwipeActionButton(
 ) {
   val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(120), label = "btn-alpha")
   val scale = 0.85f + 0.15f * progress
-  // 按钮背景：按钮颜色（红/蓝）+ 半透明 + 高斯模糊。
-  // alpha 0.6f 让颜色明显可见（红色/蓝色清晰），同时保持半透明质感。
+  // 按钮背景颜色：按钮颜色（红/蓝）+ 半透明，模拟毛玻璃的彩色底色
   val bg by
       animateColorAsState(
-          targetValue = tint.copy(alpha = 0.6f),
+          targetValue = tint.copy(alpha = 0.5f),
           animationSpec = tween(140),
           label = "btn-bg",
       )
@@ -327,15 +331,18 @@ private fun SwipeActionButton(
       modifier =
           Modifier.graphicsLayer { this.alpha = alpha }
               .scale(scale)
-              .size(28.dp)
+              .size(36.dp)
               .clip(CircleShape)
-              // 高斯模糊设置在按钮背景上，而非遮挡整个菜单
-              .blur(4.dp)
-              .background(bg)
               .clickable(enabled = visible, onClick = onClick),
       contentAlignment = Alignment.Center,
   ) {
-    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(16.dp))
+    // 背景层：半透明颜色 + 高斯模糊，只作用于背景，不会模糊图标
+    Box(
+        modifier =
+            Modifier.matchParentSize().blur(6.dp).background(bg),
+    )
+    // 图标层：清晰显示在顶层，不受高斯模糊影响
+    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
   }
   // Hint to the compiler that the content color is fine.
   LocalContentColor

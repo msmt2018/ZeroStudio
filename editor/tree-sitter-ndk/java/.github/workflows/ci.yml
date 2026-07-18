@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - pom.xml
+      - spotbugs-exclude.xml
+      - core
+      - src/**
+      - scripts/jextract.*
+      - scripts/TreeSitter_java.patch
+      - .github/workflows/ci.yml
+  pull_request:
+    branches: [master]
+    paths:
+      - pom.xml
+      - spotbugs-exclude.xml
+      - core
+      - src/**
+      - scripts/jextract.*
+      - scripts/TreeSitter_java.patch
+      - .github/workflows/ci.yml
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{github.workflow}}-${{github.ref_name}}
+
+permissions:
+  contents: write
+  security-events: write
+
+jobs:
+  test:
+    name: Test package
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ubuntu-latest, windows-latest, macos-latest]
+        java-version: [23, 24, 25]
+    runs-on: ${{matrix.target}}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{matrix.java-version}}
+          cache: maven
+      - name: Get tree-sitter commit
+        shell: sh
+        run: printf 'TREE_SITTER_REF=%s\n' "$(git rev-parse HEAD:core)" >> "$GITHUB_ENV"
+      - name: Set up tree-sitter CLI
+        uses: tree-sitter/setup-action/cli@v2
+      - name: Set up tree-sitter library
+        uses: tree-sitter/setup-action/lib@v2
+        with:
+          tree-sitter-ref: ${{env.TREE_SITTER_REF}}
+      - name: Set up tree-sitter-java
+        shell: bash
+        run: |-
+          git clone --depth=1 https://github.com/tree-sitter/tree-sitter-java
+          cd tree-sitter-java
+          tree-sitter generate --abi=15
+          cmake -B build \
+            -DBUILD_SHARED_LIBS=ON \
+            -DTREE_SITTER_ABI_VERSION=15 \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_INSTALL_BINDIR=lib \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TOOL_CACHE/tree-sitter/lib"
+          cmake --build build && cmake --install build --config Debug
+      - name: Set up jextract
+        shell: bash
+        run: |-
+          if [[ $RUNNER_OS == Linux ]]; then
+            JEXTRACT_URL+=_linux-x64_bin.tar.gz
+          elif [[ $RUNNER_OS == macOS ]]; then
+            JEXTRACT_URL+=_macos-aarch64_bin.tar.gz
+          else
+            JEXTRACT_URL+=_windows-x64_bin.tar.gz
+          fi
+          curl -LSs "$JEXTRACT_URL" | tar xzf - -C "$RUNNER_TOOL_CACHE"
+          printf '%s/jextract-25/bin\n' "$RUNNER_TOOL_CACHE" >> "$GITHUB_PATH"
+        env:
+          # NOTE: keep this in sync with deploy, docs
+          JEXTRACT_URL: https://download.java.net/java/early_access/jextract/25/2/openjdk-25-jextract+2-4
+      - name: Run tests
+        run: mvn --no-transfer-progress test
+      - name: Patch SpotBugs SARIF report
+        if: "!cancelled() && github.event_name == 'push'"
+        run: mvn antrun:run@patch-sarif
+      - name: Upload SpotBugs SARIF report
+        uses: github/codeql-action/upload-sarif@v4
+        if: "!cancelled() && github.event_name == 'push'"
+        with:
+          category: spotbugs
+          sarif_file: target/reports/spotbugsSarif.json
+      - name: Upload JUnit XML report
+        uses: mikepenz/action-junit-report@v6
+        if: "!cancelled()"
+        with:
+          annotate_only: true
+          detailed_summary: true
+          report_paths: target/reports/surefire/TEST-*.xml

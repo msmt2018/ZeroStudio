@@ -20,7 +20,9 @@ package com.itsaky.androidide.fragments.editor.image
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ImageDecoder
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -83,10 +85,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
+import android.graphics.BitmapFactory
+import android.zero.studio.layouteditor.vectormaster.VectorMasterDrawable
+import androidx.annotation.RequiresApi
 import coil3.ImageLoader
 import coil3.asDrawable
-import coil3.decode.BitmapFactoryDecoder
-import coil3.gif.GifDecoder
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.svg.SvgDecoder
@@ -100,7 +103,6 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
-import android.zero.studio.layouteditor.vectormaster.VectorMasterDrawable
 
 /**
  * 通用图片预览 fragment —— 支持 Android XML vector drawable / SVG / PNG / JPG /
@@ -910,40 +912,51 @@ private suspend fun decodeSvg(ctx: Context, file: File): LoadedImage {
 
 /**
  * 解码位图 (PNG / JPG / WebP / GIF / HEIC / BMP / AVIF / ICO / TIFF ...) ——
- * 走 Coil 3.x 默认 decoder, 异步在 IO 线程. 解码得到 [Drawable] 后渲染到
- * [Bitmap].
+ * 直接用 Android 原生 [BitmapFactory] / [ImageDecoder] 解码, 不依赖 Coil
+ * 3.x 的组件注册机制.
  *
- * **关键**: 必须显式注册 [BitmapFactoryDecoder] / [GifDecoder],
- * 不能依赖 ServiceLoader 自动发现 —— Android 模块在某些
- * 打包配置下 (R8 / 资源合并 / META-INF services 被裁剪) ServiceLoader
- * 会丢, 导致 PNG / JPG 等位图解码直接返回 ErrorResult, 表现为"无法预览".
- * 这与 [decodeSvg] 显式注册 [SvgDecoder] 的防御性做法一致.
+ * **原因**: 之前用 Coil 3.x 的 `ImageLoader.Builder.components { add(
+ * BitmapFactoryDecoder.Factory()) }` 显式注册 decoder, 但 `components { }`
+ * 会替换整个 ComponentRegistry (而非追加), 导致在某些打包配置下
+ * BitmapFactoryDecoder 无法正确解析, PNG / JPG 等常规位图返回 ErrorResult,
+ * 表现为"图片不显示". 改用原生 API 直接解码, 无依赖、无歧义.
  *
- * 注: Coil 3.x 已移除 ImageDecoderDecoder, BitmapFactoryDecoder 在 API 28+
- * 内部自动走 ImageDecoder (支持 HEIC / AVIF / 动图), 低版本 fallback 到
- * BitmapFactory, 无需手动分支.
+ * - API 28+: 用 [ImageDecoder] (支持 HEIC / AVIF / GIF 动图, 从回调取 Bitmap)
+ * - API 26-27: 用 [BitmapFactory] (GIF 仅渲染首帧)
+ *
+ * 注: GIF 动图只渲染首帧, 不播放动画. 这是预览模式的设计限制.
  */
-private suspend fun decodeRaster(ctx: Context, file: File): LoadedImage {
+private fun decodeRaster(ctx: Context, file: File): LoadedImage {
     val mime = guessMimeByExt(file)
-    val loader = ImageLoader.Builder(ctx)
-        .components {
-            // Coil 3.x: BitmapFactoryDecoder 是唯一标准 raster decoder,
-            // API 28+ 内部用 ImageDecoder, 低版本用 BitmapFactory.
-            add(BitmapFactoryDecoder.Factory())
-            // GIF 动图 —— 仅渲染首帧到位图 (drawableToBitmap 静态渲染).
-            add(GifDecoder.Factory())
-        }
-        .build()
-    val req = ImageRequest.Builder(ctx)
-        .data(file)
-        .build()
-    val result = loader.execute(req)
-    if (result !is SuccessResult) {
-        throw IllegalStateException("Failed to decode bitmap: ${result.javaClass.simpleName}")
+    val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        decodeRasterWithImageDecoder(file)
+    } else {
+        BitmapFactory.decodeFile(file.absolutePath)
     }
-    val drawable: Drawable = coilImageToDrawable(result, ctx)
-    val bmp = drawableToBitmap(drawable)
+    if (bmp == null) {
+        throw IllegalStateException("Failed to decode bitmap: ${file.name}")
+    }
     return LoadedImage(bitmap = bmp, mime = mime)
+}
+
+/** API 28+: 用 ImageDecoder 解码位图 (支持 HEIC / AVIF / GIF 首帧). */
+@RequiresApi(Build.VERSION_CODES.P)
+private fun decodeRasterWithImageDecoder(file: File): Bitmap {
+    val source = ImageDecoder.createSource(file)
+    // ImageDecoder.decodeBitmap 的回调签名是 (decoder, info, source) -> Unit,
+    // 必须在 decoder 上调用 setTargetSize / setAllocator.
+    return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+        // 限制最大尺寸, 避免超大图片 OOM (与 Coil 默认行为一致)
+        val maxDim = maxOf(info.size.width, info.size.height)
+        if (maxDim > 4096) {
+            val scale = 4096f / maxDim
+            decoder.setTargetSize(
+                (info.size.width * scale).toInt(),
+                (info.size.height * scale).toInt(),
+            )
+        }
+        decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
+    }
 }
 
 /**

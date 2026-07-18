@@ -1,10 +1,37 @@
+/*
+ *  This file is part of AndroidIDE.
+ *
+ *  AndroidIDE is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  AndroidIDE is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.itsaky.androidide.fragments.git
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.graphics.Typeface
+import android.net.Uri
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.HorizontalScrollView
+import android.widget.ImageButton
+import android.widget.LinearLayout
+import android.widget.PopupMenu
+import android.widget.TextView
 import android.widget.Toast
 import android.zero.studio.view.filetree.interfaces.FileClickListener
 import android.zero.studio.view.filetree.interfaces.FileLongClickListener
@@ -13,19 +40,25 @@ import android.zero.studio.view.filetree.model.Node
 import android.zero.studio.view.filetree.provider.file
 import android.zero.studio.view.filetree.widget.FileTree
 import androidx.core.view.isVisible
+import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import com.catpuppyapp.puppygit.utils.Libgit2Helper
+import com.github.git24j.core.Repository
 import com.itsaky.androidide.R
 import com.itsaky.androidide.activities.editor.EditorHandlerActivity
 import com.itsaky.androidide.databinding.FragmentGitProjectsBinding
 import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
-import com.itsaky.androidide.fragments.git.function.ZeroCloneDialogBottomSheetFragment
 import com.itsaky.androidide.fragments.git.menu.GitBranchPopupManager
+import com.itsaky.androidide.fragments.git.tree.FileTreeGitOps
 import com.itsaky.androidide.fragments.git.tree.ListProjectFilesRequestEvent
 import com.itsaky.androidide.fragments.git.tree.TreeStateManager
-import com.itsaky.androidide.projects.IProjectManager
+import com.itsaky.androidide.preferences.databinding.LayoutDialogTextInputBinding
 import com.itsaky.androidide.preferences.internal.GeneralPreferences
+import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.provider.IDEFileIconProvider
+import com.itsaky.androidide.resources.R as ResR
+import com.itsaky.androidide.utils.DialogUtils
 import com.itsaky.androidide.viewmodel.FileTreeViewModel
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -38,11 +71,15 @@ import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 
 /**
- * Git 项目侧边栏。
+ * Git 项目侧边栏 (文件树 + 顶部 git 操作 toolbar).
+ *
+ * 自包含 fragment, 不依赖任何基类。所有 toolbar 构建、git 分支切换、
+ * 文件树加载、EventBus 监听等逻辑全部内联在本类中。
  *
  * @author android_zero
  */
-class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongClickListener {
+class GitProjectsFragment :
+    Fragment(), FileClickListener, FileLongClickListener {
 
   private var _binding: FragmentGitProjectsBinding? = null
   private val binding
@@ -50,8 +87,8 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
 
   private var fileTreeView: FileTree? = null
   private var loadingJob: Job? = null
-  private var tvCurrentBranch: android.widget.TextView? = null
   private var branchPopupManager: GitBranchPopupManager? = null
+  private var tvBranchName: TextView? = null
 
   private val viewModel: FileTreeViewModel by viewModels({ requireActivity() })
   private var stateManager = TreeStateManager()
@@ -65,9 +102,18 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
     return binding.root
   }
 
+  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    super.onViewCreated(view, savedInstanceState)
+    setupToolbar()
+    view.post { listProjectFiles() }
+    updateCurrentBranchName()
+  }
+
   override fun onStart() {
     super.onStart()
     if (!EventBus.getDefault().isRegistered(this)) EventBus.getDefault().register(this)
+    // 返回文件树 tab 时刷新分支名 (可能在其他 tab 切换了分支)
+    updateCurrentBranchName()
   }
 
   override fun onStop() {
@@ -79,23 +125,87 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
     }
   }
 
-  override fun setupToolbar() {
+  override fun onDestroyView() {
+    loadingJob?.cancel()
+    loadingJob = null
+    fileTreeView = null
+    branchPopupManager?.dismiss()
+    branchPopupManager = null
+    tvBranchName = null
+    findToolbarContainer()?.removeAllViews()
+    _binding = null
+    super.onDestroyView()
+  }
+
+  // ============================================================
+  // Toolbar 构建 (从原 BaseGitPageFragment 迁出并 inline)
+  // ============================================================
+
+  /**
+   * 配置工具栏按钮: 顶部 git 操作 + 文件树操作。
+   *
+   * Git 上下文: 当前分支名 (可点击切换)
+   * 文件树操作: Refresh / Locate / Collapse All / Expand All / Undo / Redo
+   */
+  private fun setupToolbar() {
     val ctx = context ?: return
 
-    // ===== 分组 1: 分支切换 =====
-    val branchView = LayoutInflater.from(ctx).inflate(R.layout.item_git_toolbar_branch, null)
-    tvCurrentBranch = branchView.findViewById(R.id.tv_current_branch)
-    updateCurrentBranchName("main")
-    tvCurrentBranch?.setOnClickListener {
-      if (branchPopupManager == null) {
-        branchPopupManager = GitBranchPopupManager(ctx) { name -> updateCurrentBranchName(name) }
-      }
-      branchPopupManager?.show(it)
-    }
+    // ===== Git 上下文: 当前分支显示 + 快速切换 =====
+    branchPopupManager =
+        GitBranchPopupManager(ctx) { branchName -> switchBranch(branchName) }
+
+    // 当前分支名按钮 (可点击切换分支)
+    val branchView =
+        TextView(ctx).apply {
+          layoutParams =
+              LinearLayout.LayoutParams(
+                  LinearLayout.LayoutParams.WRAP_CONTENT,
+                  resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+              ).apply {
+                val margin = 6.dpToPx()
+                marginStart = margin
+                marginEnd = margin
+              }
+          text = ""
+          // 使用 primary 颜色 (与 toolbar 图标着色方式一致)
+          val typedValue = android.util.TypedValue()
+          ctx.theme.resolveAttribute(
+              ResR.attr.colorPrimary,
+              typedValue,
+              true,
+          )
+          setTextColor(typedValue.data)
+          textSize = 12f
+          setTypeface(typeface, Typeface.BOLD)
+          gravity = Gravity.CENTER_VERTICAL
+          maxLines = 1
+          val outValue = android.util.TypedValue()
+          ctx.theme.resolveAttribute(
+              android.R.attr.selectableItemBackgroundBorderless,
+              outValue,
+              true,
+          )
+          setBackgroundResource(outValue.resourceId)
+          val padding = 6.dpToPx()
+          setPadding(padding, 0, padding, 0)
+          contentDescription = "Switch Branch"
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            tooltipText = "Switch Branch"
+          }
+          setOnClickListener { branchPopupManager?.show(it) }
+        }
+    tvBranchName = branchView
     addToolbarCustomView(branchView)
 
-    // ===== 分组 2: 文件树操作 =====
-    addToolbarAction(R.drawable.ic_refresh_file_24dp, getString(R.string.refresh)) {
+    addToolbarSeparator()
+
+    // ===== Git 操作 kebab 菜单 =====
+    addGitKebabMenu()
+
+    addToolbarSeparator()
+
+    // ===== 文件树操作 =====
+    addToolbarAction(ResR.drawable.ic_refresh_file_24dp, getString(R.string.refresh)) {
       if (GeneralPreferences.treeRememberExpandedState) {
         fileTreeView?.reloadFileTreeSilently()
       } else {
@@ -104,7 +214,7 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
       Toast.makeText(context, "Refreshed silently", Toast.LENGTH_SHORT).show()
     }
 
-    addToolbarAction(R.drawable.ic_target_positioning_24dp, "Locate Current File") {
+    addToolbarAction(ResR.drawable.ic_target_positioning_24dp, "Locate Current File") {
       val activity = context as? EditorHandlerActivity
       val currentFile = activity?.getCurrentEditor()?.file
       if (currentFile != null && currentFile.exists()) {
@@ -115,10 +225,8 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
     }
 
     val btnCollapse =
-        addToolbarAction(R.drawable.ic_chevron_right, "Collapse All") {
-          fileTreeView?.let {
-            it.collapseAll()
-          }
+        addToolbarAction(ResR.drawable.ic_chevron_right, "Collapse All") {
+          fileTreeView?.let { it.collapseAll() }
         }
     btnCollapse.setOnLongClickListener {
       fileTreeView?.let {
@@ -130,33 +238,388 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
       true
     }
 
-    addToolbarAction(R.drawable.ic_chevron_down, "Expand All") {
-      fileTreeView?.let {
-        it.expandAll()
-      }
+    addToolbarAction(ResR.drawable.ic_chevron_down, "Expand All") {
+      fileTreeView?.let { it.expandAll() }
     }
 
-    addToolbarAction(R.drawable.ic_undo, "Undo Node Action") {
+    addToolbarAction(ResR.drawable.ic_undo, "Undo Node Action") {
       fileTreeView?.let { stateManager.undo(it) }
     }
-    addToolbarAction(R.drawable.ic_redo, "Redo Node Action") {
+    addToolbarAction(ResR.drawable.ic_redo, "Redo Node Action") {
       fileTreeView?.let { stateManager.redo(it) }
     }
+  }
 
-    // ===== 分组 3: Clone =====
-    addToolbarAction(R.drawable.ic_git_clone_24dp, getString(R.string.git_clone)) {
-      ZeroCloneDialogBottomSheetFragment.newInstance(repoId = "")
-          .show(childFragmentManager, "GitProjectsCloneBottomSheet")
+  /** 向工具栏添加一个图标按钮。 */
+  private fun addToolbarAction(iconRes: Int, tooltip: String, onClick: () -> Unit): View {
+    val context = requireContext()
+
+    val button =
+        ImageButton(context).apply {
+          layoutParams =
+              LinearLayout.LayoutParams(
+                  resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+                  resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+              )
+          setImageResource(iconRes)
+          val outValue = android.util.TypedValue()
+          context.theme.resolveAttribute(
+              android.R.attr.selectableItemBackgroundBorderless,
+              outValue,
+              true,
+          )
+          setBackgroundResource(outValue.resourceId)
+
+          contentDescription = tooltip
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            tooltipText = tooltip
+          }
+          setOnClickListener { onClick() }
+
+          val padding = resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_padding)
+          setPadding(padding, padding, padding, padding)
+
+          val typedValue = android.util.TypedValue()
+          context.theme.resolveAttribute(
+              ResR.attr.colorOnSurface,
+              typedValue,
+              true,
+          )
+          setColorFilter(typedValue.data)
+        }
+
+    findToolbarContainer()?.addView(button)
+    return button
+  }
+
+  private fun addToolbarSeparator() {
+    val context = requireContext()
+    val separator = View(context).apply {
+      layoutParams =
+          LinearLayout.LayoutParams(
+              1.dpToPx(),
+              resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+          ).apply {
+            val margin = 4.dpToPx()
+            marginStart = margin
+            marginEnd = margin
+          }
+      setBackgroundColor(
+          androidx.core.content.ContextCompat.getColor(context, ResR.color.git_toolbar_separator)
+      )
+    }
+    findToolbarContainer()?.addView(separator)
+  }
+
+  private fun addToolbarSectionLabel(text: String) {
+    val context = requireContext()
+    val label =
+        TextView(context).apply {
+          layoutParams =
+              LinearLayout.LayoutParams(
+                  LinearLayout.LayoutParams.WRAP_CONTENT,
+                  resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+              ).apply {
+                val margin = 8.dpToPx()
+                marginStart = margin
+                marginEnd = margin
+              }
+          setText(text)
+          setTextColor(
+              androidx.core.content.ContextCompat.getColor(context, ResR.color.git_toolbar_label)
+          )
+          textSize = 10f
+          gravity = Gravity.CENTER_VERTICAL
+        }
+    findToolbarContainer()?.addView(label)
+  }
+
+  private fun addToolbarCustomView(view: View) {
+    findToolbarContainer()?.addView(view)
+  }
+
+  // ============================================================
+  // Git 操作 kebab 菜单 (复刻 puppygit ChangeListPageActions)
+  // ============================================================
+
+  /**
+   * 添加 Git 操作的 kebab 菜单按钮 (三点菜单)。
+   *
+   * 菜单项复刻 puppygit `ChangeListPageActions.kt` 的 kebab 菜单:
+   * Stage All / Unstage All / Commit / Fetch / Pull / Push / Force Push /
+   * Status (打开完整 UI) / Log (提交历史) / Branches (分支列表)
+   */
+  private fun addGitKebabMenu() {
+    val ctx = context ?: return
+    val gitBtn =
+        ImageButton(ctx).apply {
+          layoutParams =
+              LinearLayout.LayoutParams(
+                  resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+                  resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_size),
+              )
+          setImageResource(ResR.drawable.ic_git)
+          val outValue = android.util.TypedValue()
+          ctx.theme.resolveAttribute(
+              android.R.attr.selectableItemBackgroundBorderless,
+              outValue,
+              true,
+          )
+          setBackgroundResource(outValue.resourceId)
+          contentDescription = "Git Operations"
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            tooltipText = "Git Operations"
+          }
+          val padding = resources.getDimensionPixelSize(ResR.dimen.git_toolbar_icon_padding)
+          setPadding(padding, padding, padding, padding)
+          val typedValue = android.util.TypedValue()
+          ctx.theme.resolveAttribute(ResR.attr.colorOnSurface, typedValue, true)
+          setColorFilter(typedValue.data)
+        }
+    gitBtn.setOnClickListener { showGitOperationsMenu(gitBtn) }
+    findToolbarContainer()?.addView(gitBtn)
+  }
+
+  /** 弹出 Git 操作下拉菜单。 */
+  private fun showGitOperationsMenu(anchor: View) {
+    val popup = PopupMenu(requireContext(), anchor)
+    popup.menu.apply {
+      // 仓库级操作
+      add(0, 1, 0, getString(R.string.git_action_add) + " (All)").setOnMenuItemClickListener {
+        execGitOp("Stage All") { FileTreeGitOps.stageAll() }
+        true
+      }
+      add(0, 2, 0, getString(R.string.git_action_unstage) + " (All)").setOnMenuItemClickListener {
+        execGitOp("Unstage All") { FileTreeGitOps.unstageAll() }
+        true
+      }
+      add(0, 3, 0, getString(R.string.git_action_commit)).setOnMenuItemClickListener {
+        showCommitDialog()
+        true
+      }
+      addSubMenu(0, 4, 0, "Remote").apply {
+        add(getString(R.string.git_action_fetch)).setOnMenuItemClickListener {
+          execGitOp("Fetch") { FileTreeGitOps.fetch() }
+          true
+        }
+        add(getString(R.string.git_action_pull)).setOnMenuItemClickListener {
+          execGitOp("Pull") { FileTreeGitOps.pull() }
+          true
+        }
+        add(getString(R.string.git_action_push)).setOnMenuItemClickListener {
+          execGitOp("Push") { FileTreeGitOps.push(force = false) }
+          true
+        }
+        add(getString(R.string.git_action_force_push)).setOnMenuItemClickListener {
+          confirmAndExec(
+              "Force Push",
+              getString(R.string.git_msg_force_push_confirm),
+          ) { FileTreeGitOps.push(force = true) }
+          true
+        }
+      }
+      addSubMenu(0, 5, 0, "Branch").apply {
+        add(getString(R.string.git_action_branches_list)).setOnMenuItemClickListener {
+          branchPopupManager?.show(anchor)
+          true
+        }
+      }
+      add(0, 6, 0, getString(R.string.git_action_status)).setOnMenuItemClickListener {
+        GitScreenOpener.openGitUi(requireActivity())
+        true
+      }
+      add(0, 7, 0, getString(R.string.git_action_log)).setOnMenuItemClickListener {
+        GitScreenOpener.openGitUi(requireActivity())
+        true
+      }
+      add(0, 8, 0, getString(R.string.git_action_open_full_git_ui)).setOnMenuItemClickListener {
+        GitScreenOpener.openGitUi(requireActivity())
+        true
+      }
+    }
+    popup.show()
+  }
+
+  /** 弹出 commit 消息输入对话框, 确认后执行 commit。 */
+  private fun showCommitDialog() {
+    val activity = requireActivity()
+    val binding = LayoutDialogTextInputBinding.inflate(LayoutInflater.from(activity))
+    binding.name.editText?.hint = getString(R.string.git_msg_commit_message_hint)
+    binding.name.editText?.setText("")
+
+    val builder = DialogUtils.newMaterialDialogBuilder(activity)
+    builder.setTitle(R.string.git_msg_commit_message_title)
+        .setView(binding.root)
+        .setNegativeButton(android.R.string.cancel, null)
+        .setPositiveButton(R.string.git_action_commit) { d, _ ->
+          d.dismiss()
+          val msg = binding.name.editText?.text?.toString().orEmpty().trim()
+          if (msg.isEmpty()) {
+            Toast.makeText(activity, R.string.git_msg_commit_message_hint, Toast.LENGTH_SHORT).show()
+            return@setPositiveButton
+          }
+          execGitOp("Commit") { FileTreeGitOps.commit(msg) }
+        }
+        .show()
+  }
+
+  /**
+   * 在 IO 线程执行 git 操作, 主线程显示 toast 反馈。
+   * @param opName 操作名称 (用于 toast)
+   * @param block 返回 [FileTreeGitOps.GitOpResult] 的阻塞操作
+   */
+  private fun execGitOp(opName: String, block: () -> FileTreeGitOps.GitOpResult<*>) {
+    val ctx = context ?: return
+    Toast.makeText(ctx, "$opName...", Toast.LENGTH_SHORT).show()
+    CoroutineScope(Dispatchers.IO).launch {
+      val result = runCatching { block() }
+      withContext(Dispatchers.Main) {
+        if (!isAdded) return@withContext
+        result.onSuccess { ret ->
+          when (ret) {
+            is FileTreeGitOps.GitOpResult.Ok ->
+                Toast.makeText(ctx, "$opName succeeded", Toast.LENGTH_SHORT).show()
+            is FileTreeGitOps.GitOpResult.Err ->
+                Toast.makeText(ctx, "$opName failed: ${ret.msg}", Toast.LENGTH_LONG).show()
+          }
+        }
+        result.onFailure { e ->
+          Toast.makeText(ctx, "$opName failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        }
+      }
     }
   }
 
-  private fun updateCurrentBranchName(name: String) {
-    tvCurrentBranch?.text = name
+  /** 弹出确认对话框, 确认后在 IO 线程执行 git 操作。 */
+  private fun confirmAndExec(opName: String, message: String, block: () -> FileTreeGitOps.GitOpResult<*>) {
+    val activity = requireActivity()
+    val builder = DialogUtils.newMaterialDialogBuilder(activity)
+    builder.setTitle(opName)
+        .setMessage(message)
+        .setNegativeButton(android.R.string.cancel, null)
+        .setPositiveButton(android.R.string.ok) { d, _ ->
+          d.dismiss()
+          execGitOp(opName, block)
+        }
+        .show()
   }
 
-  override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-    super.onViewCreated(view, savedInstanceState)
-    view.post { listProjectFiles() }
+  private fun Int.dpToPx(): Int {
+    return (this * resources.displayMetrics.density).toInt()
+  }
+
+  private fun findToolbarContainer(): LinearLayout? {
+    val rootView = view ?: return null
+    val scrollView = rootView.findViewById<HorizontalScrollView>(R.id.git_mini_toolbar_scroll)
+    return scrollView?.findViewById(R.id.git_mini_toolbar_container)
+  }
+
+  /**
+   * 解析当前打开的工程目录绝对路径。
+   *
+   * 优先从 workspace 拿 (最常见的已打开工程路径); 拿不到再回退到 projectDir。
+   * 两者都是 nullable, 可以用干净 null chain。
+   *
+   * @return 工程目录绝对路径; 当前没有打开工程时返回 `null`
+   */
+  private fun resolveWorkspaceDirPath(): String? {
+    val projectManager = IProjectManager.getInstance()
+    return projectManager.getWorkspace()?.getProjectDir()?.path?.takeIf { it.isNotBlank() }
+        ?: projectManager.projectDirPath?.takeIf { it.isNotBlank() }
+  }
+
+  /** 打开外部链接 (浏览器), 失败时显示 toast。 */
+  private fun openExternalLink(url: String, errorTip: String = "No browser available") {
+    try {
+      startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: ActivityNotFoundException) {
+      Toast.makeText(requireContext(), errorTip, Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  /** 打开 web 链接, 没有则弹 toast。 */
+  private fun openWebLinkOrToast(url: String?, emptyMsg: String = "No link available") {
+    if (url.isNullOrBlank()) {
+      Toast.makeText(requireContext(), emptyMsg, Toast.LENGTH_SHORT).show()
+      return
+    }
+    openExternalLink(url)
+  }
+
+  // ============================================================
+  // 文件树逻辑
+  // ============================================================
+
+  /** 加载当前分支名并更新 toolbar 显示. */
+  private fun updateCurrentBranchName() {
+    val projectDir = resolveWorkspaceDirPath() ?: run {
+      tvBranchName?.text = ""
+      return
+    }
+    CoroutineScope(Dispatchers.IO).launch {
+      val branchName =
+          runCatching {
+                Repository.open(projectDir).use { repo ->
+                  if (repo.headDetached()) {
+                    "HEAD (detached)"
+                  } else {
+                    repo.head()?.shorthand()?.removePrefix("refs/heads/") ?: ""
+                  }
+                }
+              }
+              .getOrDefault("")
+              .ifBlank { "" }
+      withContext(Dispatchers.Main) {
+        if (isAdded && view != null) {
+          tvBranchName?.text = if (branchName.isNotEmpty()) branchName else ""
+        }
+      }
+    }
+  }
+
+  /**
+   * 快速切换分支: 执行 checkout 后刷新文件树。
+   *
+   * 复刻 puppygit 的调用方式: 先尝试本地分支, 失败则尝试远程分支。
+   */
+  private fun switchBranch(branchName: String) {
+    val projectDir = resolveWorkspaceDirPath() ?: return
+    CoroutineScope(Dispatchers.IO).launch {
+      val ret =
+          runCatching {
+            Repository.open(projectDir).use { repo ->
+              // 先尝试本地分支 checkout
+              var checkoutRet = Libgit2Helper.checkoutLocalBranchThenUpdateHead(repo, branchName)
+              if (checkoutRet.hasError()) {
+                // 本地分支失败, 尝试远程分支 (会变成 detached HEAD)
+                checkoutRet = Libgit2Helper.checkoutRemoteBranchThenDetachHead(repo, branchName)
+              }
+              if (checkoutRet.hasError()) {
+                throw RuntimeException(checkoutRet.msg)
+              }
+            }
+          }
+      withContext(Dispatchers.Main) {
+        ret.onSuccess {
+          Toast.makeText(context, "Switched to $branchName", Toast.LENGTH_SHORT).show()
+          updateCurrentBranchName()
+          // 刷新文件树
+          if (GeneralPreferences.treeRememberExpandedState) {
+            fileTreeView?.reloadFileTreeSilently()
+          } else {
+            listProjectFiles()
+          }
+        }
+        ret.onFailure {
+          Toast.makeText(
+                  context,
+                  it.localizedMessage ?: "Failed to switch branch",
+                  Toast.LENGTH_LONG,
+              )
+              .show()
+        }
+      }
+    }
   }
 
   private fun listProjectFiles() {
@@ -247,17 +710,5 @@ class GitProjectsFragment : BaseGitPageFragment(), FileClickListener, FileLongCl
     } else {
       listProjectFiles()
     }
-  }
-
-  override fun onDestroyView() {
-    loadingJob?.cancel()
-    loadingJob = null
-    tvCurrentBranch?.setOnClickListener(null)
-    tvCurrentBranch = null
-    branchPopupManager?.dismiss()
-    branchPopupManager = null
-    fileTreeView = null
-    _binding = null
-    super.onDestroyView()
   }
 }

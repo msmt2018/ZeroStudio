@@ -1,0 +1,42 @@
+{
+  "types": ["html", "htm", "xhtml"],
+  "styles": {
+    "tag": {
+      "fg": "@xml.tag",
+      "bold": true
+    },
+    "tag.error": {
+      "fg": "@text.selected",
+      "bold": true
+    },
+    "constant": {
+      "fg": "@constant",
+      "bold": true
+    },
+    "attribute": {
+      "fg": "@attribute"
+    },
+    "string": {
+      "fg": "@string",
+      "maybeHexColor": true
+    },
+    "comment": {
+      "fg": "@comment",
+      "italic": true
+    },
+    "text": {
+      "fg": "@onSurface",
+      "maybeHexColor": true
+    },
+    "keyword": {
+      "fg": "@keyword"
+    },
+    "operator": {
+      "fg": "@operator"
+    },
+    "punctuation.bracket": {
+      "fg": "@xml.tag",
+      "bold": true
+    }
+  }
+}

@@ -1,9 +1,12 @@
 package com.itsaky.androidide.fragments.main
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Xml
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.content.res.AppCompatResources
@@ -14,25 +17,37 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -47,21 +62,33 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.documentfile.provider.DocumentFile
 import com.itsaky.androidide.resources.R
 import com.itsaky.androidide.utils.Environment
 import com.itsaky.androidide.utils.GradleFileParser
+import com.itsaky.androidide.utils.ProjectHistory
+import com.itsaky.androidide.utils.RecentProjectsManager
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.w3c.dom.Element
@@ -85,6 +112,14 @@ fun ProjectManagerPage(onOpenProject: (String) -> Unit) {
   var clipboardState by remember { mutableStateOf<ClipboardProject?>(null) }
   var selectedTabIndexState by rememberSaveable(context) { mutableIntStateOf(restoredState.selectedIndex) }
   var menuProjectPath by remember { mutableStateOf<String?>(null) }
+  val coroutineScope = rememberCoroutineScope()
+  // refreshTrigger 用于在删除/重命名/移动操作完成后强制重新扫描当前 tab 的项目列表。
+  var refreshTrigger by remember { mutableIntStateOf(0) }
+  // 长按上下文菜单操作的对话框状态
+  var deleteState by remember { mutableStateOf<DeleteDialogState>(DeleteDialogState.Idle) }
+  var renameTargetPath by remember { mutableStateOf<String?>(null) }
+  var propertiesTargetPath by remember { mutableStateOf<String?>(null) }
+  var moveSourcePath by remember { mutableStateOf<String?>(null) }
 
   val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
     uri ?: return@rememberLauncherForActivityResult
@@ -100,6 +135,30 @@ fun ProjectManagerPage(onOpenProject: (String) -> Unit) {
     }
   }
 
+  // 移动操作的目标文件夹选择器。选择目标后把 moveSourcePath 指向的文件/文件夹
+  // 移动到目标目录下，然后刷新当前 tab 列表。
+  val movePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+    uri ?: return@rememberLauncherForActivityResult
+    val src = moveSourcePath
+    moveSourcePath = null
+    if (src == null) return@rememberLauncherForActivityResult
+    val dstPath = uriToPath(uri) ?: return@rememberLauncherForActivityResult
+    coroutineScope.launch {
+      val success =
+        withContext(Dispatchers.IO) {
+          val srcFile = File(src)
+          val dstFile = File(dstPath, srcFile.name)
+          if (srcFile.exists() && !dstFile.exists()) srcFile.renameTo(dstFile) else false
+        }
+      if (success) {
+        Toast.makeText(context, "Moved successfully", Toast.LENGTH_SHORT).show()
+      } else {
+        Toast.makeText(context, "Unable to move file", Toast.LENGTH_SHORT).show()
+      }
+      refreshTrigger++
+    }
+  }
+
   // 把 safeSelected 改成 derivedStateOf, 让它能正确跟踪 tabState.size 和
   // selectedTabIndexState 的变化, 避免 ScrollableTabRow 内部用旧 size 算
   // tabPositions 时拿到越界的 selectedTabIndex 触发 IndexOutOfBoundsException。
@@ -112,7 +171,7 @@ fun ProjectManagerPage(onOpenProject: (String) -> Unit) {
   if (safeSelected != selectedTabIndexState) selectedTabIndexState = safeSelected
   val selectedTab = tabState.getOrNull(safeSelected)
 
-  LaunchedEffect(selectedTab?.stableKey()) {
+  LaunchedEffect(selectedTab?.stableKey(), refreshTrigger) {
     val tab = selectedTab ?: return@LaunchedEffect
     val key = tab.stableKey()
     loadingState[key] = true
@@ -128,13 +187,26 @@ fun ProjectManagerPage(onOpenProject: (String) -> Unit) {
         key(tabState.size) {
         ScrollableTabRow(selectedTabIndex = safeSelected, modifier = Modifier.fillMaxWidth().padding(end = 30.dp)) {
           tabState.forEachIndexed { index, tab ->
+            val tabSelected = safeSelected == index
             Tab(
-              selected = safeSelected == index,
+              selected = tabSelected,
               onClick = {
                 selectedTabIndexState = index
                 persistTabs(context, tabState, selectedTabIndexState)
               },
-              text = { Text(tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+              text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(
+                    Icons.Filled.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = if (tabSelected) MaterialTheme.colorScheme.primary
+                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+              },
             )
           }
         }
@@ -187,11 +259,123 @@ fun ProjectManagerPage(onOpenProject: (String) -> Unit) {
             }
           }
           DropdownMenu(expanded = menuProjectPath == projectPath, onDismissRequest = { menuProjectPath = null }) {
-            DropdownMenuItem(text = { Text("Cut") }, onClick = { clipboardState = ClipboardProject(projectPath); menuProjectPath = null })
+            DropdownMenuItem(
+              text = { Text("Cut") },
+              onClick = { clipboardState = ClipboardProject(projectPath); menuProjectPath = null },
+              leadingIcon = { Icon(Icons.Filled.ContentCut, null) },
+            )
+            DropdownMenuItem(
+              text = { Text(stringResource(R.string.copy_path)) },
+              onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("path", projectPath))
+                Toast.makeText(context, R.string.copied, Toast.LENGTH_SHORT).show()
+                menuProjectPath = null
+              },
+              leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+            )
+            DropdownMenuItem(
+              text = { Text(stringResource(R.string.rename_file)) },
+              onClick = { renameTargetPath = projectPath; menuProjectPath = null },
+              leadingIcon = { Icon(Icons.Filled.Edit, null) },
+            )
+            DropdownMenuItem(
+              text = { Text("Move") },
+              onClick = { moveSourcePath = projectPath; menuProjectPath = null; movePicker.launch(null) },
+              leadingIcon = { Icon(Icons.Filled.DriveFileMove, null) },
+            )
+            DropdownMenuItem(
+              text = { Text(stringResource(R.string.delete_file)) },
+              onClick = {
+                deleteState = DeleteDialogState.Confirming(
+                  ProjectHistory(name = File(projectPath).name, path = projectPath)
+                )
+                menuProjectPath = null
+              },
+              leadingIcon = { Icon(Icons.Filled.Delete, null) },
+            )
+            DropdownMenuItem(
+              text = { Text("Properties") },
+              onClick = { propertiesTargetPath = projectPath; menuProjectPath = null },
+              leadingIcon = { Icon(Icons.Filled.Info, null) },
+            )
           }
         }
       }
     }
+  }
+
+  // ---- 长按上下文菜单的对话框: 删除 / 重命名 / 属性 ----
+
+  // 删除流程: 确认 -> 进行中 -> 结果 (复用 ProjectActionDialogs 中的对话框)
+  when (val state = deleteState) {
+    DeleteDialogState.Idle -> {}
+    is DeleteDialogState.Confirming -> {
+      DeleteProjectConfirmDialog(
+        project = state.project,
+        onConfirm = {
+          val project = state.project
+          deleteState = DeleteDialogState.InProgress(project.path)
+          coroutineScope.launch {
+            val deleteError =
+              withContext(Dispatchers.IO) {
+                try {
+                  val file = File(project.path)
+                  // 同时清理最近项目历史记录, 避免残留无效条目
+                  RecentProjectsManager.removeProjectAsync(context, project.path)
+                  if (file.exists()) file.deleteRecursively()
+                  null
+                } catch (e: Exception) {
+                  e.message ?: e::class.java.simpleName
+                }
+              }
+            refreshTrigger++
+            deleteState = DeleteDialogState.Done(success = deleteError == null, projectName = project.name)
+          }
+        },
+        onDismiss = { deleteState = DeleteDialogState.Idle },
+      )
+    }
+    is DeleteDialogState.InProgress -> {
+      DeleteProjectProgressDialog(projectPath = state.projectPath, error = state.error)
+    }
+    is DeleteDialogState.Done -> {
+      DeleteProjectResultDialog(
+        success = state.success,
+        projectName = state.projectName,
+        onDismiss = { deleteState = DeleteDialogState.Idle },
+      )
+    }
+  }
+
+  // 重命名对话框
+  renameTargetPath?.let { path ->
+    RenameDialog(
+      path = path,
+      onConfirm = { newName ->
+        coroutineScope.launch {
+          val file = File(path)
+          val success =
+            withContext(Dispatchers.IO) {
+              val target = File(file.parentFile, newName)
+              file.renameTo(target)
+            }
+          renameTargetPath = null
+          if (success) {
+            Toast.makeText(context, R.string.renamed, Toast.LENGTH_SHORT).show()
+          } else {
+            Toast.makeText(context, R.string.rename_failed, Toast.LENGTH_SHORT).show()
+          }
+          refreshTrigger++
+        }
+      },
+      onDismiss = { renameTargetPath = null },
+    )
+  }
+
+  // 属性面板对话框
+  propertiesTargetPath?.let { path ->
+    PropertiesDialog(path = path, onDismiss = { propertiesTargetPath = null })
   }
 }
 
@@ -336,4 +520,153 @@ private fun uriToPath(uri: Uri): String? {
   val volume = parts[0]
   val relPath = parts[1]
   return if (volume.equals("primary", ignoreCase = true)) "/storage/emulated/0/$relPath" else "/storage/$volume/$relPath"
+}
+
+/**
+ * 重命名对话框。预填当前文件/文件夹名, 用户输入新名称后确认。
+ * 仅当新名称非空且与原名称不同时, 确认按钮才可点击。
+ */
+@Composable
+private fun RenameDialog(
+    path: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+  val file = File(path)
+  var newName by remember { mutableStateOf(file.name) }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text(stringResource(R.string.rename_file), fontWeight = FontWeight.Bold) },
+      text = {
+        Column {
+          Text(stringResource(R.string.msg_rename_file), fontSize = 13.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(8.dp))
+          OutlinedTextField(
+              value = newName,
+              onValueChange = { newName = it },
+              singleLine = true,
+              label = { Text(stringResource(R.string.new_name)) },
+              modifier = Modifier.fillMaxWidth(),
+          )
+        }
+      },
+      confirmButton = {
+        TextButton(
+            onClick = { onConfirm(newName.trim()) },
+            enabled = newName.isNotBlank() && newName != file.name,
+        ) { Text(stringResource(R.string.ok)) }
+      },
+      dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_button)) } },
+  )
+}
+
+/**
+ * 属性面板对话框。展示文件/文件夹的名称、路径、类型、大小、修改时间、权限等信息。
+ * 目录大小和子项数量在 IO 线程异步计算, 避免阻塞 UI。
+ */
+@Composable
+private fun PropertiesDialog(
+    path: String,
+    onDismiss: () -> Unit,
+) {
+  val file = File(path)
+  var properties by remember(path) { mutableStateOf<FileProperties?>(null) }
+
+  LaunchedEffect(path) {
+    properties = withContext(Dispatchers.IO) { computeFileProperties(file) }
+  }
+
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("Properties", fontWeight = FontWeight.Bold) },
+      text = {
+        val props = properties
+        if (props == null) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            Spacer(modifier = Modifier.size(12.dp))
+            Text("Loading…", fontSize = 13.sp)
+          }
+        } else {
+          Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            PropertyRow("Name", props.name)
+            PropertyRow("Path", props.path)
+            PropertyRow("Type", if (props.isDirectory) "Folder" else "File")
+            PropertyRow("Size", formatFileSize(props.size))
+            if (props.isDirectory) {
+              PropertyRow("Items", props.itemCount.toString())
+            }
+            PropertyRow("Modified", props.lastModified)
+            PropertyRow("Readable", props.readable.toString())
+            PropertyRow("Writable", props.writable.toString())
+            PropertyRow("Hidden", props.hidden.toString())
+          }
+        }
+      },
+      confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
+  )
+}
+
+/** 属性面板中的一行: 左侧标签 (灰色) + 右侧值 (等宽字体)。 */
+@Composable
+private fun PropertyRow(label: String, value: String) {
+  Row(modifier = Modifier.fillMaxWidth()) {
+    Text(
+        label,
+        fontSize = 12.sp,
+        color = Color.Gray,
+        modifier = Modifier.weight(0.25f),
+    )
+    Text(
+        value,
+        fontSize = 12.sp,
+        fontFamily = FontFamily.Monospace,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(0.75f),
+    )
+  }
+}
+
+/** 文件/文件夹属性信息。 */
+private data class FileProperties(
+    val name: String,
+    val path: String,
+    val isDirectory: Boolean,
+    val size: Long,
+    val itemCount: Int,
+    val lastModified: String,
+    val readable: Boolean,
+    val writable: Boolean,
+    val hidden: Boolean,
+)
+
+/** 在 IO 线程计算文件/文件夹属性。目录大小需要递归遍历, 可能较慢。 */
+private fun computeFileProperties(file: File): FileProperties {
+  val isDir = file.isDirectory
+  val size = if (isDir) file.walkTopDown().map { it.length() }.sum() else file.length()
+  val itemCount = if (isDir) file.listFiles()?.count() ?: 0 else 0
+  val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+  return FileProperties(
+      name = file.name,
+      path = file.absolutePath,
+      isDirectory = isDir,
+      size = size,
+      itemCount = itemCount,
+      lastModified = dateFormat.format(Date(file.lastModified())),
+      readable = file.canRead(),
+      writable = file.canWrite(),
+      hidden = file.isHidden,
+  )
+}
+
+/** 将字节数格式化为人类可读的文件大小 (B / KB / MB / GB)。 */
+private fun formatFileSize(bytes: Long): String {
+  if (bytes < 1024) return "$bytes B"
+  val kb = bytes / 1024.0
+  if (kb < 1024) return String.format(Locale.US, "%.1f KB", kb)
+  val mb = kb / 1024.0
+  if (mb < 1024) return String.format(Locale.US, "%.1f MB", mb)
+  val gb = mb / 1024.0
+  return String.format(Locale.US, "%.1f GB", gb)
 }

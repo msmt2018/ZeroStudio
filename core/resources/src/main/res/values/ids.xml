@@ -160,6 +160,10 @@
      <item
           name="dbg_action_goto_exception"
           type="id" />
+     <!-- 按行号添加断点 (弹出输入行号 -> 选择断点类型 -> 应用) -->
+     <item
+          name="dbg_action_add_bp_by_line"
+          type="id" />
 
 </resources>
 

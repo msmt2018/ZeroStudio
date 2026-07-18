@@ -23,7 +23,12 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.util.Log
+import android.webkit.SslErrorHandler
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -744,6 +749,30 @@ private fun DevToolsPanel(
                                     android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                                 // DevTools 前端自身也需要开调试 (调试嵌套)
                                 WebView.setWebContentsDebuggingEnabled(true)
+                                // 设置 WebViewClient: 拦截外部导航 + 放行 SSL +
+                                // 记录加载错误, 否则 DevTools 前端 URL 可能被
+                                // 系统浏览器抢走或因 SSL 错误白屏.
+                                webViewClient = object : WebViewClient() {
+                                    override fun onReceivedSslError(
+                                        view: WebView?,
+                                        handler: SslErrorHandler?,
+                                        error: android.net.http.SslError?,
+                                    ) {
+                                        // DevTools 是本地调试工具, 放行自签证书
+                                        handler?.proceed()
+                                    }
+
+                                    override fun onReceivedError(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                        error: WebResourceError?,
+                                    ) {
+                                        Log.e(
+                                            "DevToolsPanel",
+                                            "DevTools frontend load error: ${error?.description} (code=${error?.errorCode}) for ${request?.url}",
+                                        )
+                                    }
+                                }
                                 loadUrl(frontendUrl)
                             }
                         },

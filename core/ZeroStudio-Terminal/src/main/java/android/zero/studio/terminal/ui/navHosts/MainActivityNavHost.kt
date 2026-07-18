@@ -10,13 +10,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import android.zero.studio.termux.settings.Settings
-import android.zero.studio.termux.ui.activities.terminal.MainActivity
 import android.zero.studio.termux.ui.animations.NavigationAnimationTransitions
 import android.zero.studio.termux.ui.routes.MainActivityRoutes
 import android.zero.studio.termux.ui.screens.downloader.Downloader
@@ -57,14 +57,17 @@ fun showStatusBar(show: Boolean,window: Window){
 
 
 @Composable
-fun UpdateStatusBar(mainActivityActivity: MainActivity,show: Boolean = true){
+fun UpdateStatusBar(show: Boolean = true){
+    val view = LocalView.current
     LaunchedEffect(show) {
-        showStatusBar(show = show, window = mainActivityActivity.window)
+        (view.context as? Activity)?.window?.let { window ->
+            showStatusBar(show = show, window = window)
+        }
     }
 }
 
 @Composable
-fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostController,mainActivity: MainActivity) {
+fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostController) {
     NavHost(
         navController = navController,
         startDestination = MainActivityRoutes.MainScreen.route,
@@ -78,19 +81,19 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
             if (Rootfs.isFilesDownloaded()){
                 val config = LocalConfiguration.current
                 if (Configuration.ORIENTATION_LANDSCAPE == config.orientation){
-                    UpdateStatusBar(mainActivity, show = horizontal_statusBar.value)
+                    UpdateStatusBar(show = horizontal_statusBar.value)
                 }else{
-                    UpdateStatusBar(mainActivity, show = showStatusBar.value)
+                    UpdateStatusBar(show = showStatusBar.value)
                 }
 
-                TerminalScreen(mainActivityActivity = mainActivity, navController = navController)
+                TerminalScreen(navController = navController)
             }else{
-                Downloader(mainActivity = mainActivity, navController = navController)
+                Downloader(navController = navController)
             }
         }
         composable(MainActivityRoutes.Settings.route) {
-            UpdateStatusBar(mainActivity,show = true)
-            Settings(navController = navController, mainActivity = mainActivity)
+            UpdateStatusBar(show = true)
+            Settings(navController = navController)
         }
     }
 }

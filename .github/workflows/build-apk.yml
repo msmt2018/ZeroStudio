@@ -68,17 +68,23 @@ jobs:
       - name: Install the specified NDK and Android SDK CMake (3.22.1)
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1" "cmake;3.31.1"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |
           sudo pip3 install cmake==3.31.1 --break-system-packages
           CMAKE_DATA_DIR=$(python3 -c "import cmake, os; print(os.path.join(os.path.dirname(cmake.__file__), 'data'))")
           echo "cmake.dir=$CMAKE_DATA_DIR" >> local.properties
-          
+
           cmake --version
           protoc --version
           python3 --version
+
+      - name: Build puppygit native libs (libcrypto, libssl, libssh2, libgit2)
+        run: |
+          bash core/git/lib_build_scripts/build_native_libs.sh
+          echo "=== Built .so files ==="
+          find core/git/src/main/jniLibs -name "*.so" -type f | sort
 
       - name: Grant execution permissions to the Gradle wrapper
         run: chmod +x ./gradlew
