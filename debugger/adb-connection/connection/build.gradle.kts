@@ -26,9 +26,10 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.com.google.devtools.ksp)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
-    // kapt: Hilt 注解处理器使用 kapt 而非 ksp, 规避 Dagger #3965 类加载器冲突
+    // 注意: 本模块不应用 KSP 插件, 避免与 Hilt 插件在同一模块共存时触发
+    // Dagger #3965 classloader 冲突 (composite build 环境下两者 classloader 不一致)。
+    // Hilt 和 Room 编译器均使用 kapt 处理。
     id("kotlin-kapt")
 }
 
@@ -93,9 +94,12 @@ android {
 }
 
 tasks.withType<KotlinCompile>().configureEach {
-    ksp {
-        arg("room.schemaLocation", "$projectDir/schemas")
-        arg("room.incremental", "true")
+    // Room kapt 参数 (因使用 kapt 而非 ksp, 通过 kapt 传递参数)
+    kapt {
+        arguments {
+            arg("room.schemaLocation", "$projectDir/schemas")
+            arg("room.incremental", "true")
+        }
     }
 
     compilerOptions {
@@ -149,10 +153,10 @@ dependencies {
     // Material Design (View 体系, 部分 Compose 组件回退用)
     implementation(libs.google.material)
 
-    // Room 数据库
+    // Room 数据库 (使用 kapt 而非 ksp, 规避 Hilt + KSP classloader 冲突)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.paging)
-    ksp(libs.androidx.room.compiler)
+    kapt(libs.androidx.room.compiler)
 
     // Hilt 依赖注入 (使用 kapt 而非 ksp, 规避 Dagger #3965 类加载器冲突)
     implementation(libs.hilt.android)

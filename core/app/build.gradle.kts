@@ -16,8 +16,10 @@ plugins {
   alias(libs.plugins.firebase.crashlytics)
   id("org.jetbrains.kotlin.plugin.compose")
   // Hilt 依赖注入 (设备连接管理 connection 模块需要)
+  // 注意: 本模块不应用 KSP 插件, 避免与 Hilt 插件在同一模块共存时触发
+  // Dagger #3965 classloader 冲突 (composite build 环境下两者 classloader 不一致)。
+  // Room 编译器改用 kapt 处理。
   alias(libs.plugins.hilt)
-  alias(libs.plugins.com.google.devtools.ksp)
   alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
 }
 
@@ -350,8 +352,9 @@ dependencies {
   kapt(libs.hilt.compiler)
 
   // Room (connection 模块的 WifiAdbDeviceDao/BookmarkDao 在 app 进程内运行)
+  // 使用 kapt 而非 ksp, 因为本模块未应用 KSP 插件 (规避 Hilt + KSP classloader 冲突)
   implementation(libs.androidx.room.ktx)
-  ksp(libs.androidx.room.compiler)
+  kapt(libs.androidx.room.compiler)
 
   // QR 码生成 (WiFi ADB Pairing 二维码 UI)
   implementation(libs.nayuki.qrcode)
