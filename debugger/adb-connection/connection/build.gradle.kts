@@ -40,7 +40,6 @@ android {
 
     defaultConfig {
         minSdk = 28
-        targetSdk = 36
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -94,16 +93,18 @@ android {
 }
 
 tasks.withType<KotlinCompile>().configureEach {
-    // Room kapt 参数 (因使用 kapt 而非 ksp, 通过 kapt 传递参数)
-    kapt {
-        arguments {
-            arg("room.schemaLocation", "$projectDir/schemas")
-            arg("room.incremental", "true")
-        }
-    }
-
     compilerOptions {
         jvmTarget = JvmTarget.JVM_17
+    }
+}
+
+// Room kapt 参数 (因使用 kapt 而非 ksp, 通过 kapt 传递参数)
+// 注意: 必须放在顶层, 不能放在 tasks.withType 块内,
+// 否则 kapt{} 扩展会遮蔽 dependencies{} 块中的 kapt() 依赖函数导致编译错误
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+        arg("room.incremental", "true")
     }
 }
 
@@ -129,7 +130,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.work.ktx)
-    implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
