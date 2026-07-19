@@ -108,6 +108,12 @@ tasks.withType<KotlinCompile>().configureEach {
 // Room schema 导出功能因此省略 (非必需, 仅用于 schema 版本迁移记录)
 
 dependencies {
+    // 强制约束: 防止传递依赖将 core-ktx 升级到 1.19.0 (需要 SDK 37)
+    // 项目使用 AGP 8.13.2 + compileSdk 36, 不支持 SDK 37
+    constraints {
+        implementation("androidx.core:core-ktx:1.16.0")
+        implementation("androidx.core:core:1.16.0")
+    }
     // 项目内 ADB 协议库
     implementation(projects.debugger.adbConnection.adblib)
     implementation(projects.debugger.adbConnection.libadb)
@@ -198,7 +204,6 @@ dependencies {
     implementation(libs.common.hiddenApiBypass)
 
     // 形状指示器组件 (复刻参考工程的 UI 风格)
-    implementation(libs.shapeindicators)
 
     // Coil 图片加载 (Compose)
     implementation(libs.io.coil.compose)

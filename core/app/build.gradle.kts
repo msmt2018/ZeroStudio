@@ -137,6 +137,11 @@ configurations.all {
 }
 
 dependencies {
+    // 强制约束: 防止传递依赖将 core-ktx 升级到 1.19.0 (需要 SDK 37)
+    constraints {
+        implementation("androidx.core:core-ktx:1.16.0")
+        implementation("androidx.core:core:1.16.0")
+    }
 
   // Lottie Animation SDK
   implementation(libs.common.com.airbnb.android.lottie)
@@ -359,7 +364,6 @@ dependencies {
   // QR 码生成 (WiFi ADB Pairing 二维码 UI)
   implementation(libs.nayuki.qrcode)
   // 形状指示器组件
-  implementation(libs.shapeindicators)
   // Lottie Compose 动画
   implementation(libs.lottie.compose)
   // 加密 SharedPreferences (ADB 配对凭据)

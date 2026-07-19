@@ -177,8 +177,9 @@ sun-security-android = "1.1"
 hilt = "2.51.1"
 hiltExt = "1.2.0"
 nayukiQR = "1.8.0"
-shapeindicators = "2.1.1"
-aboutlibraries = "15.0.3"
+# shapeindicators 已移除: 所有版本 (1.0.0~2.1.1) 均要求 SDK 37, 与 AGP 8.13 不兼容
+# shapeindicators = "2.1.1"
+aboutlibraries = "11.3.0"  # 降级: 15.x 需要 AGP 9 + SDK 37, 11.3.0 兼容 SDK 35
 securityCrypto = "1.1.0"
 shizuku = "13.1.0"
 
@@ -603,7 +604,8 @@ hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltExt
 # QR 码生成: io.nayuki:qrcodegen (WiFi ADB 配对二维码)
 nayuki-qrcode = { group = "io.nayuki", name = "qrcodegen", version.ref = "nayukiQR" }
 # 形状指示器组件
-shapeindicators = { group = "io.github.dp-hridayan", name = "shapeindicators", version.ref = "shapeindicators" }
+# shapeindicators 已移除 (所有版本要求 SDK 37)
+# shapeindicators = { group = "io.github.dp-hridayan", name = "shapeindicators", version.ref = "shapeindicators" }
 # 开源协议清单
 aboutlibraries-core = { module = "com.mikepenz:aboutlibraries-core", version.ref = "aboutlibraries" }
 # Lottie Compose 动画
