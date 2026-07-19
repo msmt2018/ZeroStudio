@@ -7,7 +7,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        minSdk = 28
+        minSdk = 26  // 与 app 模块一致 (app minSdk=26), 避免清单合并冲突
     }
 
     testOptions {
