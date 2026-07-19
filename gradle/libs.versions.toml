@@ -173,13 +173,21 @@ sun-security-android = "1.1"
 # - aboutlibraries: com.mikepenz 开源协议清单
 # - securityCrypto: androidx.security:security-crypto 加密 SharedPreferences
 # - shizuku: dev.rikka.shizuku 系统级 API 桥接 (Local ADB 通道)
-# Hilt 2.60+ 升级 Kotlin 到 2.3.21, 其 kotlinx-metadata-jvm 支持 Kotlin metadata 2.2.0
-# (Hilt 2.59.x 的 kotlinx-metadata-jvm 只支持到 2.1.0, 与 Kotlin 2.2.20 不兼容)
-# Hilt 2.59.1+ 的 release notes 提到 "Hilt Gradle plugin 要求 AGP 9.0.0+", 但实测
-# Hilt 2.59.0 + AGP 8.13.2 未触发该检查 (仅 Kotlin metadata 版本错误), 升级到 2.60.1
-# 同样未在 CI 中触发 AGP 版本错误。
-hilt = "2.60.1"
+# Hilt 2.60.1 的 Gradle 插件强制要求 AGP 9.0.0+, 与本项目 AGP 8.13.2 不兼容,
+# 因此保持 Hilt 2.59 (兼容 AGP 8.x)。
+# 但 Hilt 2.59 自带的 kotlinx-metadata-jvm 只支持到 Kotlin metadata 2.1.0,
+# 与本项目 Kotlin 2.2.20 (生成 metadata 2.2.0) 不兼容, 会触发:
+#   error: [Hilt] Provided Metadata instance has version 2.2.0, while maximum supported version is 2.1.0
+# 解决方案: 利用 Dagger 2.57+ 已将 kotlin-metadata-jvm unshaded 的特性,
+# 在根 build.gradle.kts 的 subprojects { configurations.all { resolutionStrategy { force(...) } } }
+# 中显式强制 org.jetbrains.kotlin:kotlin-metadata-jvm 到 2.2.20 (或更高),
+# 让 Hilt 编译器读取 Kotlin 2.2.20 生成的 metadata 2.2.0。
+# 参考: https://vanniktech.github.io/gradle-maven-publish-plugin/ (Dagger 2.57 unshaded)
+hilt = "2.59"
 hiltExt = "1.2.0"
+# 显式强制 kotlin-metadata-jvm 版本 (Hilt 2.59 unshaded 后可作为普通依赖覆盖)
+# 必须与项目 Kotlin 版本 (2.2.20) 对齐, 才能读取 metadata 2.2.0
+kotlinMetadataJvm = "2.2.20"
 nayukiQR = "1.8.0"
 # shapeindicators 已移除: 所有版本 (1.0.0~2.1.1) 均要求 SDK 37, 与 AGP 8.13 不兼容
 # shapeindicators = "2.1.1"
