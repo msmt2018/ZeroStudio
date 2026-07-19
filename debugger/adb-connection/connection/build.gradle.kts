@@ -40,7 +40,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 26  # 与 app 模块一致 (app minSdk=26), 避免清单合并冲突
+        minSdk = 26  // 与 app 模块一致 (app minSdk=26), 避免清单合并冲突
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
