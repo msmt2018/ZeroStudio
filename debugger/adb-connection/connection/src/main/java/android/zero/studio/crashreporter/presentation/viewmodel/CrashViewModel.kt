@@ -8,7 +8,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import android.zero.studio.crashreporter.domain.model.CrashReport
 import android.zero.studio.crashreporter.domain.repository.CrashRepository
-import jakarta.inject.Inject
+import javax.inject.Inject
 import kotlinx.coroutines.launch
 
 @Stable
