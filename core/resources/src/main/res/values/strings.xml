@@ -165,7 +165,7 @@
      <string name="view_apm_panel">APM Panel</string>
      <string name="title_installation_failed">Installation failed</string>
      <string name="msg_picked_isnt_dir">Picked file is not a directory!</string>
-     <string name="please_wait">Please wait for a moment …</string>
+     <string name="please_wait">Please wait for a moment …</string>
 
      <!-- Project Builder -->
      <string name="title_unsupported_device">Device Not Supported</string>
@@ -184,7 +184,7 @@
 
      <!-- Project -->
      <string name="title_first_build">First Build</string>
-     <string name="msg_first_build">This is the first time build after you installed ZeroStudio. First build usually takes time as Gradle downloads all dependencies and plugins. This process may take about 10–15 minutes. But this totally depends on your network connection.\n\nPlease be patient …</string>
+     <string name="msg_first_build">This is the first time build after you installed ZeroStudio. First build usually takes time as Gradle downloads all dependencies and plugins. This process may take about 10–15 minutes. But this totally depends on your network connection.\n\nPlease be patient …</string>
      <string name="create_project">Create project</string>
      <string name="minimum_sdk">Minimum SDK</string>
      <string name="new_project">New project</string>
@@ -223,7 +223,7 @@
      <string name="msg_search_modules">Search in modules</string>
      <string name="msg_no_modules">No modules found in project</string>
      <string name="hint_find_project_filter">Filter file extensions (optional)</string>
-     <string name="msg_find_project_filter">Separated by '|'</string>
+     <string name="msg_find_project_filter">Separated by \'|\'</string>
      <string name="msg_empty_search_query">Please enter text</string>
      <string name="msg_select_search_modules">Select modules to search</string>
      <string name="msg_searching_project">Finding in project, please wait…</string>
@@ -240,7 +240,7 @@
      <string name="msg_layout_file_exists">Layout file already exists!</string>
      <string name="msg_invalid_name">Invalid Name!</string>
      <string name="text_create">Create</string>
-     <string name="msg_can_contain_slashes">If the path contains File separator ('/'), then the required (parent) directories will be created if they don\'t exist.</string>
+     <string name="msg_can_contain_slashes">If the path contains File separator (\'/\'), then the required (parent) directories will be created if they don\'t exist.</string>
      <string name="folder_name">Folder Name</string>
      <string name="file_name">File Name</string>
      <string name="new_name">New name</string>
@@ -311,8 +311,6 @@
      <string name="idepref_debugger_shizuku_sub_path_summary">Auto picks the first working strategy. Lock to one only for advanced use.</string>
      <string name="idepref_debugger_shizuku_manager_title">打开 Shizuku 管理器</string>
      <string name="idepref_debugger_shizuku_manager_summary">查看 Shizuku 状态, 启动 server, 授权 IDE, 配对无线 ADB 调试。</string>
-     <string name="idepref_debugger_device_connection_title">设备连接管理</string>
-     <string name="idepref_debugger_device_connection_summary">Shizuku / Root ADB 连接通道状态检测与切换 (底部弹窗)。</string>
      <string name="idepref_debugger_root_su_bin_title">su binary path</string>
      <string name="idepref_debugger_innet_socks_host_title">SOCKS5 host</string>
      <string name="idepref_debugger_innet_socks_port_title">SOCKS5 port</string>
@@ -332,7 +330,7 @@
      <string name="title_confirm_project_open">Confirm project opening</string>
      <string name="msg_confirm_project_open">Ask before opening last opened project.</string>
      <string name="title_default_shell">Use system shell in terminal</string>
-     <string name="msg_default_shell">If checked, '/system/bin/sh' will be used in terminal.</string>
+     <string name="msg_default_shell">If checked, \'/system/bin/sh\' will be used in terminal.</string>
      <string name="title_general">General</string>
      <string name="title_tab_size">Tab size</string>
      <string name="msg_tab_size">Specify number of spaces for TAB</string>
@@ -422,7 +420,7 @@
      <string name="msg_output_text_extraction_failed">Failed to get text from editor</string>
      <string name="err_invalid_data_by_intent">Intent returned invalid data</string>
      <string name="msg_select_from_primary_storage">Select a directory from primary storage</string>
-     <string name="err_authority_not_allowed">Authority '%s' not allowed</string>
+     <string name="err_authority_not_allowed">Authority \'%s\' not allowed</string>
      <string name="idepref_useIcu_title">Use ICU lib</string>
      <string name="idepref_useIcu_summary">Use ICU library to use retrive word edges for double-tap and long-press word selection.</string>
 
@@ -431,7 +429,7 @@
      <string name="msg_drawer_for_files">Open the left drawer for @@files@@.</string>
      <string name="msg_swipe_for_output">Swipe up for @@build output@@.</string>
      <string name="idepref_editor_useSoftTabs_title">Use soft tab</string>
-     <string name="idepref_editor_useSoftTabs_summary">Choose whether to use spaces instead of tab character (\t).</string>
+     <string name="idepref_editor_useSoftTabs_summary">Choose whether to use spaces instead of tab character (\\t).</string>
      <string name="btn_donate">Chat Ai</string>
      <string name="btn_docs">Documentation</string>
      <string name="btn_close">Close</string>
@@ -483,7 +481,7 @@
      <string name="xml_formatting_options">XML formatting options</string>
      <string name="xml_formatting_options_summary">Configure the XML formatter</string>
      <string name="idepref_customFont_title">Use custom font</string>
-     <string name="idepref_customFont_summary">If enabled, the file at "/data/data/com.itsaky.ZeroStudio/files/home/.ZeroStudio/ui/font.ttf" will be used as Editor font.</string>
+     <string name="idepref_customFont_summary">If enabled, the file at \"/data/data/com.itsaky.ZeroStudio/files/home/.ZeroStudio/ui/font.ttf\" will be used as Editor font.</string>
      <string name="msg_installing_apk">Installing APK...</string>
      <string name="msg_action_open_application">Do you want to open the application?</string>
 
@@ -496,14 +494,14 @@
      <string name="msg_empty_package">Package name is empty</string>
      <string name="msg_package_is_not_valid">Package name is not a valid</string>
      <string name="msg_package_is_to_long">Package name is to long</string>
-     <string name="msg_package_not_valid_char_1">The character '_' cannot be the first character in a package segment</string>
+     <string name="msg_package_not_valid_char_1">The character \'_\' cannot be the first character in a package segment</string>
      <string name="msg_package_not_use_digit_first">A digit cannot be the first character in a package segment</string>
      <string name="msg_package_not_valid_char_2">The character "%1$s" is not allowed in Android application package names</string>
-     <string name="msg_package_mus_have_dot">The package must have at least one '.' separator</string>
+     <string name="msg_package_mus_have_dot">The package must have at least one \'.\' separator</string>
 
      <string name="action_import_classes">Import class(es)</string>
      <string name="action_generate_setters_getters">Generate setters/getters</string>
-     <string name="action_add_throws">Add 'throws'</string>
+     <string name="action_add_throws">Add \'throws\'</string>
      <string name="action_comment_line">Comment line</string>
      <string name="action_create_missing_method">Create missing method</string>
      <string name="action_convert_to_block">Convert to block</string>
@@ -512,7 +510,7 @@
      <string name="action_remove_class">Remove class</string>
      <string name="action_remove_method">Remove method</string>
      <string name="action_remove_unused_throws">Remove unused throws</string>
-     <string name="action_suppress_unchecked_warning">Suppress 'unchecked' warning</string>
+     <string name="action_suppress_unchecked_warning">Suppress \'unchecked\' warning</string>
      <string name="action_uncomment_line">Uncomment line</string>
      <string name="action_convert_to_statement">Convert to statement</string>
      <string name="msg_select_fields">Select fields</string>
@@ -541,7 +539,7 @@
      <string name="hint_search_tasks">Search tasks…</string>
      <string name="msg_err_select_tasks">Please select tasks to run</string>
      <string name="title_confirmation">Confirmation</string>
-     <string name="msg_tasks_to_run">The following tasks will be run, in order. Click the 'Run' button again to confirm.\n\n%1$s</string>
+     <string name="msg_tasks_to_run">The following tasks will be run, in order. Click the \'Run\' button again to confirm.\n\n%1$s</string>
      <string name="msg_loading_tasks">Loading tasks...</string>
 
      <string
@@ -1033,7 +1031,7 @@
   <string name="od_sdk_log_installing_git">» Installing Git…</string>
   <string name="od_sdk_log_installing_openssh">» Installing OpenSSH…</string>
   <string name="od_sdk_log_installing_openjdk_task">Installing OpenJDK %1$s…</string>
-  <string name="od_sdk_log_installing_pkg_openjdk">» Installing package: 'openjdk-%1$s'</string>
+  <string name="od_sdk_log_installing_pkg_openjdk">» Installing package: \'openjdk-%1$s\'</string>
   <string name="od_sdk_log_jdk_installed">» JDK %1$s has been installed.</string>
   <string name="od_sdk_log_updating_properties">» Updating ide-environment.properties…</string>
   <string name="od_sdk_log_java_home">» JAVA_HOME=%1$s</string>
@@ -1048,6 +1046,11 @@
   <string name="od_sdk_log_file_copied">» File copied. Installing tar &amp; dpkg…</string>
   <string name="od_sdk_log_executing_offline">Executing offline installation…</string>
   <string name="od_sdk_log_error_with_msg">ERR: %1$s</string>
-  <string name="title_open_device_connection">设备连接</string>
-  <string name="msg_device_connection_not_available">当前环境不可用, 无法打开设备连接管理</string>
+
+    <!-- Strings added by connection module PR -->
+    <string name="idepref_debugger_device_connection_summary">Shizuku / Root ADB 连接通道状态检测与切换 (底部弹窗)。</string>
+    <string name="idepref_debugger_device_connection_title">设备连接管理</string>
+    <string name="msg_device_connection_not_available">当前环境不可用, 无法打开设备连接管理</string>
+    <string name="title_open_device_connection">设备连接</string>
+
 </resources>
