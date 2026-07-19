@@ -1,27 +1,31 @@
 plugins {
-	id("com.android.library")
+    id("com.android.library")
 }
 
 android {
-    namespace 'rikka.shizuku.provider'
+    namespace = "rikka.shizuku.provider"
+
     defaultConfig {
-        consumerProguardFiles "consumer-rules.pro"
+        consumerProguardFiles("consumer-rules.pro")
     }
+
     buildFeatures {
-        buildConfig false
+        buildConfig = false
     }
+
     buildTypes {
         release {
-            minifyEnabled false
+            isMinifyEnabled = false
         }
     }
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 }
 
 dependencies {
-	implementation(projects.modules.shizuku.api)
-	implementation(libs.androidx.annotation)
+    implementation(projects.modules.shizuku.api)
+    implementation(libs.androidx.annotation)
 }
