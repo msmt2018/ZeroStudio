@@ -173,19 +173,21 @@ sun-security-android = "1.1"
 # - aboutlibraries: com.mikepenz 开源协议清单
 # - securityCrypto: androidx.security:security-crypto 加密 SharedPreferences
 # - shizuku: dev.rikka.shizuku 系统级 API 桥接 (Local ADB 通道)
-# Hilt 2.60.1 的 Gradle 插件强制要求 AGP 9.0.0+, 与本项目 AGP 8.13.2 不兼容,
-# 因此保持 Hilt 2.59 (兼容 AGP 8.x)。
-# 但 Hilt 2.59 自带的 kotlinx-metadata-jvm 只支持到 Kotlin metadata 2.1.0,
-# 与本项目 Kotlin 2.2.20 (生成 metadata 2.2.0) 不兼容, 会触发:
-#   error: [Hilt] Provided Metadata instance has version 2.2.0, while maximum supported version is 2.1.0
-# 解决方案: 利用 Dagger 2.57+ 已将 kotlin-metadata-jvm unshaded 的特性,
-# 在根 build.gradle.kts 的 subprojects { configurations.all { resolutionStrategy { force(...) } } }
-# 中显式强制 org.jetbrains.kotlin:kotlin-metadata-jvm 到 2.2.20 (或更高),
-# 让 Hilt 编译器读取 Kotlin 2.2.20 生成的 metadata 2.2.0。
-# 参考: https://vanniktech.github.io/gradle-maven-publish-plugin/ (Dagger 2.57 unshaded)
-hilt = "2.59"
+# Hilt 版本选择 (满足本项目 AGP 8.13.2 + Kotlin 2.2.20 双重约束):
+# - Hilt 2.60.1: Gradle 插件强制要求 AGP 9.0.0+ (启动期 check 直接报错)
+# - Hilt 2.59:    Gradle 插件使用了 AGP 9.0.0-beta03 引入的 Incubating API
+#                 `ScopedArtifact.POST_COMPILATION_CLASSES`, 在 AGP 8.x 上不存在,
+#                 配置阶段抛 ClassNotFoundException:
+#                   com/android/build/api/artifact/ScopedArtifact$POST_COMPILATION_CLASSES
+# - Hilt 2.58:    Gradle 插件未引用 POST_COMPILATION_CLASSES (经二进制分析确认 count=0),
+#                 兼容 AGP 8.x; 且 hilt-compiler POM 已将 kotlin-metadata-jvm unshaded
+#                 并声明为 2.2.20 (正好匹配项目 Kotlin 版本, 无需 force 即可读取
+#                 metadata 2.2.0)。这是同时满足两项约束的最佳版本。
+# 根 build.gradle.kts 中的 resolutionStrategy.force(kotlin-metadata-jvm:2.2.20)
+# 作为双重保险保留 (防止传递依赖把版本拉偏)。
+hilt = "2.58"
 hiltExt = "1.2.0"
-# 显式强制 kotlin-metadata-jvm 版本 (Hilt 2.59 unshaded 后可作为普通依赖覆盖)
+# 显式强制 kotlin-metadata-jvm 版本 (Dagger 2.57+ unshaded 后可作为普通依赖覆盖)
 # 必须与项目 Kotlin 版本 (2.2.20) 对齐, 才能读取 metadata 2.2.0
 kotlinMetadataJvm = "2.2.20"
 nayukiQR = "1.8.0"
