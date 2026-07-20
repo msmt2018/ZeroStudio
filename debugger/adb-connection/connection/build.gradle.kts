@@ -35,7 +35,7 @@ plugins {
 }
 
 android {
-    namespace = "android.zero.studio.connection"
+    namespace = "android.zero.studio"
 
     compileSdk = 36
 
