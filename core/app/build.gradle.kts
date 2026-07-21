@@ -15,6 +15,12 @@ plugins {
   alias(libs.plugins.google.services)
   alias(libs.plugins.firebase.crashlytics)
   id("org.jetbrains.kotlin.plugin.compose")
+  // Hilt 依赖注入 (设备连接管理 connection 模块需要)
+  // 注意: 本模块不应用 KSP 插件, 避免与 Hilt 插件在同一模块共存时触发
+  // Dagger #3965 classloader 冲突 (composite build 环境下两者 classloader 不一致)。
+  // Room 编译器改用 kapt 处理。
+  alias(libs.plugins.hilt)
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
 }
 
 apply { plugin(AndroidIDEAssetsPlugin::class.java) }
@@ -131,6 +137,11 @@ configurations.all {
 }
 
 dependencies {
+    // 强制约束: 防止传递依赖将 core-ktx 升级到 1.19.0 (需要 SDK 37)
+    constraints {
+        implementation("androidx.core:core-ktx:1.16.0")
+        implementation("androidx.core:core:1.16.0")
+    }
 
   // Lottie Animation SDK
   implementation(libs.common.com.airbnb.android.lottie)
@@ -311,6 +322,54 @@ dependencies {
   // Shizuku 客户端 API (子项目 3 断点调试连接层用)
   // 不依赖 Shizuku server / manager, 只用 rikka.shizuku.Shizuku 静态 API
   implementation(projects.modules.shizuku.api)
+  // ShizukuProvider: ContentProvider 接收 Shizuku server 下发的 binder,
+  //   没有它 Shizuku.pingBinder() 永远返回 false (设备连接管理 BottomSheet 用)
+  implementation(projects.modules.shizuku.provider)
+
+  // libsu: Root 通道探测/执行用, 跟 debugger/android-adb-shell 参考工程一致。
+  // - Shell.getShell().isRoot 检测 root 可用性
+  // - Shell.cmd(...).exec() / .submit() 执行 root 命令
+  // - Shell.Builder.setCommands() 支持自定义 su 路径 (DebugConnectionPreferences.rootSuBin)
+  implementation(libs.libsu.core)
+
+  // ADB 连接管理模块 (复刻自 debugger/android-adb-shell 参考工程)
+  // - adblib: Cameron Gutman 的 ADB 协议 Java 实现 (OTG/USB ADB 用)
+  // - libadb: Muntashirakon 的 ADB 库 (WiFi/TLS ADB 用, 含 mDNS + SPAKE2 配对)
+  // - fastbootlib: Fastboot 协议 Kotlin 实现
+  // - connection: 完整复刻 app/shell+core 源码, 提供 AdbConnectionManager/Repositories
+  //   /ViewModels/Services 等真正实现 (Clean Architecture + Hilt + Room)
+  // 设备连接管理 BottomSheet 通过这些模块实现 Local+WiFi+OTG+Fastboot 四种连接方式
+  implementation(projects.debugger.adbConnection.adblib)
+  implementation(projects.debugger.adbConnection.libadb)
+  implementation(projects.debugger.adbConnection.fastbootlib)
+  implementation(projects.debugger.adbConnection.connection)
+
+  // JmDNS —— WiFi ADB mDNS 服务发现 (_adb-tls-connect._tcp / _adb-tls-pairing._tcp)
+  implementation(libs.jmdns)
+
+  // Hilt 依赖注入 (设备连接管理 connection 模块需要 @HiltAndroidApp + @HiltViewModel)
+  // 使用 kapt 而非 ksp 处理 Hilt 注解, 规避 Dagger #3965 类加载器冲突
+  // (Hilt 插件与 KSP 插件在不同作用域声明导致 classloader 不一致)
+  implementation(libs.hilt.android)
+  add("kapt", libs.hilt.android.compiler)
+  implementation(libs.hilt.navigation.compose)
+  implementation(libs.hilt.work)
+  add("kapt", libs.hilt.compiler)
+
+  // Room (connection 模块的 WifiAdbDeviceDao/BookmarkDao 在 app 进程内运行)
+  // 使用 kapt 而非 ksp, 因为本模块未应用 KSP 插件 (规避 Hilt + KSP classloader 冲突)
+  implementation(libs.androidx.room.ktx)
+  add("kapt", libs.androidx.room.compiler)
+
+  // QR 码生成 (WiFi ADB Pairing 二维码 UI)
+  implementation(libs.nayuki.qrcode)
+  // 形状指示器组件
+  // Lottie Compose 动画
+  implementation(libs.lottie.compose)
+  // 加密 SharedPreferences (ADB 配对凭据)
+  implementation(libs.androidx.security.crypto)
+  // Ktor CIO client
+  implementation(libs.io.ktor.client.cio)
 
   coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")

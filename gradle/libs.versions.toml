@@ -153,6 +153,50 @@ antlr4 = "4.13.1"
 # ANR watchdog
 anrwatchdog = "1.4.0"
 
+# Root shell (libsu) —— 设备连接管理 BottomSheet 的 Root 通道探测/执行用,
+# 跟 debugger/android-adb-shell 参考工程保持一致 (6.0.0)。
+libsu = "6.0.0"
+
+# ADB 连接管理 —— libadb 模块需要的加密/配对依赖
+# - bcprov-jdk15to18: BouncyCastle, TLS 加密用
+# - spake2-android: SPAKE2 配对协议 (WiFi ADB Pairing)
+# - sun-security-android: sun.security 替代实现 (libadb 需要)
+bcprov-jdk15to18 = "1.85"
+spake2-android = "-SNAPSHOT"
+sun-security-android = "1.1"
+
+# ADB 连接管理 —— connection 模块需要的依赖 (复刻自 debugger/android-adb-shell 参考工程)
+# - hilt: 依赖注入 (com.google.dagger.hilt.android)
+# - hiltExt: androidx.hilt 扩展 (hilt-work / hilt-navigation-compose / hilt-compiler)
+# - nayukiQR: io.nayuki:qrcodegen QR 码生成 (WiFi ADB Pairing 二维码)
+# - shapeindicators: io.github.dp-hridayan:shapeindicators 形状指示器组件
+# - aboutlibraries: com.mikepenz 开源协议清单
+# - securityCrypto: androidx.security:security-crypto 加密 SharedPreferences
+# - shizuku: dev.rikka.shizuku 系统级 API 桥接 (Local ADB 通道)
+# Hilt 版本选择 (满足本项目 AGP 8.13.2 + Kotlin 2.2.20 双重约束):
+# - Hilt 2.60.1: Gradle 插件强制要求 AGP 9.0.0+ (启动期 check 直接报错)
+# - Hilt 2.59:    Gradle 插件使用了 AGP 9.0.0-beta03 引入的 Incubating API
+#                 `ScopedArtifact.POST_COMPILATION_CLASSES`, 在 AGP 8.x 上不存在,
+#                 配置阶段抛 ClassNotFoundException:
+#                   com/android/build/api/artifact/ScopedArtifact$POST_COMPILATION_CLASSES
+# - Hilt 2.58:    Gradle 插件未引用 POST_COMPILATION_CLASSES (经二进制分析确认 count=0),
+#                 兼容 AGP 8.x; 且 hilt-compiler POM 已将 kotlin-metadata-jvm unshaded
+#                 并声明为 2.2.20 (正好匹配项目 Kotlin 版本, 无需 force 即可读取
+#                 metadata 2.2.0)。这是同时满足两项约束的最佳版本。
+# 根 build.gradle.kts 中的 resolutionStrategy.force(kotlin-metadata-jvm:2.2.20)
+# 作为双重保险保留 (防止传递依赖把版本拉偏)。
+hilt = "2.58"
+hiltExt = "1.2.0"
+# 显式强制 kotlin-metadata-jvm 版本 (Dagger 2.57+ unshaded 后可作为普通依赖覆盖)
+# 必须与项目 Kotlin 版本 (2.2.20) 对齐, 才能读取 metadata 2.2.0
+kotlinMetadataJvm = "2.2.20"
+nayukiQR = "1.8.0"
+# shapeindicators 已移除: 所有版本 (1.0.0~2.1.1) 均要求 SDK 37, 与 AGP 8.13 不兼容
+# shapeindicators = "2.1.1"
+aboutlibraries = "11.3.0"  # 降级: 15.x 需要 AGP 9 + SDK 37, 11.3.0 兼容 SDK 35
+securityCrypto = "1.1.0"
+shizuku = "13.1.0"
+
 # root/build.gradle.kts > plugins || Classpaths
 maven-publish-plugin = "0.29.0"
 
@@ -550,6 +594,45 @@ floatingx-compose = { module = "io.github.petterpx:floatingx-compose", version.r
 huge-icons = { group = "com.github.rikkahub", name = "hugeicons-compose", version.ref = "huge-icons" }
 com-github-fwcd-ktfmt = { module = "com.github.fwcd.ktfmt:ktfmt", version = "b5d31d1" }
 anrwatchdog = { module = "com.github.anrwatchdog:anrwatchdog", version.ref = "anrwatchdog" }
+# libsu: com.topjohnwu 的 root shell 库, Java 包名 com.topjohnwu.superuser (历史遗留)
+# - Shell.setDefaultBuilder() 配置全局 Builder (FLAG_REDIRECT_STDERR / setCommands(suBin))
+# - Shell.getShell().isRoot 检测 root
+# - Shell.cmd(...).exec() / .submit() 执行 root 命令
+libsu-core = { module = "com.github.topjohnwu.libsu:core", version.ref = "libsu" }
+
+# ADB 连接管理 —— libadb 模块加密/配对依赖
+# - bcprov-jdk15to18: BouncyCastle TLS 加密
+# - spake2-android: SPAKE2 配对协议 (com.github.Mahmud0808.spake2-java)
+# - sun-security-android: sun.security 替代实现 (com.github.MuntashirAkon)
+bcprov-jdk15to18 = { module = "org.bouncycastle:bcprov-jdk15to18", version.ref = "bcprov-jdk15to18" }
+spake2-android = { module = "com.github.Mahmud0808.spake2-java:spake2-android", version.ref = "spake2-android" }
+sun-security-android = { module = "com.github.MuntashirAkon:sun-security-android", version.ref = "sun-security-android" }
+
+# ADB 连接管理 —— connection 模块依赖 (复刻自 debugger/android-adb-shell 参考工程)
+# Hilt: 依赖注入框架
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltExt" }
+hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hiltExt" }
+hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltExt" }
+# QR 码生成: io.nayuki:qrcodegen (WiFi ADB 配对二维码)
+nayuki-qrcode = { group = "io.nayuki", name = "qrcodegen", version.ref = "nayukiQR" }
+# 形状指示器组件
+# shapeindicators 已移除 (所有版本要求 SDK 37)
+# shapeindicators = { group = "io.github.dp-hridayan", name = "shapeindicators", version.ref = "shapeindicators" }
+# 开源协议清单
+aboutlibraries-core = { module = "com.mikepenz:aboutlibraries-core", version.ref = "aboutlibraries" }
+# Lottie Compose 动画
+lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "lottie-animation" }
+# 加密 SharedPreferences (用于存储 ADB 配对凭据)
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+# Compose Animation (BOM 之外的显式版本)
+androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
+# Ktor CIO client (mDNS discovery 心跳/HTTP 用)
+io-ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "io-ktor" }
+# Shizuku 系统级 API 桥接 (Local ADB 通道)
+shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
+shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
 
 
 [bundles]
@@ -601,7 +684,7 @@ io-insert-koin = [
 ]
 
 [plugins]
-# android ， androidx , Google 相关
+# android ，androidx , Google 相关
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 android-test = { id = "com.android.test", version.ref = "agp" }
@@ -626,6 +709,11 @@ org-jetbrains-kotlin-plugin-serialization = { id = "org.jetbrains.kotlin.plugin.
 
 # github
 com-github-jk1-tcdeps = { id = "com.github.jk1.tcdeps", version = "1.2" }
+
+# Hilt 依赖注入插件 (设备连接管理 connection 模块用)
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+# AboutLibraries 开源协议清单插件
+aboutlibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutlibraries" }
 
 # other
 maven-publish = { id = "com.vanniktech.maven.publish.base", version.ref = "maven-publish-plugin" }

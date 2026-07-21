@@ -1,0 +1,178 @@
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+
+package android.zero.studio.commandexamples.presentation.component.bottomsheet
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import android.zero.studio.R
+import android.zero.studio.commandexamples.presentation.component.row.Labels
+import android.zero.studio.commandexamples.presentation.viewmodel.CommandExamplesViewModel
+import android.zero.studio.core.presentation.components.card.CustomCard
+import android.zero.studio.core.presentation.components.haptic.withHaptic
+import android.zero.studio.core.presentation.components.search.CustomSearchBar
+import android.zero.studio.core.presentation.components.text.AutoResizeableText
+import android.zero.studio.core.presentation.theme.CardCornerShape.getRoundedShape
+import android.zero.studio.core.presentation.theme.CustomCardShape
+
+@Composable
+fun CommandsFilterBottomSheet(
+    modifier: Modifier = Modifier,
+    onDismiss: () -> Unit,
+    commandExamplesViewModel: CommandExamplesViewModel = hiltViewModel()
+) {
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
+    val lazyListState = rememberLazyListState()
+    val states by commandExamplesViewModel.states.collectAsState()
+    val searchedLabels by commandExamplesViewModel.searchedLabels.collectAsState()
+    val filteredLabels by commandExamplesViewModel.filteredLabels.collectAsState()
+
+    ModalBottomSheet(
+        modifier = modifier,
+        sheetState = sheetState,
+        onDismissRequest = onDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            AutoResizeableText(
+                text = stringResource(R.string.filter_by_labels),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            if (filteredLabels.isNotEmpty()) {
+                Labels(
+                    modifier = Modifier.fillMaxWidth(),
+                    labels = filteredLabels,
+                    showCrossIcon = true,
+                    crossIconOnClick = { label ->
+                        commandExamplesViewModel.toggleFilteredLabels(label = label)
+                    }
+                )
+            }
+
+            CustomSearchBar(
+                modifier = Modifier.fillMaxWidth(),
+                value = states.labelField.fieldValue,
+                hint = stringResource(R.string.search_labels_here),
+                onValueChange = { commandExamplesViewModel.onLabelFieldTextChange(it) },
+                trailingIcon = {
+                    if (states.labelField.fieldValue.text.isNotEmpty()) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_clear),
+                            contentDescription = null,
+                            modifier = Modifier.clickable(
+                                enabled = true,
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                                onClick = withHaptic {
+                                    commandExamplesViewModel.onLabelFieldTextChange(TextFieldValue(""))
+                                }
+                            ))
+                    }
+                }
+            )
+
+            LazyColumn(
+                state = lazyListState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 240.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+            ) {
+                itemsIndexed(searchedLabels) { index, label ->
+
+                    val shape = getRoundedShape(index, searchedLabels.size)
+
+                    val selected = label in filteredLabels
+
+                    val finalShape = if (selected) {
+                        CustomCardShape(50)
+                    } else {
+                        shape
+                    }
+
+                    val containerColor =
+                        if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLowest
+
+                    val contentColor =
+                        if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+
+                    CustomCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 1.dp),
+                        shape = finalShape,
+                        colors = CardDefaults.cardColors(
+                            containerColor = containerColor,
+                            contentColor = contentColor
+                        ),
+                        onClick = withHaptic {
+                            commandExamplesViewModel.toggleFilteredLabels(label)
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 15.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(15.dp)
+                        ) {
+                            Text(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                text = label,
+                                style = MaterialTheme.typography.bodyMediumEmphasized,
+                            )
+
+                            if (selected) Icon(
+                                painter = painterResource(R.drawable.ic_check),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

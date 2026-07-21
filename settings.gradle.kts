@@ -158,6 +158,24 @@ include(
 
     ":debugger:Breakpoint-debugger:library",
 
+    // ADB 连接管理模块 (复刻自 debugger/android-adb-shell 参考工程的 adblib/libadb/fastbootlib)
+    // - adblib: Cameron Gutman 的 ADB 协议 Java 实现 (OTG/USB ADB 用)
+    // - libadb: Muntashirakon 的 ADB 库 (WiFi/TLS ADB 用, 含 mDNS + SPAKE2 配对)
+    // - fastbootlib: Fastboot 协议 Kotlin 实现
+    // - connection: 完整复刻 android-adb-shell/app 的 shell+core 源码, 包含
+    //   AdbConnectionManager/WifiAdbRepositoryImpl/OtgRepositoryImpl/FastbootRepositoryImpl
+    //   /ShellViewModel/WifiAdbViewModel/OtgViewModel/FastbootViewModel 等真正实现
+    //   Clean Architecture + Hilt + Room + JmDNS + Shizuku
+    // 设备连接管理 BottomSheet 通过这些模块实现 Local+WiFi+OTG+Fastboot 四种连接方式
+    ":debugger:adb-connection:adblib",
+    ":debugger:adb-connection:libadb",
+    ":debugger:adb-connection:fastbootlib",
+    ":debugger:adb-connection:connection",
+    // settings-dsl 模块 (复刻自 debugger/android-adb-shell 参考工程)
+    // 提供 Kotlin DSL 风格的设置页构建器 (switchItem/clickableItem/radioGroupItem/
+    // buttonGroupItem/settingsPage 等), 被 connection 模块的 SettingsProvider.kt 引用。
+    ":debugger:android-adb-shell:settings-dsl",
+
     ":editor:api",
     ":editor:impl",
     ":editor:lexers",
@@ -254,11 +272,13 @@ include(
     ":modules:web-preview",
     ":modules:zero-onboarding-guide",
     // Shizuku 客户端 API: 子项目 3 断点调试连接层用
-    // (只依赖 api 模块, 不依赖 manager / server 等独立 app 模块;
-    //  api 内部依赖 :modules:shizuku:aidl 和 :modules:shizuku:shared)
+    // (api 内部依赖 :modules:shizuku:aidl 和 :modules:shizuku:shared)
+    // provider: ShizukuProvider ContentProvider, 接收 Shizuku server 下发的 binder,
+    //   没有 provider 注册则 Shizuku.pingBinder() 永远 false (设备连接管理 BottomSheet 用)
     ":modules:shizuku:aidl",
     ":modules:shizuku:shared",
     ":modules:shizuku:api",
+    ":modules:shizuku:provider",
 
 )
 

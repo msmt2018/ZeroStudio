@@ -1046,4 +1046,11 @@
   <string name="od_sdk_log_file_copied">» File copied. Installing tar &amp; dpkg…</string>
   <string name="od_sdk_log_executing_offline">Executing offline installation…</string>
   <string name="od_sdk_log_error_with_msg">ERR: %1$s</string>
+
+    <!-- Strings added by connection module PR -->
+    <string name="idepref_debugger_device_connection_summary">Shizuku / Root ADB 连接通道状态检测与切换 (底部弹窗)。</string>
+    <string name="idepref_debugger_device_connection_title">设备连接管理</string>
+    <string name="msg_device_connection_not_available">当前环境不可用, 无法打开设备连接管理</string>
+    <string name="title_open_device_connection">设备连接</string>
+
 </resources>

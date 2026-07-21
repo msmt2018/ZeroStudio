@@ -37,6 +37,9 @@ plugins {
   alias(libs.plugins.android.test) apply false
   alias(libs.plugins.protobuf) apply false
   alias(libs.plugins.com.google.devtools.ksp) apply false
+  // Hilt 插件必须在根项目与 KSP 同一作用域声明 (apply false),
+  // 否则 Hilt 插件检测 KSP 时会因 classloader 不一致报错 (Dagger #3965)
+  alias(libs.plugins.hilt) apply false
   alias(libs.plugins.google.services) apply false
   alias(libs.plugins.firebase.crashlytics) apply false
 
@@ -95,6 +98,15 @@ subprojects {
       substitute(module("com.itsaky.androidide.treesitter:annotations"))
         .using(project(":editor:tree-sitter-ndk:annotations"))
     }
+
+    // 强制 kotlin-metadata-jvm 版本对齐项目 Kotlin 版本 (2.2.20)。
+    // Hilt 2.59 (兼容 AGP 8.x) 自带的 kotlinx-metadata-jvm 只支持到 Kotlin metadata 2.1.0,
+    // 与 Kotlin 2.2.20 生成的 metadata 2.2.0 不兼容, 会触发:
+    //   error: [Hilt] Provided Metadata instance has version 2.2.0, while maximum supported version is 2.1.0
+    // 利用 Dagger 2.57+ 已将 kotlin-metadata-jvm unshaded 的特性,
+    // 显式强制升级到 2.2.20 让 Hilt 编译器能读取 metadata 2.2.0。
+    // 必须放在 configurations.all 中以覆盖所有配置 (含 kapt / androidTest 等)。
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:2.2.20")
   }
 
   plugins.withId("com.android.application") { configureAndroidModule(libs.androidx.libDesugaring) }
