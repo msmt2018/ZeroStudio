@@ -344,7 +344,7 @@ public class Shizuku {
     /**
      * Remove the listener added by {@link #addBinderDeadListener(OnBinderDeadListener)}.
      *
-     * @param listener OnBinderDeadListener
+     * @param listener OnBinderReceivedListener
      * @return If the listener is removed.
      */
     public static boolean removeBinderDeadListener(@NonNull OnBinderDeadListener listener) {
@@ -488,7 +488,7 @@ public class Shizuku {
      * for complicated requirements.
      * <p>This method is planned to be removed from Shizuku API 14.
      */
-    private static ShizukuRemoteProcess newProcess(@NonNull String[] cmd, @Nullable String[] env, @Nullable String dir) {
+    public static ShizukuRemoteProcess newProcess(@NonNull String[] cmd, @Nullable String[] env, @Nullable String dir) {
         try {
             return new ShizukuRemoteProcess(requireService().newProcess(cmd, env, dir));
         } catch (RemoteException e) {
