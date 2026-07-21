@@ -91,6 +91,14 @@ android {
         targetSdk = 36
         abortOnError = false
     }
+
+    // 复用参考工程已 git 跟踪的 res/ 目录, 避免在本模块内重复维护 302 个资源文件
+    // (PNG/TTF 等二进制文件无法通过 GitHub API 高效推送, 直接引用源目录)
+    sourceSets {
+        getByName("main") {
+            res.srcDirs("src/main/res", "../../android-adb-shell/app/src/main/res")
+        }
+    }
 }
 
 tasks.withType<KotlinCompile>().configureEach {
@@ -122,6 +130,10 @@ dependencies {
     // Shizuku 客户端 (Local ADB 通道桥接系统服务)
     implementation(projects.modules.shizuku.api)
     implementation(projects.modules.shizuku.provider)
+
+    // settings-dsl 模块 (SettingsProvider.kt 引用 in.hridayan.settingsdsl.dsl.* 和 model.*)
+    // 提供 switchItem()/clickableItem()/radioGroupItem()/buttonGroupItem()/settingsPage() 等 DSL 构建器
+    implementation(projects.debugger.androidAdbShell.settingsDsl)
 
     // Kotlin 标准库 / 反射
     implementation(libs.org.jetbrains.kotlin.reflect)

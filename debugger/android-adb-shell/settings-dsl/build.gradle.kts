@@ -2,13 +2,21 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.compose.stability.analyzer)
+    // 关键修复: 显式声明 Kotlin 插件, 否则此模块的 Kotlin DSL 源文件不会被编译,
+    // 导致 connection 模块中所有 in.hridayan.settingsdsl.* 引用出现 Unresolved reference 错误。
+    id("kotlin-android")
+    // 使用 Compose Compiler 插件 (与 connection 模块一致), 替代原项目的
+    // org.jetbrains.compose (JetBrains Compose Multiplatform) 插件。
+    alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+    // 注意: 移除原项目 alias(libs.plugins.compose.stability.analyzer),
+    // 该插件别名在本项目版本目录中不存在, 应用会导致构建失败。
 }
 
 android {
     namespace = "in.hridayan.settingsdsl"
-    compileSdk = 37
+    // 关键修复: compileSdk 37 需 AGP 9.0+, 本项目使用 AGP 8.13.2 + compileSdk 36,
+    // 必须降级到 36 以兼容项目工具链 (用户硬性约束: 保持 8.13 agp 版本)。
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 28
@@ -31,9 +39,12 @@ android {
 }
 
 dependencies {
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
-    implementation(libs.material3)
-    implementation(libs.material.icons.extended)
-    implementation(libs.annotation)
+    // 关键修复: 原项目使用 libs.compose.bom / libs.compose.ui / libs.material3 /
+    // libs.material.icons.extended / libs.annotation 等无前缀别名, 这些别名在本项目
+    // 版本目录中不存在。本项目统一使用 androidx- 前缀别名。
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.annotation)
 }
