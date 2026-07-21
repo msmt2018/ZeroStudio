@@ -19,7 +19,10 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 28
+        // 与 :core:app 模块一致 (app minSdk=26), 避免清单合并失败。
+        // settings-dsl 是纯 Kotlin DSL + Compose UI, Compose 最低要求 minSdk 21,
+        // 26 完全覆盖所需 API, 无需更高 SDK 级别。
+        minSdk = 26
     }
 
     compileOptions {
