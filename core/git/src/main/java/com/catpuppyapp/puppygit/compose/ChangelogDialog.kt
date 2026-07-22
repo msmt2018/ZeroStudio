@@ -16,8 +16,8 @@ import com.catpuppyapp.puppygit.utils.AppModel
 private const val hahaNoteLink = "https://github.com/catpuppyapp/HahaNote-Release"
 
 private val changelog = """
-- support pin repos (issue #141)
-- 支持置顶仓库 (issue #141)
+- update bundled certs
+- 更新内置证书
 """.trimIndent()
 
 
@@ -49,7 +49,7 @@ fun ChangelogDialog(
 
                 Spacer(Modifier.height(15.dp))
 
-                MultiLineClickableText("Try my new app: Haha Note, an e2ee note sync app") {
+                MultiLineClickableText("Try my new app: HahaNote, a cross-platform note-taking app, supports e2ee sync") {
                     ActivityUtil.openUrl(activityContext, hahaNoteLink)
                 }
 

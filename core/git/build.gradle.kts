@@ -36,7 +36,7 @@ android {
 
   defaultConfig {
     minSdk = BuildConfig.minSdk
-
+    //versionName = "1.1.5.5"
     buildConfigField("String", "FILE_PROVIDIER_AUTHORITY", "\"$packageName.file_provider\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
