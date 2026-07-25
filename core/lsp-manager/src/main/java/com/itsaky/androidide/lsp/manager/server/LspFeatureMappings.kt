@@ -1,0 +1,88 @@
+package com.itsaky.androidide.lsp.manager.server
+
+import com.itsaky.androidide.lsp.manager.protocol.LspProtocolMethod
+
+/** Maps protocol methods to coarse feature groups for capability gating and UI enablement. */
+object LspFeatureMappings {
+  private val methodToFeature: Map<LspProtocolMethod, LspFeatureGroup> = mapOf(
+    LspProtocolMethod.Initialize to LspFeatureGroup.Lifecycle,
+    LspProtocolMethod.Initialized to LspFeatureGroup.Lifecycle,
+    LspProtocolMethod.Shutdown to LspFeatureGroup.Lifecycle,
+    LspProtocolMethod.Exit to LspFeatureGroup.Lifecycle,
+    LspProtocolMethod.TextDocumentDidOpen to LspFeatureGroup.TextSynchronization,
+    LspProtocolMethod.TextDocumentDidChange to LspFeatureGroup.TextSynchronization,
+    LspProtocolMethod.TextDocumentWillSave to LspFeatureGroup.TextSynchronization,
+    LspProtocolMethod.TextDocumentWillSaveWaitUntil to LspFeatureGroup.TextSynchronization,
+    LspProtocolMethod.TextDocumentDidSave to LspFeatureGroup.TextSynchronization,
+    LspProtocolMethod.TextDocumentDidClose to LspFeatureGroup.TextSynchronization,
+    LspProtocolMethod.TextDocumentCompletion to LspFeatureGroup.Completion,
+    LspProtocolMethod.CompletionItemResolve to LspFeatureGroup.Completion,
+    LspProtocolMethod.TextDocumentHover to LspFeatureGroup.Hover,
+    LspProtocolMethod.TextDocumentSignatureHelp to LspFeatureGroup.SignatureHelp,
+    LspProtocolMethod.TextDocumentPublishDiagnostics to LspFeatureGroup.Diagnostics,
+    LspProtocolMethod.TextDocumentDiagnostic to LspFeatureGroup.Diagnostics,
+    LspProtocolMethod.WorkspaceDiagnostic to LspFeatureGroup.Diagnostics,
+    LspProtocolMethod.TextDocumentCodeAction to LspFeatureGroup.CodeAction,
+    LspProtocolMethod.CodeActionResolve to LspFeatureGroup.CodeAction,
+    LspProtocolMethod.TextDocumentCodeLens to LspFeatureGroup.CodeLens,
+    LspProtocolMethod.CodeLensResolve to LspFeatureGroup.CodeLens,
+    LspProtocolMethod.TextDocumentFormatting to LspFeatureGroup.Formatting,
+    LspProtocolMethod.TextDocumentRangeFormatting to LspFeatureGroup.Formatting,
+    LspProtocolMethod.TextDocumentRangesFormatting to LspFeatureGroup.Formatting,
+    LspProtocolMethod.TextDocumentOnTypeFormatting to LspFeatureGroup.Formatting,
+    LspProtocolMethod.TextDocumentRename to LspFeatureGroup.Rename,
+    LspProtocolMethod.TextDocumentPrepareRename to LspFeatureGroup.Rename,
+    LspProtocolMethod.TextDocumentDefinition to LspFeatureGroup.Definition,
+    LspProtocolMethod.TextDocumentDeclaration to LspFeatureGroup.Declaration,
+    LspProtocolMethod.TextDocumentTypeDefinition to LspFeatureGroup.TypeDefinition,
+    LspProtocolMethod.TextDocumentImplementation to LspFeatureGroup.Implementation,
+    LspProtocolMethod.TextDocumentReferences to LspFeatureGroup.References,
+    LspProtocolMethod.TextDocumentDocumentHighlight to LspFeatureGroup.DocumentHighlight,
+    LspProtocolMethod.TextDocumentDocumentSymbol to LspFeatureGroup.DocumentSymbol,
+    LspProtocolMethod.WorkspaceSymbol to LspFeatureGroup.WorkspaceSymbol,
+    LspProtocolMethod.TextDocumentFoldingRange to LspFeatureGroup.FoldingRange,
+    LspProtocolMethod.TextDocumentSelectionRange to LspFeatureGroup.SelectionRange,
+    LspProtocolMethod.TextDocumentSemanticTokensFull to LspFeatureGroup.SemanticTokens,
+    LspProtocolMethod.TextDocumentSemanticTokensFullDelta to LspFeatureGroup.SemanticTokens,
+    LspProtocolMethod.TextDocumentSemanticTokensRange to LspFeatureGroup.SemanticTokens,
+    LspProtocolMethod.TextDocumentInlayHint to LspFeatureGroup.InlayHint,
+    LspProtocolMethod.InlayHintResolve to LspFeatureGroup.InlayHint,
+    LspProtocolMethod.TextDocumentInlineValue to LspFeatureGroup.InlineValue,
+    LspProtocolMethod.TextDocumentInlineCompletion to LspFeatureGroup.InlineCompletion,
+    LspProtocolMethod.TextDocumentPrepareCallHierarchy to LspFeatureGroup.CallHierarchy,
+    LspProtocolMethod.CallHierarchyIncomingCalls to LspFeatureGroup.CallHierarchy,
+    LspProtocolMethod.CallHierarchyOutgoingCalls to LspFeatureGroup.CallHierarchy,
+    LspProtocolMethod.TextDocumentPrepareTypeHierarchy to LspFeatureGroup.TypeHierarchy,
+    LspProtocolMethod.TypeHierarchySupertypes to LspFeatureGroup.TypeHierarchy,
+    LspProtocolMethod.TypeHierarchySubtypes to LspFeatureGroup.TypeHierarchy,
+    LspProtocolMethod.TextDocumentLinkedEditingRange to LspFeatureGroup.LinkedEditingRange,
+    LspProtocolMethod.TextDocumentDocumentLink to LspFeatureGroup.DocumentLink,
+    LspProtocolMethod.DocumentLinkResolve to LspFeatureGroup.DocumentLink,
+    LspProtocolMethod.TextDocumentDocumentColor to LspFeatureGroup.DocumentColor,
+    LspProtocolMethod.TextDocumentColorPresentation to LspFeatureGroup.DocumentColor,
+    LspProtocolMethod.TextDocumentMoniker to LspFeatureGroup.Moniker,
+    LspProtocolMethod.Progress to LspFeatureGroup.Progress,
+    LspProtocolMethod.WindowShowMessage to LspFeatureGroup.Window,
+    LspProtocolMethod.WindowShowMessageRequest to LspFeatureGroup.Window,
+    LspProtocolMethod.WindowLogMessage to LspFeatureGroup.Window,
+    LspProtocolMethod.WorkspaceWorkspaceFolders to LspFeatureGroup.WorkspaceFolders,
+    LspProtocolMethod.WorkspaceExecuteCommand to LspFeatureGroup.ExecuteCommand,
+    LspProtocolMethod.WorkspaceWillCreateFiles to LspFeatureGroup.FileOperations,
+    LspProtocolMethod.WorkspaceDidCreateFiles to LspFeatureGroup.FileOperations,
+    LspProtocolMethod.WorkspaceWillRenameFiles to LspFeatureGroup.FileOperations,
+    LspProtocolMethod.WorkspaceDidRenameFiles to LspFeatureGroup.FileOperations,
+    LspProtocolMethod.WorkspaceWillDeleteFiles to LspFeatureGroup.FileOperations,
+    LspProtocolMethod.WorkspaceDidDeleteFiles to LspFeatureGroup.FileOperations,
+    LspProtocolMethod.NotebookDocumentDidOpen to LspFeatureGroup.NotebookDocument,
+    LspProtocolMethod.NotebookDocumentDidChange to LspFeatureGroup.NotebookDocument,
+    LspProtocolMethod.NotebookDocumentDidSave to LspFeatureGroup.NotebookDocument,
+    LspProtocolMethod.NotebookDocumentDidClose to LspFeatureGroup.NotebookDocument,
+  )
+
+  fun featureFor(method: LspProtocolMethod): LspFeatureGroup? = methodToFeature[method]
+
+  fun isSupported(method: LspProtocolMethod, featureSet: LspFeatureSet): Boolean {
+    val feature = featureFor(method) ?: return true
+    return feature in featureSet
+  }
+}

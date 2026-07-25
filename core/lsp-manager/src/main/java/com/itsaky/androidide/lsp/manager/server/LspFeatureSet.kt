@@ -25,6 +25,7 @@ enum class LspFeatureGroup {
   SemanticTokens,
   InlayHint,
   InlineValue,
+  InlineCompletion,
   CallHierarchy,
   TypeHierarchy,
   LinkedEditingRange,
