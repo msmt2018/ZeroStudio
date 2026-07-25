@@ -139,6 +139,7 @@ include(
     ":core:indexing-core",
     ":core:lsp-api",
     ":core:lsp-models",
+    ":core:lsp-manager",
     ":core:projects",
     ":core:resources",
     ":core:git",
