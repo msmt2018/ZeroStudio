@@ -3,6 +3,8 @@ package com.itsaky.androidide.lsp.manager.session
 import com.itsaky.androidide.lsp.manager.registry.LspServerRegistry
 import com.itsaky.androidide.lsp.manager.server.LspServerDescriptor
 import com.itsaky.androidide.lsp.manager.server.LspServerLaunchContext
+import com.itsaky.androidide.lsp.manager.protocol.LspProtocolRouter
+import com.itsaky.androidide.lsp.manager.ui.LspUiRegistry
 import com.itsaky.androidide.lsp.manager.window.LspWindowEventBus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap
 class LspSessionManager(
   val registry: LspServerRegistry = LspServerRegistry(),
   val windowEvents: LspWindowEventBus = LspWindowEventBus(),
+  val protocolRouter: LspProtocolRouter = LspProtocolRouter(),
+  val uiRegistry: LspUiRegistry = LspUiRegistry(),
   private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : AutoCloseable {
   private val sessions = ConcurrentHashMap<String, LspSession>()
@@ -34,6 +38,7 @@ class LspSessionManager(
       documentUri = request.documentUri,
       languageId = request.languageId,
       projectRoot = request.projectRoot,
+      state = LspSessionState.Running,
     ).also { sessions[it.id] = it }
   }
 

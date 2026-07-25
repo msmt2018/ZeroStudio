@@ -19,4 +19,5 @@ data class LspSession(
   val documentUri: String,
   val languageId: String,
   val projectRoot: String,
+  val state: LspSessionState = LspSessionState.Created,
 )
