@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.zero.studio.R
 import android.zero.studio.core.common.constants.DEV_EMAIL
 import android.zero.studio.core.presentation.components.card.CustomCard

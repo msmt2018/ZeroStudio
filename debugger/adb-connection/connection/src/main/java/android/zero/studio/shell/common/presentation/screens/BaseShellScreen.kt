@@ -115,7 +115,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.zero.studio.R
 import android.zero.studio.ai.presentation.components.bottomsheet.AiAnalysisBottomSheet
 import android.zero.studio.ai.presentation.components.button.AnalyzeButton

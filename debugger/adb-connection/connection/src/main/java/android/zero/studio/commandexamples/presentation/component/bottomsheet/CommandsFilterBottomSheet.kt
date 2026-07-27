@@ -21,9 +21,8 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,7 +34,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.zero.studio.R
 import android.zero.studio.commandexamples.presentation.component.row.Labels
 import android.zero.studio.commandexamples.presentation.viewmodel.CommandExamplesViewModel
@@ -52,10 +51,7 @@ fun CommandsFilterBottomSheet(
     onDismiss: () -> Unit,
     commandExamplesViewModel: CommandExamplesViewModel = hiltViewModel()
 ) {
-    val sheetState = rememberBottomSheetState(
-        initialValue = SheetValue.Hidden,
-        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
-    )
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val lazyListState = rememberLazyListState()
     val states by commandExamplesViewModel.states.collectAsState()
     val searchedLabels by commandExamplesViewModel.searchedLabels.collectAsState()
