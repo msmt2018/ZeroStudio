@@ -149,7 +149,7 @@ object DeviceConnectionManager {
         Shell.setDefaultBuilder(
             Shell.Builder.create()
                 .setFlags(Shell.FLAG_REDIRECT_STDERR)
-                .setCommands(arrayOf(suBin))
+                .setCommands(suBin)
         )
     }
 
