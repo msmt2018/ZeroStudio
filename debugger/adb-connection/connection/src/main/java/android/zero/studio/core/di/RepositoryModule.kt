@@ -9,7 +9,11 @@ import android.zero.studio.commandexamples.domain.repository.CommandRepository
 import android.zero.studio.crashreporter.data.repository.CrashRepositoryImpl
 import android.zero.studio.crashreporter.domain.repository.CrashRepository
 import android.zero.studio.settings.data.repository.BackupAndRestoreRepositoryImpl
+import android.zero.studio.settings.data.repository.NoOpGoogleAuthRepositoryImpl
+import android.zero.studio.settings.data.repository.NoOpGoogleDriveRepositoryImpl
 import android.zero.studio.settings.domain.repository.BackupAndRestoreRepository
+import android.zero.studio.settings.domain.repository.GoogleAuthRepository
+import android.zero.studio.settings.domain.repository.GoogleDriveRepository
 import android.zero.studio.shell.common.data.repository.BookmarkRepositoryImpl
 import android.zero.studio.shell.common.data.repository.PackageRepositoryImpl
 import android.zero.studio.shell.common.domain.repository.BookmarkRepository
@@ -36,6 +40,18 @@ abstract class RepositoryModule {
     abstract fun bindBackupAndRestoreRepository(
         backupAndRestoreRepositoryImpl: BackupAndRestoreRepositoryImpl
     ): BackupAndRestoreRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGoogleAuthRepository(
+        noOpGoogleAuthRepositoryImpl: NoOpGoogleAuthRepositoryImpl
+    ): GoogleAuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGoogleDriveRepository(
+        noOpGoogleDriveRepositoryImpl: NoOpGoogleDriveRepositoryImpl
+    ): GoogleDriveRepository
 
     @Binds
     @Singleton
