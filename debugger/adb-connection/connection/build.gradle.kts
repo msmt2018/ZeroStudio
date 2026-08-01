@@ -138,9 +138,9 @@ dependencies {
     implementation(projects.modules.shizuku.api)
     implementation(projects.modules.shizuku.provider)
 
-    // settings-dsl 模块 (SettingsProvider.kt 引用 in.hridayan.settingsdsl.dsl.* 和 model.*)
+    // settings-dsl 模块 (SettingsProvider.kt 引用 android.zero.studio.settingsdsl.dsl.* 和 model.*)
     // 提供 switchItem()/clickableItem()/radioGroupItem()/buttonGroupItem()/settingsPage() 等 DSL 构建器
-    implementation(projects.debugger.androidAdbShell.settingsDsl)
+    implementation(projects.debugger.adbConnection.settingsDsl)
 
     // Kotlin 标准库 / 反射
     implementation(libs.org.jetbrains.kotlin.reflect)

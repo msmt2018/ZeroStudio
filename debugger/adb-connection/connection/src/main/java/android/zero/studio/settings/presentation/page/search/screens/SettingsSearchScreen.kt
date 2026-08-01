@@ -60,7 +60,7 @@ import android.zero.studio.navigation.NavRoutes
 import android.zero.studio.navigation.navigateBack
 import android.zero.studio.settings.presentation.page.search.viewmodel.SettingsSearchViewModel
 import android.zero.studio.settings.presentation.provider.SettingsProvider
-import `in`.hridayan.settingsdsl.search.SearchEntry
+import android.zero.studio.settingsdsl.search.SearchEntry
 
 @Composable
 fun SettingsSearchScreen(

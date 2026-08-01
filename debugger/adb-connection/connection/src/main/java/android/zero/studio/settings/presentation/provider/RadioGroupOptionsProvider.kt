@@ -8,7 +8,7 @@ import android.zero.studio.core.domain.model.SortType
 import android.zero.studio.settings.domain.model.AppFont
 import android.zero.studio.settings.domain.model.BackupFrequency
 import android.zero.studio.settings.domain.model.BackupType
-import `in`.hridayan.settingsdsl.model.RadioButtonOption
+import android.zero.studio.settingsdsl.model.RadioButtonOption
 
 class RadioGroupOptionsProvider {
     companion object {

@@ -14,17 +14,17 @@ import android.zero.studio.core.domain.model.TerminalFontStyle
 import android.zero.studio.core.presentation.components.floaters.FloatingIconsBackground
 import android.zero.studio.navigation.NavRoutes
 import android.zero.studio.settings.data.SettingsKeys
-import `in`.hridayan.settingsdsl.dsl.buttonGroupItem
-import `in`.hridayan.settingsdsl.dsl.category
-import `in`.hridayan.settingsdsl.dsl.clickableItem
-import `in`.hridayan.settingsdsl.dsl.customSlot
-import `in`.hridayan.settingsdsl.dsl.group
-import `in`.hridayan.settingsdsl.dsl.radioGroupItem
-import `in`.hridayan.settingsdsl.dsl.settingsPage
-import `in`.hridayan.settingsdsl.dsl.switchBannerItem
-import `in`.hridayan.settingsdsl.dsl.switchItem
-import `in`.hridayan.settingsdsl.model.ButtonGroupOption
-import `in`.hridayan.settingsdsl.model.SettingsPage
+import android.zero.studio.settingsdsl.dsl.buttonGroupItem
+import android.zero.studio.settingsdsl.dsl.category
+import android.zero.studio.settingsdsl.dsl.clickableItem
+import android.zero.studio.settingsdsl.dsl.customSlot
+import android.zero.studio.settingsdsl.dsl.group
+import android.zero.studio.settingsdsl.dsl.radioGroupItem
+import android.zero.studio.settingsdsl.dsl.settingsPage
+import android.zero.studio.settingsdsl.dsl.switchBannerItem
+import android.zero.studio.settingsdsl.dsl.switchItem
+import android.zero.studio.settingsdsl.model.ButtonGroupOption
+import android.zero.studio.settingsdsl.model.SettingsPage
 
 private val isSdkLowerThan31 = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
 

@@ -1,6 +1,6 @@
 package android.zero.studio.settings.presentation.provider
 
-import `in`.hridayan.settingsdsl.model.CustomSlot
+import android.zero.studio.settingsdsl.model.CustomSlot
 
 /** Named custom-slot identifiers for the Backup & Restore screen. */
 sealed class BackupScreenCustomSlots(id: String) : CustomSlot(id) {

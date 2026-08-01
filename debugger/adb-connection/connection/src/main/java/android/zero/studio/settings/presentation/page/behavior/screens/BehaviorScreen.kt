@@ -28,9 +28,9 @@ import android.zero.studio.settings.presentation.components.scaffold.SettingsSca
 import android.zero.studio.settings.presentation.event.SettingsUiEvent
 import android.zero.studio.settings.presentation.state.rememberController
 import android.zero.studio.settings.presentation.viewmodel.SettingsViewModel
-import `in`.hridayan.settingsdsl.resolver.resolveAll
-import `in`.hridayan.settingsdsl.ui.highlight.rememberHighlightState
-import `in`.hridayan.settingsdsl.ui.item.settingsContent
+import android.zero.studio.settingsdsl.resolver.resolveAll
+import android.zero.studio.settingsdsl.ui.highlight.rememberHighlightState
+import android.zero.studio.settingsdsl.ui.item.settingsContent
 
 @Composable
 fun BehaviorScreen(

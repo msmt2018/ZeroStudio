@@ -8,7 +8,7 @@ import android.zero.studio.core.domain.model.SortType
 import android.zero.studio.core.domain.provider.SeedColorProvider
 import android.zero.studio.settings.data.SettingsKeys.Companion.entries
 import android.zero.studio.settings.data.SettingsKeys.Companion.valueOf
-import `in`.hridayan.settingsdsl.model.SettingsKey
+import android.zero.studio.settingsdsl.model.SettingsKey
 import kotlin.reflect.KClass
 
 /**

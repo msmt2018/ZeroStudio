@@ -7,8 +7,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import android.zero.studio.settings.data.SettingsKeys
 import android.zero.studio.settings.presentation.viewmodel.SettingsViewModel
-import `in`.hridayan.settingsdsl.controller.SettingsController
-import `in`.hridayan.settingsdsl.controller.rememberController
+import android.zero.studio.settingsdsl.controller.SettingsController
+import android.zero.studio.settingsdsl.controller.rememberController
 
 /**
  * App-specific convenience wrapper around the library's [rememberController].
