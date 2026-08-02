@@ -1,6 +1,6 @@
-package `in`.hridayan.settingsdsl.controller
+package android.zero.studio.settingsdsl.controller
 
-import `in`.hridayan.settingsdsl.model.SettingsKey
+import android.zero.studio.settingsdsl.model.SettingsKey
 
 /**
  * Provides state and handles events for settings UI rendering.

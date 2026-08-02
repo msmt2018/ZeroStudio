@@ -1,4 +1,4 @@
-package `in`.hridayan.settingsdsl.model
+package android.zero.studio.settingsdsl.model
 
 import androidx.compose.runtime.Stable
 

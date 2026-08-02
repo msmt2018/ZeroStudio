@@ -1,17 +1,17 @@
-package `in`.hridayan.settingsdsl.dsl
+package android.zero.studio.settingsdsl.dsl
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.vector.ImageVector
-import `in`.hridayan.settingsdsl.model.ButtonGroupOption
-import `in`.hridayan.settingsdsl.model.CustomSlot
-import `in`.hridayan.settingsdsl.model.GroupSpec
-import `in`.hridayan.settingsdsl.model.ItemSpec
-import `in`.hridayan.settingsdsl.model.RadioButtonOption
-import `in`.hridayan.settingsdsl.model.SettingsGroup
-import `in`.hridayan.settingsdsl.model.SettingsItemSpec
-import `in`.hridayan.settingsdsl.model.SettingsKey
-import `in`.hridayan.settingsdsl.model.SettingsPage
+import android.zero.studio.settingsdsl.model.ButtonGroupOption
+import android.zero.studio.settingsdsl.model.CustomSlot
+import android.zero.studio.settingsdsl.model.GroupSpec
+import android.zero.studio.settingsdsl.model.ItemSpec
+import android.zero.studio.settingsdsl.model.RadioButtonOption
+import android.zero.studio.settingsdsl.model.SettingsGroup
+import android.zero.studio.settingsdsl.model.SettingsItemSpec
+import android.zero.studio.settingsdsl.model.SettingsKey
+import android.zero.studio.settingsdsl.model.SettingsPage
 
 /**
  * Creates a settings item with a toggle switch.

@@ -1,10 +1,10 @@
-package `in`.hridayan.settingsdsl.controller
+package android.zero.studio.settingsdsl.controller
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import `in`.hridayan.settingsdsl.model.SettingsKey
+import android.zero.studio.settingsdsl.model.SettingsKey
 
 /**
  * Creates a [SettingsController] from individual lambda callbacks.

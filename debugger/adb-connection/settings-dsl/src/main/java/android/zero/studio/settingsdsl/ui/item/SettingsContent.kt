@@ -1,4 +1,4 @@
-package `in`.hridayan.settingsdsl.ui.item
+package android.zero.studio.settingsdsl.ui.item
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
@@ -11,12 +11,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import `in`.hridayan.settingsdsl.controller.SettingsController
-import `in`.hridayan.settingsdsl.model.CustomSlot
-import `in`.hridayan.settingsdsl.model.ResolvedGroup
-import `in`.hridayan.settingsdsl.model.SettingsItem
-import `in`.hridayan.settingsdsl.model.SettingsKey
-import `in`.hridayan.settingsdsl.resolver.resolveAll
+import android.zero.studio.settingsdsl.controller.SettingsController
+import android.zero.studio.settingsdsl.model.CustomSlot
+import android.zero.studio.settingsdsl.model.ResolvedGroup
+import android.zero.studio.settingsdsl.model.SettingsItem
+import android.zero.studio.settingsdsl.model.SettingsKey
+import android.zero.studio.settingsdsl.resolver.resolveAll
 
 /**
  * Renders a list of [ResolvedGroup]s into a [LazyListScope] using a [SettingsController].

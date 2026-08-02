@@ -1,9 +1,9 @@
-package `in`.hridayan.settingsdsl.model
+package android.zero.studio.settingsdsl.model
 
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Stable
-import `in`.hridayan.settingsdsl.dsl.settingsPage
-import `in`.hridayan.settingsdsl.resolver.resolveAll
+import android.zero.studio.settingsdsl.dsl.settingsPage
+import android.zero.studio.settingsdsl.resolver.resolveAll
 
 /**
  * The top-level container for a settings screen's content.

@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 
-package `in`.hridayan.settingsdsl.ui.item
+package android.zero.studio.settingsdsl.ui.item
 
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
@@ -48,12 +48,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import `in`.hridayan.settingsdsl.model.ButtonGroupOption
-import `in`.hridayan.settingsdsl.model.ItemBehavior
-import `in`.hridayan.settingsdsl.model.RadioButtonOption
-import `in`.hridayan.settingsdsl.ui.card.CustomCard
-import `in`.hridayan.settingsdsl.ui.card.CustomCardShape
-import `in`.hridayan.settingsdsl.ui.card.cardShapeForPosition
+import android.zero.studio.settingsdsl.model.ButtonGroupOption
+import android.zero.studio.settingsdsl.model.ItemBehavior
+import android.zero.studio.settingsdsl.model.RadioButtonOption
+import android.zero.studio.settingsdsl.ui.card.CustomCard
+import android.zero.studio.settingsdsl.ui.card.CustomCardShape
+import android.zero.studio.settingsdsl.ui.card.cardShapeForPosition
 
 /**
  * Renders a single settings item matching the app item UI:

@@ -1,4 +1,4 @@
-package `in`.hridayan.settingsdsl.resolver
+package android.zero.studio.settingsdsl.resolver
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
@@ -7,16 +7,16 @@ import androidx.compose.runtime.State
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import `in`.hridayan.settingsdsl.model.GroupSpec
-import `in`.hridayan.settingsdsl.model.ItemBehavior
-import `in`.hridayan.settingsdsl.model.ItemSpec
-import `in`.hridayan.settingsdsl.model.ResolvedGroup
-import `in`.hridayan.settingsdsl.model.SettingsItem
-import `in`.hridayan.settingsdsl.model.SettingsKey
-import `in`.hridayan.settingsdsl.model.SettingsPage
-import `in`.hridayan.settingsdsl.ui.card.CustomCardShape
-import `in`.hridayan.settingsdsl.ui.card.cardShapeForPosition
-import `in`.hridayan.settingsdsl.ui.item.settingsContent
+import android.zero.studio.settingsdsl.model.GroupSpec
+import android.zero.studio.settingsdsl.model.ItemBehavior
+import android.zero.studio.settingsdsl.model.ItemSpec
+import android.zero.studio.settingsdsl.model.ResolvedGroup
+import android.zero.studio.settingsdsl.model.SettingsItem
+import android.zero.studio.settingsdsl.model.SettingsKey
+import android.zero.studio.settingsdsl.model.SettingsPage
+import android.zero.studio.settingsdsl.ui.card.CustomCardShape
+import android.zero.studio.settingsdsl.ui.card.cardShapeForPosition
+import android.zero.studio.settingsdsl.ui.item.settingsContent
 
 /**
  * Resolves all groups in this [SettingsPage] into display-ready [ResolvedGroup]s.

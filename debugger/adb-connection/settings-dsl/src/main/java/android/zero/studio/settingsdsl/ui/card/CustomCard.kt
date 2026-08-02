@@ -1,4 +1,4 @@
-package `in`.hridayan.settingsdsl.ui.card
+package android.zero.studio.settingsdsl.ui.card
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec

@@ -1,4 +1,4 @@
-package `in`.hridayan.settingsdsl.ui.highlight
+package android.zero.studio.settingsdsl.ui.highlight
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -9,10 +9,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import `in`.hridayan.settingsdsl.model.SettingsKey
-import `in`.hridayan.settingsdsl.model.SettingsPage
-import `in`.hridayan.settingsdsl.resolver.resolveAll
-import `in`.hridayan.settingsdsl.ui.item.settingsContent
+import android.zero.studio.settingsdsl.model.SettingsKey
+import android.zero.studio.settingsdsl.model.SettingsPage
+import android.zero.studio.settingsdsl.resolver.resolveAll
+import android.zero.studio.settingsdsl.ui.item.settingsContent
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 

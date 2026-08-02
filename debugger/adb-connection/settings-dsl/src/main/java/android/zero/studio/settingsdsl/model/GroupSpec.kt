@@ -1,11 +1,11 @@
-package `in`.hridayan.settingsdsl.model
+package android.zero.studio.settingsdsl.model
 
 import androidx.annotation.StringRes
-import `in`.hridayan.settingsdsl.dsl.category
-import `in`.hridayan.settingsdsl.dsl.customSlot
-import `in`.hridayan.settingsdsl.dsl.divider
-import `in`.hridayan.settingsdsl.dsl.group
-import `in`.hridayan.settingsdsl.dsl.settingsPage
+import android.zero.studio.settingsdsl.dsl.category
+import android.zero.studio.settingsdsl.dsl.customSlot
+import android.zero.studio.settingsdsl.dsl.divider
+import android.zero.studio.settingsdsl.dsl.group
+import android.zero.studio.settingsdsl.dsl.settingsPage
 
 /**
  * Internal blueprint for a group of settings items.

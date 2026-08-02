@@ -1,13 +1,13 @@
-package `in`.hridayan.settingsdsl.search
+package android.zero.studio.settingsdsl.search
 
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import `in`.hridayan.settingsdsl.model.GroupSpec
-import `in`.hridayan.settingsdsl.model.ItemSpec
-import `in`.hridayan.settingsdsl.model.SettingsKey
-import `in`.hridayan.settingsdsl.model.SettingsPage
+import android.zero.studio.settingsdsl.model.GroupSpec
+import android.zero.studio.settingsdsl.model.ItemSpec
+import android.zero.studio.settingsdsl.model.SettingsKey
+import android.zero.studio.settingsdsl.model.SettingsPage
 
 /**
  * A single search result produced by [SettingsSearchEngine].

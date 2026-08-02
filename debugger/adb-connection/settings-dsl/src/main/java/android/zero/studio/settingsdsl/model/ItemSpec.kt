@@ -1,14 +1,14 @@
-package `in`.hridayan.settingsdsl.model
+package android.zero.studio.settingsdsl.model
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.vector.ImageVector
-import `in`.hridayan.settingsdsl.dsl.buttonGroupItem
-import `in`.hridayan.settingsdsl.dsl.category
-import `in`.hridayan.settingsdsl.dsl.clickableItem
-import `in`.hridayan.settingsdsl.dsl.group
-import `in`.hridayan.settingsdsl.dsl.radioGroupItem
-import `in`.hridayan.settingsdsl.dsl.switchItem
+import android.zero.studio.settingsdsl.dsl.buttonGroupItem
+import android.zero.studio.settingsdsl.dsl.category
+import android.zero.studio.settingsdsl.dsl.clickableItem
+import android.zero.studio.settingsdsl.dsl.group
+import android.zero.studio.settingsdsl.dsl.radioGroupItem
+import android.zero.studio.settingsdsl.dsl.switchItem
 
 /**
  * Internal blueprint for a single settings item.

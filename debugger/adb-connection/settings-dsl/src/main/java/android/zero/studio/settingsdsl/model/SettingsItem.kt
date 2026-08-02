@@ -1,10 +1,10 @@
-package `in`.hridayan.settingsdsl.model
+package android.zero.studio.settingsdsl.model
 
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
-import `in`.hridayan.settingsdsl.resolver.resolveItem
-import `in`.hridayan.settingsdsl.ui.card.CustomCardShape
+import android.zero.studio.settingsdsl.resolver.resolveItem
+import android.zero.studio.settingsdsl.ui.card.CustomCardShape
 
 /**
  * The fully-resolved, display-ready representation of a single settings item.

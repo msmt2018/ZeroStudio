@@ -1,6 +1,6 @@
-package `in`.hridayan.settingsdsl.model
+package android.zero.studio.settingsdsl.model
 
-import `in`.hridayan.settingsdsl.resolver.resolveAll
+import android.zero.studio.settingsdsl.resolver.resolveAll
 
 /**
  * A resolved group ready for rendering.

@@ -1,4 +1,4 @@
-package `in`.hridayan.settingsdsl.model
+package android.zero.studio.settingsdsl.model
 
 /**
  * A type-safe identifier for a custom composable slot within a settings page.

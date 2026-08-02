@@ -1,4 +1,4 @@
-package `in`.hridayan.settingsdsl.ui.card
+package android.zero.studio.settingsdsl.ui.card
 
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
