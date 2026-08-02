@@ -58,7 +58,6 @@ import androidx.fragment.app.viewModels
 import com.itsaky.androidide.activities.MainActivity
 import com.itsaky.androidide.activities.PreferencesActivity
 import com.itsaky.androidide.activities.TerminalActivity
-import com.itsaky.androidide.fragments.git.function.ZeroCloneDialogBottomSheetFragment
 import com.itsaky.androidide.fragments.main.DeleteDialogState
 import com.itsaky.androidide.fragments.main.DeleteProjectConfirmDialog
 import com.itsaky.androidide.fragments.main.DeleteProjectProgressDialog
@@ -421,9 +420,9 @@ class MainFragment : BaseFragment() {
                   modifier = Modifier.weight(1f),
                   icon = Icons.Default.Share,
                   label = stringResource(R.string.main_clone_repo),
+                  enabled = false,
               ) {
-                ZeroCloneDialogBottomSheetFragment.newInstance(repoId = "")
-                    .show(childFragmentManager, "CloneBottomSheet")
+                // Git clone 功能已移至新的 Git Compose Screen 体系
               }
             }
           }
