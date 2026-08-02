@@ -2412,10 +2412,11 @@ private fun LoadingRow(text: String) {
 @Composable
 private fun TextButton(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
     content: @Composable RowScope.() -> Unit,
 ) {
-    OutlinedButton(onClick = onClick, contentPadding = contentPadding, content = content)
+    OutlinedButton(onClick = onClick, modifier = modifier, contentPadding = contentPadding, content = content)
 }
 
 // ---- 6 位随机配对码 (跟 android-adb-shell generatePairingCode 一致, 返回 String) ----
