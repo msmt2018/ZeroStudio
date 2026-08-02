@@ -7,7 +7,7 @@ import android.zero.studio.shell.wifi_adb_shell.data.local.model.WifiAdbDeviceEn
 @Database(
     entities = [WifiAdbDeviceEntity::class],
     version = 1,
-    exportSchema = true
+    exportSchema = false
 )
 abstract class WifiAdbDeviceDatabase : RoomDatabase() {
     abstract fun wifiAdbDeviceDao(): WifiAdbDeviceDao

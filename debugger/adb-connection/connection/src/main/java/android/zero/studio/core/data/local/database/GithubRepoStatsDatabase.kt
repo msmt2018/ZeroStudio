@@ -4,7 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import android.zero.studio.core.data.local.model.GithubRepoStatsEntity
 
-@Database(entities = [GithubRepoStatsEntity::class], version = 1)
+@Database(entities = [GithubRepoStatsEntity::class], version = 1, exportSchema = false)
 abstract class GithubRepoStatsDatabase : RoomDatabase() {
     abstract fun githubRepoStatsDao(): GithubRepoStatsDao
 }
