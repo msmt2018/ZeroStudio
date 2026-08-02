@@ -9,8 +9,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import android.zero.studio.settings.data.SettingsKeys
 import android.zero.studio.settings.domain.repository.SettingsRepository
 import android.zero.studio.settings.presentation.provider.SettingsProvider
-import `in`.hridayan.settingsdsl.search.SearchEntry
-import `in`.hridayan.settingsdsl.search.SettingsSearchEngine
+import android.zero.studio.settingsdsl.search.SearchEntry
+import android.zero.studio.settingsdsl.search.SettingsSearchEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

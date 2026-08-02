@@ -17,23 +17,20 @@
 package com.itsaky.androidide.fragments.git
 
 import androidx.fragment.app.FragmentActivity
-import com.itsaky.androidide.ui.screen.git.ComposeHostFragment
+import com.itsaky.androidide.utils.flashError
 
 /**
  * 用于从任何位置 (action / button / menu) 打开 git 完整 UI 的统一入口。
  *
- * 行为: 替换当前 activity 的内容 fragment 为 [ComposeHostFragment]。
+ * 注: 原先打开的 ComposeHostFragment/GitHostScreen 完整 git UI 已移除,
+ * 现保留此 object 仅作占位, 避免调用方编译失败。调用时会提示功能不可用。
  *
  * @author android_zero
  */
 object GitScreenOpener {
 
-  /** 打开 git 完整 UI (status / branch / log / diff 等都在这里)。 */
+  /** 打开 git 完整 UI — 完整 git UI 已移除, 当前为占位空操作。 */
   fun openGitUi(activity: FragmentActivity) {
-    val frag = ComposeHostFragment()
-    activity.supportFragmentManager.beginTransaction()
-        .replace(android.R.id.content, frag, "GitComposeHost")
-        .addToBackStack("git")
-        .commit()
+    flashError("完整 Git UI 已移除, 请使用文件树页面的 Git 操作")
   }
 }

@@ -28,6 +28,7 @@ plugins {
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
+    alias(libs.plugins.aboutlibraries)
     // 注意: 本模块不应用 KSP 插件, 避免与 Hilt 插件在同一模块共存时触发
     // Dagger #3965 classloader 冲突 (composite build 环境下两者 classloader 不一致)。
     // Hilt 和 Room 编译器均使用 kapt 处理。
@@ -43,6 +44,12 @@ android {
         minSdk = 26  // 与 app 模块一致 (app minSdk=26), 避免清单合并冲突
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "VERSION_NAME", "\"v8.0.0-alpha01\"")
+        buildConfigField("int", "VERSION_CODE", "63")
+        buildConfigField("String", "DIST_FLAVOR_GITHUB", "\"github\"")
+        buildConfigField("String", "DIST_FLAVOR_FDROID", "\"fdroid\"")
+        buildConfigField("String", "FLAVOR", "DIST_FLAVOR_GITHUB")
     }
 
     buildTypes {
@@ -131,9 +138,9 @@ dependencies {
     implementation(projects.modules.shizuku.api)
     implementation(projects.modules.shizuku.provider)
 
-    // settings-dsl 模块 (SettingsProvider.kt 引用 in.hridayan.settingsdsl.dsl.* 和 model.*)
+    // settings-dsl 模块 (SettingsProvider.kt 引用 android.zero.studio.settingsdsl.dsl.* 和 model.*)
     // 提供 switchItem()/clickableItem()/radioGroupItem()/buttonGroupItem()/settingsPage() 等 DSL 构建器
-    implementation(projects.debugger.androidAdbShell.settingsDsl)
+    implementation(projects.debugger.adbConnection.settingsDsl)
 
     // Kotlin 标准库 / 反射
     implementation(libs.org.jetbrains.kotlin.reflect)

@@ -7,6 +7,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,12 +16,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import android.zero.studio.core.common.LocalPaletteStyle
 import android.zero.studio.core.common.LocalSeedColor
@@ -30,7 +34,6 @@ import android.zero.studio.core.data.local.provider.SeedColor
 import android.zero.studio.core.domain.model.PaletteStyle
 import android.zero.studio.settings.data.SettingsKeys
 import android.zero.studio.settings.presentation.components.palette.PaletteWheel
-import `in`.hridayan.shapeindicators.ShapeIndicatorRow
 
 @Composable
 fun ColorTabs(
@@ -104,11 +107,21 @@ fun ColorTabs(
             enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)),
             exit = ExitTransition.None
         ) {
-            ShapeIndicatorRow(
-                pagerState = pagerState,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                shuffleShapes = true,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                repeat(groupedPalettes.size) { index ->
+                    val color = if (pagerState.currentPage == index) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(if (pagerState.currentPage == index) 10.dp else 8.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                }
+            }
         }
     }
 }

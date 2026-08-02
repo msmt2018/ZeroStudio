@@ -47,7 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.zero.studio.R
 import android.zero.studio.core.common.LocalDialogManager
 import android.zero.studio.core.common.LocalSettings
@@ -77,9 +77,9 @@ import android.zero.studio.settings.presentation.page.backup.viewmodel.BackupAnd
 import android.zero.studio.settings.presentation.provider.BackupScreenCustomSlots
 import android.zero.studio.settings.presentation.state.rememberController
 import android.zero.studio.settings.presentation.viewmodel.SettingsViewModel
-import `in`.hridayan.settingsdsl.resolver.resolveAll
-import `in`.hridayan.settingsdsl.ui.highlight.rememberHighlightState
-import `in`.hridayan.settingsdsl.ui.item.settingsContent
+import android.zero.studio.settingsdsl.resolver.resolveAll
+import android.zero.studio.settingsdsl.ui.highlight.rememberHighlightState
+import android.zero.studio.settingsdsl.ui.item.settingsContent
 
 @Composable
 fun BackupAndRestoreScreen(

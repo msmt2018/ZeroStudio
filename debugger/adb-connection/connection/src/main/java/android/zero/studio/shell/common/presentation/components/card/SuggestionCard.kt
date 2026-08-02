@@ -14,7 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.zero.studio.commandexamples.presentation.component.chip.LabelChip
 import android.zero.studio.core.presentation.components.card.CustomCard
 import android.zero.studio.core.presentation.components.haptic.withHaptic

@@ -174,7 +174,7 @@ include(
     // settings-dsl 模块 (复刻自 debugger/android-adb-shell 参考工程)
     // 提供 Kotlin DSL 风格的设置页构建器 (switchItem/clickableItem/radioGroupItem/
     // buttonGroupItem/settingsPage 等), 被 connection 模块的 SettingsProvider.kt 引用。
-    ":debugger:android-adb-shell:settings-dsl",
+    ":debugger:adb-connection:settings-dsl",
 
     ":editor:api",
     ":editor:impl",

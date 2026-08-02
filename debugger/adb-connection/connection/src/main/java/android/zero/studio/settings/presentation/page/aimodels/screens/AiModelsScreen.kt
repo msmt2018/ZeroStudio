@@ -20,7 +20,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.zero.studio.R
 import android.zero.studio.ai.data.local.model.ModelRegistry
 import android.zero.studio.ai.presentation.viewmodel.AiModelManagerViewModel
@@ -36,9 +36,9 @@ import android.zero.studio.settings.presentation.event.SettingsUiEvent
 import android.zero.studio.settings.presentation.components.dialog.CacheDurationDialog
 import android.zero.studio.settings.presentation.state.rememberController
 import android.zero.studio.settings.presentation.viewmodel.SettingsViewModel
-import `in`.hridayan.settingsdsl.resolver.resolveAll
-import `in`.hridayan.settingsdsl.ui.highlight.rememberHighlightState
-import `in`.hridayan.settingsdsl.ui.item.settingsContent
+import android.zero.studio.settingsdsl.resolver.resolveAll
+import android.zero.studio.settingsdsl.ui.highlight.rememberHighlightState
+import android.zero.studio.settingsdsl.ui.item.settingsContent
 
 @Composable
 fun AiModelsScreen(

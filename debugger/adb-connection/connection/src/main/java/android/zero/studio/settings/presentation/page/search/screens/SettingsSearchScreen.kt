@@ -47,7 +47,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.zero.studio.R
 import android.zero.studio.core.presentation.components.haptic.withHaptic
@@ -60,7 +60,7 @@ import android.zero.studio.navigation.NavRoutes
 import android.zero.studio.navigation.navigateBack
 import android.zero.studio.settings.presentation.page.search.viewmodel.SettingsSearchViewModel
 import android.zero.studio.settings.presentation.provider.SettingsProvider
-import `in`.hridayan.settingsdsl.search.SearchEntry
+import android.zero.studio.settingsdsl.search.SearchEntry
 
 @Composable
 fun SettingsSearchScreen(
