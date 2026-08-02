@@ -17,7 +17,20 @@
 
 package com.itsaky.androidide.activities.editor
 
-/** @author Akash Yadav */
+import dagger.hilt.android.AndroidEntryPoint
+
+/**
+ * 编辑器主 Activity。
+ *
+ * 标注 @AndroidEntryPoint 以启用 Hilt 依赖注入: 设备连接管理 BottomSheet
+ * (DeviceConnectionBottomSheet) 中的 WiFi/OTG/Fastboot 三个 Tab 通过
+ * hiltViewModel() 获取 connection 模块的 @HiltViewModel, 这要求宿主 Activity
+ * 是 Hilt 组件持有者 (实现 GeneratedComponentManager)。IDEApplication 已标注
+ * @HiltAndroidApp, 此处标注后 hiltViewModel() 即可正常解析 ViewModel。
+ *
+ * @author Akash Yadav
+ */
+@AndroidEntryPoint
 class EditorActivityKt : EditorHandlerActivity()
 
 // TODO: Should we adjust to the display cutout insets?

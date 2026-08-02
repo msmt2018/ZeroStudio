@@ -9,11 +9,11 @@
  *   - OTG:            USB OTG ADB 设备枚举 (OtgViewModel)
  *   - Fastboot:       Fastboot 设备管理 (FastbootViewModel)
  *
- * 注意: 本 Fragment 不使用 @AndroidEntryPoint 注解。
- *       宿主 EditorActivityKt 未标注 @AndroidEntryPoint, 若本 Fragment 标注会触发
- *       Hilt "Fragment host component is missing" 异常并导致崩溃。
+ * 注意: 本 Fragment 不使用 @AndroidEntryPoint 注解 (无 @Inject 字段)。
+ *       宿主 EditorActivityKt 已标注 @AndroidEntryPoint, hiltViewModel() 通过
+ *       宿主 Activity 的 Hilt 组件持有者解析 connection 模块的 Hilt ViewModels。
  *       WiFi/OTG/Fastboot 三个 Tab 通过 hiltViewModel() 复用 connection 模块的
- *       Hilt ViewModels (依赖宿主 Activity 已配置 Hilt 入口)。
+ *       Hilt ViewModels。
  *
  * UI/UX 设计 (跟 android-adb-shell 参考工程不同):
  *   - TabRow 顶部 4 个 Tab, 切换不同连接方式
@@ -150,8 +150,9 @@ import kotlinx.coroutines.launch
  * ViewModels, 直接复用参考工程的 AdbConnectionManager / Repositories / mDNS 发现 /
  * USB 监听 / Fastboot 协议等完整连接逻辑, 仅 UI 层重新设计。
  *
- * 注意: 本 Fragment 不标注 @AndroidEntryPoint (宿主 EditorActivityKt 未标注,
- * 标注会导致 Hilt 崩溃), 三个 Tab 通过 hiltViewModel() 复用 Hilt ViewModels。
+ * 注意: 本 Fragment 不标注 @AndroidEntryPoint (无 @Inject 字段),
+ * 宿主 EditorActivityKt 已标注 @AndroidEntryPoint, 三个 Tab 通过
+ * hiltViewModel() 复用 Hilt ViewModels。
  *
  * 使用方式:
  *   DeviceConnectionBottomSheet().show(supportFragmentManager, "device_connection")
