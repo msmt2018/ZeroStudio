@@ -35,6 +35,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import android.zero.studio.adb.AbsAdbConnectionManager
 import android.zero.studio.adb.AdbStream
 import android.zero.studio.adb.android.AdbMdns
@@ -702,16 +703,15 @@ class ShizukuPairingService : Service() {
     // region 广播
 
     /**
-     * 把当前状态广播给 UI。使用 setPackage 限制在 app 内, 避免泄露给其他应用。
+     * 把当前状态广播给 UI。使用 LocalBroadcastManager 限制在 app 内, 避免泄露给其他应用。
      */
     private fun broadcastState(state: State, message: String) {
         Log.d(TAG, "broadcastState: $state ($message)")
         val intent = Intent(ACTION_PAIRING_STATE).apply {
             putExtra(EXTRA_STATE, state.name)
             putExtra(EXTRA_MESSAGE, message)
-            setPackage(packageName)
         }
-        sendBroadcast(intent)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
     // endregion
