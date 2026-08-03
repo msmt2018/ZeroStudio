@@ -3,9 +3,10 @@
  *
  *  在 IDE 内提供一个轻量的 Shizuku 管理界面:
  *    1. 显示 Shizuku 运行 / 授权 / 版本状态 (复用 DefaultShizukuProbe)
- *    2. 一键跳转 Shizuku Manager 启动 server
- *    3. 一键发起授权请求 (Shizuku.requestPermission)
- *    4. 一键跳转 Shizuku Manager 的无线 ADB 配对教程
+ *    2. 一键发起无线配对 (内置 ShizukuPairingService, Android 11+)
+ *    3. 一键启动 Shizuku Server (内置 ShizukuPairingService.startServer)
+ *    4. 一键跳转 Shizuku Manager 启动 server / 管理
+ *    5. 一键发起授权请求 (Shizuku.requestPermission)
  *
  *  core/app 只依赖 projects.modules.shizuku.api (客户端 SDK),
  *  manager APK 是独立进程, 通过 Intent 显式 component 跳转,
@@ -15,10 +16,13 @@
 package com.itsaky.androidide.fragments.shizuku
 
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -71,8 +75,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.itsaky.androidide.debugger.connection.shizuku.DefaultShizukuProbe
 import com.itsaky.androidide.debugger.connection.shizuku.ShizukuStatus
+import com.itsaky.androidide.debugger.shizuku.ShizukuPairingService
+import com.itsaky.androidide.debugger.shizuku.ShizukuPairingService.Companion.ACTION_PAIRING_STATE
+import com.itsaky.androidide.debugger.shizuku.ShizukuPairingService.Companion.EXTRA_MESSAGE
+import com.itsaky.androidide.debugger.shizuku.ShizukuPairingService.Companion.EXTRA_STATE
 import com.itsaky.androidide.onboarding.effects.frostedGlass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -106,7 +115,6 @@ class ShizukuManagerFragment : Fragment() {
 
 private const val SHIZUKU_MANAGER_PKG = "moe.shizuku.manager"
 private const val SHIZUKU_HOME_ACTIVITY = "moe.shizuku.manager.home.HomeActivity"
-private const val SHIZUKU_PAIR_ACTIVITY = "moe.shizuku.manager.adb.AdbPairingTutorialActivity"
 
 /**
  * Shizuku.requestPermission 的 requestCode, 与
@@ -123,8 +131,12 @@ private const val SHIZUKU_REQUEST_CODE = 0x5B1A
 private fun ShizukuManagerScreen() {
     val ctx = LocalContext.current
     var status by remember { mutableStateOf<ShizukuStatus?>(null) }
-    // tick 改变会触发重新 probe (首次进入 / 手动刷新 / binder 状态变化 / 授权回调)
+    // tick 改变会触发重新 probe (首次进入 / 手动刷新 / binder 状态变化 / 授权回调 / 配对成功)
     var tick by remember { mutableIntStateOf(0) }
+
+    // 配对流程状态 (由 ShizukuPairingService 通过 LocalBroadcast 回传)
+    var pairingState by remember { mutableStateOf<String?>(null) }
+    var pairingMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(tick) {
         status = withContext(Dispatchers.IO) { DefaultShizukuProbe().probe() }
@@ -153,6 +165,25 @@ private fun ShizukuManagerScreen() {
         }
     }
 
+    // 监听 ShizukuPairingService 配对状态广播 (SEARCHING / FOUND / PAIRING /
+    // CONNECTING / STARTING / SUCCESS / FAILED), SUCCESS 时触发状态刷新
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == ACTION_PAIRING_STATE) {
+                    pairingState = intent.getStringExtra(EXTRA_STATE)
+                    pairingMessage = intent.getStringExtra(EXTRA_MESSAGE)
+                    if (pairingState == "SUCCESS") tick++  // 触发状态刷新
+                }
+            }
+        }
+        val filter = IntentFilter(ACTION_PAIRING_STATE)
+        LocalBroadcastManager.getInstance(ctx).registerReceiver(receiver, filter)
+        onDispose {
+            LocalBroadcastManager.getInstance(ctx).unregisterReceiver(receiver)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -175,15 +206,30 @@ private fun ShizukuManagerScreen() {
         Spacer(Modifier.height(16.dp))
         StatusCard(status = status)
 
+        if (pairingState != null) {
+            Spacer(Modifier.height(12.dp))
+            PairingStateCard(
+                state = pairingState,
+                message = pairingMessage,
+            )
+        }
+
         Spacer(Modifier.height(16.dp))
         ActionButtons(
             status = status,
+            onStartPairing = {
+                runCatching { ShizukuPairingService.start(ctx) }
+                    .onFailure { toast(ctx, "启动配对失败: ${it.message}") }
+            },
+            onStartServer = {
+                runCatching { ShizukuPairingService.startServer(ctx) }
+                    .onFailure { toast(ctx, "启动 Server 失败: ${it.message}") }
+            },
             onLaunchManager = { launchShizukuManager(ctx) },
             onAuthorize = {
                 runCatching { Shizuku.requestPermission(SHIZUKU_REQUEST_CODE) }
                     .onFailure { toast(ctx, "授权请求失败: ${it.message}") }
             },
-            onPairWirelessAdb = { launchWirelessAdbPairing(ctx) },
             onRefresh = { tick++ },
         )
 
@@ -295,30 +341,177 @@ private fun StatusCard(status: ShizukuStatus?) {
 
 // endregion
 
+// region 配对状态卡片
+
+/**
+ * 配对状态卡片: 显示 [ShizukuPairingService] 配对流程的实时状态。
+ *
+ * 状态来自 service 通过 [ACTION_PAIRING_STATE] 广播的 [EXTRA_STATE]:
+ * SEARCHING / FOUND / PAIRING / CONNECTING / STARTING / SUCCESS / FAILED。
+ */
+@Composable
+private fun PairingStateCard(state: String?, message: String?) {
+    if (state == null) return
+
+    val icon: ImageVector
+    val tint: Color
+    val text: String
+    val showProgress: Boolean
+    when (state) {
+        "SEARCHING" -> {
+            icon = Icons.Outlined.Info
+            tint = Color(0xFF64B5F6)
+            text = "正在搜索配对服务..."
+            showProgress = true
+        }
+        "FOUND" -> {
+            icon = Icons.Outlined.Info
+            tint = Color(0xFFFFB74D)
+            text = "已发现配对服务,请在通知栏输入配对码"
+            showProgress = false
+        }
+        "PAIRING" -> {
+            icon = Icons.Outlined.Info
+            tint = Color(0xFF64B5F6)
+            text = "正在配对..."
+            showProgress = true
+        }
+        "CONNECTING" -> {
+            icon = Icons.Outlined.Info
+            tint = Color(0xFF64B5F6)
+            text = "正在连接 ADB..."
+            showProgress = true
+        }
+        "STARTING" -> {
+            icon = Icons.Outlined.Info
+            tint = Color(0xFF64B5F6)
+            text = "正在启动 Shizuku Server..."
+            showProgress = true
+        }
+        "SUCCESS" -> {
+            icon = Icons.Outlined.CheckCircle
+            tint = Color(0xFF66BB6A)
+            text = "Shizuku 配对并启动成功!"
+            showProgress = false
+        }
+        "FAILED" -> {
+            icon = Icons.Outlined.Error
+            tint = Color(0xFFEF5350)
+            text = if (message.isNullOrEmpty()) "配对失败" else "配对失败: $message"
+            showProgress = false
+        }
+        else -> {
+            icon = Icons.Outlined.Info
+            tint = Color(0xFFCCCCCC)
+            text = message ?: state
+            showProgress = false
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .frostedGlass(
+                shape = RoundedCornerShape(20.dp),
+                tint = Color(0xFF2D2D30),
+                alpha = 0.85f,
+            )
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            if (showProgress) {
+                CircularProgressIndicator(
+                    color = tint,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
+}
+
+// endregion
+
 // region 操作按钮
 
 @Composable
 private fun ActionButtons(
     status: ShizukuStatus?,
+    onStartPairing: () -> Unit,
+    onStartServer: () -> Unit,
     onLaunchManager: () -> Unit,
     onAuthorize: () -> Unit,
-    onPairWirelessAdb: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     val canAuthorize = status?.isRunning == true && !status.isGranted
+    // 仅当 Shizuku 未运行时允许尝试启动 (此时 ADB 可能已连接)
+    val canStartServer = status != null && !status.isRunning
+    val canWirelessPair = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // 1. 开始无线配对 (内置 ShizukuPairingService, Android 11+)
         Button(
+            onClick = onStartPairing,
+            enabled = canWirelessPair,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Outlined.Bluetooth, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(if (canWirelessPair) "开始无线配对 (推荐)" else "需要 Android 11+")
+        }
+        Text(
+            text = "请先在系统设置 > 开发者选项 > 无线调试 中打开无线调试,然后点击「使用配对码配对设备」",
+            color = Color(0xFF999999),
+            fontSize = 11.sp,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+
+        // 2. 启动 Shizuku Server (内置 startServer, 走 ADB start 脚本)
+        OutlinedButton(
+            onClick = onStartServer,
+            enabled = canStartServer,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("启动 Shizuku Server")
+        }
+        Text(
+            text = "需要已安装 Shizuku Manager APK 以提供 start 脚本, 且设备已通过 USB / 无线 ADB 连接",
+            color = Color(0xFF999999),
+            fontSize = 11.sp,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+
+        // 3. 打开 Shizuku Manager (手动启动 / 管理)
+        OutlinedButton(
             onClick = onLaunchManager,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("启动 Shizuku / 打开 Manager")
+            Text("打开 Shizuku Manager")
         }
 
+        // 4. 授权 Shizuku 访问
         OutlinedButton(
             onClick = onAuthorize,
             enabled = canAuthorize,
@@ -329,15 +522,7 @@ private fun ActionButtons(
             Text("授权 Shizuku 访问")
         }
 
-        OutlinedButton(
-            onClick = onPairWirelessAdb,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(Icons.Outlined.Bluetooth, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("无线 ADB 配对 (WIFI 调试)")
-        }
-
+        // 5. 刷新状态
         OutlinedButton(
             onClick = onRefresh,
             modifier = Modifier.fillMaxWidth(),
@@ -379,11 +564,12 @@ private fun HelpFooter() {
         }
         Spacer(Modifier.height(8.dp))
         val steps = listOf(
-            "1. 在系统设置开启「无线调试」(Android 11+)",
-            "2. 安装 Shizuku Manager APK (从 shizuku.com 下载)",
-            "3. 在 Shizuku Manager 内通过无线调试启动 Server",
-            "4. 回到本页, 点击「授权」给 IDE 访问权限",
-            "5. 在 Debugger 设置中选择 Shizuku 连接方式",
+            "1. 在系统设置 > 开发者选项 中开启「无线调试」(Android 11+)",
+            "2. 在无线调试页面点击「使用配对码配对设备」",
+            "3. 点击上方「开始无线配对」,在通知栏输入 6 位配对码",
+            "4. 配对成功后 Shizuku Server 将自动启动",
+            "5. 回到本页点击「授权」给 IDE 访问权限",
+            "6. 在 Debugger 设置中选择 Shizuku 连接方式",
         )
         steps.forEach { step ->
             Text(
@@ -408,17 +594,6 @@ private fun launchShizukuManager(ctx: Context) {
     }
     if (!tryStartActivity(ctx, intent)) {
         toast(ctx, "Shizuku Manager 未安装, 请先从 shizuku.com 下载安装")
-    }
-}
-
-/** 跳转 Shizuku Manager 无线 ADB 配对教程页。未安装时提示。 */
-private fun launchWirelessAdbPairing(ctx: Context) {
-    val intent = Intent().apply {
-        component = ComponentName(SHIZUKU_MANAGER_PKG, SHIZUKU_PAIR_ACTIVITY)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    if (!tryStartActivity(ctx, intent)) {
-        toast(ctx, "Shizuku Manager 未安装, 无法打开无线 ADB 配对")
     }
 }
 
