@@ -597,8 +597,7 @@ public class Shizuku {
          * <br>Under daemon mode, the service will run forever until {@link Shizuku#unbindUserService(UserServiceArgs, ServiceConnection, boolean)} is called.
          * <p>For upward compatibility reason, {@code daemon} is {@code true} by default.
          *
-         * @param daemon Daemon
-         */
+         * @param daemon Daemon         */
         public UserServiceArgs daemon(boolean daemon) {
             this.daemon = daemon;
             return this;
@@ -796,9 +795,7 @@ public class Shizuku {
              * of its ServiceConnection connections[].
              * This finally leads to the ServiceConnection#onServiceConnected/onServiceDisconnected being
              * called multiple times after bindUserService is called later, which is not expected.
-             */
-
-            ShizukuServiceConnection connection = ShizukuServiceConnections.get(args);
+             */            ShizukuServiceConnection connection = ShizukuServiceConnections.get(args);
 
             /*
              * For newer versions of the server, we can just call removeUserService with remove=false.
