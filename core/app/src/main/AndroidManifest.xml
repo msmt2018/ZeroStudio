@@ -173,6 +173,14 @@
                </intent-filter>
           </service>
 
+          <!-- Shizuku 无线调试配对服务 (Android 11+ self-pairing + server start) -->
+          <!-- 通知栏 RemoteInput 输入配对码, mDNS 发现, ADB 连接, 启动 Shizuku server -->
+          <service
+               android:name="com.itsaky.androidide.debugger.shizuku.ShizukuPairingService"
+               android:exported="false"
+               android:foregroundServiceType="connectedDevice"
+               tools:targetApi="34" />
+
           <profileable
                android:shell="true"
                tools:targetApi="q" />

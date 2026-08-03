@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.android.library)
@@ -30,14 +31,19 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlin {
-        compilerOptions {
-            jvmTarget = JvmTarget.JVM_17
-        }
-    }
-
     buildFeatures {
         compose = true
+    }
+}
+
+// 关键修复: 与 connection 模块完全一致的写法 (顶层 tasks.withType<KotlinCompile>)。
+// 原先使用 android { kotlin { compilerOptions { } } } 嵌套块, 在 AGP 8.13.2 +
+// KGP 2.2.20 组合下可能不会被正确应用, 导致本模块 Kotlin 源文件未按预期编译/打包,
+// 进而让 connection 模块出现大量 android.zero.studio.settingsdsl.* Unresolved reference。
+// 改为顶层 tasks.withType<KotlinCompile> 后, 编译产物可被 connection 正常消费。
+tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_17
     }
 }
 

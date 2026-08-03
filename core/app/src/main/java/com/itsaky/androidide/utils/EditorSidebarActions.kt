@@ -47,6 +47,7 @@ import com.itsaky.androidide.actions.sidebar.CloseProjectSidebarAction
 import com.itsaky.androidide.actions.sidebar.DataFileTreeSidebarAction
 import com.itsaky.androidide.actions.sidebar.EditorToolboxSidebarAction
 import com.itsaky.androidide.actions.sidebar.FileTreeSidebarAction
+import com.itsaky.androidide.actions.sidebar.GitSidebarAction
 import com.itsaky.androidide.actions.sidebar.PreferencesSidebarAction
 import com.itsaky.androidide.actions.sidebar.TerminalSidebarAction
 import com.itsaky.androidide.actions.sidebar.TerminalHostSidebarAction
@@ -69,6 +70,9 @@ internal object EditorSidebarActions {
 
     @Suppress("KotlinConstantConditions")
     registry.registerAction(FileTreeSidebarAction(context, ++order))
+    // 完整 Git UI 容器 (diff/branches/history/changes/stash/conflict/
+    // repositories/settings/tags/interactive-rebase) — 与文件树页面相互独立。
+    registry.registerAction(GitSidebarAction(context, ++order))
     registry.registerAction(DataFileTreeSidebarAction(context, ++order))
     registry.registerAction(BuildVariantsSidebarAction(context, ++order))
     EditorToolboxActions.registerActions(context)

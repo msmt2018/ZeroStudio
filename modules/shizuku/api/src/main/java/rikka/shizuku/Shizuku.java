@@ -197,8 +197,7 @@ public class Shizuku {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             ListenerHolder<?> that = (ListenerHolder<?>) o;
-            return Objects.equals(listener, that.listener) && Objects.equals(handler, that.handler);
-        }
+            return Objects.equals(listener, that.listener) && Objects.equals(handler, that.handler);        }
 
         @Override
         public int hashCode() {
@@ -397,8 +396,7 @@ public class Shizuku {
     }
 
     /**
-     * Remove the listener added by {@link #addRequestPermissionResultListener(OnRequestPermissionResultListener)}.
-     *
+     * Remove the listener added by {@link #addRequestPermissionResultListener(OnRequestPermissionResultListener)}.     *
      * @param listener OnRequestPermissionResultListener
      * @return If the listener is removed.
      */
@@ -488,6 +486,7 @@ public class Shizuku {
      * for complicated requirements.
      * <p>This method is planned to be removed from Shizuku API 14.
      */
+    @Deprecated
     public static ShizukuRemoteProcess newProcess(@NonNull String[] cmd, @Nullable String[] env, @Nullable String dir) {
         try {
             return new ShizukuRemoteProcess(requireService().newProcess(cmd, env, dir));
@@ -596,8 +595,7 @@ public class Shizuku {
          * <br>Under daemon mode, the service will run forever until {@link Shizuku#unbindUserService(UserServiceArgs, ServiceConnection, boolean)} is called.
          * <p>For upward compatibility reason, {@code daemon} is {@code true} by default.
          *
-         * @param daemon Daemon
-         */
+         * @param daemon Daemon         */
         public UserServiceArgs daemon(boolean daemon) {
             this.daemon = daemon;
             return this;
@@ -795,9 +793,7 @@ public class Shizuku {
              * of its ServiceConnection connections[].
              * This finally leads to the ServiceConnection#onServiceConnected/onServiceDisconnected being
              * called multiple times after bindUserService is called later, which is not expected.
-             */
-
-            ShizukuServiceConnection connection = ShizukuServiceConnections.get(args);
+             */            ShizukuServiceConnection connection = ShizukuServiceConnections.get(args);
 
             /*
              * For newer versions of the server, we can just call removeUserService with remove=false.
