@@ -197,7 +197,8 @@ public class Shizuku {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             ListenerHolder<?> that = (ListenerHolder<?>) o;
-            return Objects.equals(listener, that.listener) && Objects.equals(handler, that.handler);        }
+            return Objects.equals(listener, that.listener) && Objects.equals(handler, that.handler);
+        }
 
         @Override
         public int hashCode() {
@@ -396,7 +397,8 @@ public class Shizuku {
     }
 
     /**
-     * Remove the listener added by {@link #addRequestPermissionResultListener(OnRequestPermissionResultListener)}.     *
+     * Remove the listener added by {@link #addRequestPermissionResultListener(OnRequestPermissionResultListener)}.
+     *
      * @param listener OnRequestPermissionResultListener
      * @return If the listener is removed.
      */
