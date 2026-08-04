@@ -19,6 +19,7 @@ import com.itsaky.androidide.ui.theme.deviceconnection.DcChannel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -65,12 +66,15 @@ enum class CommandSortType(val label: String) {
  * - 维护活动通道选择，命令执行按活动通道路由到对应后端
  * - 流式收集命令输出，按行批量推送给 UI（避免每行触发重组）
  * - 与 [CommandRepository] 交互，提供命令示范列表的搜索 / 排序 / 收藏 / 使用计数
+ * - FAB 菜单：加载预置命令 / 添加自定义命令 / 仅看收藏
  *
  * 命令执行后端映射（见 spec §6.6）：
  * - BASIC → [ShellRepository.executeBasicCommand]
  * - SHIZUKU → [ShellRepository.executeShizukuCommand]
  * - ROOT → [RootAdbBridge.execOnActiveDevice]
  * - OTG → [OtgRepository.runOtgCommand]
+ *
+ * 输出批量策略（spec §6.6）：每 100 行或 250ms 推送一次。
  */
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -151,6 +155,19 @@ class AdbConsoleViewModel @Inject constructor(
     val allLabels: StateFlow<List<String>> = commandRepository.getAllLabels()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** 预置命令加载进度（0~1），null 表示未在加载。 */
+    private val _loadProgress = MutableStateFlow<Float?>(null)
+    val loadProgress: StateFlow<Float?> = _loadProgress.asStateFlow()
+
+    /** 最近一次操作的提示信息（供 UI snackbar 显示）。 */
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
+
+    /** 消费 toast。 */
+    fun consumeToast() {
+        _toast.value = null
+    }
+
     /** 当前执行任务，便于取消。 */
     private var execJob: Job? = null
 
@@ -206,6 +223,23 @@ class AdbConsoleViewModel @Inject constructor(
         _output.value = listOf(OutputLine("$ $command", isError = false))
 
         execJob = viewModelScope.launch {
+            // 批量缓冲：250ms 或 100 行触发一次推送
+            val buffer = mutableListOf<OutputLine>()
+            var lastFlush = System.currentTimeMillis()
+
+            // 启动 flush 协程
+            val flushJob = launch {
+                while (true) {
+                    delay(50)
+                    val now = System.currentTimeMillis()
+                    if (buffer.isNotEmpty() && (buffer.size >= 100 || now - lastFlush >= 250)) {
+                        flushBuffer(buffer)
+                        buffer.clear()
+                        lastFlush = now
+                    }
+                }
+            }
+
             val flow = when (channel) {
                 AdbChannel.BASIC -> shellRepository.executeBasicCommand(command)
                 AdbChannel.SHIZUKU -> shellRepository.executeShizukuCommand(command)
@@ -214,13 +248,29 @@ class AdbConsoleViewModel @Inject constructor(
             }
             runCatching {
                 flow.collect { line ->
-                    appendOutput(line)
+                    buffer.add(line)
+                    // 即时触发：达到 100 行立即 flush
+                    if (buffer.size >= 100) {
+                        flushBuffer(buffer)
+                        buffer.clear()
+                        lastFlush = System.currentTimeMillis()
+                    }
                 }
             }.onFailure { e ->
-                appendOutput(OutputLine("执行出错: ${e.message ?: e.javaClass.simpleName}", isError = true))
+                buffer.add(OutputLine("执行出错: ${e.message ?: e.javaClass.simpleName}", isError = true))
             }
+
+            // 收尾：把剩余缓冲 flush 出去
+            flushJob.cancel()
+            if (buffer.isNotEmpty()) flushBuffer(buffer)
             _running.value = false
         }
+    }
+
+    /** 把一批输出行原子追加到 [_output]。 */
+    private fun flushBuffer(lines: List<OutputLine>) {
+        if (lines.isEmpty()) return
+        _output.value = _output.value + lines
     }
 
     /** 停止当前命令。 */
@@ -263,10 +313,54 @@ class AdbConsoleViewModel @Inject constructor(
         }
     }
 
-    /** 加载预置命令到数据库。 */
-    fun loadDefaultCommands(onProgress: (Float) -> Unit) {
+    /**
+     * 加载预置命令到数据库。落实 spec §6.7 FAB 菜单「加载预置命令」。
+     */
+    fun loadDefaultCommands() {
+        if (_loadProgress.value != null) return
         viewModelScope.launch {
-            commandRepository.loadDefaultCommandsWithProgress().collect { onProgress(it) }
+            _loadProgress.value = 0f
+            runCatching {
+                commandRepository.loadDefaultCommandsWithProgress().collect { p ->
+                    _loadProgress.value = p
+                }
+            }.onSuccess {
+                _toast.value = "预置命令已加载"
+            }.onFailure { e ->
+                _toast.value = "加载失败：${e.message}"
+            }
+            _loadProgress.value = null
+        }
+    }
+
+    /**
+     * 添加自定义命令。落实 spec §6.7 FAB 菜单「添加自定义命令」。
+     */
+    fun addCustomCommand(command: String, description: String, labels: List<String>) {
+        if (command.isBlank()) {
+            _toast.value = "命令不能为空"
+            return
+        }
+        viewModelScope.launch {
+            commandRepository.insertCommand(
+                CommandEntity(
+                    command = command,
+                    description = description.ifBlank { "自定义命令" },
+                    labels = labels,
+                )
+            )
+            _toast.value = "已添加自定义命令"
+        }
+    }
+
+    /**
+     * 切换「仅看收藏」模式。落实 spec §6.7 FAB 菜单「书签」。
+     */
+    fun toggleFavoriteOnly() {
+        _sortType.value = if (_sortType.value == CommandSortType.FAVORITE) {
+            CommandSortType.AZ
+        } else {
+            CommandSortType.FAVORITE
         }
     }
 

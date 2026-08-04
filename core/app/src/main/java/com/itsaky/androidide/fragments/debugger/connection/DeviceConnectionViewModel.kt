@@ -1,7 +1,13 @@
 package com.itsaky.androidide.fragments.debugger.connection
 
 import android.zero.studio.shell.common.domain.repository.ShellRepository
+import android.zero.studio.shell.otg_adb_shell.domain.model.OtgConnection
+import android.zero.studio.shell.otg_adb_shell.domain.model.OtgState
 import android.zero.studio.shell.otg_adb_shell.domain.repository.OtgRepository
+import android.zero.studio.shell.wifi_adb_shell.data.repository.WifiAdbRepositoryImpl.ConnectionListener
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbConnection
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbDevice
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbState
 import android.zero.studio.shell.wifi_adb_shell.domain.repository.WifiAdbRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -24,6 +30,11 @@ import javax.inject.Inject
  * 设备连接页 ViewModel。
  *
  * 汇总各通道状态供 UI 消费，并提供刷新 / 探测 / 连接等操作入口。
+ *
+ * 落实 spec §4.2 / §4.4 / §7.4：
+ * - 无线 ADB「启动」按钮：[startWifiAdb] 复用 [WifiAdbRepository.connect]
+ * - OTG「等待设备 / 管理设备」：[startOtgScan] / [disconnectOtg] 复用 [OtgRepository]
+ * - 状态刷新：[refreshAll] 并行触发各通道刷新
  */
 @HiltViewModel
 class DeviceConnectionViewModel @Inject constructor(
@@ -42,11 +53,30 @@ class DeviceConnectionViewModel @Inject constructor(
 
     val rootDevices: StateFlow<List<RootAdbDevice>> = rootAdbBridge.deviceList.asStateFlow()
 
+    /** WiFi ADB 当前已保存的设备列表（用于「启动」按钮选择目标）。 */
+    val savedWifiDevices: StateFlow<List<WifiAdbDevice>> = wifiAdbRepository.getSavedDevicesFlow()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** OTG 通道当前状态（供 OTG 卡片显示设备名 / 连接状态）。 */
+    val otgState: StateFlow<OtgState> = OtgConnection.state
+        .stateIn(viewModelScope, SharingStarted.Eagerly, OtgState.Idle)
+
     /** 是否正在刷新所有通道。 */
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
-    /** 刷新所有通道状态。 */
+    /** 最近一次操作的提示信息（供 UI snackbar 显示）。 */
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
+
+    /** 消费 toast。 */
+    fun consumeToast() {
+        _toast.value = null
+    }
+
+    /**
+     * 刷新所有通道状态。落实 spec §7.4：并行触发各通道刷新。
+     */
     fun refreshAll() {
         if (_refreshing.value) return
         _refreshing.value = true
@@ -54,7 +84,9 @@ class DeviceConnectionViewModel @Inject constructor(
             runCatching {
                 shellRepository.refreshShizukuPermission()
                 rootManager.probe()
-                // WiFi ADB / OTG 状态由各自 StateFlow 实时推送，无需显式 refresh
+                rootAdbBridge.refreshDevices()
+                // OTG 状态由 BroadcastReceiver 实时推送，无需显式 refresh
+                // WiFi ADB 心跳状态由 WifiAdbConnection.state 实时推送
             }
             _refreshing.value = false
         }
@@ -86,5 +118,62 @@ class DeviceConnectionViewModel @Inject constructor(
     /** 设为活动设备。 */
     fun setActiveDevice(serial: String) {
         rootAdbBridge.setActive(serial)
+    }
+
+    /** 刷新 Root ADB 设备列表。 */
+    fun refreshRootDevices() {
+        rootAdbBridge.refreshDevices()
+    }
+
+    /**
+     * 无线 ADB「启动」按钮。落实 spec §4.2：
+     * - 已有保存设备 → 连接最近一台 ([WifiAdbRepository.getCurrentDevice] 优先)
+     * - 无保存设备 → 提示先配对
+     */
+    fun startWifiAdb() {
+        val state = WifiAdbConnection.currentState
+        if (state is WifiAdbState.Connected) {
+            _toast.value = "已连接到 ${state.address}"
+            return
+        }
+        val target = wifiAdbRepository.getCurrentDevice() ?: savedWifiDevices.value.firstOrNull()
+        if (target == null) {
+            _toast.value = "请先配对设备"
+            return
+        }
+        wifiAdbRepository.connect(target.ip, target.port, object : ConnectionListener {
+            override fun onConnectionSuccess() {
+                _toast.value = "已连接到 ${target.ip}:${target.port}"
+            }
+
+            override fun onConnectionFailed() {
+                _toast.value = "连接失败：${target.ip}:${target.port}"
+            }
+        })
+    }
+
+    /**
+     * OTG「等待设备」按钮。落实 spec §4.4：触发 USB 设备扫描。
+     */
+    fun startOtgScan() {
+        if (otgRepository.isConnected()) {
+            _toast.value = "OTG 已连接"
+            return
+        }
+        otgRepository.searchDevices()
+    }
+
+    /**
+     * OTG 断开当前设备。落实 spec §4.4「管理设备」。
+     */
+    fun disconnectOtg() {
+        otgRepository.disconnect()
+    }
+
+    /**
+     * OTG 注销 BroadcastReceiver。彻底释放 USB 监听。
+     */
+    fun unregisterOtg() {
+        otgRepository.unRegister()
     }
 }

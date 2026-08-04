@@ -28,4 +28,5 @@ enum class RootAdbDeviceState {
     OFFLINE,     // 离线
     UNAUTHORIZED, // 未授权
     CONNECTING,  // 连接中
+    UNKNOWN,     // 未知状态
 }

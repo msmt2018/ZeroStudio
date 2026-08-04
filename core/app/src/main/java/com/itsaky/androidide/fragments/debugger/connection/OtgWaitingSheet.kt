@@ -23,7 +23,12 @@ import androidx.compose.ui.window.Dialog
 import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
 
 /**
- * OTG 等待 USB 设备插入弹窗。显示一个旋转加载圈 + 提示文字。
+ * OTG 等待 USB 设备插入弹窗。落实 spec §4.4。
+ *
+ * 显示一个旋转加载圈 + 当前状态提示文字。状态由调用方传入（来自 [OtgConnection.state]）。
+ *
+ * @param message 当前 OTG 状态描述
+ * @param onDismiss 关闭弹窗（同时会取消扫描）
  */
 @Composable
 fun OtgWaitingSheet(
@@ -68,6 +73,11 @@ fun OtgWaitingSheet(
                     message,
                     color = c.textSecondary,
                     style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "请插入 USB 设备，连接成功后此弹窗会自动关闭",
+                    color = c.textSecondary,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 )
             }
         }

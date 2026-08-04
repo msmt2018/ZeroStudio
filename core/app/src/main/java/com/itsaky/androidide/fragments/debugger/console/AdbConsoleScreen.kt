@@ -1,101 +1,4 @@
-      color = c.surfaceHighlight,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, c.border),
-                            onClick = { channelMenuExpanded = true },
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                DcStatusDot(
-                                    level = viewModel.statusForChannel(activeChannel)?.level
-                                        ?: DcStatusLevel.RED,
-                                    sizeDp = 8,
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    activeChannel.displayName,
-                                    color = c.textPrimary,
-                                    fontSize = 13.sp,
-                                )
-                                Icon(Icons.Default.ArrowDropDown, null, tint = c.textSecondary)
-                            }
-                        }
-                        DropdownMenu(
-                            expanded = channelMenuExpanded,
-                            onDismissRequest = { channelMenuExpanded = false },
-                        ) {
-                            availableChannels.forEach { ch ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            DcStatusDot(
-                                                level = viewModel.statusForChannel(ch)?.level
-                                                    ?: DcStatusLevel.RED,
-                                                sizeDp = 8,
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(ch.displayName, color = c.textPrimary)
-                                        }
-                                    },
-                                    onClick = {
-                                        viewModel.setActiveChannel(ch)
-                                        channelMenuExpanded = false
-                                    },
-                                )
-                            }
-                            if (availableChannels.isEmpty()) {
-                                DropdownMenuItem(
-                                    text = { Text("无可用通道", color = c.textSecondary) },
-                                    onClick = { channelMenuExpanded = false },
-                                )
-                            }
-                        }
-                    }
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.Refresh, "刷新", tint = c.textSecondary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = c.surfacePanel),
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .navigationBarsPadding(),
-        ) {
-            // 活动连接条
-            ActiveConnectionBar(
-                activeChannel = activeChannel,
-                status = viewModel.statusForChannel(activeChannel),
-                hasUsableConnection = hasUsableConnection,
-                onNavigateToConnection = onNavigateToConnection,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            // 命令示范列表（可折叠）
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = c.surfacePanel,
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "命令示范 (${commandExamples.size})",
-                            color = c.textPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { examplesExpanded = !examplesExpanded }) {
-                            Icon(
-                                if (examplesExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                "折叠",
-                                tint = c.textSecondary,
+condary,
                             )
                         }
                     }
@@ -301,6 +204,25 @@
             }
         }
     }
+
+    // 添加自定义命令对话框
+    if (showAddCommandDialog) {
+        AddCommandDialog(
+            onDismiss = { showAddCommandDialog = false },
+            onConfirm = { cmd, desc, labels ->
+                viewModel.addCustomCommand(cmd, desc, labels)
+            },
+        )
+    }
+
+    // 预置命令加载进度
+    loadProgress?.let { p ->
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { p },
+            modifier = Modifier.fillMaxWidth(),
+            color = c.primary,
+        )
+    }
 }
 
 /** 顶部活动连接条。 */
@@ -426,4 +348,113 @@ private fun highlightLine(line: OutputLine, colors: DeviceConnectionColors): Ann
             }
         }
     }
+}
+
+/**
+ * FAB 菜单。落实 spec §6.7：加载预置命令 / 添加自定义命令 / 书签。
+ *
+ * 展开时显示三个子操作按钮 + 一个主切换按钮。
+ */
+@Composable
+private fun FloatingActionButtonMenu(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onLoadDefaults: () -> Unit,
+    onAddCustom: () -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    val c = deviceConnectionColors
+    Box {
+        androidx.compose.material3.ExtendedFloatingActionButton(
+            onClick = onToggle,
+            icon = { Icon(Icons.Default.Add, "菜单", tint = c.textPrimary) },
+            text = { Text(if (expanded) "关闭" else "更多", color = c.textPrimary) },
+            containerColor = c.primary,
+            contentColor = c.textPrimary,
+        )
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = onToggle,
+        ) {
+            DropdownMenuItem(
+                text = { Text("加载预置命令", color = c.textPrimary) },
+                leadingIcon = { Icon(Icons.Default.Download, null, tint = c.primary) },
+                onClick = onLoadDefaults,
+            )
+            DropdownMenuItem(
+                text = { Text("添加自定义命令", color = c.textPrimary) },
+                leadingIcon = { Icon(Icons.Default.Edit, null, tint = c.primary) },
+                onClick = onAddCustom,
+            )
+            DropdownMenuItem(
+                text = { Text("仅看收藏", color = c.textPrimary) },
+                leadingIcon = { Icon(Icons.Default.Bookmark, null, tint = c.statusYellow) },
+                onClick = onToggleFavorite,
+            )
+        }
+    }
+}
+
+/**
+ * 添加自定义命令对话框。落实 spec §6.7 FAB 菜单「添加自定义命令」。
+ */
+@Composable
+private fun AddCommandDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (command: String, description: String, labels: List<String>) -> Unit,
+) {
+    val c = deviceConnectionColors
+    var command by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var labelsText by remember { mutableStateOf("") }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加自定义命令", color = c.textPrimary, fontWeight = FontWeight.SemiBold) },
+        containerColor = c.surfacePanel,
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = command,
+                    onValueChange = { command = it },
+                    label = { Text("命令", color = c.textSecondary) },
+                    placeholder = { Text("如：adb shell pm list packages", fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("描述", color = c.textSecondary) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                )
+                OutlinedTextField(
+                    value = labelsText,
+                    onValueChange = { labelsText = it },
+                    label = { Text("标签（逗号分隔）", color = c.textSecondary) },
+                    placeholder = { Text("如：pm, shell", fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                )
+            }
+        },
+        confirmButton = {
+            DcPrimaryButton(
+                text = "添加",
+                onClick = {
+                    val labels = labelsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    onConfirm(command.trim(), description.trim(), labels)
+                    onDismiss()
+                },
+                enabled = command.isNotBlank(),
+            )
+        },
+        dismissButton = {
+            DcSecondaryButton(text = "取消", onClick = onDismiss)
+        },
+    )
 }

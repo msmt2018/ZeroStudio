@@ -134,10 +134,72 @@ class RootAdbBridge @Inject constructor(
 
     /**
      * 刷新设备列表（移除已离线 / 已断开的设备）。
+     *
+     * 落实 spec §4.3.6：通过 `adb devices` 命令刷新（adb 二进制后端，libsu 执行）。
+     * 若 adb 二进制不可用，则仅清理已断开的 WiFi 连接。
      */
     fun refreshDevices() {
+        // 清理已断开的 WiFi 连接
         _deviceList.value = _deviceList.value.filterNot {
             it.type == RootAdbDeviceType.WIFI && !wifiConnections.containsKey(it.serial)
+        }
+        // 若 root 已授权，尝试用 libsu 执行 `adb devices` 刷新设备列表
+        if (rootManager.isGranted) {
+            // 在后台协程中执行 adb devices 刷新，避免阻塞调用方
+            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                runCatching {
+                    val output = rootManager.executeLibsuCapture("adb devices")
+                    parseAdbDevicesOutput(output)
+                }
+            }
+        }
+    }
+
+    /**
+     * 解析 `adb devices` 输出，更新设备列表。
+     *
+     * 输出格式示例：
+     * ```
+     * List of devices attached
+     * 192.168.1.50:5555    device
+     * emulator-5554    offline
+     * ```
+     */
+    private fun parseAdbDevicesOutput(output: String) {
+        val lines = output.lineSequence()
+            .dropWhile { !it.contains("List of devices") }
+            .drop(1)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toList()
+        val parsed = mutableListOf<RootAdbDevice>()
+        for (line in lines) {
+            val parts = line.split(Regex("\\s+"))
+            if (parts.size < 2) continue
+            val serial = parts[0]
+            val state = parts[1]
+            val type = when {
+                serial.contains(":") -> RootAdbDeviceType.WIFI
+                serial.startsWith("emulator-") -> RootAdbDeviceType.LOCAL
+                else -> RootAdbDeviceType.USB
+            }
+            val deviceState = when (state) {
+                "device" -> RootAdbDeviceState.DEVICE
+                "offline" -> RootAdbDeviceState.OFFLINE
+                "unauthorized" -> RootAdbDeviceState.UNAUTHORIZED
+                else -> RootAdbDeviceState.UNKNOWN
+            }
+            parsed.add(RootAdbDevice(
+                type = type,
+                serial = serial,
+                model = serial,
+                state = deviceState,
+            ))
+        }
+        if (parsed.isNotEmpty()) {
+            // 合并：保留 LOCAL 本机设备，替换 WIFI/USB 设备
+            val local = _deviceList.value.filter { it.type == RootAdbDeviceType.LOCAL }
+            _deviceList.value = local + parsed.filter { it.type != RootAdbDeviceType.LOCAL }
         }
     }
 

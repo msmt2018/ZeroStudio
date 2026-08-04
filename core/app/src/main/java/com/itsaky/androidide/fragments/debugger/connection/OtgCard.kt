@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Usb
-import androidx.compose.material.icons.filled.DevicesOther
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -28,16 +28,25 @@ import com.itsaky.androidide.ui.theme.deviceconnection.DcStatusDot
 import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
 
 /**
- * OTG 卡片。
+ * OTG 卡片。落实 spec §4.4。
  *
  * - 图标 + 标题 / 设备名 + 右上状态点
- * - 两按钮：等待设备 / 管理设备
+ * - 未连接：[等待设备] + [管理设备] 两按钮
+ * - 已连接：[管理设备] + [断开] 两按钮
+ *
+ * @param status OTG 通道状态
+ * @param connected 是否已连接（用于切换按钮组）
+ * @param onWaitDevice 等待 USB 设备插入
+ * @param onManageDevice 管理当前已连接设备
+ * @param onDisconnect 断开当前 OTG 设备
  */
 @Composable
 fun OtgCard(
     status: ChannelStatus?,
+    connected: Boolean,
     onWaitDevice: () -> Unit,
     onManageDevice: () -> Unit,
+    onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = deviceConnectionColors
@@ -72,18 +81,33 @@ fun OtgCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                DcPrimaryButton(
-                    text = "等待设备",
-                    icon = Icons.Default.Search,
-                    onClick = onWaitDevice,
-                    modifier = Modifier.weight(1f),
-                )
-                DcSecondaryButton(
-                    text = "管理设备",
-                    icon = Icons.Default.DevicesOther,
-                    onClick = onManageDevice,
-                    modifier = Modifier.weight(1f),
-                )
+                if (connected) {
+                    DcSecondaryButton(
+                        text = "管理设备",
+                        icon = Icons.Default.Usb,
+                        onClick = onManageDevice,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DcPrimaryButton(
+                        text = "断开",
+                        icon = Icons.Default.LinkOff,
+                        onClick = onDisconnect,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    DcPrimaryButton(
+                        text = "等待设备",
+                        icon = Icons.Default.Search,
+                        onClick = onWaitDevice,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DcSecondaryButton(
+                        text = "管理设备",
+                        icon = Icons.Default.Usb,
+                        onClick = onManageDevice,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }

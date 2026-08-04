@@ -18,6 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,8 @@ import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
  *
  * 由 [com.itsaky.androidide.fragments.debugger.DeviceConnectionBottomSheet] 承载，
  * 通过回调与外部 Fragment 协作跳转全屏子页面。
+ *
+ * 落实 spec §3.3 / §4 / §7：所有按钮均已接入 [DeviceConnectionViewModel]。
  */
 @Composable
 fun DeviceConnectionSheetContent(
@@ -51,12 +54,21 @@ fun DeviceConnectionSheetContent(
     val rootState by viewModel.rootState.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
     val rootDevices by viewModel.rootDevices.collectAsState()
+    val otgState by viewModel.otgState.collectAsState()
+    val toast by viewModel.toast.collectAsState()
 
     var showPairMenu by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
     var showRootPicker by remember { mutableStateOf(false) }
     var showRootAdbDevices by remember { mutableStateOf(false) }
     var showOtgWaiting by remember { mutableStateOf(false) }
+
+    // OTG 连接成功后自动关闭等待弹窗
+    LaunchedEffect(otgState) {
+        if (showOtgWaiting && otgState is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connected) {
+            showOtgWaiting = false
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -94,9 +106,7 @@ fun DeviceConnectionSheetContent(
                     status = statuses.firstOrNull { it.channel == DcChannel.WIFI_ADB },
                     onGuide = { showGuide = true },
                     onPairMenu = { showPairMenu = true },
-                    onStart = {
-                        // TODO: 调用 viewModel 启动 WiFi ADB 连接（连接到 currentDevice）
-                    },
+                    onStart = viewModel::startWifiAdb,
                 )
             }
             item {
@@ -114,11 +124,13 @@ fun DeviceConnectionSheetContent(
             item {
                 OtgCard(
                     status = statuses.firstOrNull { it.channel == DcChannel.OTG },
-                    onWaitDevice = { showOtgWaiting = true },
-                    onManageDevice = {
-                        // TODO: 打开 OTG 设备管理（当前复用 RootAdbDeviceSheet 的 USB 分组即可）
-                        showRootAdbDevices = true
+                    connected = otgState is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connected,
+                    onWaitDevice = {
+                        viewModel.startOtgScan()
+                        showOtgWaiting = true
                     },
+                    onManageDevice = { showRootAdbDevices = true },
+                    onDisconnect = viewModel::disconnectOtg,
                 )
             }
             item {
@@ -173,14 +185,26 @@ fun DeviceConnectionSheetContent(
             onConnectWifi = { ip, port -> viewModel.connectWifiDevice(ip, port) {} },
             onDisconnectWifi = viewModel::disconnectWifiDevice,
             onSetActive = viewModel::setActiveDevice,
-            onRefresh = { /* TODO: refreshDevices */ },
+            onRefresh = viewModel::refreshRootDevices,
             onDismiss = { showRootAdbDevices = false },
         )
     }
     if (showOtgWaiting) {
+        val msg = when (otgState) {
+            is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Searching -> "正在搜索 USB 设备..."
+            is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.DeviceFound ->
+                "已发现设备：${(otgState as com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.DeviceFound).deviceName}"
+            is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connecting -> "正在连接..."
+            is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Error ->
+                "错误：${(otgState as com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Error).message}"
+            else -> "请插入 USB 设备..."
+        }
         OtgWaitingSheet(
-            message = "请插入 USB 设备...",
-            onDismiss = { showOtgWaiting = false },
+            message = msg,
+            onDismiss = {
+                showOtgWaiting = false
+                viewModel.unregisterOtg()
+            },
         )
     }
 }
