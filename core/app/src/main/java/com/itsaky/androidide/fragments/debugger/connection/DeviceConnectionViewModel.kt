@@ -167,7 +167,9 @@ class DeviceConnectionViewModel @Inject constructor(
 
     /** 刷新 Root ADB 设备列表。 */
     fun refreshRootDevices() {
-        rootAdbBridge.refreshDevices()
+        viewModelScope.launch {
+            rootAdbBridge.refreshDevices()
+        }
     }
 
     /**
