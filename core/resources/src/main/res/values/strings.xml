@@ -302,30 +302,9 @@
      <string name="title_open_projects">Open last project</string>
      <string name="idepref_debugger_title">Debugger</string>
      <string name="idepref_debugger_summary">Configure how the IDE connects to the host app for debugging.</string>
-     <string name="idepref_debugger_connection_type_title">Connection method</string>
-     <string name="idepref_debugger_connection_type_summary">Choose how the IDE reaches the JDWP server inside the host app.</string>
      <string name="idepref_debugger_auto_retry_title">Auto retry on failure</string>
      <string name="idepref_debugger_auto_retry_summary">Retry up to 3 times within the selected method before reporting an error.</string>
-     <string name="idepref_debugger_aidl_listen_port_title">AIDL listen port (0 = random)</string>
-     <string name="idepref_debugger_shizuku_sub_path_title">Shizuku sub-path</string>
-     <string name="idepref_debugger_shizuku_sub_path_summary">Auto picks the first working strategy. Lock to one only for advanced use.</string>
-     <string name="idepref_debugger_shizuku_manager_title">打开 Shizuku 管理器</string>
-     <string name="idepref_debugger_shizuku_manager_summary">查看 Shizuku 状态, 启动 server, 授权 IDE, 配对无线 ADB 调试。</string>
-     <string name="idepref_debugger_root_su_bin_title">su binary path</string>
-     <string name="idepref_debugger_innet_socks_host_title">SOCKS5 host</string>
-     <string name="idepref_debugger_innet_socks_port_title">SOCKS5 port</string>
-     <string name="idepref_debugger_innet_socks_user_title">SOCKS5 user (optional)</string>
-     <string name="idepref_debugger_innet_socks_password_title">SOCKS5 password (optional)</string>
-     <string name="idepref_debugger_innet_socks_connect_timeout_title">SOCKS5 connect timeout (ms)</string>
-     <string name="idepref_debugger_innet_socks_title">Inner-VM (SOCKS5)</string>
-     <string name="idepref_debugger_innet_adb_host_title">Remote ADB host</string>
-     <string name="idepref_debugger_innet_adb_port_title">Remote ADB port</string>
-     <string name="idepref_debugger_innet_adb_serial_title">Remote ADB serial (optional)</string>
-     <string name="idepref_debugger_innet_adb_connect_timeout_title">Remote ADB connect timeout (ms)</string>
-     <string name="idepref_debugger_innet_adb_title">Inner-VM (ADB forward)</string>
-     <string name="idepref_debugger_usb_adb_host_title">ADB host</string>
-     <string name="idepref_debugger_usb_adb_port_title">ADB port</string>
-     <string name="idepref_debugger_usb_adb_serial_title">ADB serial (optional)</string>
+     <string name="idepref_debugger_aidl_listen_port_title">JDWP listen port</string>
      <string name="msg_open_projects">If checked, the IDE will remember the last opened project and it will be reopened on next startup.</string>
      <string name="title_confirm_project_open">Confirm project opening</string>
      <string name="msg_confirm_project_open">Ask before opening last opened project.</string>
@@ -1048,9 +1027,9 @@
   <string name="od_sdk_log_error_with_msg">ERR: %1$s</string>
 
     <!-- Strings added by connection module PR -->
-    <string name="idepref_debugger_device_connection_summary">Shizuku / Root ADB 连接通道状态检测与切换 (底部弹窗)。</string>
-    <string name="idepref_debugger_device_connection_title">设备连接管理</string>
+    <string name="idepref_debugger_device_connection_summary">仅 JDWP 协议连接端点检测与本地命令面板 (底部弹窗)。</string>
+    <string name="idepref_debugger_device_connection_title">JDWP 连接</string>
     <string name="msg_device_connection_not_available">当前环境不可用, 无法打开设备连接管理</string>
-    <string name="title_open_device_connection">设备连接</string>
+    <string name="title_open_device_connection">JDWP 连接</string>
 
 </resources>
