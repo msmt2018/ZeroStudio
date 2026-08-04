@@ -30,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import android.zero.studio.shell.otg_adb_shell.domain.model.OtgState
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbConnection
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbState
 import com.itsaky.androidide.ui.theme.deviceconnection.DcChannel
 import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
 
@@ -57,6 +59,8 @@ fun DeviceConnectionSheetContent(
     val otgState by viewModel.otgState.collectAsState()
     val toast by viewModel.toast.collectAsState()
     val availableManagers by viewModel.availableManagers.collectAsState()
+    val wifiConnecting by viewModel.wifiConnecting.collectAsState()
+    val wifiState by WifiAdbConnection.state.collectAsState()
 
     var showPairMenu by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
@@ -113,9 +117,12 @@ fun DeviceConnectionSheetContent(
             item {
                 WirelessAdbCard(
                     status = statuses.firstOrNull { it.channel == DcChannel.WIFI_ADB },
+                    connecting = wifiConnecting,
+                    connected = wifiState is WifiAdbState.Connected,
                     onGuide = { showGuide = true },
                     onPairMenu = { showPairMenu = true },
                     onStart = viewModel::startWifiAdb,
+                    onDisconnect = viewModel::disconnectWifiAdb,
                 )
             }
             item {

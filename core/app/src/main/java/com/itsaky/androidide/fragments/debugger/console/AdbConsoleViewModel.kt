@@ -8,6 +8,9 @@ import android.zero.studio.shell.common.domain.repository.ShellRepository
 import android.zero.studio.shell.otg_adb_shell.domain.model.OtgConnection
 import android.zero.studio.shell.otg_adb_shell.domain.model.OtgState
 import android.zero.studio.shell.otg_adb_shell.domain.repository.OtgRepository
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbConnection
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbState
+import android.zero.studio.shell.wifi_adb_shell.domain.repository.WifiAdbRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.debugger.connection.status.ChannelStatus
@@ -35,6 +38,7 @@ import javax.inject.Inject
 enum class AdbChannel(val displayName: String) {
     BASIC("本机 sh"),
     SHIZUKU("Shizuku"),
+    WIRELESS_ADB("无线 ADB"),
     ROOT("Root ADB"),
     OTG("OTG ADB"),
 }
@@ -85,6 +89,7 @@ class AdbConsoleViewModel @Inject constructor(
     private val rootManager: RootManager,
     private val commandRepository: CommandRepository,
     private val aggregator: ConnectionStatusAggregator,
+    private val wifiAdbRepository: WifiAdbRepository,
 ) : ViewModel() {
 
     /** 所有通道的当前状态（用于顶部活动连接条 + 通道选择器可用性判断）。 */
@@ -97,10 +102,12 @@ class AdbConsoleViewModel @Inject constructor(
         rootManager.rootState,
         rootAdbBridge.deviceList,
         OtgConnection.state,
-    ) { shizuku, root, devices, otg ->
+        WifiAdbConnection.state,
+    ) { shizuku, root, devices, otg, wifiState ->
         buildList {
             add(AdbChannel.BASIC)
             if (shizuku) add(AdbChannel.SHIZUKU)
+            if (wifiState is WifiAdbState.Connected) add(AdbChannel.WIRELESS_ADB)
             if (root is RootState.Granted && devices.any { it.isActive }) {
                 add(AdbChannel.ROOT)
             }
@@ -289,6 +296,7 @@ class AdbConsoleViewModel @Inject constructor(
             val flow = when (channel) {
                 AdbChannel.BASIC -> shellRepository.executeBasicCommand(command)
                 AdbChannel.SHIZUKU -> shellRepository.executeShizukuCommand(command)
+                AdbChannel.WIRELESS_ADB -> wifiAdbRepository.execute(command)
                 AdbChannel.ROOT -> rootAdbBridge.execOnActiveDevice(command)
                 AdbChannel.OTG -> otgRepository.runOtgCommand(command)
             }
@@ -326,6 +334,7 @@ class AdbConsoleViewModel @Inject constructor(
         runCatching {
             when (_activeChannel.value) {
                 AdbChannel.BASIC, AdbChannel.SHIZUKU -> shellRepository.stopCommand()
+                AdbChannel.WIRELESS_ADB -> wifiAdbRepository.abortShell()
                 AdbChannel.ROOT -> rootAdbBridge.stopCommand()
                 AdbChannel.OTG -> otgRepository.stopCommand()
             }
@@ -426,7 +435,8 @@ class AdbConsoleViewModel @Inject constructor(
         return when (channel) {
             AdbChannel.BASIC -> ChannelStatus(DcChannel.SHIZUKU, com.itsaky.androidide.ui.theme.deviceconnection.DcStatusLevel.GREEN, "本机 sh")
             AdbChannel.SHIZUKU -> all.firstOrNull { it.channel == DcChannel.SHIZUKU }
-            AdbChannel.ROOT -> all.firstOrNull { it.channel == DcChannel.ROOT }
+            AdbChannel.WIRELESS_ADB -> all.firstOrNull { it.channel == DcChannel.WIFI_ADB }
+            AdbChannel.ROOT -> all.firstOrNull { it.channel == DcChannel.ROOT_ADB }
             AdbChannel.OTG -> all.firstOrNull { it.channel == DcChannel.OTG }
         }
     }
@@ -437,5 +447,6 @@ class AdbConsoleViewModel @Inject constructor(
         runCatching { shellRepository.stopCommand() }
         runCatching { otgRepository.stopCommand() }
         runCatching { rootAdbBridge.stopCommand() }
+        runCatching { wifiAdbRepository.abortShell() }
     }
 }

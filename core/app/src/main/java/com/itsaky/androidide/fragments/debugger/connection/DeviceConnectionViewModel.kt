@@ -68,6 +68,10 @@ class DeviceConnectionViewModel @Inject constructor(
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    /** WiFi ADB 是否正在连接中（用于启动按钮 loading 态）。 */
+    private val _wifiConnecting = MutableStateFlow(false)
+    val wifiConnecting: StateFlow<Boolean> = _wifiConnecting.asStateFlow()
+
     /** 最近一次操作的提示信息（供 UI snackbar 显示）。 */
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
@@ -176,6 +180,7 @@ class DeviceConnectionViewModel @Inject constructor(
      * 无线 ADB「启动」按钮。落实 spec §4.2：
      * - 已有保存设备 → 连接最近一台 ([WifiAdbRepository.getCurrentDevice] 优先)
      * - 无保存设备 → 提示先配对
+     * - 连接成功后自动启动 heartbeat 保活
      */
     fun startWifiAdb() {
         val state = WifiAdbConnection.currentState
@@ -183,20 +188,32 @@ class DeviceConnectionViewModel @Inject constructor(
             _toast.value = "已连接到 ${state.address}"
             return
         }
+        if (_wifiConnecting.value) return
         val target = wifiAdbRepository.getCurrentDevice() ?: savedWifiDevices.value.firstOrNull()
         if (target == null) {
             _toast.value = "请先配对设备"
             return
         }
+        _wifiConnecting.value = true
         wifiAdbRepository.connect(target.ip, target.port, object : ConnectionListener {
             override fun onConnectionSuccess() {
+                _wifiConnecting.value = false
                 _toast.value = "已连接到 ${target.ip}:${target.port}"
+                // 启动 heartbeat 保活
+                wifiAdbRepository.startHeartbeat()
             }
 
             override fun onConnectionFailed() {
+                _wifiConnecting.value = false
                 _toast.value = "连接失败：${target.ip}:${target.port}"
             }
         })
+    }
+
+    /** 断开无线 ADB 连接。 */
+    fun disconnectWifiAdb() {
+        wifiAdbRepository.disconnect()
+        _toast.value = "已断开无线 ADB"
     }
 
     /**

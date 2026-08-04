@@ -11,8 +11,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,20 +27,33 @@ import com.itsaky.androidide.ui.theme.deviceconnection.DcChannel
 import com.itsaky.androidide.ui.theme.deviceconnection.DcPrimaryButton
 import com.itsaky.androidide.ui.theme.deviceconnection.DcSecondaryButton
 import com.itsaky.androidide.ui.theme.deviceconnection.DcStatusDot
+import com.itsaky.androidide.ui.theme.deviceconnection.DcStatusLevel
 import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
 
 /**
  * 无线 ADB 卡片。
  *
  * - 图标 + 标题 + 右上状态点
- * - 三按钮：指南 / 配对设备▾ / 启动
+ * - 三按钮：指南 / 配对设备▾ / 启动（连接成功后变为断开）
+ * - 连接中显示 loading 指示器
+ *
+ * @param status 当前通道状态
+ * @param connecting 是否正在连接中
+ * @param connected 是否已连接
+ * @param onGuide 指南回调
+ * @param onPairMenu 配对菜单回调
+ * @param onStart 启动回调
+ * @param onDisconnect 断开回调（已连接时显示）
  */
 @Composable
 fun WirelessAdbCard(
     status: ChannelStatus?,
+    connecting: Boolean,
+    connected: Boolean,
     onGuide: () -> Unit,
     onPairMenu: () -> Unit,
     onStart: () -> Unit,
+    onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = deviceConnectionColors
@@ -87,16 +101,47 @@ fun WirelessAdbCard(
                 )
                 DcSecondaryButton(
                     text = "配对设备",
-                    icon = Icons.Default.Bluetooth,
+                    icon = androidx.compose.material.icons.Icons.Default.Cast,
                     onClick = onPairMenu,
                     modifier = Modifier.weight(1f),
                 )
-                DcPrimaryButton(
-                    text = "启动",
-                    icon = Icons.Default.PlayArrow,
-                    onClick = onStart,
-                    modifier = Modifier.weight(1f),
-                )
+                if (connected) {
+                    DcSecondaryButton(
+                        text = "断开",
+                        icon = Icons.Default.Stop,
+                        onClick = onDisconnect,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    DcPrimaryButton(
+                        text = if (connecting) "连接中" else "启动",
+                        icon = if (connecting) null else Icons.Default.PlayArrow,
+                        enabled = !connecting,
+                        onClick = onStart,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            // 连接中 loading 指示器
+            if (connecting) {
+                Spacer(Modifier.size(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        color = c.channelWifiAdb,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "正在连接...",
+                        color = c.textSecondary,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
     }

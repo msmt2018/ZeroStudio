@@ -114,7 +114,6 @@ fun AdbConsoleScreen(
     var examplesExpanded by remember { mutableStateOf(true) }
     var showHistory by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
-    var showFabMenu by remember { mutableStateOf(false) }
     var showAddCommandDialog by remember { mutableStateOf(false) }
 
     val loadProgress by viewModel.loadProgress.collectAsState()
@@ -133,24 +132,6 @@ fun AdbConsoleScreen(
 
     Scaffold(
         containerColor = c.background,
-        floatingActionButton = {
-            FloatingActionButtonMenu(
-                expanded = showFabMenu,
-                onToggle = { showFabMenu = !showFabMenu },
-                onLoadDefaults = {
-                    showFabMenu = false
-                    viewModel.loadDefaultCommands()
-                },
-                onAddCustom = {
-                    showFabMenu = false
-                    showAddCommandDialog = true
-                },
-                onToggleFavorite = {
-                    showFabMenu = false
-                    viewModel.toggleFavoriteOnly()
-                },
-            )
-        },
         topBar = {
             TopAppBar(
                 title = { Text("ADB 命令", color = c.textPrimary, fontWeight = FontWeight.SemiBold) },
@@ -201,18 +182,16 @@ fun AdbConsoleScreen(
                                             )
                                             Spacer(Modifier.width(8.dp))
                                             Text(ch.displayName, color = c.textPrimary)
+                                            if (ch == activeChannel) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("✓", color = c.primary, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     },
                                     onClick = {
                                         viewModel.setActiveChannel(ch)
                                         channelMenuExpanded = false
                                     },
-                                )
-                            }
-                            if (availableChannels.isEmpty()) {
-                                DropdownMenuItem(
-                                    text = { Text("无可用通道", color = c.textSecondary) },
-                                    onClick = { channelMenuExpanded = false },
                                 )
                             }
                         }
@@ -256,6 +235,20 @@ fun AdbConsoleScreen(
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f),
                         )
+                        // 操作按钮（原 FAB 菜单移到此避免遮挡输入栏）
+                        IconButton(onClick = { viewModel.loadDefaultCommands() }) {
+                            Icon(Icons.Default.Download, "加载预置命令", tint = c.primary)
+                        }
+                        IconButton(onClick = { showAddCommandDialog = true }) {
+                            Icon(Icons.Default.Edit, "添加自定义命令", tint = c.primary)
+                        }
+                        IconButton(onClick = { viewModel.toggleFavoriteOnly() }) {
+                            Icon(
+                                if (sortType == CommandSortType.FAVORITE) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                "仅看收藏",
+                                tint = if (sortType == CommandSortType.FAVORITE) c.statusYellow else c.textSecondary,
+                            )
+                        }
                         IconButton(onClick = { examplesExpanded = !examplesExpanded }) {
                             Icon(
                                 if (examplesExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -682,52 +675,7 @@ private fun LabelChip(
 }
 
 /**
- * FAB 菜单。落实 spec §6.7：加载预置命令 / 添加自定义命令 / 书签。
- *
- * 展开时显示三个子操作按钮 + 一个主切换按钮。
- */
-@Composable
-private fun FloatingActionButtonMenu(
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onLoadDefaults: () -> Unit,
-    onAddCustom: () -> Unit,
-    onToggleFavorite: () -> Unit,
-) {
-    val c = deviceConnectionColors
-    Box {
-        androidx.compose.material3.ExtendedFloatingActionButton(
-            onClick = onToggle,
-            icon = { Icon(Icons.Default.Add, "菜单", tint = c.textPrimary) },
-            text = { Text(if (expanded) "关闭" else "更多", color = c.textPrimary) },
-            containerColor = c.primary,
-            contentColor = c.textPrimary,
-        )
-        androidx.compose.material3.DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = onToggle,
-        ) {
-            DropdownMenuItem(
-                text = { Text("加载预置命令", color = c.textPrimary) },
-                leadingIcon = { Icon(Icons.Default.Download, null, tint = c.primary) },
-                onClick = onLoadDefaults,
-            )
-            DropdownMenuItem(
-                text = { Text("添加自定义命令", color = c.textPrimary) },
-                leadingIcon = { Icon(Icons.Default.Edit, null, tint = c.primary) },
-                onClick = onAddCustom,
-            )
-            DropdownMenuItem(
-                text = { Text("仅看收藏", color = c.textPrimary) },
-                leadingIcon = { Icon(Icons.Default.Bookmark, null, tint = c.statusYellow) },
-                onClick = onToggleFavorite,
-            )
-        }
-    }
-}
-
-/**
- * 添加自定义命令对话框。落实 spec §6.7 FAB 菜单「添加自定义命令」。
+ * 添加自定义命令对话框。落实 spec §6.7「添加自定义命令」。
  */
 @Composable
 private fun AddCommandDialog(

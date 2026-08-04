@@ -39,12 +39,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /** 通道标识。用于卡片色条 / 状态聚合。 */
-enum class DcChannel(val color: Color) {
-    SHIZUKU(DeviceConnectionDarkColors.channelShizuku),
-    ROOT(DeviceConnectionDarkColors.channelRoot),
-    ROOT_ADB(DeviceConnectionDarkColors.channelRoot),
-    OTG(DeviceConnectionDarkColors.channelOtg),
-    WIFI_ADB(DeviceConnectionDarkColors.channelWifiAdb),
+enum class DcChannel(val color: Color, val displayName: String) {
+    SHIZUKU(DeviceConnectionDarkColors.channelShizuku, "Shizuku"),
+    ROOT(DeviceConnectionDarkColors.channelRoot, "Root"),
+    ROOT_ADB(DeviceConnectionDarkColors.channelRoot, "Root ADB"),
+    OTG(DeviceConnectionDarkColors.channelOtg, "OTG"),
+    WIFI_ADB(DeviceConnectionDarkColors.channelWifiAdb, "无线 ADB"),
 }
 
 /** 状态点颜色层级。 */
