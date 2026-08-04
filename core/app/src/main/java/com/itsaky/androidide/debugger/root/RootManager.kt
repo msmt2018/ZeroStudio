@@ -19,7 +19,7 @@ import javax.inject.Singleton
  *
  * 探测与执行入口（双轨）：
  * - **标准 su**：复用 [ShellRepository.hasRootAccess]（Runtime.exec("su") 探测）+ [ShellRepository.executeRootCommand]
- * - **libsu 轨**：使用 [Shell.getShell] 检测 root shell 可用性，[Shell.newJob] 执行命令；
+ * - **libsu 轨**：使用 [Shell.getShell] 检测 root shell 可用性，[Shell.cmd] 执行命令；
  *   对 KernelSU/Magisk/APatch 通过 `ls /data/adb/` 识别后再用 libsu 执行（管理器自带的 su 包装）。
  *
  * 暴露 [rootState] 给状态通道系统与 Root 卡片消费。
@@ -100,7 +100,7 @@ class RootManager @Inject constructor(
             }
             // 执行授权（所有管理器最终都通过 su 执行 `id` 验证）
             val authorized = runCatching {
-                val result = Shell.newJob().add("id").exec()
+                val result = Shell.cmd("id").exec()
                 result.isSuccess
             }.getOrDefault(false)
 
@@ -134,7 +134,7 @@ class RootManager @Inject constructor(
             RootManagerType.APATCH -> "ls /data/adb/apatch 2>/dev/null"
         }
         val output = runCatching {
-            Shell.newJob().add(checkCmd).exec().out.joinToString("\n")
+            Shell.cmd(checkCmd).exec().out.joinToString("\n")
         }.getOrElse {
             runRootCommandCapture(checkCmd)
         }
@@ -169,13 +169,13 @@ class RootManager @Inject constructor(
      * 通过 `ls /data/adb/` 输出判断：ksu/magisk/apatch 目录命中即对应管理器，
      * 否则视为标准 su。
      *
-     * 优先使用 libsu [Shell.newJob] 执行（更稳定，能识别管理器注入的环境变量），
+     * 优先使用 libsu [Shell.cmd] 执行（更稳定，能识别管理器注入的环境变量），
      * 失败时回退到 [ShellRepository.executeRootCommand]。
      */
     private suspend fun detectManagerType(): RootManagerType {
         val output = runCatching {
             // 优先用 libsu（管理器环境变量更完整）
-            val result = Shell.newJob().add("ls /data/adb/ 2>/dev/null").exec()
+            val result = Shell.cmd("ls /data/adb/ 2>/dev/null").exec()
             result.out.joinToString("\n")
         }.getOrElse {
             // 回退到标准 su
@@ -207,7 +207,7 @@ class RootManager @Inject constructor(
      * @return 输出文本（stdout + stderr），失败时抛异常
      */
     suspend fun executeLibsuCapture(command: String): String = withContext(Dispatchers.IO) {
-        val result = Shell.newJob().add(command).exec()
+        val result = Shell.cmd(command).exec()
         buildString {
             if (result.out.isNotEmpty()) append(result.out.joinToString("\n"))
             if (result.err.isNotEmpty()) {

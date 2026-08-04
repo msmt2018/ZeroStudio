@@ -137,7 +137,7 @@ class ConnectionStatusAggregator @Inject constructor(
                 DcChannel.WIFI_ADB,
                 DcStatusLevel.GREEN,
                 "已连接",
-                deviceName = device?.address ?: state.address,
+                deviceName = device?.let { "${it.ip}:${it.port}" } ?: state.address,
             )
             is WifiAdbState.Connecting,
             is WifiAdbState.Reconnecting,

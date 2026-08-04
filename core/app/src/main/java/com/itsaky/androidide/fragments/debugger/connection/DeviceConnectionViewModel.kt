@@ -52,9 +52,9 @@ class DeviceConnectionViewModel @Inject constructor(
     val allStatuses: StateFlow<List<ChannelStatus>> = aggregator.allStatuses
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val rootState: StateFlow<RootState> = rootManager.rootState.asStateFlow()
+    val rootState: StateFlow<RootState> = rootManager.rootState
 
-    val rootDevices: StateFlow<List<RootAdbDevice>> = rootAdbBridge.deviceList.asStateFlow()
+    val rootDevices: StateFlow<List<RootAdbDevice>> = rootAdbBridge.deviceList
 
     /** WiFi ADB 当前已保存的设备列表（用于「启动」按钮选择目标）。 */
     val savedWifiDevices: StateFlow<List<WifiAdbDevice>> = wifiAdbRepository.getSavedDevicesFlow()

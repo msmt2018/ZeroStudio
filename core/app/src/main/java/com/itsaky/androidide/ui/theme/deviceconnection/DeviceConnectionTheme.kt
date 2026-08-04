@@ -7,7 +7,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 
-private val LocalDeviceConnectionColors = staticCompositionLocalOf {
+private val LocalDeviceConnectionColors = staticCompositionLocalOf<DeviceConnectionColors> {
     error("DeviceConnectionColors not provided. Wrap content with DeviceConnectionTheme.")
 }
 

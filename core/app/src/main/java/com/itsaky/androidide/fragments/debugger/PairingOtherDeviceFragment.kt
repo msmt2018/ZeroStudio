@@ -37,6 +37,9 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.DialogFragment
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import android.zero.studio.shell.wifi_adb_shell.data.repository.WifiAdbRepositoryImpl.PairingListener
 import android.zero.studio.shell.wifi_adb_shell.domain.repository.WifiAdbRepository
 import com.itsaky.androidide.ui.theme.deviceconnection.DeviceConnectionTheme
@@ -77,8 +80,8 @@ class PairingOtherDeviceViewModel @Inject constructor(
     private val wifiAdbRepository: WifiAdbRepository,
 ) : ViewModel() {
 
-    private val _status = mutableStateOf("准备就绪")
-    val status: androidx.compose.runtime.State<String> = _status
+    private val _status = MutableStateFlow("准备就绪")
+    val status: StateFlow<String> = _status.asStateFlow()
 
     fun pair(ip: String, port: Int, code: String) {
         if (ip.isBlank() || code.isBlank()) {

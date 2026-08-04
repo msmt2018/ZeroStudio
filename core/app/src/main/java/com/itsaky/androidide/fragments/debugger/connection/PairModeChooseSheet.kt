@@ -5,8 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.PhonelinkRing
-import androidx.compose.material.icons.filled.RemoteConfig
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -54,7 +54,7 @@ fun PairModeChooseSheet(
                 },
             )
             DcOptionRow(
-                icon = Icons.Default.RemoteConfig,
+                icon = Icons.Default.Cast,
                 title = "配对其它设备",
                 subtitle = "手动输入 host:port:code",
                 onClick = {

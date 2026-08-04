@@ -140,25 +140,24 @@ class RootAdbBridge @Inject constructor(
      *
      * 落实 spec §4.3.6：首次调用时先 `adb start-server`，再 `adb devices` 刷新。
      * 若 adb 二进制不可用，则仅清理已断开的 WiFi 连接。
+     *
+     * 调用方需在协程中调用（[DeviceConnectionViewModel.refreshAll] / [AdbConsoleViewModel.refreshAll]）。
      */
-    fun refreshDevices() {
+    suspend fun refreshDevices() = withContext(Dispatchers.IO) {
         // 清理已断开的 WiFi 连接
         _deviceList.value = _deviceList.value.filterNot {
             it.type == RootAdbDeviceType.WIFI && !wifiConnections.containsKey(it.serial)
         }
-        // 若 root 已授权，尝试用 libsu 执行 `adb devices` 刷新设备列表
+        // 若 root 已授权，用 libsu 执行 `adb devices` 刷新设备列表
         if (rootManager.isGranted) {
-            // 在后台协程中执行 adb devices 刷新，避免阻塞调用方
-            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-                runCatching {
-                    // 首次需启动 adb server（spec §4.3.6 step 3）
-                    if (!adbServerStarted) {
-                        rootManager.executeLibsuCapture("adb start-server")
-                        adbServerStarted = true
-                    }
-                    val output = rootManager.executeLibsuCapture("adb devices")
-                    parseAdbDevicesOutput(output)
+            runCatching {
+                // 首次需启动 adb server（spec §4.3.6 step 3）
+                if (!adbServerStarted) {
+                    rootManager.executeLibsuCapture("adb start-server")
+                    adbServerStarted = true
                 }
+                val output = rootManager.executeLibsuCapture("adb devices")
+                parseAdbDevicesOutput(output)
             }
         }
     }
