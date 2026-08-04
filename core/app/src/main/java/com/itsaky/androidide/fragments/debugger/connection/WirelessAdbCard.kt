@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -101,7 +102,7 @@ fun WirelessAdbCard(
                 )
                 DcSecondaryButton(
                     text = "配对设备",
-                    icon = androidx.compose.material.icons.Icons.Default.Cast,
+                    icon = Icons.Default.Cast,
                     onClick = onPairMenu,
                     modifier = Modifier.weight(1f),
                 )
