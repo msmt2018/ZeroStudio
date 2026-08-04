@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.zero.studio.shell.otg_adb_shell.domain.model.OtgState
 import com.itsaky.androidide.ui.theme.deviceconnection.DcChannel
 import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
 
@@ -65,9 +66,9 @@ fun DeviceConnectionSheetContent(
 
     // OTG 连接成功后：自动关闭等待弹窗 + 镜像 USB 设备到 Root ADB 列表（落实 spec §4.3.5）
     LaunchedEffect(otgState) {
-        if (otgState is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connected) {
+        if (otgState is OtgState.Connected) {
             if (showOtgWaiting) showOtgWaiting = false
-            val connected = otgState as com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connected
+            val connected = otgState as OtgState.Connected
             // OtgState.Connected 只有 deviceName，用作 serial 和 deviceName
             viewModel.mirrorUsbDevice(connected.deviceName, connected.deviceName)
         }
@@ -132,7 +133,7 @@ fun DeviceConnectionSheetContent(
             item {
                 OtgCard(
                     status = statuses.firstOrNull { it.channel == DcChannel.OTG },
-                    connected = otgState is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connected,
+                    connected = otgState is OtgState.Connected,
                     onWaitDevice = {
                         viewModel.startOtgScan()
                         showOtgWaiting = true
@@ -194,17 +195,18 @@ fun DeviceConnectionSheetContent(
             onDisconnectWifi = viewModel::disconnectWifiDevice,
             onSetActive = viewModel::setActiveDevice,
             onRefresh = viewModel::refreshRootDevices,
+            onScanUsb = viewModel::refreshRootDevices, // 扫描 USB 复用 adb devices 刷新
             onDismiss = { showRootAdbDevices = false },
         )
     }
     if (showOtgWaiting) {
         val msg = when (otgState) {
-            is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Searching -> "正在搜索 USB 设备..."
-            is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.DeviceFound ->
-                "已发现设备：${(otgState as com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.DeviceFound).deviceName}"
-            is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connecting -> "正在连接..."
-            is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Error ->
-                "错误：${(otgState as com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Error).message}"
+            is OtgState.Searching -> "正在搜索 USB 设备..."
+            is OtgState.DeviceFound ->
+                "已发现设备：${(otgState as OtgState.DeviceFound).deviceName}"
+            is OtgState.Connecting -> "正在连接..."
+            is OtgState.Error ->
+                "错误：${(otgState as OtgState.Error).message}"
             else -> "请插入 USB 设备..."
         }
         OtgWaitingSheet(

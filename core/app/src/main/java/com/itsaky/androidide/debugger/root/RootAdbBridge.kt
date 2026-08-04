@@ -132,10 +132,13 @@ class RootAdbBridge @Inject constructor(
         _deviceList.value = _deviceList.value.map { it.copy(isActive = it.serial == serial) }
     }
 
+    /** 标记 adb server 是否已启动，避免重复 start-server。 */
+    private var adbServerStarted = false
+
     /**
      * 刷新设备列表（移除已离线 / 已断开的设备）。
      *
-     * 落实 spec §4.3.6：通过 `adb devices` 命令刷新（adb 二进制后端，libsu 执行）。
+     * 落实 spec §4.3.6：首次调用时先 `adb start-server`，再 `adb devices` 刷新。
      * 若 adb 二进制不可用，则仅清理已断开的 WiFi 连接。
      */
     fun refreshDevices() {
@@ -148,6 +151,11 @@ class RootAdbBridge @Inject constructor(
             // 在后台协程中执行 adb devices 刷新，避免阻塞调用方
             kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
                 runCatching {
+                    // 首次需启动 adb server（spec §4.3.6 step 3）
+                    if (!adbServerStarted) {
+                        rootManager.executeLibsuCapture("adb start-server")
+                        adbServerStarted = true
+                    }
                     val output = rootManager.executeLibsuCapture("adb devices")
                     parseAdbDevicesOutput(output)
                 }

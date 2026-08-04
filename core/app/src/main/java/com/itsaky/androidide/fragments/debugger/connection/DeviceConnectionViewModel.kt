@@ -18,6 +18,9 @@ import com.itsaky.androidide.debugger.root.RootAdbDevice
 import com.itsaky.androidide.debugger.root.RootManager
 import com.itsaky.androidide.debugger.root.RootState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -75,19 +78,40 @@ class DeviceConnectionViewModel @Inject constructor(
     }
 
     /**
-     * 刷新所有通道状态。落实 spec §7.4：并行触发各通道刷新。
+     * 刷新所有通道状态。落实 spec §7.4：并行触发 4 个刷新操作。
+     *
+     * - [shellRepository.refreshShizukuPermission]（ShizukuPermissionHandler.refreshPermissionState）
+     * - [rootManager.probe]（Root 探测）
+     * - [otgRepository.searchDevices]（OTG 重新扫描 USB 设备）
+     * - [wifiAdbRepository.startHeartbeat]（WiFi ADB 重启心跳触发状态检查）
+     *
+     * 4 个操作通过 `async` 并行触发，`awaitAll` 等待全部完成；
+     * 任一通道异常不影响其他通道刷新。
      */
     fun refreshAll() {
         if (_refreshing.value) return
         _refreshing.value = true
         viewModelScope.launch {
-            runCatching {
-                shellRepository.refreshShizukuPermission()
-                rootManager.probe()
-                rootAdbBridge.refreshDevices()
-                // OTG 状态由 BroadcastReceiver 实时推送，无需显式 refresh
-                // WiFi ADB 心跳状态由 WifiAdbConnection.state 实时推送
+            coroutineScope {
+                awaitAll(
+                    async {
+                        runCatching { shellRepository.refreshShizukuPermission() }
+                    },
+                    async {
+                        runCatching { rootManager.probe() }
+                    },
+                    async {
+                        runCatching { otgRepository.searchDevices() }
+                    },
+                    async {
+                        // WiFi ADB 心跳实时推送状态，重启心跳以重新检查当前设备
+                        runCatching { wifiAdbRepository.startHeartbeat() }
+                    },
+                )
             }
+            // Root ADB 设备列表依赖 Root 授权，放在 Root 探测之后串行触发，
+            // 避免在未授权时反复 adb start-server。
+            runCatching { rootAdbBridge.refreshDevices() }
             _refreshing.value = false
         }
     }
