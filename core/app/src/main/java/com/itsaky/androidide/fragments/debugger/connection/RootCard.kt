@@ -92,7 +92,7 @@ fun RootCard(
                     modifier = Modifier.weight(1f),
                 )
                 DcSecondaryButton(
-                    text = "管理器",
+                    text = "管理器选择",
                     icon = Icons.Default.Tune,
                     onClick = onPickManager,
                     modifier = Modifier.weight(1f),

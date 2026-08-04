@@ -189,6 +189,19 @@ class AdbConsoleViewModel @Inject constructor(
         .map { it.any { ch -> ch != AdbChannel.BASIC } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    init {
+        // 落实 spec §6.4：选了通道但通道掉线时自动回退到 BASIC + 提示
+        viewModelScope.launch {
+            availableChannels.collect { channels ->
+                val current = _activeChannel.value
+                if (current != AdbChannel.BASIC && !channels.contains(current)) {
+                    _activeChannel.value = AdbChannel.BASIC
+                    _toast.value = "通道 $current 已掉线，已回退到本机 sh"
+                }
+            }
+        }
+    }
+
     /** 设置活动通道。 */
     fun setActiveChannel(channel: AdbChannel) {
         if (availableChannels.value.contains(channel)) {

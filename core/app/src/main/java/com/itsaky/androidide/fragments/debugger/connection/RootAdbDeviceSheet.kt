@@ -39,9 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.itsaky.androidide.debugger.root.RootAdbDevice
 import com.itsaky.androidide.debugger.root.RootAdbDeviceType
+import com.itsaky.androidide.ui.theme.deviceconnection.DcModalBottomSheet
 import com.itsaky.androidide.ui.theme.deviceconnection.DcPrimaryButton
 import com.itsaky.androidide.ui.theme.deviceconnection.DcSecondaryButton
 import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
@@ -52,7 +52,10 @@ import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
  * - 列出本机 / 无线 / USB 三组设备
  * - 当前活动设备标星
  * - 「+ 连接无线设备」展开 ip:port 输入
- * - 「↻ 刷新」触发 [onRefresh]
+ * - 「↻ 扫描 USB」触发 [onScanUsb]
+ * - 「⟲ adb devices 刷新」触发 [onRefresh]
+ *
+ * 落实 spec §4.3.5。
  */
 @Composable
 fun RootAdbDeviceSheet(
@@ -61,6 +64,7 @@ fun RootAdbDeviceSheet(
     onDisconnectWifi: (address: String) -> Unit,
     onSetActive: (serial: String) -> Unit,
     onRefresh: () -> Unit,
+    onScanUsb: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val c = deviceConnectionColors
@@ -68,122 +72,136 @@ fun RootAdbDeviceSheet(
     var ipText by remember { mutableStateOf("") }
     var portText by remember { mutableStateOf("5555") }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = c.surfacePanel,
+    // 落实 spec §8.4：Sheet 改用 ModalBottomSheet + Haze 毛玻璃
+    DcModalBottomSheet(onDismiss = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(
+            // 标题栏
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Root ADB 设备", color = c.textPrimary, fontWeight = FontWeight.SemiBold)
+                Row {
+                    IconButton(onClick = onRefresh) {
+                        Icon(Icons.Default.Refresh, "刷新", tint = c.primary)
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, "关闭", tint = c.textSecondary)
+                    }
+                }
+            }
+
+            val active = devices.firstOrNull { it.isActive }
+            Text(
+                "活动设备: ${active?.serial ?: "(无)"}",
+                color = c.textSecondary,
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            )
+
+            // 设备列表
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .height(220.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                // 标题栏
+                val grouped = devices.groupBy { it.type }
+                RootAdbDeviceType.values().forEach { type ->
+                    val group = grouped[type] ?: emptyList()
+                    if (group.isNotEmpty()) {
+                        item {
+                            Text(
+                                "${type.displayName} (${group.size})",
+                                color = c.textSecondary,
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                            )
+                        }
+                        items(group) { device ->
+                            DeviceRow(
+                                device = device,
+                                onSetActive = { onSetActive(device.serial) },
+                                onDisconnect = { onDisconnectWifi(device.serial) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 连接无线设备
+            if (showWifiInput) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Root ADB 设备", color = c.textPrimary, fontWeight = FontWeight.SemiBold)
-                    Row {
-                        IconButton(onClick = onRefresh) {
-                            Icon(Icons.Default.Refresh, "刷新", tint = c.primary)
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, "关闭", tint = c.textSecondary)
-                        }
-                    }
+                    OutlinedTextField(
+                        value = ipText,
+                        onValueChange = { ipText = it },
+                        label = { Text("IP 地址") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = portText,
+                        onValueChange = { portText = it.filter(Char::isDigit).take(5) },
+                        label = { Text("端口") },
+                        modifier = Modifier.width(96.dp),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
                 }
-
-                val active = devices.firstOrNull { it.isActive }
-                Text(
-                    "活动设备: ${active?.serial ?: "(无)"}",
-                    color = c.textSecondary,
-                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                )
-
-                // 设备列表
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    val grouped = devices.groupBy { it.type }
-                    RootAdbDeviceType.values().forEach { type ->
-                        val group = grouped[type] ?: emptyList()
-                        if (group.isNotEmpty()) {
-                            item {
-                                Text(
-                                    "${type.displayName} (${group.size})",
-                                    color = c.textSecondary,
-                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-                                )
-                            }
-                            items(group) { device ->
-                                DeviceRow(
-                                    device = device,
-                                    onSetActive = { onSetActive(device.serial) },
-                                    onDisconnect = { onDisconnectWifi(device.serial) },
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 连接无线设备
-                if (showWifiInput) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        OutlinedTextField(
-                            value = ipText,
-                            onValueChange = { ipText = it },
-                            label = { Text("IP 地址") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                        )
-                        OutlinedTextField(
-                            value = portText,
-                            onValueChange = { portText = it.filter(Char::isDigit).take(5) },
-                            label = { Text("端口") },
-                            modifier = Modifier.width(96.dp),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DcSecondaryButton(
-                            text = "取消",
-                            onClick = { showWifiInput = false },
-                            modifier = Modifier.weight(1f),
-                        )
-                        DcPrimaryButton(
-                            text = "连接",
-                            icon = Icons.Default.Add,
-                            enabled = ipText.isNotBlank() && portText.toIntOrNull() in 1..65535,
-                            onClick = {
-                                onConnectWifi(ipText.trim(), portText.toInt())
-                                showWifiInput = false
-                                ipText = ""
-                                portText = "5555"
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DcSecondaryButton(
-                        text = "+ 连接无线设备",
+                        text = "取消",
+                        onClick = { showWifiInput = false },
+                        modifier = Modifier.weight(1f),
+                    )
+                    DcPrimaryButton(
+                        text = "连接",
+                        icon = Icons.Default.Add,
+                        enabled = ipText.isNotBlank() && portText.toIntOrNull() in 1..65535,
+                        onClick = {
+                            onConnectWifi(ipText.trim(), portText.toInt())
+                            showWifiInput = false
+                            ipText = ""
+                            portText = "5555"
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DcSecondaryButton(
+                        text = "+ 无线设备",
                         icon = Icons.Default.Add,
                         onClick = { showWifiInput = true },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    DcSecondaryButton(
+                        text = "扫描 USB",
+                        icon = Icons.Default.Usb,
+                        onClick = onScanUsb,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
+            // adb devices 刷新按钮（始终显示）
+            DcSecondaryButton(
+                text = "⟲ adb devices 刷新",
+                icon = Icons.Default.Refresh,
+                onClick = onRefresh,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

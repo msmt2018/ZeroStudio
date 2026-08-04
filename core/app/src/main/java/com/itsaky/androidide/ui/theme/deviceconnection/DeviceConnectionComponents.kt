@@ -247,3 +247,107 @@ fun DcDivider(modifier: Modifier = Modifier) {
             .background(c.border.copy(alpha = 0.5f)),
     )
 }
+
+// ── ModalBottomSheet + Haze 毛玻璃包装器 ─────────────────────────
+
+/**
+ * 设备连接页统一的 ModalBottomSheet 包装器。落实 spec §8.4：
+ * - 使用 Material3 [ModalBottomSheet]（替换原有 `Dialog`）
+ * - 自定义 Haze 背景：`hazeEffect` + `HazeStyle`（tint 与 blur 由主题色驱动）
+ * - 顶部 28dp 圆角 + 1dp 描边 + 顶部高光（模拟毛玻璃受光）
+ * - scrim 用主题深色，保证毛玻璃层次感
+ *
+ * 在 API < 31 时 Haze 自动降级为半透明 tint 色，视觉风格保持一致。
+ *
+ * 用法：
+ * ```
+ * DcModalBottomSheet(onDismiss = { ... }) {
+ *     // 内容
+ * }
+ * ```
+ *
+ * @param onDismiss 关闭回调（点击 scrim / 滑动隐藏 / 按返回键均触发）
+ * @param skipHalfExpanded 是否跳过半展开态（默认 true，直接展开）
+ * @param content Sheet 内容
+ */
+@Composable
+fun DcModalBottomSheet(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    skipHalfExpanded: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val c = deviceConnectionColors
+    val hazeState = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipHalfExpanded = skipHalfExpanded,
+    )
+    val hazeBackground = Modifier.hazeTintedBackground(hazeState)
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        modifier = modifier,
+        sheetState = sheetState,
+        containerColor = Color.Transparent,
+        scrimColor = c.background.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = null,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(hazeBackground)
+                .then(
+                    androidx.compose.ui.draw.drawWithContent {
+                        // 先画内容
+                        drawContent()
+                        // 顶部高光，模拟毛玻璃受光
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.06f),
+                                    Color.Transparent,
+                                ),
+                                startY = 0f,
+                                endY = 24f,
+                            ),
+                        )
+                    },
+                ),
+        ) {
+            content()
+        }
+    }
+}
+
+/**
+ * 给 Sheet 容器叠加 Haze 毛玻璃背景。
+ *
+ * 由于 [androidx.compose.material3.ModalBottomSheet] 内部已有 scrim 隔离，
+ * 此处主要起"统一视觉风格 + 主题色 tint + 描边"作用；
+ * 在 API 31+ 设备上若有 hazeSource 内容则真实模糊。
+ */
+@Composable
+private fun Modifier.hazeTintedBackground(hazeState: dev.chrisbanes.haze.HazeState): Modifier {
+    val c = deviceConnectionColors
+    val style = dev.chrisbanes.haze.blur.materials.HazeMaterials.thin(
+        containerColor = c.surfacePanel,
+    )
+    return this
+        .background(
+            // 主题色 tint，模拟毛玻璃半透明感
+            brush = Brush.verticalGradient(
+                colors = listOf(c.surfacePanel, c.background),
+            ),
+        )
+        .then(
+            // Haze 真实模糊层（API 31+ 生效，低版本降级为 tint）
+            dev.chrisbanes.haze.hazeEffect(
+                state = hazeState,
+            ) {
+                dev.chrisbanes.haze.blur.blurEffect {
+                    this.style = style
+                }
+            },
+        )
+}
