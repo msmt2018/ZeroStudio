@@ -136,17 +136,30 @@ class AdbConsoleViewModel @Inject constructor(
     private val _sortType = MutableStateFlow(CommandSortType.AZ)
     val sortType: StateFlow<CommandSortType> = _sortType.asStateFlow()
 
-    /** 命令示范列表。根据搜索 + 排序实时计算。 */
+    /** 当前选中的标签（null 表示不按标签筛选）。落实 spec §6.5「筛选 labels」。 */
+    private val _selectedLabel = MutableStateFlow<String?>(null)
+    val selectedLabel: StateFlow<String?> = _selectedLabel.asStateFlow()
+
+    /**
+     * 命令示范列表。根据搜索 + 排序 + 标签筛选实时计算。落实 spec §6.5。
+     *
+     * 优先级：搜索框 > 标签筛选 > 排序。
+     * - 搜索框有内容：走 [CommandRepository.searchCommands]（匹配 command/description/labels）
+     * - 选了标签：走 [CommandRepository.searchCommands]（用标签名作为查询，命中 labels 字段）
+     * - 仅收藏：走 [CommandRepository.getFavoriteCommands]
+     * - 其它排序：走 [CommandRepository.getSortedCommands]
+     */
     val commandExamples: StateFlow<List<CommandEntity>> = combine(
         _query,
         _sortType,
-    ) { q, sort -> q to sort }
-        .flatMapLatest { (q, sort) ->
+        _selectedLabel,
+    ) { q, sort, label -> Triple(q, sort, label) }
+        .flatMapLatest { (q, sort, label) ->
             when {
-                q.isBlank() && sort == CommandSortType.FAVORITE ->
-                    commandRepository.getFavoriteCommands()
-                q.isBlank() -> commandRepository.getSortedCommands(sort.toSortTypeConstant())
-                else -> commandRepository.searchCommands(q)
+                q.isNotBlank() -> commandRepository.searchCommands(q)
+                label != null -> commandRepository.searchCommands(label) // 复用 search 命中 labels 字段
+                sort == CommandSortType.FAVORITE -> commandRepository.getFavoriteCommands()
+                else -> commandRepository.getSortedCommands(sort.toSortTypeConstant())
             }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -196,6 +209,26 @@ class AdbConsoleViewModel @Inject constructor(
     /** 设置排序方式。 */
     fun setSortType(type: CommandSortType) {
         _sortType.value = type
+    }
+
+    /**
+     * 设置标签筛选。传入 null 清除筛选。落实 spec §6.5「筛选 labels」。
+     */
+    fun setSelectedLabel(label: String?) {
+        _selectedLabel.value = label
+    }
+
+    /**
+     * 刷新所有通道状态。落实 spec §7.4：TopBar 刷新按钮触发并行刷新。
+     */
+    fun refreshAll() {
+        viewModelScope.launch {
+            runCatching {
+                shellRepository.refreshShizukuPermission()
+                rootManager.probe()
+                rootAdbBridge.refreshDevices()
+            }
+        }
     }
 
     /**

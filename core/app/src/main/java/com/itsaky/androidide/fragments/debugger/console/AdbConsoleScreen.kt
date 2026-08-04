@@ -1,42 +1,29 @@
-condary,
-                            )
-                        }
-                    }
-                    AnimatedVisibility(visible = examplesExpanded) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // 搜索 + 排序
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                OutlinedTextField(
-                                    value = query,
-                                    onValueChange = viewModel::setQuery,
-                                    placeholder = { Text("搜索命令 / 描述 / 标签", fontSize = 13.sp) },
-                                    leadingIcon = { Icon(Icons.Default.Search, null, tint = c.textSecondary) },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(12.dp),
-                                )
-                                Box {
-                                    DcSecondaryButton(
-                                        text = sortType.label,
-                                        onClick = { showSortMenu = true },
-                                    )
-                                    DropdownMenu(
-                                        expanded = showSortMenu,
-                                        onDismissRequest = { showSortMenu = false },
-                                    ) {
-                                        CommandSortType.values().forEach { t ->
-                                            DropdownMenuItem(
-                                                text = { Text(t.label, color = c.textPrimary) },
-                                                onClick = {
-                                                    viewModel.setSortType(t)
-                                                    showSortMenu = false
-                                                },
-                                            )
-                                        }
+         }
+                                    }
+                                }
+                            }
+                            // 标签筛选 chip 行（落实 spec §6.5「筛选 labels」）
+                            if (allLabels.isNotEmpty()) {
+                                androidx.compose.foundation.lazy.LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    item {
+                                        LabelChip(
+                                            text = "全部",
+                                            selected = selectedLabel == null,
+                                            onClick = { viewModel.setSelectedLabel(null) },
+                                        )
+                                    }
+                                    items(allLabels, key = { it }) { label ->
+                                        LabelChip(
+                                            text = label,
+                                            selected = selectedLabel == label,
+                                            onClick = {
+                                                viewModel.setSelectedLabel(
+                                                    if (selectedLabel == label) null else label
+                                                )
+                                            },
+                                        )
                                     }
                                 }
                             }
@@ -347,6 +334,38 @@ private fun highlightLine(line: OutputLine, colors: DeviceConnectionColors): Ann
                 append(seg.text)
             }
         }
+    }
+}
+
+/**
+ * 标签筛选 chip。落实 spec §6.5「筛选 labels」。
+ *
+ * @param text 标签名
+ * @param selected 是否选中
+ * @param onClick 点击回调
+ */
+@Composable
+private fun LabelChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val c = deviceConnectionColors
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) c.primary else c.surfaceHighlight,
+        border = BorderStroke(
+            1.dp,
+            if (selected) c.primary else c.border,
+        ),
+        onClick = onClick,
+    ) {
+        Text(
+            text = text,
+            color = if (selected) c.textPrimary else c.textSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
     }
 }
 

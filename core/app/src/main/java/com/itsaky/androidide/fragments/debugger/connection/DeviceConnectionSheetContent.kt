@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.itsaky.androidide.debugger.root.RootManagerType
 import com.itsaky.androidide.ui.theme.deviceconnection.DcChannel
 import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
 
@@ -56,6 +55,7 @@ fun DeviceConnectionSheetContent(
     val rootDevices by viewModel.rootDevices.collectAsState()
     val otgState by viewModel.otgState.collectAsState()
     val toast by viewModel.toast.collectAsState()
+    val availableManagers by viewModel.availableManagers.collectAsState()
 
     var showPairMenu by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
@@ -63,11 +63,19 @@ fun DeviceConnectionSheetContent(
     var showRootAdbDevices by remember { mutableStateOf(false) }
     var showOtgWaiting by remember { mutableStateOf(false) }
 
-    // OTG 连接成功后自动关闭等待弹窗
+    // OTG 连接成功后：自动关闭等待弹窗 + 镜像 USB 设备到 Root ADB 列表（落实 spec §4.3.5）
     LaunchedEffect(otgState) {
-        if (showOtgWaiting && otgState is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connected) {
-            showOtgWaiting = false
+        if (otgState is com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connected) {
+            if (showOtgWaiting) showOtgWaiting = false
+            val connected = otgState as com.itsaky.androidide.shell.otg_adb_shell.domain.model.OtgState.Connected
+            // OtgState.Connected 只有 deviceName，用作 serial 和 deviceName
+            viewModel.mirrorUsbDevice(connected.deviceName, connected.deviceName)
         }
+    }
+
+    // 打开管理器选择弹窗前先探测已安装的管理器
+    LaunchedEffect(showRootPicker) {
+        if (showRootPicker) viewModel.detectManagers()
     }
 
     Surface(
@@ -172,10 +180,10 @@ fun DeviceConnectionSheetContent(
         GuideSheet(onDismiss = { showGuide = false })
     }
     if (showRootPicker) {
-        // 简化：所有管理器都标记为「可尝试」
+        // 落实 spec §4.3.4：动态传入已检测到的管理器，点击后按所选管理器差异化授权
         RootManagerPickerSheet(
-            availableManagers = RootManagerType.values().toSet(),
-            onPick = { viewModel.probeRoot() },
+            availableManagers = availableManagers,
+            onPick = { type -> viewModel.probeRootAs(type) },
             onDismiss = { showRootPicker = false },
         )
     }

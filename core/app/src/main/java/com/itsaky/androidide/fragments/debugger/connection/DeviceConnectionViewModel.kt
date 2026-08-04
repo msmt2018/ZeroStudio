@@ -97,6 +97,27 @@ class DeviceConnectionViewModel @Inject constructor(
         viewModelScope.launch { rootManager.probe() }
     }
 
+    /**
+     * 按指定管理器类型执行差异化授权探测。落实 spec §4.3.1 / §4.3.4。
+     *
+     * 用户在 [RootManagerPickerSheet] 选中某个管理器后调用。
+     */
+    fun probeRootAs(type: com.itsaky.androidide.debugger.root.RootManagerType) {
+        viewModelScope.launch { rootManager.probeAs(type) }
+    }
+
+    /** 已检测到的 Root 管理器集合（供 RootManagerPickerSheet 显示可用性）。 */
+    private val _availableManagers = MutableStateFlow<Set<com.itsaky.androidide.debugger.root.RootManagerType>>(emptySet())
+    val availableManagers: StateFlow<Set<com.itsaky.androidide.debugger.root.RootManagerType>> =
+        _availableManagers.asStateFlow()
+
+    /** 探测已安装的管理器列表。 */
+    fun detectManagers() {
+        viewModelScope.launch {
+            _availableManagers.value = rootManager.detectAvailableManagers()
+        }
+    }
+
     /** Root 授权后连接本机。 */
     fun connectLocal() {
         if (rootManager.isGranted) rootAdbBridge.connectLocal()
@@ -175,5 +196,20 @@ class DeviceConnectionViewModel @Inject constructor(
      */
     fun unregisterOtg() {
         otgRepository.unRegister()
+    }
+
+    /**
+     * 将当前 OTG 连接的 USB 设备镜像到 Root ADB 设备列表。落实 spec §4.3.3 / §4.3.5。
+     *
+     * 当 OTG 连接成功且 Root 已授权时调用，使 USB 设备在 RootAdbDeviceSheet 中可见，
+     * 便于「设为活动」后用 Root ADB 通道执行命令。
+     *
+     * @param serial USB 设备序列号
+     * @param deviceName USB 设备名（用于显示）
+     */
+    fun mirrorUsbDevice(serial: String, deviceName: String) {
+        if (rootManager.isGranted) {
+            rootAdbBridge.mirrorUsbDevice(serial, deviceName)
+        }
     }
 }
