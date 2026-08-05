@@ -419,7 +419,7 @@ fun AdbConsoleScreen(
                         placeholder = { Text("输入命令（如 adb devices）", fontSize = 13.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        enabled = hasUsableConnection || activeChannel == AdbChannel.BASIC,
+                        enabled = hasUsableConnection,
                         shape = RoundedCornerShape(12.dp),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
                     )
@@ -443,7 +443,7 @@ fun AdbConsoleScreen(
                             DcPrimaryButton(
                                 text = "运行",
                                 icon = Icons.Default.PlayArrow,
-                                enabled = input.isNotBlank() && (hasUsableConnection || activeChannel == AdbChannel.BASIC),
+                                enabled = input.isNotBlank() && hasUsableConnection,
                                 onClick = viewModel::runCommand,
                                 modifier = Modifier.weight(1f),
                             )
@@ -522,8 +522,8 @@ private fun ActiveConnectionBar(
     val c = deviceConnectionColors
     val level = status?.level ?: DcStatusLevel.RED
     val label = status?.label ?: "未连接"
-    // 无连接且非 BASIC 通道时显示红条
-    val noConnection = !hasUsableConnection && activeChannel != AdbChannel.BASIC
+    // 无可执行 ADB 连接时显示红条
+    val noConnection = !hasUsableConnection
     val barColor = if (noConnection) c.statusRed.copy(alpha = 0.15f) else c.surfaceHighlight
     Surface(
         modifier = modifier,
