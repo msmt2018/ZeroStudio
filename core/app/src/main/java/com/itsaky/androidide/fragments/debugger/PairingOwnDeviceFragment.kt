@@ -1,46 +1,47 @@
 package com.itsaky.androidide.fragments.debugger
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DeveloperMode
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiSettings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -49,33 +50,49 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.fragment.app.DialogFragment
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import android.zero.studio.core.utils.askUserToEnableWifi
 import android.zero.studio.core.utils.createAppNotificationSettingsIntent
+import android.zero.studio.core.utils.createMiUiNotificationStylesSettingsIntent
+import android.zero.studio.core.utils.isConnectedToWifi
 import android.zero.studio.core.utils.isNotificationPermissionGranted
-import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbConnection
-import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbEvent
+import android.zero.studio.core.utils.MiUiCheck
+import android.zero.studio.core.utils.registerNetworkCallback
+import android.zero.studio.core.utils.showToast
+import android.zero.studio.core.utils.unregisterNetworkCallback
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbDevice
 import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbState
+import android.zero.studio.shell.wifi_adb_shell.presentation.viewmodel.WifiAdbViewModel
 import android.zero.studio.shell.wifi_adb_shell.service.SelfPairingService
 import android.zero.studio.shell.wifi_adb_shell.utils.WirelessDebuggingUtils
 import com.itsaky.androidide.fragments.debugger.console.AdbConsoleFragment
 import com.itsaky.androidide.ui.theme.deviceconnection.DeviceConnectionTheme
-import com.itsaky.androidide.ui.theme.deviceconnection.DcPrimaryButton
-import com.itsaky.androidide.ui.theme.deviceconnection.DcSecondaryButton
-import com.itsaky.androidide.ui.theme.deviceconnection.deviceConnectionColors
 
 /**
- * 配对此设备页面（全屏）。本机 Android 11+ 无线调试自配对。
+ * 配对此设备页面（全屏）。
  *
- * 参考 debugger/adb-connection/connection 的 PairingOwnDeviceScreen 设计：
- * - 通知权限检查与申请
- * - 「打开无线调试设置」按钮：检查权限 → 启动 SelfPairingService → 跳转系统无线调试
- * - collect [WifiAdbConnection.state]，连接成功后显示「前往 ADB 命令」按钮
+ * 直接照搬 debugger/adb-connection/connection 里 PairingOwnDeviceScreen 的 UI 设计：
+ * - WiFi 未连接时显示 WiFi 开启卡片
+ * - 已保存的本机设备卡片（重连/忘记/断开/前往终端）
+ * - 通知权限申请卡片 / 通知配对提示卡片
+ * - 通知样式提示卡片（MIUI）
+ * - 3 步操作指引（含「开发者选项」跳转按钮）
+ *
+ * 点击「开发者选项」按钮：检查通知权限 → 检查 WiFi → 启动 SelfPairingService → 跳转无线调试设置。
  */
 class PairingOwnDeviceFragment : DialogFragment() {
 
@@ -108,270 +125,555 @@ class PairingOwnDeviceFragment : DialogFragment() {
 private fun PairingOwnDeviceScreen(
     onBack: () -> Unit,
     onNavigateToConsole: () -> Unit,
+    viewModel: WifiAdbViewModel = hiltViewModel(),
 ) {
-    val c = deviceConnectionColors
     val context = LocalContext.current
-    val wifiState by WifiAdbConnection.state.collectAsState()
-    val currentDevice by WifiAdbConnection.currentDevice.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var serviceRunning by remember { mutableStateOf(false) }
+    var isWifiConnected by remember { mutableStateOf(context.isConnectedToWifi()) }
     var hasNotificationAccess by remember { mutableStateOf(isNotificationPermissionGranted(context)) }
-    var pairingCode by remember { mutableStateOf("") }
-    var localAddress by remember { mutableStateOf<String?>(null) }
-    var toastMsg by remember { mutableStateOf<String?>(null) }
 
-    // 页面恢复时刷新通知权限状态
-    LaunchedEffect(Unit) {
-        hasNotificationAccess = isNotificationPermissionGranted(context)
+    val savedDevices by viewModel.savedDevices.collectAsState()
+    val wifiAdbState by viewModel.state.collectAsState()
+    val currentDevice by viewModel.currentDevice.collectAsState()
+    val ownDevice = savedDevices.filter { it.isOwnDevice }.getOrNull(0)
+
+    // 监听 WiFi 连接状态变化
+    DisposableEffect(Unit) {
+        val callback = registerNetworkCallback(context) { isConnected ->
+            isWifiConnected = isConnected
+        }
+        onDispose { unregisterNetworkCallback(context, callback) }
     }
 
-    // 收集一次性事件（错误提示等）
-    LaunchedEffect(Unit) {
-        WifiAdbConnection.events.collect { event ->
-            when (event) {
-                is WifiAdbEvent.PairConnectFailed -> toastMsg = "配对成功但连接失败：${event.error}"
-                is WifiAdbEvent.ReconnectFailed -> toastMsg = "重连失败，可能需重新配对"
-                is WifiAdbEvent.WirelessDebuggingOff -> toastMsg = "无线调试已关闭"
-                else -> {}
-            }
+    // 页面恢复时刷新权限状态
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    hasNotificationAccess = isNotificationPermissionGranted(context)
+                    isWifiConnected = context.isConnectedToWifi()
+                }
+            },
+        )
+    }
+
+    // WiFi 断开时标记设备已断开
+    LaunchedEffect(isWifiConnected, ownDevice) {
+        if (!isWifiConnected && ownDevice != null) {
+            viewModel.setDeviceDisconnected(ownDevice.id)
         }
     }
 
-    // 服务运行状态跟随连接状态
-    LaunchedEffect(wifiState) {
-        when (wifiState) {
-            is WifiAdbState.Connected -> serviceRunning = false
-            is WifiAdbState.Disconnected, WifiAdbState.Idle -> {
-                // 保持当前 serviceRunning 状态
-            }
-            else -> {}
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
+    val onClickNotificationButton: () -> Unit = {
+        context.startActivity(createAppNotificationSettingsIntent(context))
+    }
+
+    val onClickNotificationStylesButton: () -> Unit = {
+        try {
+            context.startActivity(createMiUiNotificationStylesSettingsIntent(context))
+        } catch (e: Exception) {
+            showToast(context, "未找到通知样式设置页面")
         }
     }
 
-    toastMsg?.let { msg ->
-        LaunchedEffect(msg) {
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            toastMsg = null
-        }
+    val onClickWifiEnableButton: () -> Unit = {
+        context.askUserToEnableWifi()
     }
 
-    val isConnected = wifiState is WifiAdbState.Connected
+    val onClickDevOptionsButton: () -> Unit = {
+        if (!hasNotificationAccess) {
+            showToast(context, "请先授权通知权限")
+            return
+        }
+        if (!isWifiConnected) {
+            showToast(context, "请先连接到 WiFi 网络")
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+
+        SelfPairingService.start(context)
+        WirelessDebuggingUtils.openWirelessDebuggingSettings(context)
+    }
 
     Scaffold(
-        containerColor = c.background,
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
-            TopAppBar(
-                title = { Text("配对此设备", color = c.textPrimary, fontWeight = FontWeight.SemiBold) },
+            LargeTopAppBar(
+                title = {
+                    val collapsedFraction = scrollBehavior.state.collapsedFraction
+                    val fontSize = androidx.compose.ui.unit.lerp(28.sp, 20.sp, collapsedFraction)
+                    Text(
+                        text = "配对此设备",
+                        maxLines = 1,
+                        fontSize = fontSize,
+                        fontFamily = FontFamily.SansSerif,
+                        letterSpacing = 0.05.em,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = c.textPrimary)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            "返回",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = c.surfacePanel),
+                scrollBehavior = scrollBehavior,
             )
         },
-    ) { padding ->
-        Column(
+    ) { innerPadding ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .padding(start = 15.dp, end = 15.dp, top = 15.dp),
+            contentPadding = innerPadding,
+            verticalArrangement = Arrangement.spacedBy(13.dp),
         ) {
-            // 通知权限申请卡片（未授权时显示）
-            if (!hasNotificationAccess) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = c.statusYellow.copy(alpha = 0.12f),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Icon(Icons.Default.Notifications, null, tint = c.statusYellow, modifier = Modifier.size(24.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("需要通知权限", color = c.textPrimary, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "自配对需通过通知栏输入配对码，请先授权通知",
-                                color = c.textSecondary,
-                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        DcSecondaryButton(
-                            text = "去授权",
-                            onClick = {
-                                context.startActivity(createAppNotificationSettingsIntent(context))
+            // WiFi 未连接时显示 WiFi 开启卡片
+            if (!isWifiConnected) {
+                item {
+                    HintCard(
+                        icon = Icons.Default.SignalWifiOff,
+                        iconTint = MaterialTheme.colorScheme.error,
+                        text = "需要连接 WiFi 网络才能进行无线调试配对",
+                        buttonText = "开启 WiFi",
+                        buttonIcon = Icons.Default.WifiSettings,
+                        onButtonClick = onClickWifiEnableButton,
+                    )
+                }
+            }
+
+            // 已保存的本机设备卡片
+            ownDevice?.let { device ->
+                item {
+                    val isCurrentDevice = currentDevice?.id == device.id
+                    val isReconnecting = wifiAdbState is WifiAdbState.Reconnecting &&
+                        (wifiAdbState as WifiAdbState.Reconnecting).deviceId == device.id
+                    val isConnected = isCurrentDevice &&
+                        (wifiAdbState is WifiAdbState.Connected || viewModel.isConnected()) &&
+                        isWifiConnected
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SavedDeviceCard(
+                            device = device,
+                            isConnected = isConnected,
+                            isReconnecting = isReconnecting,
+                            onReconnect = {
+                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return@SavedDeviceCard
+                                if (!isWifiConnected) {
+                                    showToast(context, "请先连接到 WiFi 网络")
+                                    return@SavedDeviceCard
+                                }
+                                viewModel.reconnectToDevice(device)
                             },
+                            onForget = { viewModel.forgetDevice(device) },
+                            onDisconnect = { viewModel.disconnect() },
                         )
+
+                        if (isReconnecting) {
+                            OutlinedButton(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                onClick = { viewModel.cancelReconnect() },
+                            ) {
+                                Text("取消重连")
+                            }
+                        }
+
+                        if (isConnected) {
+                            Button(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                onClick = onNavigateToConsole,
+                            ) {
+                                Icon(Icons.Default.Terminal, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("前往 ADB 命令")
+                            }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
                     }
                 }
             }
 
-            // 说明
-            Text(
-                "本机 Android 11+ 无线调试自配对",
-                color = c.textPrimary,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "点击「打开无线调试设置」会启动后台配对服务并跳转到系统开发者选项，" +
-                    "在系统页面操作后，返回此页面即可看到连接状态。",
-                color = c.textSecondary,
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-            )
-
-            val steps = listOf(
-                "1. 授权通知权限（上方卡片）",
-                "2. 确保手机连接到 WiFi 网络",
-                "3. 点击「打开无线调试设置」",
-                "4. 在系统页面打开「无线调试」开关",
-                "5. 点击「使用配对码配对设备」，记录 6 位码",
-                "6. 在通知栏输入 6 位配对码完成配对",
-            )
-            steps.forEach { step ->
-                Text(step, color = c.textSecondary, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            // 提示标题
+            item {
+                Text(
+                    modifier = Modifier.padding(horizontal = 5.dp),
+                    text = "提示",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
 
-            Spacer(Modifier.width(0.dp))
-
-            // 核心：打开无线调试设置按钮
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (serviceRunning) {
-                    DcPrimaryButton(
-                        text = "停止配对服务",
-                        icon = Icons.Default.Stop,
-                        onClick = {
-                            SelfPairingService.stop(context)
-                            serviceRunning = false
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    DcPrimaryButton(
-                        text = "打开无线调试设置",
-                        icon = Icons.Default.DeveloperMode,
-                        onClick = {
-                            // 1. 检查通知权限
-                            if (!isNotificationPermissionGranted(context)) {
-                                toastMsg = "请先授权通知权限"
-                                return@DcPrimaryButton
-                            }
-                            // 2. 检查 WiFi
-                            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-                            if (wifiManager?.connectionInfo?.ipAddress == 0) {
-                                toastMsg = "请先连接到 WiFi 网络"
-                                return@DcPrimaryButton
-                            }
-                            // 3. 启动自配对服务
-                            SelfPairingService.start(context)
-                            serviceRunning = true
-                            // 4. 跳转无线调试设置
-                            WirelessDebuggingUtils.openWirelessDebuggingSettings(context)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
+            // 通知权限卡片（未授权时显示） / 通知配对提示卡片（已授权时显示）
+            if (!hasNotificationAccess) {
+                item {
+                    HintCard(
+                        icon = Icons.Default.Notifications,
+                        iconTint = MaterialTheme.colorScheme.error,
+                        text = "自配对需要通过通知栏输入配对码，请先授权通知访问权限",
+                        buttonText = "通知设置",
+                        buttonIcon = Icons.Default.OpenInNew,
+                        onButtonClick = onClickNotificationButton,
                     )
                 }
             } else {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = c.statusRed.copy(alpha = 0.12f),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        "无线调试需要 Android 11 (R) 及以上版本",
-                        color = c.statusRed,
-                        modifier = Modifier.padding(12.dp),
+                item {
+                    InfoCard(
+                        icon = Icons.Default.Notifications,
+                        text = "配对过程中，6 位配对码会通过通知栏输入，请保持通知权限开启",
                     )
                 }
             }
 
-            // 服务运行中状态提示
-            if (serviceRunning) {
-                val stateLabel = when (wifiState) {
-                    is WifiAdbState.Discovering -> "正在发现 pairing 服务..."
-                    is WifiAdbState.Pairing -> "配对中..."
-                    is WifiAdbState.Connecting -> "连接中..."
-                    else -> "等待在通知栏输入配对码"
+            // 通知样式提示卡片（MIUI 专属）
+            item {
+                NotificationStylesCard(
+                    onClickButton = onClickNotificationStylesButton,
+                )
+            }
+
+            // 3 步操作指引
+            item {
+                InstructionsSection(
+                    onClickDevOptionsButton = onClickDevOptionsButton,
+                )
+            }
+
+            item { Spacer(Modifier.height(20.dp)) }
+        }
+    }
+}
+
+// ── 子组件 ──
+
+/** 带图标 + 文字 + 操作按钮的提示卡片（照搬源码 IconWithTextCard 结构）。 */
+@Composable
+private fun HintCard(
+    icon: ImageVector,
+    iconTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    text: String,
+    buttonText: String,
+    buttonIcon: ImageVector? = null,
+    onButtonClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Icon(icon, null, tint = iconTint, modifier = Modifier.size(28.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Button(
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                ),
+                onClick = onButtonClick,
+            ) {
+                if (buttonIcon != null) {
+                    Icon(buttonIcon, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
                 }
-                Text(
-                    "状态: $stateLabel",
-                    color = c.statusYellow,
-                    fontWeight = FontWeight.Medium,
-                )
+                Text(buttonText, style = MaterialTheme.typography.labelLarge)
             }
+        }
+    }
+}
 
-            // 6 位配对码输入框（可选手动输入，正常由通知栏完成）
-            OutlinedTextField(
-                value = pairingCode,
-                onValueChange = { if (it.length <= 6 && it.all(Char::isDigit)) pairingCode = it },
-                label = { Text("6 位配对码（通知栏输入为主，此处可选）", color = c.textSecondary) },
-                singleLine = true,
-                enabled = serviceRunning,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
+/** 仅图标 + 文字的信息卡片。 */
+@Composable
+private fun InfoCard(
+    icon: ImageVector,
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Icon(
+                icon,
+                null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(24.dp),
             )
-
-            // 复制本机地址
-            DcSecondaryButton(
-                text = "复制本机地址",
-                icon = Icons.Default.ContentCopy,
-                onClick = {
-                    val address = getLocalIpAddress(context)
-                    localAddress = address
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("本机地址", address))
-                    toastMsg = "已复制: $address"
-                },
-                modifier = Modifier.fillMaxWidth(),
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
+        }
+    }
+}
 
-            localAddress?.let {
-                Text(
-                    "本机地址: $it",
-                    color = c.textSecondary,
-                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                )
-            }
-
-            // 连接成功：显示前往 ADB 命令按钮
-            if (isConnected) {
-                Spacer(Modifier.size(8.dp))
-                Surface(
+/** 通知样式提示卡片（MIUI 专属，非 MIUI 仅显示提示文字）。 */
+@Composable
+private fun NotificationStylesCard(
+    onClickButton: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(24.dp),
+            )
+            Text(
+                "MIUI 设备需在通知样式中允许「配对服务」通知，否则配对码通知可能被隐藏",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            if (MiUiCheck.isMiui(excludeHyperOS = false)) {
+                Button(
                     shape = RoundedCornerShape(14.dp),
-                    color = c.statusGreen.copy(alpha = 0.12f),
-                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary,
+                        contentColor = MaterialTheme.colorScheme.onTertiary,
+                    ),
+                    onClick = onClickButton,
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            "已连接：${currentDevice?.deviceName ?: currentDevice?.ip ?: "设备"}",
-                            color = c.statusGreen,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        DcPrimaryButton(
-                            text = "前往 ADB 命令",
-                            icon = Icons.Default.Terminal,
-                            onClick = onNavigateToConsole,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                    Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("通知样式", style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
     }
 }
 
-/** 获取本机 WiFi IP 地址，格式化为 `xxx.xxx.xxx.xxx:5555`。 */
-private fun getLocalIpAddress(context: Context): String {
-    return runCatching {
-        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val ip = wifiManager.connectionInfo.ipAddress
-        if (ip == 0) "127.0.0.1:5555"
-        else "${(ip and 0xff)}.${(ip shr 8 and 0xff)}.${(ip shr 16 and 0xff)}.${(ip shr 24 and 0xff)}:5555"
-    }.getOrDefault("127.0.0.1:5555")
+/** 已保存设备卡片（照搬源码 SavedDeviceItem 结构）。 */
+@Composable
+private fun SavedDeviceCard(
+    device: WifiAdbDevice,
+    isConnected: Boolean,
+    isReconnecting: Boolean,
+    onReconnect: () -> Unit,
+    onForget: () -> Unit,
+    onDisconnect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = if (isConnected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    Icons.Default.Wifi,
+                    null,
+                    tint = if (isConnected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        device.deviceName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        "${device.ip}:${device.port}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // 状态标签
+                val statusText = when {
+                    isConnected -> "已连接"
+                    isReconnecting -> "重连中"
+                    else -> "未连接"
+                }
+                val statusColor = when {
+                    isConnected -> MaterialTheme.colorScheme.primary
+                    isReconnecting -> MaterialTheme.colorScheme.tertiary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Text(
+                    statusText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = statusColor,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (isConnected) {
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        onClick = onDisconnect,
+                    ) { Text("断开") }
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        onClick = onForget,
+                    ) { Text("忘记") }
+                } else {
+                    Button(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = !isReconnecting,
+                        onClick = onReconnect,
+                    ) {
+                        Text(if (isReconnecting) "重连中..." else "重连")
+                    }
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        onClick = onForget,
+                    ) { Text("忘记") }
+                }
+            }
+        }
+    }
+}
+
+/** 3 步操作指引（照搬源码 Instructions 结构）。 */
+@Composable
+private fun InstructionsSection(
+    onClickDevOptionsButton: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            modifier = Modifier.padding(vertical = 15.dp, horizontal = 5.dp),
+            text = "操作步骤",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+
+        // Step 1: 打开无线调试 + 开发者选项按钮
+        InstructionCard(
+            stepNumber = 1,
+            text = "在手机「设置 → 开发者选项」中打开「无线调试」开关",
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "重要：必须先打开无线调试，否则配对将失败",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Button(
+                    shape = RoundedCornerShape(14.dp),
+                    onClick = onClickDevOptionsButton,
+                ) {
+                    Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("开发者选项")
+                }
+            }
+        }
+
+        // Step 2: 使用配对码配对设备
+        InstructionCard(
+            stepNumber = 2,
+            text = "在无线调试页面点击「使用配对码配对设备」，系统会显示 6 位配对码",
+        )
+
+        // Step 3: 在通知栏输入配对码
+        InstructionCard(
+            stepNumber = 3,
+            text = "回到本应用，在通知栏中输入 6 位配对码即可完成配对",
+        )
+    }
+}
+
+/** 单步指引卡片（带序号圆标）。 */
+@Composable
+private fun InstructionCard(
+    stepNumber: Int,
+    text: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit = {},
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth().padding(vertical = 1.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            // 序号圆标
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Text(
+                    stepNumber.toString(),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                content()
+            }
+        }
+    }
 }
