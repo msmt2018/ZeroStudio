@@ -5,15 +5,11 @@
  * 传 listOf() 空 capabilities, Auto 模式 for 循环空迭代直接走 fallback
  * WifiAdb, 4 个 capability 全部 missing。
  *
- *  4 个 capability 的探测逻辑:
- *    - WifiAdbCapability       只检查 adb connect 可达 (不依赖 Shizuku)
- *    - BinderCapability        Shizuku 12+ transferFileDescriptor 不可用,
- *                              走 placeholder 返 false (Phase 13d TODO 修)
+ *  Auto 模式只保留不引入 AIDL 数据通道的 JDWP 字节流路径:
  *    - InHostPluginCapability  探测 host app 装了 ide-debugger-host aar
- *                              (走 host ContentProvider, Phase 12p/12q 修的路径)
- *    - SocksCapability         Shizuku 12+ newProcess 不可用 (Phase 12u 锁死),
- *                              走 placeholder 返 false (Phase 12y TODO 实装
- *                              ISocksControl AIDL + transact 替代)
+ *    - SocksCapability         通过 host 内 SOCKS5 server 转发到 localabstract:jdwp
+ *
+ *  WifiAdb/AIDL 与 Binder-fd 路径不再参与 Auto,避免跟 JDWP 握手/包流竞争。
  */
 
 package com.itsaky.androidide.debugger.connection.shizuku
@@ -128,19 +124,17 @@ class SocksCapability(
 }
 
 /**
- * 4 个 capability 的默认组装 (按 ShizukuSubPathResolver 探测顺序):
- * 1. WifiAdb (最宽松, Shizuku 没跑也能用)
- * 2. Binder (Shizuku 14+ 才返 true)
- * 3. InHostPlugin (host 装 plugin 返 true)
- * 4. Socks (host 装 plugin 返 true)
+ * JDWP-only capability 默认组装 (按 ShizukuSubPathResolver 探测顺序):
+ * 1. InHostPlugin (host 装 plugin 返 true)
+ * 2. Socks (host 装 plugin 返 true)
+ *
+ * WifiAdb/AIDL 与 Binder-fd 均不再作为断点调试器自动路径。
  */
 fun defaultShizukuSubPathCapabilities(
     serverApiVersion: Int = -1,
-    adbProbe: (DebugTarget) -> Boolean = { _ -> true },
+    @Suppress("UNUSED_PARAMETER") adbProbe: (DebugTarget) -> Boolean = { _ -> true },
     hostPluginProbe: (DebugTarget) -> Boolean = { _ -> true },
 ): List<ShizukuSubPathCapability> = listOf(
-    WifiAdbCapability(adbProbe),
-    BinderCapability(serverApiVersion),
     InHostPluginCapability(hostPluginProbe),
     SocksCapability(hostPluginProbe),
 )

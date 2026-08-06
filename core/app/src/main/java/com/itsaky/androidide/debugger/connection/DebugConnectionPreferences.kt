@@ -67,7 +67,7 @@ object DebugConnectionPreferences {
 
     // ---- 顶层 var ----
     var activeTypeId: String
-        get() = prefManager.getString(ACTIVE_TYPE, ConnectionType.AidlSocket.id)!!
+        get() = prefManager.getString(ACTIVE_TYPE, ConnectionType.UsbLan.id)!!
         set(value) { prefManager.putString(ACTIVE_TYPE, value) }
 
     /**
@@ -75,7 +75,7 @@ object DebugConnectionPreferences {
      * 保证从旧版本升级上来的用户不会回到默认 AIDL socket。
      */
     var activeType: ConnectionType
-        get() = ConnectionType.fromIdCompat(prefManager.getString(ACTIVE_TYPE, ConnectionType.AidlSocket.id))
+        get() = ConnectionType.fromIdCompat(prefManager.getString(ACTIVE_TYPE, ConnectionType.UsbLan.id))
         set(value) { prefManager.putString(ACTIVE_TYPE, value.id) }
 
     var autoRetry: Boolean

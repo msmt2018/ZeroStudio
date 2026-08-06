@@ -1,12 +1,12 @@
 /*
  *  ZeroStudio IDE - Debugger Connection Layer
  *
- *  ShizukuConnection: Shizuku 4 子路径 (Auto / WifiAdb / Binder / InHostPlugin / Socks)
+ *  ShizukuConnection: Shizuku JDWP-only 子路径 (Auto / InHostPlugin / Socks)
  *  的真实实现 (子项目 3)。
  *
- *  - WifiAdb / InHostPlugin 复用 AidlSocketConnection 的 ServerSocket + startActivity 模式
- *  - Binder 走 Shizuku binder 把 host JDWP fd 转回 IDE
- *  - Socks 走 Shizuku newProcess 启动 SOCKS5 server + IDE 当 SOCKS5 客户端
+ *  - InHostPlugin 走宿主内插件反连,只转发 JDWP 字节流
+ *  - Socks 走宿主内 SOCKS5 server,CONNECT 到 localabstract:jdwp
+ *  - 旧 WifiAdb/AIDL 与 Binder-fd 路径已停用,避免 AIDL/Binder IPC 与 JDWP 包流混用
  *
  *  resolve(): 探测 Shizuku 状态 + 选 subPath
  *  connect(): 准备 (启动 SOCKS5 / 拉 host plugin / 开 ServerSocket)
@@ -194,7 +194,7 @@ class ShizukuConnection(
             ResolveInfo(
                 transportKind = subPath.name,
                 endpoint = "shizuku:${subPath.name}",
-                requiresHostRunning = subPath != ShizukuSubPath.WifiAdb,
+                requiresHostRunning = true,
             )
         )
     }
@@ -206,16 +206,15 @@ class ShizukuConnection(
             ?: return Result.failure(IllegalStateException("connect() before resolve()"))
         transitionTo(ConnectionState.Connecting)
         // connect() 阶段只做"准备",具体 attach 留到 attach()。
-        // 4 条路径的准备:
-        //   WifiAdb: 不需要, 让 attach() 走 AidlSocketConnection
-        //   Binder: 不需要 (跟 InHostPlugin 走同款实装, bindUserService 在 attach)
+        // JDWP-only 路径的准备:
         //   InHostPlugin: bindUserService 在 attach() 阶段做 (避免重复调用)
         //   Socks: 由 attach 阶段 Socks 客户端连接
+        //   WifiAdb/Binder: 旧 AIDL/Binder-fd 路径已停用
         val attempt = retryPolicy.retry { _ ->
             runCatching {
                 when (subPath) {
-                    ShizukuSubPath.WifiAdb -> { /* nothing to do */ }
-                    ShizukuSubPath.Binder -> { /* nothing to do, prepare in attach */ }
+                    ShizukuSubPath.WifiAdb -> error("Shizuku WifiAdb/AIDL path is disabled for JDWP-only debugging")
+                    ShizukuSubPath.Binder -> error("Shizuku Binder-fd path is disabled for JDWP-only debugging")
                     ShizukuSubPath.InHostPlugin -> { /* bindUserService 在 attach() 阶段做, 避免重复 */ }
                     ShizukuSubPath.Socks -> { /* 由 attach 阶段 Socks 客户端连接 */ }
                     ShizukuSubPath.Auto -> error("Auto should have been resolved by resolve()")
@@ -238,8 +237,8 @@ class ShizukuConnection(
         val attempt = retryPolicy.retry { _ ->
             runCatching {
                 when (subPath) {
-                    ShizukuSubPath.WifiAdb -> attachViaAidlStyle()
-                    ShizukuSubPath.Binder -> attachViaBinder()
+                    ShizukuSubPath.WifiAdb -> throw IOException("Shizuku WifiAdb/AIDL path is disabled for JDWP-only debugging")
+                    ShizukuSubPath.Binder -> throw IOException("Shizuku Binder-fd path is disabled for JDWP-only debugging")
                     ShizukuSubPath.InHostPlugin -> attachViaInHostPlugin()
                     ShizukuSubPath.Socks -> attachViaSocks()
                     ShizukuSubPath.Auto -> error("Auto should have been resolved")
@@ -270,34 +269,6 @@ class ShizukuConnection(
     }
 
     // ---- 4 个子路径的 attach 细节 ----
-
-    private suspend fun attachViaAidlStyle(): AttachInfo {
-        // 复用 AidlSocketConnection 同款流程
-        // 这里简化: 临时构造一个 AidlSocketConnection 走一遍 resolve/connect/attach
-        val aidlSettings = settings.copy(
-            aidlSocket = settings.aidlSocket.copy(requireHostForeground = false)
-        )
-        val aidl = AidlSocketConnection(
-            target = target,
-            settings = aidlSettings,
-            hostLauncher = null,
-            processProbe = null,
-            retryPolicy = ConnectionRetryPolicy(maxAttempts = 1, initialDelayMs = 0L),
-        )
-        try {
-            aidl.resolve()
-            val cr = aidl.connect()
-            if (cr.isFailure) throw cr.exceptionOrNull()!!
-            val ar = aidl.attach()
-            if (ar.isFailure) throw ar.exceptionOrNull()!!
-            socket = aidl.attachedSocket()
-            return ar.getOrNull()!!
-        } catch (t: Throwable) {
-            // cleanup aidl 自己的 ServerSocket, 避免端口泄漏
-            runCatching { aidl.release() }
-            throw t
-        }
-    }
 
     /**
      * 子项目 4 - InHostPlugin 路径实装。
@@ -389,47 +360,6 @@ class ShizukuConnection(
                 if (h != null) binderImpl.unbindUserService(h)
             }
             throw t
-        }
-    }
-
-    /**
-     * 子项目 4 - Binder 路径实装。
-     *
-     * **Phase 13d 限制 (留 TODO 文档化)**:
-     *   Shizuku 13+ 把 [rikka.shizuku.Shizuku.transferFileDescriptor] 设 package-private,
-     *   第三方 IDE 端不能直接调 ([ShizukuBinderClient.transferFileDescriptor] 抛
-     *   `UnsupportedOperationException`)。所以 Binder 路径走 fallback: 复用
-     *   [attachViaInHostPlugin] 同款实装 (走 `Shizuku.bindUserService` + host 端
-     *   `HostPluginService` reverse-connect 回 IDE `LocalServerSocket`)。
-     *
-     *   唯一区别: transport 名字保留 Binder 供 UI 显示 (跟 InHostPlugin 区分开),
-     *   底层逻辑复用 InHostPlugin。
-     *
-     * **Shizuku 14+ 真路径 TODO** (Phase 13d 后续):
-     *   1) host 端 user service (e.g. `BinderTransportService`) 跑 root 进程 attach
-     *      host app 的 JDWP agent, open `/proc/<host_pid>/fd/<jdwp_socket>` 拿 fd
-     *   2) host 端 user service 把 fd 写回 Parcel
-     *   3) IDE 端 `ShizukuBinderClient.transferFileDescriptor` 走 Shizuku 14+ 公共
-     *      API (如果官方开放) 拿回 ParcelFileDescriptor
-     *   4) `ShizukuFdTransporter.toSocket(pfd)` 包成 [com.itsaky.androidide.debugger.connection.shizuku.PfdSocket]
-     *   5) 走 JDWP 握手 + VM.Version
-     *
-     *   优先级: 14+ 走真 transferFileDescriptor, 13+ 继续走 InHostPlugin fallback。
-     *
-     * **SocksServiceUserService adapter** (Phase 13d 关联):
-     *   Socks 路径的 user service adapter (`IdeShizukuSocksUserService`) 已在
-     *   Phase 12y + 13c 合并实装 (走 `ISocksControl` binder transact 协议传 port
-     *   + detach 释放)。BInder 路径 14+ 真实现后, 同样需要
-     *   `BinderTransportService` user service (跟 Socks 路径 adapter 风格一致)。
-     */
-    private suspend fun attachViaBinder(): AttachInfo {
-        // 跟 attachViaInHostPlugin 走同款实现
-        return attachViaInHostPlugin().let { info ->
-            AttachInfo(
-                pid = info.pid,
-                jdwpSessionId = info.jdwpSessionId,
-                jdwpDescription = info.jdwpDescription.replace("[shizuku-inhostplugin]", "[shizuku-binder]"),
-            )
         }
     }
 
