@@ -99,6 +99,8 @@ fun AdbConsoleScreen(
     val c = deviceConnectionColors
     val availableChannels by viewModel.availableChannels.collectAsState()
     val activeChannel by viewModel.activeChannel.collectAsState()
+    val connectedDevices by viewModel.connectedDevices.collectAsState()
+    val activeDeviceId by viewModel.activeDeviceId.collectAsState()
     val input by viewModel.input.collectAsState()
     val output by viewModel.output.collectAsState()
     val running by viewModel.running.collectAsState()
@@ -111,6 +113,7 @@ fun AdbConsoleScreen(
     val selectedLabel by viewModel.selectedLabel.collectAsState()
 
     var channelMenuExpanded by remember { mutableStateOf(false) }
+    var deviceMenuExpanded by remember { mutableStateOf(false) }
     var examplesExpanded by remember { mutableStateOf(true) }
     var showHistory by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -141,7 +144,7 @@ fun AdbConsoleScreen(
                     }
                 },
                 actions = {
-                    // 通道选择器
+                    // 设备连接类型选择器
                     Box {
                         Surface(
                             color = c.surfaceHighlight,
@@ -193,6 +196,56 @@ fun AdbConsoleScreen(
                                         channelMenuExpanded = false
                                     },
                                 )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    // 已连接设备选择器
+                    Box {
+                        val activeDevice = connectedDevices.firstOrNull { it.id == activeDeviceId }
+                        Surface(
+                            color = c.surfaceHighlight,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, c.border),
+                            onClick = { deviceMenuExpanded = true },
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    activeDevice?.title ?: "选择设备",
+                                    color = c.textPrimary,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                )
+                                Icon(Icons.Default.ArrowDropDown, null, tint = c.textSecondary)
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = deviceMenuExpanded,
+                            onDismissRequest = { deviceMenuExpanded = false },
+                        ) {
+                            if (connectedDevices.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("暂无已连接设备", color = c.textSecondary) },
+                                    onClick = { deviceMenuExpanded = false },
+                                )
+                            } else {
+                                connectedDevices.forEach { device ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(device.title, color = c.textPrimary)
+                                                Text(device.subtitle, color = c.textSecondary, fontSize = 11.sp)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.selectDevice(device.id)
+                                            deviceMenuExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }

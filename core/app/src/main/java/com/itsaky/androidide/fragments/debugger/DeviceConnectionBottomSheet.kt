@@ -38,15 +38,12 @@ class DeviceConnectionBottomSheet : BaseBottomSheetFragment() {
                 DeviceConnectionSheetContent(
                     onDismiss = { dismiss() },
                     onNavigateToPairOwn = {
-                        dismiss()
                         PairingOwnDeviceFragment().show(parentFragmentManager, "pairing_own")
                     },
                     onNavigateToPairOther = {
-                        dismiss()
                         PairingOtherDeviceFragment().show(parentFragmentManager, "pairing_other")
                     },
                     onNavigateToAdbConsole = {
-                        dismiss()
                         AdbConsoleFragment().show(parentFragmentManager, "adb_console")
                     },
                 )

@@ -9,6 +9,8 @@ import android.zero.studio.shell.otg_adb_shell.domain.model.OtgConnection
 import android.zero.studio.shell.otg_adb_shell.domain.model.OtgState
 import android.zero.studio.shell.otg_adb_shell.domain.repository.OtgRepository
 import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbConnection
+import android.zero.studio.shell.wifi_adb_shell.domain.model.UNKNOWN_DEVICE
+import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbDevice
 import android.zero.studio.shell.wifi_adb_shell.domain.model.WifiAdbState
 import android.zero.studio.shell.wifi_adb_shell.domain.repository.WifiAdbRepository
 import androidx.lifecycle.ViewModel
@@ -16,6 +18,7 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.debugger.connection.status.ChannelStatus
 import com.itsaky.androidide.debugger.connection.status.ConnectionStatusAggregator
 import com.itsaky.androidide.debugger.root.RootAdbBridge
+import com.itsaky.androidide.debugger.root.RootAdbDeviceState
 import com.itsaky.androidide.debugger.root.RootManager
 import com.itsaky.androidide.debugger.root.RootState
 import com.itsaky.androidide.ui.theme.deviceconnection.DcChannel
@@ -41,6 +44,14 @@ enum class AdbChannel(val displayName: String) {
     ROOT("Root ADB"),
     OTG("OTG ADB"),
 }
+
+/** ADB 命令页可切换的已连接设备。 */
+data class AdbConsoleDevice(
+    val id: String,
+    val channel: AdbChannel,
+    val title: String,
+    val subtitle: String,
+)
 
 /** 命令示范列表排序方式。 */
 enum class CommandSortType(val label: String) {
@@ -116,6 +127,54 @@ class AdbConsoleViewModel @Inject constructor(
     /** 活动通道。默认 Shizuku；刷新后会自动切到首个可用连接类型。 */
     private val _activeChannel = MutableStateFlow(AdbChannel.SHIZUKU)
     val activeChannel: StateFlow<AdbChannel> = _activeChannel.asStateFlow()
+
+    /** 当前可切换的已连接设备列表，汇总 Shizuku / WiFi ADB / Root ADB / OTG。 */
+    val connectedDevices: StateFlow<List<AdbConsoleDevice>> = combine(
+        shellRepository.shizukuPermissionState(),
+        WifiAdbConnection.currentDevice,
+        WifiAdbConnection.state,
+        rootAdbBridge.deviceList,
+        OtgConnection.state,
+    ) { shizuku, wifiDevice, wifiState, rootDevices, otg ->
+        buildList {
+            if (shizuku) {
+                add(
+                    AdbConsoleDevice(
+                        id = "shizuku:current",
+                        channel = AdbChannel.SHIZUKU,
+                        title = "本机 Shizuku",
+                        subtitle = "Shizuku 无线 ADB",
+                    )
+                )
+            }
+            if (wifiState is WifiAdbState.Connected && wifiDevice != null) {
+                add(wifiDevice.toConsoleDevice())
+            }
+            rootDevices.filter { it.state == RootAdbDeviceState.DEVICE }.forEach { device ->
+                add(
+                    AdbConsoleDevice(
+                        id = "root:${device.serial}",
+                        channel = AdbChannel.ROOT,
+                        title = device.model ?: device.serial,
+                        subtitle = "Root ADB · ${device.type.displayName}${if (device.isActive) " · 当前" else ""}",
+                    )
+                )
+            }
+            if (otg is OtgState.Connected) {
+                add(
+                    AdbConsoleDevice(
+                        id = "otg:${otg.deviceName}",
+                        channel = AdbChannel.OTG,
+                        title = otg.deviceName,
+                        subtitle = "OTG ADB",
+                    )
+                )
+            }
+        }.distinctBy { it.id }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _activeDeviceId = MutableStateFlow<String?>(null)
+    val activeDeviceId: StateFlow<String?> = _activeDeviceId.asStateFlow()
 
     /** 命令输入。 */
     private val _input = MutableStateFlow("")
@@ -207,12 +266,34 @@ class AdbConsoleViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            connectedDevices.collect { devices ->
+                val current = _activeDeviceId.value
+                val selectedStillUsable = current != null && devices.any { it.id == current }
+                if (!selectedStillUsable) {
+                    val preferred = devices.firstOrNull { it.channel == _activeChannel.value } ?: devices.firstOrNull()
+                    _activeDeviceId.value = preferred?.id
+                    preferred?.let { _activeChannel.value = it.channel }
+                }
+            }
+        }
     }
 
     /** 设置活动通道。 */
     fun setActiveChannel(channel: AdbChannel) {
         if (availableChannels.value.contains(channel)) {
             _activeChannel.value = channel
+            connectedDevices.value.firstOrNull { it.channel == channel }?.let { selectDevice(it.id) }
+        }
+    }
+
+    /** 切换已连接设备；Root ADB 同步切换 RootAdbBridge 的活动设备。 */
+    fun selectDevice(deviceId: String) {
+        val device = connectedDevices.value.firstOrNull { it.id == deviceId } ?: return
+        _activeDeviceId.value = device.id
+        _activeChannel.value = device.channel
+        if (device.channel == AdbChannel.ROOT) {
+            rootAdbBridge.setActive(device.id.removePrefix("root:"))
         }
     }
 
@@ -441,6 +522,15 @@ class AdbConsoleViewModel @Inject constructor(
     }
 
     private fun String.removeAdbShellPrefix(): String = removePrefix("adb shell").trimStart()
+
+    private fun WifiAdbDevice.toConsoleDevice(): AdbConsoleDevice = AdbConsoleDevice(
+        id = "wifi:$id",
+        channel = AdbChannel.WIRELESS_ADB,
+        title = deviceName.takeUnless { it == UNKNOWN_DEVICE }
+            ?: serialNumber
+            ?: "$ip:$port",
+        subtitle = "无线 ADB · $ip:$port${if (isOwnDevice) " · 本机" else ""}",
+    )
 
     override fun onCleared() {
         super.onCleared()
