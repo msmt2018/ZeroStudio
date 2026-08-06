@@ -103,7 +103,7 @@ data class UsbLanConfig(
  * 通过 [DebugConnectionPreferences] 读写持久化。
  */
 data class DebugConnectionSettings(
-    val activeType: ConnectionType = ConnectionType.AidlSocket,
+    val activeType: ConnectionType = ConnectionType.UsbLan,
     val autoRetry: Boolean = true,
     val retryMaxAttempts: Int = 3,
     val retryInitialDelayMs: Long = 500L,

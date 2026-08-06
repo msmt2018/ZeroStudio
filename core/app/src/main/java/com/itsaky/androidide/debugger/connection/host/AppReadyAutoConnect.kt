@@ -22,7 +22,7 @@
  *    - 行为: 收到任一信号, 找匹配的 IDebugConnection, 触发 resolve+connect+attach
  *
  *  策略:
- *    - 默认连接方案: [ConnectionType.AidlSocket] (免 root 通用 fallback)
+ *    - 默认连接方案: [ConnectionType.UsbLan] (免 root 通用 fallback)
  *    - AIDL+Socket 路径: 走 HostBridgeServer 的反连 (host 端 HostAttachAgent
  *      反连) 而不是 TCP ServerSocket 路径
  *    - 如果 host 端只发了 "READY" 而没反连 LocalServerSocket (旧 host app),
@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 interface AutoConnectListener {
     /**
-     * 决定 host app 启动后用哪个连接方案 (默认 = AidlSocket)。
+     * 决定 host app 启动后用哪个连接方案 (默认 = UsbLan)。
      * 子类可改: 读用户偏好 / 当前调试方案 / 设备能力。
      */
     fun pickConnectionType(packageName: String, hint: AutoConnectHint): ConnectionType
@@ -99,12 +99,12 @@ data class AutoConnectHint(
 )
 
 /**
- * 默认实现: 总是选 AidlSocket, 失败就 log。
+ * 默认实现: 总是选 UsbLan JDWP/ADB 转发, 失败就 log。
  */
 class DefaultAutoConnectListener : AutoConnectListener {
     private val log = ILogger.ROOT
     override fun pickConnectionType(packageName: String, hint: AutoConnectHint): ConnectionType {
-        return ConnectionType.AidlSocket
+        return ConnectionType.UsbLan
     }
     override fun onAttachSuccess(
         packageName: String,
@@ -136,7 +136,7 @@ class DefaultAutoConnectListener : AutoConnectListener {
  *   - IDebugConnection 工厂: 默认用 DebugConnectionRegistry.create, 可注入
  *     connectionFactory 替换 (测试用)
  *
- * @param settings DebugConnectionSettings (用于构造 fallback AidlSocketConnection)
+ * @param settings DebugConnectionSettings (用于构造 fallback JDWP connection)
  * @param listener AutoConnectListener
  * @param connectionFactory 工厂 (生产: DebugConnectionRegistry.create)
  * @param debounceMs 防抖 (1s 内只触发一次 attach)

@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.WifiSettings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -184,18 +183,15 @@ private fun PairingOwnDeviceScreen(
     }
 
     val onClickDevOptionsButton: () -> Unit = {
-        if (!hasNotificationAccess) {
-            showToast(context, "请先授权通知权限")
-            return
+        when {
+            !hasNotificationAccess -> showToast(context, "请先授权通知权限")
+            !isWifiConnected -> showToast(context, "请先连接到 WiFi 网络")
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.R -> showToast(context, "Android 11 及以上才支持无线调试配对")
+            else -> {
+                SelfPairingService.start(context)
+                WirelessDebuggingUtils.openWirelessDebuggingSettings(context)
+            }
         }
-        if (!isWifiConnected) {
-            showToast(context, "请先连接到 WiFi 网络")
-            return
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
-
-        SelfPairingService.start(context)
-        WirelessDebuggingUtils.openWirelessDebuggingSettings(context)
     }
 
     Scaffold(
@@ -244,7 +240,7 @@ private fun PairingOwnDeviceScreen(
                         iconTint = MaterialTheme.colorScheme.error,
                         text = "需要连接 WiFi 网络才能进行无线调试配对",
                         buttonText = "开启 WiFi",
-                        buttonIcon = Icons.Default.WifiSettings,
+                        buttonIcon = Icons.Default.Wifi,
                         onButtonClick = onClickWifiEnableButton,
                     )
                 }

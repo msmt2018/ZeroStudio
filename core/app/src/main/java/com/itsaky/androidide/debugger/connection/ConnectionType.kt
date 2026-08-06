@@ -2,7 +2,7 @@
  *  ZeroStudio IDE - Debugger Connection Layer
  *
  *  ConnectionType: 6 种连接方式的密封枚举 + 元数据。
- *  默认 AIDL_SOCKET,运行时由用户在设置页手动切换。
+ *  默认使用 JDWP/ADB 转发,运行时由用户在设置页手动切换。
  *  6 种实现完全独立,运行时只存在一种,无跨方案降级。
  *
  *  注: 内网虚拟机拆分成了 SOCKS5 代理 和 ADB 端口转发 两个独立方案,
@@ -18,10 +18,15 @@ sealed class ConnectionType(
     val requiresRoot: Boolean,
     val requiresShizuku: Boolean,
 ) {
-    /** AIDL + LocalServerSocket 反向连,免 root,需要宿主体内有 stub */
+    /**
+     * 旧 AIDL + LocalServerSocket 反向连接方案。
+     *
+     * 已停止对外暴露: 断点调试只允许 JDWP 字节流传输,旧偏好会迁移到
+     * [UsbLan]。保留对象仅用于读取历史 id 时兼容。
+     */
     object AidlSocket : ConnectionType(
         id = "aidl_socket",
-        displayName = "AIDL Socket (免Root)",
+        displayName = "AIDL Socket (已停用)",
         requiresRoot = false,
         requiresShizuku = false,
     )
@@ -76,12 +81,12 @@ sealed class ConnectionType(
 
     companion object {
         val ALL: List<ConnectionType> =
-            listOf(AidlSocket, Shizuku, Root, InnetVmSocks, InnetVmAdb, UsbLan)
+            listOf(Shizuku, Root, InnetVmSocks, InnetVmAdb, UsbLan)
 
         fun fromId(id: String?): ConnectionType {
             // ALL 列表初始化存在竞态,filterNotNull 防御 it 为 null 导致的 NPE
             val all: List<ConnectionType> = ALL.filterNotNull()
-            return all.firstOrNull { it.id == id } ?: AidlSocket
+            return all.firstOrNull { it.id == id } ?: UsbLan
         }
 
         fun isValidId(id: String?): Boolean = ALL.filterNotNull().any { it.id == id }
@@ -91,7 +96,8 @@ sealed class ConnectionType(
          * (默认走 SOCKS5 因为更通用,ADB 转发需要 VM 端开 adbd 端口)。
          */
         fun fromIdCompat(id: String?): ConnectionType = when (id) {
-            null -> AidlSocket
+            null -> UsbLan
+            AidlSocket.id -> UsbLan
             "innet_vm" -> InnetVmSocks
             else -> fromId(id)
         }

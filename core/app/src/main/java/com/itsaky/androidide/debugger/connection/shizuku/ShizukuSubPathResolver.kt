@@ -3,14 +3,11 @@
  *
  *  ShizukuSubPathResolver: Auto 模式探测可用子路径, 返回第一个能用的。
  *
- *  4 个子路径 (按探测顺序):
- *    1. WifiAdb       - 复用 AIDL 方案, 不依赖 Shizuku 权限, 只要 host app 已装
- *    2. Binder        - 走 Shizuku binder 拿 host JDWP fd, 需要 Shizuku 已运行 + 授权
- *    3. InHostPlugin  - 走 Shizuku attachUserService, 需要 host 装了 plugin runtime
- *    4. Socks         - 走 Shizuku newProcess 启动 SOCKS5, 需要 Shizuku 已运行 + 授权
+ *  JDWP-only Auto 子路径 (按探测顺序):
+ *    1. InHostPlugin  - 走 Shizuku attachUserService,宿主内插件只做 JDWP 字节转发
+ *    2. Socks         - 走宿主内 SOCKS5 server,CONNECT 到 localabstract:jdwp
  *
- *  Auto 模式先尝试 WifiAdb (最宽松), 再 Binder (需 Shizuku), 再
- *  InHostPlugin (需 host plugin), 再 Socks (兜底, 走 SOCKS5)。
+ *  旧 WifiAdb/AIDL 与 Binder-fd 子路径保留枚举兼容,但 Auto 不再选择。
  *
  *  ShizukuConfig.SubPath 枚举是子路径 id, 5 个值:
  *    Auto / WifiAdb / Binder / InHostPlugin / Socks
@@ -65,9 +62,8 @@ class ShizukuSubPathResolver(
         }
         val status = probe.probe()
         if (!status.isRunning) {
-            // Shizuku 没运行, 只能走 WifiAdb (不依赖 Shizuku)
-            log.info("ShizukuSubPathResolver: Shizuku not running, using WifiAdb")
-            return ShizukuSubPath.WifiAdb
+            log.info("ShizukuSubPathResolver: Shizuku not running; JDWP-only Shizuku paths unavailable")
+            return ShizukuSubPath.Socks
         }
         for (cap in capabilities) {
             val usability = cap.probeUsable(target)
@@ -77,8 +73,8 @@ class ShizukuSubPathResolver(
                 return cap.subPath
             }
         }
-        // 全部不可用, 退回 WifiAdb
-        log.warn("ShizukuSubPathResolver: all sub-paths unusable, falling back to WifiAdb")
-        return ShizukuSubPath.WifiAdb
+        // 全部不可用, 退回 Socks,由 attach 阶段给出明确错误; 不再回退 AIDL/WifiAdb。
+        log.warn("ShizukuSubPathResolver: all JDWP-only sub-paths unusable, falling back to Socks")
+        return ShizukuSubPath.Socks
     }
 }

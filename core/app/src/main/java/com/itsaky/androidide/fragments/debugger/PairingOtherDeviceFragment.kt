@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.WifiSettings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -839,7 +838,7 @@ private fun WifiEnableHintCard(
                 ),
                 onClick = onClickButton,
             ) {
-                Icon(Icons.Default.WifiSettings, null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Wifi, null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("开启 WiFi")
             }
