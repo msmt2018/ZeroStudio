@@ -7,16 +7,10 @@ import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,12 +28,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.BasicAlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,12 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
@@ -306,7 +295,10 @@ fun TerminalScreen(
                 changeSession(context, nextId)
             }
 
-            TerminalSessionHolder.sessionBinder?.terminateSession(sessionId)
+            TerminalSessionHolder.sessionBinder?.terminateSession(
+                sessionId,
+                stopServiceWhenEmpty = false,
+            )
         }
 
         fun handleCloseOtherSessions(sessionId: String) {
@@ -316,15 +308,13 @@ fun TerminalScreen(
             }
             service.sessionOrder.toList()
                 .filter { it != sessionId }
-                .forEach { TerminalSessionHolder.sessionBinder?.terminateSession(it) }
+                .forEach { TerminalSessionHolder.sessionBinder?.terminateSession(it, stopServiceWhenEmpty = false) }
         }
 
         fun handleCloseAllSessions() {
             val service = TerminalSessionHolder.sessionBinder?.getService() ?: return
             pendingEmptySessionCreate = false
-            service.sessionOrder.toList().forEach { sessionId ->
-                TerminalSessionHolder.sessionBinder?.terminateSession(sessionId)
-            }
+            TerminalSessionHolder.sessionBinder?.terminateAllSessions()
         }
         // Add session dialog (shared between wide and narrow layouts)
         if (showAddDialog) {
@@ -753,52 +743,6 @@ fun BackgroundImage() {
 }
 
 
-/**
- * Selectable card for the narrow-screen session drawer.
- * Supports long-press for renaming.
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun SelectableCard(
-    selected: Boolean,
-    onSelect: () -> Unit,
-    onLongPress: () -> Unit = {},
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val containerColor by animateColorAsState(
-        targetValue = when {
-            selected -> MaterialTheme.colorScheme.primaryContainer
-            else -> MaterialTheme.colorScheme.surface
-        },
-        label = "containerColor"
-    )
-
-    Card(
-        modifier = modifier.combinedClickable(
-            onClick = onSelect,
-            onLongClick = onLongPress
-        ),
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor,
-            contentColor = if (selected) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            }
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (selected) 8.dp else 2.dp
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            content()
-        }
-    }
-}
 
 
 fun changeSession(context: Context, session_id: String) {
