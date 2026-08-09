@@ -5,7 +5,7 @@
     <string name="use_shizuku_desc">自动执行 rish 命令</string>
     <string name="default_working_mode">默认工作模式</string>
     <string name="alpine_desc">Alpine Linux</string>
-    <string name="android_desc">Termix Android Shell</string>
+    <string name="android_desc">Terminal Android Shell</string>
     <string name="terminal_env_alpine">Alpine</string>
     <string name="terminal_env_arch">Arch</string>
     <string name="terminal_env_android">Android</string>

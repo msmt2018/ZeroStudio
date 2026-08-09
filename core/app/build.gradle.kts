@@ -15,10 +15,6 @@ plugins {
   alias(libs.plugins.google.services)
   alias(libs.plugins.firebase.crashlytics)
   id("org.jetbrains.kotlin.plugin.compose")
-  // Hilt 依赖注入 (设备连接管理 connection 模块需要)
-  // 注意: 本模块不应用 KSP 插件, 避免与 Hilt 插件在同一模块共存时触发
-  // Dagger #3965 classloader 冲突 (composite build 环境下两者 classloader 不一致)。
-  // Room 编译器改用 kapt 处理。
   alias(libs.plugins.hilt)
   alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
 }

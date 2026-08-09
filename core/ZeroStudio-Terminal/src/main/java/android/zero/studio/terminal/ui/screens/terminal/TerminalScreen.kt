@@ -660,7 +660,7 @@ fun TerminalContent(
                     ),
                     title = {
                         Column {
-                            Text(text = "Termix", color = color)
+                            Text(text = "Terminal", color = color)
                             Text(
                                 style = MaterialTheme.typography.bodySmall,
                                 text = displayTitle,
