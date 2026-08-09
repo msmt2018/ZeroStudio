@@ -17,14 +17,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +58,8 @@ fun SessionTabBar(
     getWorkingMode: (String) -> Int?,
     onSelectSession: (String) -> Unit,
     onCloseSession: (String) -> Unit,
+    onCloseOtherSessions: (String) -> Unit,
+    onCloseAllSessions: () -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (String) -> Unit,
     onOpenSettings: () -> Unit,
@@ -83,15 +90,23 @@ fun SessionTabBar(
             modifier = Modifier.fillMaxHeight(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Scrollable area: tabs + add button
-            Row(
-                            modifier = Modifier.weight(1f)
-                    .fillMaxHeight()
-                    .horizontalScroll(scrollState),
+            // Scrollable area: tabs only. The add button below is fixed on the right
+            // edge and floats above the scrollable tab strip.
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(end = 40.dp)
+                        .horizontalScroll(scrollState),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 sessions.forEachIndexed { index, sessionId ->
                     val selected = sessionId == currentSessionId
+                    var menuExpanded by remember(sessionId) { mutableStateOf(false) }
 
                     // Tab item with fixed width
                     Box(
@@ -106,7 +121,7 @@ fun SessionTabBar(
                             )
                             .combinedClickable(
                                 onClick = { onSelectSession(sessionId) },
-                                onLongClick = { onRenameSession(sessionId) }
+                                onLongClick = { menuExpanded = true }
                             )
                             .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
@@ -172,15 +187,60 @@ fun SessionTabBar(
                                 )
                             }
                         }
+
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("重命名会话名") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRenameSession(sessionId)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("关闭当前会话标签") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onCloseSession(sessionId)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("关闭其它会话") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onCloseOtherSessions(sessionId)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("关闭全部") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onCloseAllSessions()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("设置") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenSettings()
+                                },
+                            )
+                        }
                     }
                 }
+                }
 
-                // Add button (scrolls with tabs)
+                // Add button (fixed on right, floating over the tab strip)
                 IconButton(
                     onClick = onAddSession,
                     modifier = Modifier
-                        .padding(horizontal = 2.dp)
-                        .size(28.dp)
+                        .align(Alignment.CenterEnd)
+                        .padding(horizontal = 4.dp)
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -191,20 +251,6 @@ fun SessionTabBar(
                 }
             }
 
-            // Settings button (fixed on right)
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier
-                    .padding(horizontal = 4.dp)
-                    .size(28.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Settings",
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }
