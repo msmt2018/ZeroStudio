@@ -234,7 +234,7 @@ fun AboutScreen(
                                 .align(Alignment.Start)
                                 .animateItem()
                         )
-                        ProfilePic(model = R.mipmap.dp_hridayan, size = 150.dp)
+                        ProfilePic(model = R.drawable.ic_launcher_foreground, size = 150.dp)
                         Text(
                             text = "Hridayan",
                             style = MaterialTheme.typography.bodyLarge,
