@@ -19,34 +19,81 @@ for sofile in "$PREFIX/files/"*.so.2; do
   [ ! -e "$dest" ] && cp "$sofile" "$dest"
 done
 
-if [ ! -d "$ROOTFS_DIR/etc" ]; then
+ROOTFS_READY_MARKER=$ROOTFS_DIR/.zerostudio-rootfs-ready
+
+ensure_usrmerge_link() {
+  link_path=$1
+  target_path=$2
+
+  if [ -L "$ROOTFS_DIR/$link_path" ]; then
+    return 0
+  fi
+
+  if [ -e "$ROOTFS_DIR/$link_path" ]; then
+    return 0
+  fi
+
+  if [ -d "$ROOTFS_DIR/$target_path" ]; then
+    ln -s "$target_path" "$ROOTFS_DIR/$link_path" 2>/dev/null || true
+  fi
+}
+
+repair_usrmerge_links() {
+  # Ubuntu base images are usr-merged. Android tar implementations normally
+  # restore these symlinks, but interrupted extraction or limited tar builds can
+  # leave them missing. Recreate them idempotently before validation.
+  ensure_usrmerge_link bin usr/bin
+  ensure_usrmerge_link sbin usr/sbin
+  ensure_usrmerge_link lib usr/lib
+  ensure_usrmerge_link lib64 usr/lib64
+}
+
+probe_guest_bins() {
+  GUEST_SH=/bin/sh
+  [ -x "$ROOTFS_DIR$GUEST_SH" ] || GUEST_SH=/usr/bin/sh
+  GUEST_BASH=/bin/bash
+  [ -x "$ROOTFS_DIR$GUEST_BASH" ] || GUEST_BASH=/usr/bin/bash
+  GUEST_ENV=/usr/bin/env
+  [ -x "$ROOTFS_DIR$GUEST_ENV" ] || GUEST_ENV=/bin/env
+}
+
+rootfs_is_complete() {
+  [ -d "$ROOTFS_DIR/etc" ] || return 1
+  [ -d "$ROOTFS_DIR/usr/bin" ] || return 1
+
+  repair_usrmerge_links
+  probe_guest_bins
+
+  [ -x "$ROOTFS_DIR$GUEST_SH" ] || return 1
+  [ -x "$ROOTFS_DIR$GUEST_ENV" ] || return 1
+  return 0
+}
+
+extract_ubuntu_rootfs() {
   if [ ! -f "$ROOTFS_ARCHIVE" ]; then
     echo "Ubuntu rootfs archive not found: $ROOTFS_ARCHIVE"
     exit 1
   fi
+
+  rm -rf "$ROOTFS_DIR"
+  mkdir -p "$ROOTFS_DIR"
+
   echo "Extracting Ubuntu rootfs into $ROOTFS_DIR"
-  tar -xf "$ROOTFS_ARCHIVE" -C "$ROOTFS_DIR"
-fi
+  # -p preserves executable bits and symlink metadata where the Android tar
+  # implementation supports it; symlinks are then verified by rootfs_is_complete.
+  tar -xpf "$ROOTFS_ARCHIVE" -C "$ROOTFS_DIR"
+  repair_usrmerge_links
+}
 
-# Ubuntu base images are usr-merged. Try to recreate the compatibility links,
-# but do not depend on them: Android devices can differ in how symlink creation
-# behaves in app-private storage. The launcher below probes both /bin/* and
-# /usr/bin/* paths before entering proot.
-[ -e "$ROOTFS_DIR/bin" ] || [ -L "$ROOTFS_DIR/bin" ] || [ ! -d "$ROOTFS_DIR/usr/bin" ] || ln -s usr/bin "$ROOTFS_DIR/bin" 2>/dev/null || true
-[ -e "$ROOTFS_DIR/sbin" ] || [ -L "$ROOTFS_DIR/sbin" ] || [ ! -d "$ROOTFS_DIR/usr/sbin" ] || ln -s usr/sbin "$ROOTFS_DIR/sbin" 2>/dev/null || true
-[ -e "$ROOTFS_DIR/lib" ] || [ -L "$ROOTFS_DIR/lib" ] || [ ! -d "$ROOTFS_DIR/usr/lib" ] || ln -s usr/lib "$ROOTFS_DIR/lib" 2>/dev/null || true
-[ -e "$ROOTFS_DIR/lib64" ] || [ -L "$ROOTFS_DIR/lib64" ] || [ ! -d "$ROOTFS_DIR/usr/lib64" ] || ln -s usr/lib64 "$ROOTFS_DIR/lib64" 2>/dev/null || true
-
-GUEST_SH=/bin/sh
-[ -x "$ROOTFS_DIR$GUEST_SH" ] || GUEST_SH=/usr/bin/sh
-GUEST_BASH=/bin/bash
-[ -x "$ROOTFS_DIR$GUEST_BASH" ] || GUEST_BASH=/usr/bin/bash
-GUEST_ENV=/usr/bin/env
-[ -x "$ROOTFS_DIR$GUEST_ENV" ] || GUEST_ENV=/bin/env
-
-if [ ! -x "$ROOTFS_DIR$GUEST_SH" ]; then
-  echo "Ubuntu rootfs is invalid: missing /bin/sh and /usr/bin/sh"
-  exit 1
+if [ ! -f "$ROOTFS_READY_MARKER" ] || ! rootfs_is_complete; then
+  extract_ubuntu_rootfs
+  if ! rootfs_is_complete; then
+    echo "Ubuntu rootfs extraction failed: missing required symlinks or executables (/usr/bin/env, /bin/sh)."
+    exit 1
+  fi
+  : > "$ROOTFS_READY_MARKER"
+else
+  probe_guest_bins
 fi
 
 mkdir -p "$ROOTFS_DIR/tmp" "$ROOTFS_DIR/root" "$ROOTFS_DIR/proc" "$ROOTFS_DIR/sys" "$ROOTFS_DIR/dev" "$PREFIX/tmp" 2>/dev/null || true
