@@ -91,7 +91,10 @@ class SessionService : Service() {
             sessions.values.forEach{
                 it.finishIfRunning()
             }
-            sessions.keys.toList().forEach { cleanupSessionTemp(it) }
+            sessions.keys.toList().forEach { sessionId ->
+                android.zero.studio.termux.settings.Settings.removeCustomSessionName(sessionId)
+                cleanupSessionTemp(sessionId)
+            }
             sessions.clear()
             sessionOrder.clear()
             sessionList.clear()
@@ -115,7 +118,7 @@ class SessionService : Service() {
         fun getSession(id: String): TerminalSession? {
             return sessions[id]
         }
-        fun terminateSession(id: String) {
+        fun terminateSession(id: String, stopServiceWhenEmpty: Boolean = true) {
             runCatching {
                 //crash is here
                 sessions[id]?.apply {
@@ -132,7 +135,11 @@ class SessionService : Service() {
                 android.zero.studio.termux.settings.Settings.removeCustomSessionName(id)
                 cleanupSessionTemp(id)
                 if (sessions.isEmpty()) {
-                    stopSelf()
+                    if (stopServiceWhenEmpty) {
+                        stopSelf()
+                    } else {
+                        updateNotification()
+                    }
                 } else {
                     updateNotification()
                 }
@@ -178,7 +185,10 @@ class SessionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "ACTION_EXIT" -> {
-                sessions.keys.toList().forEach { cleanupSessionTemp(it) }
+                sessions.keys.toList().forEach { sessionId ->
+                    android.zero.studio.termux.settings.Settings.removeCustomSessionName(sessionId)
+                    cleanupSessionTemp(sessionId)
+                }
                 sessions.forEach { s -> s.value.finishIfRunning() }
                 stopSelf()
             }

@@ -1,10 +1,10 @@
-package `in`.hridayan.ashell
+package android.zero.studio
 
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import `in`.hridayan.ashell.crashreporter.domain.repository.CrashRepository
-import `in`.hridayan.ashell.qstiles.data.provider.TileComponentManager
+import android.zero.studio.crashreporter.domain.repository.CrashRepository
+import android.zero.studio.qstiles.data.provider.TileComponentManager
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)

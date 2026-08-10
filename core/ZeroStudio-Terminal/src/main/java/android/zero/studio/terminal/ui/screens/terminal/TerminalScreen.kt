@@ -1,6 +1,5 @@
 package android.zero.studio.termux.ui.screens.terminal
 
-import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
@@ -8,17 +7,10 @@ import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,30 +23,16 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.BasicAlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,14 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
@@ -92,7 +66,6 @@ import android.zero.studio.termux.libcommons.dpToPx
 import android.zero.studio.termux.libcommons.localDir
 import android.zero.studio.termux.libcommons.pendingCommand
 import android.zero.studio.termux.settings.Settings
-import android.app.Activity
 import android.content.Context
 import android.zero.studio.termux.ui.fragments.TerminalSessionHolder
 import android.zero.studio.termux.ui.components.InputDialog
@@ -104,9 +77,7 @@ import android.zero.studio.termux.ui.components.terminalEnvironmentFromWorkingMo
 import android.zero.studio.termux.ui.components.terminalEnvironmentToWorkingMode
 import android.zero.studio.termux.ui.components.workingModeIsRoot
 import android.zero.studio.termux.ui.routes.MainActivityRoutes
-import android.zero.studio.termux.ui.screens.settings.LayoutMode
 import android.zero.studio.termux.model.WorkingMode
-import android.zero.studio.termux.ui.screens.settings.CloseLastSessionBehavior
 import android.zero.studio.termux.ui.screens.terminal.virtualkeys.VirtualKeysConstants
 import android.zero.studio.termux.ui.screens.terminal.virtualkeys.VirtualKeysInfo
 import android.zero.studio.termux.ui.screens.terminal.virtualkeys.VirtualKeysListener
@@ -253,8 +224,6 @@ fun TerminalScreen(
     }
 
     Box {
-        val scope = rememberCoroutineScope()
-        val isTabBarMode = Settings.layout_mode == LayoutMode.TAB_BAR
         var showAddDialog by remember { mutableStateOf(false) }
         var selectedNewSessionEnvironment by remember {
             mutableStateOf(terminalEnvironmentFromWorkingMode(Settings.working_Mode))
@@ -263,6 +232,7 @@ fun TerminalScreen(
             mutableStateOf(workingModeIsRoot(Settings.working_Mode))
         }
         var showRenameDialogFor by remember { mutableStateOf<String?>(null) }
+        var pendingEmptySessionCreate by remember { mutableStateOf(false) }
 
         // Helper function to generate unique session ID
         fun generateUniqueSessionId(): String {
@@ -288,16 +258,21 @@ fun TerminalScreen(
             }
 
             val sessionId = generateUniqueSessionId()
-            terminalView.get()?.let {
-                val client = TerminalBackEnd(it, context)
+            val terminalViewInstance = terminalView.get()
+            if (terminalViewInstance == null) {
+                TerminalSessionHolder.sessionBinder?.getService()?.currentSession?.value = Pair(sessionId, workingMode)
+                pendingEmptySessionCreate = true
+            } else {
+                val client = TerminalBackEnd(terminalViewInstance, context)
                 TerminalSessionHolder.sessionBinder!!.createSession(
                     sessionId,
                     client,
                     context,
                     workingMode = workingMode
                 )
+                changeSession(context, session_id = sessionId)
+                pendingEmptySessionCreate = false
             }
-            changeSession(context, session_id = sessionId)
         }
 
         fun openAddSessionDialog() {
@@ -307,38 +282,39 @@ fun TerminalScreen(
             showAddDialog = true
         }
 
-        // Helper function to handle closing a session
+        // Helper functions to close tab-backed sessions. The terminal pane is hidden
+        // when no sessions remain, so closing all sessions never recreates an
+        // implicit fallback session.
         fun handleCloseSession(sessionId: String, currentSessionId: String) {
             val service = TerminalSessionHolder.sessionBinder?.getService() ?: return
             val keys = service.sessionOrder.toList()
-            
-            if (keys.size <= 1) {
-                // Last session - check behavior setting
-                if (Settings.close_last_session_behavior == CloseLastSessionBehavior.NEW_SESSION) {
-                    // Create new session BEFORE terminating old one to prevent service stopSelf()
-                    createNewSession(Settings.working_Mode)
-                    // Now safe to terminate the old session
-                    TerminalSessionHolder.sessionBinder?.terminateSession(sessionId)
-                } else {
-                    // Exit - terminate then finish host Activity if available
-                    TerminalSessionHolder.sessionBinder?.terminateSession(sessionId)
-                    if (service.sessionOrder.isEmpty()) {
-                        (context as? Activity)?.finish()
-                    }
-                }
-            } else {
-                // Not last session - switch to adjacent session if closing current
-                if (sessionId == currentSessionId) {
-                    val currentIndex = keys.indexOf(sessionId)
-                    val nextId = if (currentIndex < keys.size - 1) {
-                        keys[currentIndex + 1]
-                    } else {
-                        keys[currentIndex - 1]
-                    }
-                    changeSession(context, nextId)
-                }
-                TerminalSessionHolder.sessionBinder?.terminateSession(sessionId)
+
+            if (keys.size > 1 && sessionId == currentSessionId) {
+                val currentIndex = keys.indexOf(sessionId)
+                val nextId = if (currentIndex < keys.lastIndex) keys[currentIndex + 1] else keys[currentIndex - 1]
+                changeSession(context, nextId)
             }
+
+            TerminalSessionHolder.sessionBinder?.terminateSession(
+                sessionId,
+                stopServiceWhenEmpty = false,
+            )
+        }
+
+        fun handleCloseOtherSessions(sessionId: String) {
+            val service = TerminalSessionHolder.sessionBinder?.getService() ?: return
+            if (service.currentSession.value.first != sessionId) {
+                changeSession(context, sessionId)
+            }
+            service.sessionOrder.toList()
+                .filter { it != sessionId }
+                .forEach { TerminalSessionHolder.sessionBinder?.terminateSession(it, stopServiceWhenEmpty = false) }
+        }
+
+        fun handleCloseAllSessions() {
+            val service = TerminalSessionHolder.sessionBinder?.getService() ?: return
+            pendingEmptySessionCreate = false
+            TerminalSessionHolder.sessionBinder?.terminateAllSessions()
         }
         // Add session dialog (shared between wide and narrow layouts)
         if (showAddDialog) {
@@ -432,12 +408,16 @@ fun TerminalScreen(
             )
         }
 
-        if (isTabBarMode) {
-            Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                val service = TerminalSessionHolder.sessionBinder?.getService()
-                val sessionKeys = service?.sessionOrder?.toList() ?: emptyList()
-                val currentSessionId = service?.currentSession?.value?.first ?: ""
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+            val service = TerminalSessionHolder.sessionBinder?.getService()
+            val sessionKeys = service?.sessionOrder?.toList() ?: emptyList()
+            val currentSessionId = service?.currentSession?.value?.first ?: ""
 
+            LaunchedEffect(sessionKeys.size) {
+                if (sessionKeys.isNotEmpty()) pendingEmptySessionCreate = false
+            }
+
+            if (sessionKeys.isNotEmpty()) {
                 SessionTabBar(
                     sessions = sessionKeys,
                     currentSessionId = currentSessionId,
@@ -445,6 +425,8 @@ fun TerminalScreen(
                     getWorkingMode = { id -> service?.getWorkingMode(id) },
                     onSelectSession = { id -> changeSession(context, id) },
                     onCloseSession = { id -> handleCloseSession(id, currentSessionId) },
+                    onCloseOtherSessions = { id -> handleCloseOtherSessions(id) },
+                    onCloseAllSessions = { handleCloseAllSessions() },
                     onAddSession = { openAddSessionDialog() },
                     onRenameSession = { id -> showRenameDialogFor = id },
                     onOpenSettings = { navController.navigate(MainActivityRoutes.Settings.route) },
@@ -454,157 +436,18 @@ fun TerminalScreen(
                 TabBarTerminalContent(
                     modifier = Modifier.weight(1f)
                 )
+            } else if (pendingEmptySessionCreate) {
+                TabBarTerminalContent(
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                EmptyTerminalSessions(
+                    onAddSession = { openAddSessionDialog() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                )
             }
-        } else {
-            val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-            val configuration = LocalConfiguration.current
-            val screenWidthDp = configuration.screenWidthDp
-            val drawerWidth = (screenWidthDp * 0.84).dp
-
-            BackHandler(enabled = drawerState.isOpen) {
-                scope.launch { drawerState.close() }
-            }
-
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                gesturesEnabled = drawerState.isOpen || !(showToolbar.value && (LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE || showHorizontalToolbar.value)),
-                drawerContent = {
-                    ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(strings.session),
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-
-                                Row {
-                                    val keyboardController = LocalSoftwareKeyboardController.current
-                                    IconButton(onClick = {
-                                        navController.navigate(MainActivityRoutes.Settings.route)
-                                        keyboardController?.hide()
-                                    }) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Settings,
-                                            contentDescription = null
-                                        )
-                                    }
-
-                                    IconButton(onClick = {
-                                        openAddSessionDialog()
-                                    }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = null
-                                        )
-                                    }
-
-                                }
-
-
-                            }
-
-                            TerminalSessionHolder.sessionBinder?.getService()?.let { service ->
-                                val sessionKeys = service.sessionOrder.toList()
-                                LazyColumn {
-                                    itemsIndexed(sessionKeys) { index, session_id ->
-                                        SelectableCard(
-                                            selected = session_id == service.currentSession.value.first,
-                                            onSelect = {
-                                                changeSession(
-                                                    context,
-                                                    session_id
-                                                )
-                                            },
-                                            onLongPress = {
-                                                showRenameDialogFor = session_id
-                                            },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(8.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                // Session number badge
-                                                if (index < 9) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(24.dp)
-                                                            .clip(RoundedCornerShape(6.dp))
-                                                            .background(
-                                                                if (session_id == service.currentSession.value.first)
-                                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                                                else
-                                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
-                                                            ),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            text = "${index + 1}",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = if (session_id == service.currentSession.value.first)
-                                                                MaterialTheme.colorScheme.primary
-                                                            else
-                                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                        )
-                                                    }
-                                                    Spacer(modifier = Modifier.width(12.dp))
-                                                }
-
-                                                Text(
-                                                    text = service.getDisplayTitle(session_id),
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    color = getSessionTextColor(service.getWorkingMode(session_id))
-                                                )
-
-                                                if (session_id != service.currentSession.value.first) {
-                                                    Spacer(modifier = Modifier.weight(1f))
-
-                                                    IconButton(
-                                                        onClick = {
-                                                            println(session_id)
-                                                            TerminalSessionHolder.sessionBinder?.terminateSession(
-                                                                session_id
-                                                            )
-                                                        },
-                                                        modifier = Modifier.size(24.dp)
-                                                    ) {
-                                                    
-                                                        Icon(
-                                                            imageVector = Icons.Outlined.Delete,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                }
-
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                        }
-                    }
-
-                },
-                content = {
-                    TerminalContent(
-                        navController = navController,
-                        showAddDialog = { openAddSessionDialog() },
-                        openDrawer = { scope.launch { drawerState.open() } },
-                    )
-                })
         }
     }
 }
@@ -626,78 +469,25 @@ fun getSessionTextColor(workingMode: Int?): androidx.compose.ui.graphics.Color {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TerminalContent(
-    navController: NavController,
-    showAddDialog: () -> Unit,
-    openDrawer: () -> Unit,
-    modifier: Modifier = Modifier
+fun EmptyTerminalSessions(
+    onAddSession: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     Box(
-        modifier = modifier
-            .fillMaxSize(),
-        contentAlignment = Alignment.TopStart
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
     ) {
         BackgroundImage()
-        val color = getComposeColor()
-        Column {
-
-
-            val showToolbarCondition = showToolbar.value && (LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE || showHorizontalToolbar.value)
-
-            if (showToolbarCondition) {
-                val service = TerminalSessionHolder.sessionBinder?.getService()
-                val currentSessionId = service?.currentSession?.value?.first ?: ""
-                val displayTitle = service?.getDisplayTitle(currentSessionId) ?: currentSessionId
-                val currentWorkingMode = service?.getWorkingMode(currentSessionId)
-
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
-                    ),
-                    title = {
-                        Column {
-                            Text(text = "Terminal", color = color)
-                            Text(
-                                style = MaterialTheme.typography.bodySmall,
-                                text = displayTitle,
-                                color = getSessionTextColor(currentWorkingMode)
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { openDrawer() }) {
-                            Icon(Icons.Default.Menu, null, tint = color)
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { showAddDialog() }) {
-                            Icon(Icons.Default.Add, null, tint = color)
-                        }
-                    }
-                )
-            }
-
-            val density = LocalDensity.current
-            TerminalPaneContent(
-                modifier = Modifier
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .padding(top = if (showToolbar.value) {
-                        0.dp
-                    } else {
-                        with(density) {
-                            TopAppBarDefaults.windowInsets.getTop(density).toDp()
-                        }
-                    })
+        FilledTonalButton(onClick = onAddSession) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
             )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(stringResource(strings.shortcut_new_session))
         }
-
-
-
     }
 }
 
@@ -953,52 +743,6 @@ fun BackgroundImage() {
 }
 
 
-/**
- * Selectable card for the narrow-screen session drawer.
- * Supports long-press for renaming.
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun SelectableCard(
-    selected: Boolean,
-    onSelect: () -> Unit,
-    onLongPress: () -> Unit = {},
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val containerColor by animateColorAsState(
-        targetValue = when {
-            selected -> MaterialTheme.colorScheme.primaryContainer
-            else -> MaterialTheme.colorScheme.surface
-        },
-        label = "containerColor"
-    )
-
-    Card(
-        modifier = modifier.combinedClickable(
-            onClick = onSelect,
-            onLongClick = onLongPress
-        ),
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor,
-            contentColor = if (selected) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            }
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (selected) 8.dp else 2.dp
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            content()
-        }
-    }
-}
 
 
 fun changeSession(context: Context, session_id: String) {
