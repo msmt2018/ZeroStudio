@@ -36,6 +36,7 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToLong
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Downloader(
     modifier: Modifier = Modifier,

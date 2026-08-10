@@ -349,6 +349,7 @@ fun TerminalScreen(
                     )
 
                     if (selectedNewSessionEnvironment.supportsRoot) {
+                        val selectedEnvironmentLabel = stringResource(selectedNewSessionEnvironment.labelRes)
                         PreferenceSwitch(
                             checked = startNewSessionWithRoot,
                             onCheckedChange = {
@@ -357,7 +358,7 @@ fun TerminalScreen(
                             label = stringResource(strings.terminal_env_root_toggle),
                             description = stringResource(
                                 strings.terminal_env_root_toggle_desc,
-                                stringResource(selectedNewSessionEnvironment.labelRes),
+                                selectedEnvironmentLabel,
                             ),
                             onClick = {
                                 startNewSessionWithRoot = !startNewSessionWithRoot

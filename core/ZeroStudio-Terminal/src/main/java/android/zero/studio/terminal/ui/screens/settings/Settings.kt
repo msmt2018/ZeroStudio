@@ -640,6 +640,7 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController) {
             )
 
             if (selectedTerminalEnvironment.supportsRoot) {
+                val selectedEnvironmentLabel = stringResource(selectedTerminalEnvironment.labelRes)
                 PreferenceSwitch(
                     checked = startWithRoot,
                     onCheckedChange = {
@@ -649,7 +650,7 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController) {
                     modifier = modifier,
                     description = stringResource(
                         strings.terminal_env_root_toggle_desc,
-                        stringResource(selectedTerminalEnvironment.labelRes),
+                        selectedEnvironmentLabel,
                     ),
                     onClick = {
                         applyTerminalEnvironmentSelection(selectedTerminalEnvironment, !startWithRoot)
