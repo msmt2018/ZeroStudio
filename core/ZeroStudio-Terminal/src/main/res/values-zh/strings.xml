@@ -4,8 +4,11 @@
     <string name="use_shizuku">自动登录 Shizuku</string>
     <string name="use_shizuku_desc">自动执行 rish 命令</string>
     <string name="default_working_mode">默认工作模式</string>
+    <string name="ubuntu_desc">Ubuntu Linux (proot)</string>
+    <string name="ubuntu_root_desc">Ubuntu Linux（以真实 Root 启动 proot）</string>
     <string name="alpine_desc">Alpine Linux</string>
     <string name="android_desc">Terminal Android Shell</string>
+    <string name="terminal_env_ubuntu">Ubuntu</string>
     <string name="terminal_env_alpine">Alpine</string>
     <string name="terminal_env_arch">Arch</string>
     <string name="terminal_env_android">Android</string>

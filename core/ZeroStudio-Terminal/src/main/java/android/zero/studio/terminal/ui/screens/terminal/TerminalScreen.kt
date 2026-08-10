@@ -30,6 +30,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -279,6 +283,7 @@ fun TerminalScreen(
             val initialEnvironment = terminalEnvironmentFromWorkingMode(Settings.working_Mode)
             selectedNewSessionEnvironment = initialEnvironment
             startNewSessionWithRoot = workingModeIsRoot(Settings.working_Mode) && initialEnvironment.supportsRoot
+            selectedNewSessionVersion = Settings.linux_distribution_version
             showAddDialog = true
         }
 
@@ -348,6 +353,44 @@ fun TerminalScreen(
                         },
                     )
 
+                    if (selectedNewSessionEnvironment.versions.isNotEmpty()) {
+                        var versionExpanded by remember { mutableStateOf(false) }
+                        val versionOptions = selectedNewSessionEnvironment.versions
+                        if (selectedNewSessionVersion !in versionOptions) {
+                            selectedNewSessionVersion = versionOptions.first()
+                        }
+                        ExposedDropdownMenuBox(
+                            expanded = versionExpanded,
+                            onExpandedChange = { versionExpanded = !versionExpanded },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        ) {
+                            OutlinedTextField(
+                                value = selectedNewSessionVersion,
+                                onValueChange = {},
+                                readOnly = true,
+                                singleLine = true,
+                                label = { Text("系统版本") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = versionExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = versionExpanded,
+                                onDismissRequest = { versionExpanded = false },
+                            ) {
+                                versionOptions.forEach { version ->
+                                    DropdownMenuItem(
+                                        text = { Text(version) },
+                                        onClick = {
+                                            selectedNewSessionVersion = version
+                                            Settings.linux_distribution_version = version
+                                            versionExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     if (selectedNewSessionEnvironment.supportsRoot) {
                         PreferenceSwitch(
                             checked = startNewSessionWithRoot,
@@ -376,6 +419,9 @@ fun TerminalScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .heightIn(min = 48.dp),
                         onClick = {
+                            if (selectedNewSessionEnvironment.versions.isNotEmpty()) {
+                                Settings.linux_distribution_version = selectedNewSessionVersion
+                            }
                             createNewSession(
                                 workingMode = terminalEnvironmentToWorkingMode(
                                     selectedNewSessionEnvironment,
@@ -464,6 +510,8 @@ fun getSessionTextColor(workingMode: Int?): androidx.compose.ui.graphics.Color {
     return when (workingMode) {
         WorkingMode.ALPINE_ROOT -> androidx.compose.ui.graphics.Color(0xFFEF5350)
         WorkingMode.ARCH_ROOT -> androidx.compose.ui.graphics.Color(0xFFEF5350)
+        WorkingMode.UBUNTU -> androidx.compose.ui.graphics.Color(0xFFFFB300)
+        WorkingMode.UBUNTU_ROOT -> androidx.compose.ui.graphics.Color(0xFFEF5350)
         WorkingMode.ANDROID -> androidx.compose.ui.graphics.Color(0xFFFFA726)
         else -> MaterialTheme.colorScheme.onSurface
     }

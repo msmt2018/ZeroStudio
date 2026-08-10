@@ -4,9 +4,12 @@
     <string name="use_shizuku">Auto Login to shizuku</string>
     <string name="use_shizuku_desc">Automatically execute rish command</string>
     <string name="default_working_mode">Default Working mode</string>
+    <string name="ubuntu_desc">Ubuntu Linux (proot)</string>
+    <string name="ubuntu_root_desc">Ubuntu Linux (proot with real root startup)</string>
     <string name="alpine_desc">Alpine Linux</string>
     <string name="arch_desc">Arch Linux ARM (proot)</string>
     <string name="android_desc">Terminal Android shell</string>
+    <string name="terminal_env_ubuntu">Ubuntu</string>
     <string name="terminal_env_alpine">Alpine</string>
     <string name="terminal_env_arch">Arch</string>
     <string name="terminal_env_android">Android</string>

@@ -26,6 +26,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -171,6 +175,7 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController) {
     var selectedLayoutMode by remember { mutableIntStateOf(Settings.layout_mode) }
     var selectedCloseLastSessionBehavior by remember { mutableIntStateOf(Settings.close_last_session_behavior) }
     var selectedShellType by remember { mutableIntStateOf(Settings.default_shell) }
+    var selectedLinuxVersion by remember { mutableStateOf(Settings.linux_distribution_version) }
 
     val applyTerminalEnvironmentSelection: (TerminalEnvironmentOption, Boolean) -> Unit = { environment, rootEnabled ->
         val normalizedRoot = rootEnabled && environment.supportsRoot
@@ -638,6 +643,45 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController) {
                     applyTerminalEnvironmentSelection(environment, startWithRoot)
                 },
             )
+
+            if (selectedTerminalEnvironment.versions.isNotEmpty()) {
+                var versionExpanded by remember { mutableStateOf(false) }
+                val versionOptions = selectedTerminalEnvironment.versions
+                if (selectedLinuxVersion !in versionOptions) {
+                    selectedLinuxVersion = versionOptions.first()
+                    Settings.linux_distribution_version = selectedLinuxVersion
+                }
+                ExposedDropdownMenuBox(
+                    expanded = versionExpanded,
+                    onExpandedChange = { versionExpanded = !versionExpanded },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                ) {
+                    OutlinedTextField(
+                        value = selectedLinuxVersion,
+                        onValueChange = {},
+                        readOnly = true,
+                        singleLine = true,
+                        label = { Text("系统安装版本") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = versionExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = versionExpanded,
+                        onDismissRequest = { versionExpanded = false },
+                    ) {
+                        versionOptions.forEach { version ->
+                            DropdownMenuItem(
+                                text = { Text(version) },
+                                onClick = {
+                                    selectedLinuxVersion = version
+                                    Settings.linux_distribution_version = version
+                                    versionExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
 
             if (selectedTerminalEnvironment.supportsRoot) {
                 PreferenceSwitch(

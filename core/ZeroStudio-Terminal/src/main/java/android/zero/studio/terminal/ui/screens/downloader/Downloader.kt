@@ -111,12 +111,17 @@ fun Downloader(
             val rootfsUrls = when (workingMode) {
                 WorkingMode.ARCH,
                 WorkingMode.ARCH_ROOT -> urls.arch ?: throw RuntimeException("Arch Linux is not supported for ABI: $abi")
+                WorkingMode.UBUNTU,
+                WorkingMode.UBUNTU_ROOT -> ubuntuRootfsUrls(Settings.linux_distribution_version, abi)
+                    ?: throw RuntimeException("Ubuntu ${Settings.linux_distribution_version} is not supported for ABI: $abi")
                 else -> listOf(urls.alpine)
             }
 
             val rootfsFileName = when (workingMode) {
                 WorkingMode.ARCH,
                 WorkingMode.ARCH_ROOT -> "arch.tar.gz"
+                WorkingMode.UBUNTU,
+                WorkingMode.UBUNTU_ROOT -> "ubuntu-${Settings.linux_distribution_version.normalizedRootfsVersion()}.tar.gz"
                 else -> "alpine.tar.gz"
             }
 
@@ -863,8 +868,40 @@ private data class DownloadProgressSnapshot(
 private fun modeLabel(workingMode: Int): String = when (workingMode) {
     WorkingMode.ARCH -> "ARCH"
     WorkingMode.ARCH_ROOT -> "ARCH ROOT"
+    WorkingMode.UBUNTU -> "UBUNTU ${Settings.linux_distribution_version}"
+    WorkingMode.UBUNTU_ROOT -> "UBUNTU ${Settings.linux_distribution_version} ROOT"
     WorkingMode.ALPINE_ROOT -> "ALPINE ROOT"
     else -> "ALPINE"
+}
+
+private fun String.normalizedRootfsVersion(): String = lowercase().replace(" ", "-")
+
+private fun ubuntuRootfsUrls(version: String, abi: String): List<String>? {
+    val ubuntuAbi = when (abi) {
+        "arm64-v8a" -> "arm64"
+        "armeabi-v7a" -> "armhf"
+        "x86" -> "i386"
+        else -> return null
+    }
+    val file = when (version) {
+        "18.04" -> "ubuntu-base-18.04.5-base-$ubuntuAbi.tar.gz"
+        "20.04" -> "ubuntu-base-20.04.5-base-$ubuntuAbi.tar.gz"
+        "22.04" -> "ubuntu-base-22.04.5-base-$ubuntuAbi.tar.gz"
+        "24.04" -> "ubuntu-base-24.04.4-base-$ubuntuAbi.tar.gz"
+        "25.10" -> "ubuntu-base-25.10-base-$ubuntuAbi.tar.gz"
+        "26.04" -> "ubuntu-base-26.04-base-$ubuntuAbi.tar.gz"
+        "26.10 snapshot-1" -> "ubuntu-base-26.10-snapshot1-base-$ubuntuAbi.tar.gz"
+        "26.10 snapshot-2" -> "ubuntu-base-26.10-snapshot2-base-$ubuntuAbi.tar.gz"
+        else -> return null
+    }
+    if (version == "18.04" && ubuntuAbi !in setOf("arm64", "armhf", "i386")) return null
+    if (version != "18.04" && ubuntuAbi !in setOf("arm64", "armhf")) return null
+    val path = when (version) {
+        "26.10 snapshot-1" -> "26.10/release/snapshot-1"
+        "26.10 snapshot-2" -> "26.10/release/snapshot-2"
+        else -> "$version/release"
+    }
+    return listOf("https://cdimage.ubuntu.com/ubuntu-base/releases/$path/$file")
 }
 
 private fun formatRate(bytesPerSecond: Long): String {

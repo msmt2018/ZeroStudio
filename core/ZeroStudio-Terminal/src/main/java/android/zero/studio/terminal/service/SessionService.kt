@@ -52,6 +52,8 @@ class SessionService : Service() {
             WorkingMode.ALPINE_ROOT -> "alpine (root)"
             WorkingMode.ARCH -> "arch"
             WorkingMode.ARCH_ROOT -> "arch (root)"
+            WorkingMode.UBUNTU -> "ubuntu"
+            WorkingMode.UBUNTU_ROOT -> "ubuntu (root)"
             else -> sessionId
         }
         return modeName

@@ -29,6 +29,8 @@ object Rootfs {
         return when (workingMode) {
             WorkingMode.ARCH,
             WorkingMode.ARCH_ROOT -> "arch.tar.gz"
+            WorkingMode.UBUNTU,
+            WorkingMode.UBUNTU_ROOT -> "ubuntu-${Settings.linux_distribution_version.lowercase().replace(" ", "-")}.tar.gz"
             else -> "alpine.tar.gz"
         }
     }
