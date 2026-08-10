@@ -75,7 +75,7 @@ fun Downloader(
     var retryToken by remember { mutableIntStateOf(0) }
     var selectedInstallEnvironment by remember { mutableStateOf(terminalEnvironmentFromWorkingMode(Settings.working_Mode)) }
     var selectedInstallVersion by remember { mutableStateOf(Settings.linux_distribution_version) }
-    var installRequested by remember { mutableStateOf(Rootfs.isFilesDownloaded(Settings.working_Mode)) }
+    var installRequested by remember { mutableStateOf(true) }
 
     fun appendInstallerLog(line: String) {
         installerLogs += line
