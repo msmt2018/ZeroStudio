@@ -1,6 +1,7 @@
 package android.zero.studio.termux.ui.screens.terminal
 
 import android.os.Environment
+import android.os.Build
 import androidx.compose.runtime.mutableStateOf
 import android.zero.studio.termux.libcommons.application
 import android.zero.studio.termux.libcommons.archDir
@@ -25,12 +26,22 @@ object Rootfs {
         return workingMode != WorkingMode.ANDROID
     }
 
+    private fun ubuntuRootfsAbi(): String {
+        val abi = Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" || it == "armeabi-v7a" || it == "x86" }
+        return when (abi) {
+            "arm64-v8a" -> "arm64"
+            "armeabi-v7a" -> "armhf"
+            "x86" -> "i386"
+            else -> "unknown"
+        }
+    }
+
     private fun rootfsFileName(workingMode: Int): String {
         return when (workingMode) {
             WorkingMode.ARCH,
             WorkingMode.ARCH_ROOT -> "arch.tar.gz"
             WorkingMode.UBUNTU,
-            WorkingMode.UBUNTU_ROOT -> "ubuntu-${Settings.linux_distribution_version.lowercase().replace(" ", "-")}.tar.gz"
+            WorkingMode.UBUNTU_ROOT -> "ubuntu-${Settings.linux_distribution_version.lowercase().replace(" ", "-")}-${ubuntuRootfsAbi()}.tar.gz"
             else -> "alpine.tar.gz"
         }
     }

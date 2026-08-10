@@ -108,12 +108,17 @@ fun Downloader(
             } ?: throw RuntimeException("Unsupported CPU")
 
             val urls = abiMap[abi] ?: throw RuntimeException("Unsupported CPU ABI: $abi")
+            val ubuntuRootfs = if (workingMode == WorkingMode.UBUNTU || workingMode == WorkingMode.UBUNTU_ROOT) {
+                ubuntuRootfsAsset(Settings.linux_distribution_version, abi)
+                    ?: throw RuntimeException("Ubuntu ${Settings.linux_distribution_version} is not supported for ABI: $abi")
+            } else {
+                null
+            }
             val rootfsUrls = when (workingMode) {
                 WorkingMode.ARCH,
                 WorkingMode.ARCH_ROOT -> urls.arch ?: throw RuntimeException("Arch Linux is not supported for ABI: $abi")
                 WorkingMode.UBUNTU,
-                WorkingMode.UBUNTU_ROOT -> ubuntuRootfsUrls(Settings.linux_distribution_version, abi)
-                    ?: throw RuntimeException("Ubuntu ${Settings.linux_distribution_version} is not supported for ABI: $abi")
+                WorkingMode.UBUNTU_ROOT -> listOf(ubuntuRootfs!!.url)
                 else -> listOf(urls.alpine)
             }
 
@@ -121,14 +126,19 @@ fun Downloader(
                 WorkingMode.ARCH,
                 WorkingMode.ARCH_ROOT -> "arch.tar.gz"
                 WorkingMode.UBUNTU,
-                WorkingMode.UBUNTU_ROOT -> "ubuntu-${Settings.linux_distribution_version.normalizedRootfsVersion()}.tar.gz"
+                WorkingMode.UBUNTU_ROOT -> ubuntuRootfs!!.archiveName
                 else -> "alpine.tar.gz"
             }
 
             val filesToDownload = listOf(
                 DownloadFile(listOf(urls.talloc.url), Rootfs.reTerminal.child("libtalloc.so.2"), urls.talloc.sha256),
                 DownloadFile(listOf(urls.proot.url), Rootfs.reTerminal.child("proot"), urls.proot.sha256),
-                DownloadFile(rootfsUrls, Rootfs.reTerminal.child(rootfsFileName))
+                DownloadFile(
+                    urls = rootfsUrls,
+                    outputFile = Rootfs.reTerminal.child(rootfsFileName),
+                    checksumUrl = ubuntuRootfs?.sha256SumsUrl,
+                    checksumFileName = ubuntuRootfs?.fileName,
+                )
             )
 
             needsDownload = filesToDownload.any { !it.outputFile.exists() }
@@ -389,7 +399,18 @@ fun Downloader(
 private data class DownloadFile(
     val urls: List<String>,
     val outputFile: File,
-    val expectedSha256: String? = null
+    val expectedSha256: String? = null,
+    val checksumUrl: String? = null,
+    val checksumFileName: String? = null,
+) {
+    fun hasChecksum(): Boolean = expectedSha256 != null || (checksumUrl != null && checksumFileName != null)
+}
+
+private data class UbuntuRootfsAsset(
+    val url: String,
+    val sha256SumsUrl: String,
+    val fileName: String,
+    val archiveName: String,
 )
 
 private suspend fun setupEnvironment(
@@ -425,9 +446,10 @@ private suspend fun setupEnvironment(
                         onInstallLog("Detected usable Arch rootfs; skipping arch.tar.gz download")
                     }
                 } else {
-                    if (outputFile.exists() && file.expectedSha256 != null && !outputFile.matchesSha256(file.expectedSha256)) {
+                    val expectedSha256 = file.resolveExpectedSha256()
+                    if (outputFile.exists() && expectedSha256 != null && !outputFile.matchesSha256(expectedSha256)) {
                         runOnUiThread {
-                            onInstallLog("Checksum mismatch for existing ${outputFile.name}; redownloading")
+                            onInstallLog("Checksum mismatch for existing ${outputFile.name}; deleting and redownloading")
                         }
                         if (!outputFile.delete()) {
                             throw Exception("Checksum mismatch for ${outputFile.name} and failed to delete stale file")
@@ -444,7 +466,14 @@ private suspend fun setupEnvironment(
                         var lastDownloaded = 0L
                         var smoothedSpeed = 0.0
 
-                        downloadFileWithFallback(file.urls, tempOutputFile) { downloaded, total ->
+                        var checksumAttempt = 0
+                        while (true) {
+                            checksumAttempt++
+                            if (tempOutputFile.exists()) {
+                                tempOutputFile.delete()
+                            }
+
+                            downloadFileWithFallback(file.urls, tempOutputFile) { downloaded, total ->
                             val now = System.nanoTime()
                             val deltaNanos = now - lastSampleAt
                             if (deltaNanos > 0) {
@@ -482,12 +511,25 @@ private suspend fun setupEnvironment(
                             }
                         }
 
-                        if (outputFile.exists()) {
-                            outputFile.delete()
-                        }
+                            if (outputFile.exists()) {
+                                outputFile.delete()
+                            }
 
-                        file.expectedSha256?.let { expectedSha256 ->
-                            verifySha256OrThrow(tempOutputFile, expectedSha256)
+                            if (expectedSha256 != null) {
+                                try {
+                                    verifySha256OrThrow(tempOutputFile, expectedSha256)
+                                } catch (e: Exception) {
+                                    tempOutputFile.delete()
+                                    runOnUiThread {
+                                        onInstallLog("Checksum verification failed for ${outputFile.name} (attempt $checksumAttempt/$MAX_CHECKSUM_ATTEMPTS)")
+                                    }
+                                    if (checksumAttempt < MAX_CHECKSUM_ATTEMPTS) {
+                                        continue
+                                    }
+                                    throw Exception("Checksum verification failed after $MAX_CHECKSUM_ATTEMPTS attempts for ${outputFile.name}", e)
+                                }
+                            }
+                            break
                         }
 
                         if (!tempOutputFile.renameTo(outputFile)) {
@@ -759,6 +801,33 @@ private suspend fun downloadFile(url: String, outputFile: File, onProgress: (Lon
     }
 }
 
+private fun DownloadFile.resolveExpectedSha256(): String? {
+    expectedSha256?.let { return it }
+    val sumsUrl = checksumUrl ?: return null
+    val fileName = checksumFileName ?: return null
+    val sums = OkHttpClient().newCall(Request.Builder().url(sumsUrl).build()).execute().use { response ->
+        if (!response.isSuccessful) {
+            throw Exception("Failed to download checksum file from $sumsUrl: HTTP ${response.code}")
+        }
+        response.body?.string() ?: throw Exception("Empty checksum file from $sumsUrl")
+    }
+    return parseSha256Sums(sums, fileName)
+        ?: throw Exception("Checksum for $fileName not found in $sumsUrl")
+}
+
+private fun parseSha256Sums(sums: String, fileName: String): String? {
+    return sums.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .firstNotNullOfOrNull { line ->
+            val parts = line.split(Regex("\s+"), limit = 2)
+            if (parts.size != 2) return@firstNotNullOfOrNull null
+            val hash = parts[0]
+            val listedFileName = parts[1].removePrefix("*")
+            hash.takeIf { listedFileName == fileName && it.matches(Regex("[a-fA-F0-9]{64}")) }
+        }
+}
+
 private fun verifySha256OrThrow(file: File, expectedSha256: String) {
     val actualSha256 = file.sha256()
     if (!actualSha256.equals(expectedSha256, ignoreCase = true)) {
@@ -851,6 +920,7 @@ private data class RuntimeAsset(
 private const val ARCH_EXTRACT_TIMEOUT_MINUTES = 30L
 private const val ARCH_READY_MARKER = ".termix-arch-installed"
 private const val MAX_INSTALL_LOG_LINES = 220
+private const val MAX_CHECKSUM_ATTEMPTS = 3
 private const val NANOS_PER_SECOND = 1_000_000_000.0
 
 private data class DownloadProgressSnapshot(
@@ -876,7 +946,7 @@ private fun modeLabel(workingMode: Int): String = when (workingMode) {
 
 private fun String.normalizedRootfsVersion(): String = lowercase().replace(" ", "-")
 
-private fun ubuntuRootfsUrls(version: String, abi: String): List<String>? {
+private fun ubuntuRootfsAsset(version: String, abi: String): UbuntuRootfsAsset? {
     val ubuntuAbi = when (abi) {
         "arm64-v8a" -> "arm64"
         "armeabi-v7a" -> "armhf"
@@ -901,7 +971,12 @@ private fun ubuntuRootfsUrls(version: String, abi: String): List<String>? {
         "26.10 snapshot-2" -> "26.10/release/snapshot-2"
         else -> "$version/release"
     }
-    return listOf("https://cdimage.ubuntu.com/ubuntu-base/releases/$path/$file")
+    return UbuntuRootfsAsset(
+        url = "https://cdimage.ubuntu.com/ubuntu-base/releases/$path/$file",
+        sha256SumsUrl = "https://cdimage.ubuntu.com/ubuntu-base/releases/$path/SHA256SUMS",
+        fileName = file,
+        archiveName = "ubuntu-${version.normalizedRootfsVersion()}-$ubuntuAbi.tar.gz",
+    )
 }
 
 private fun formatRate(bytesPerSecond: Long): String {
