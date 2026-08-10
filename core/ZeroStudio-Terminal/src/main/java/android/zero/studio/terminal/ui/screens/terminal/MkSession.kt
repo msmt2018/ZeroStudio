@@ -50,7 +50,7 @@ object MkSession {
                 WorkingMode.ARCH,
                 WorkingMode.ARCH_ROOT -> archHomeDir().path
                 WorkingMode.UBUNTU,
-                WorkingMode.UBUNTU_ROOT -> filesDir.child("LinuxSystem").child(ubuntuRootfsId).child("root").path
+                WorkingMode.UBUNTU_ROOT -> filesDir.path
                 else -> alpineHomeDir().path
             }
             val workingDir = pendingCommand?.workingDir ?: defaultWorkingDir

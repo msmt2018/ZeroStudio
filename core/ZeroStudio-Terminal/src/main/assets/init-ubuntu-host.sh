@@ -8,8 +8,9 @@ PROOT_BIN=$PREFIX/local/bin/proot
 LIB_DIR=$PREFIX/local/lib
 LINKER=${LINKER:-/system/bin/linker}
 [ -f /system/bin/linker64 ] && LINKER=/system/bin/linker64
+export PROOT_TMP_DIR=${PROOT_TMP_DIR:-$PREFIX/tmp}
 
-mkdir -p "$ROOTFS_DIR" "$PREFIX/local/bin" "$LIB_DIR"
+mkdir -p "$ROOTFS_DIR" "$PREFIX/local/bin" "$LIB_DIR" "$PREFIX/tmp"
 [ ! -e "$PROOT_BIN" ] && cp "$PREFIX/files/proot" "$PROOT_BIN"
 chmod +x "$PROOT_BIN" 2>/dev/null || true
 
@@ -79,9 +80,13 @@ extract_ubuntu_rootfs() {
   mkdir -p "$ROOTFS_DIR"
 
   echo "Extracting Ubuntu rootfs into $ROOTFS_DIR"
-  # -p preserves executable bits and symlink metadata where the Android tar
-  # implementation supports it; symlinks are then verified by rootfs_is_complete.
-  tar -xpf "$ROOTFS_ARCHIVE" -C "$ROOTFS_DIR"
+  # Run tar under proot --link2symlink. Ubuntu rootfs archives contain many
+  # hardlinks (for example coreutils applets); Android app-private storage can
+  # reject hardlink creation with EACCES, so proot converts link(2) calls into
+  # symlinks during extraction. -p preserves executable bits where tar supports it.
+  EXTRACT_ARGS="--kill-on-exit -0 --link2symlink -r / -w /"
+  EXTRACT_ARGS="$EXTRACT_ARGS -b /dev -b /proc -b /sys -b /data -b $PREFIX"
+  "$LINKER" "$PROOT_BIN" $EXTRACT_ARGS /system/bin/sh -c "cd '$ROOTFS_DIR' && tar -xpf '$ROOTFS_ARCHIVE'"
   repair_usrmerge_links
 }
 
@@ -144,7 +149,6 @@ ARGS="$ARGS --link2symlink"
 ARGS="$ARGS --sysvipc"
 ARGS="$ARGS -L"
 
-export PROOT_TMP_DIR=${PROOT_TMP_DIR:-$PREFIX/tmp}
 export LD_LIBRARY_PATH="$LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export HOME=/root
 export TERM=${TERM:-xterm-256color}
