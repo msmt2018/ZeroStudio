@@ -6,9 +6,12 @@ object strings {
     val settings = R.string.settings
     val session = R.string.session
     val default_working_mode = R.string.default_working_mode
+    val ubuntu_desc = R.string.ubuntu_desc
+    val ubuntu_root_desc = R.string.ubuntu_root_desc
     val alpine_desc = R.string.alpine_desc
     val arch_desc = R.string.arch_desc
     val android_desc = R.string.android_desc
+    val terminal_env_ubuntu = R.string.terminal_env_ubuntu
     val terminal_env_alpine = R.string.terminal_env_alpine
     val terminal_env_arch = R.string.terminal_env_arch
     val terminal_env_android = R.string.terminal_env_android

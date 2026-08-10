@@ -6,4 +6,6 @@ object WorkingMode {
     const val ALPINE_ROOT = 2
     const val ARCH = 3
     const val ARCH_ROOT = 4
+    const val UBUNTU = 5
+    const val UBUNTU_ROOT = 6
 }

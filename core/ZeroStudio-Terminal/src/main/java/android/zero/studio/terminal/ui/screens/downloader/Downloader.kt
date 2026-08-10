@@ -26,6 +26,10 @@ import android.zero.studio.termux.App
 import android.zero.studio.termux.model.WorkingMode
 import android.zero.studio.termux.ui.screens.terminal.Rootfs
 import android.zero.studio.termux.ui.screens.terminal.TerminalScreen
+import android.zero.studio.termux.ui.components.TerminalEnvironmentOption
+import android.zero.studio.termux.ui.components.terminalEnvironmentFromWorkingMode
+import android.zero.studio.termux.ui.components.terminalEnvironmentToWorkingMode
+import android.zero.studio.termux.ui.components.workingModeIsRoot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -68,6 +72,9 @@ fun Downloader(
     var needsDownload by remember { mutableStateOf(false) }
     var setupError by remember { mutableStateOf<String?>(null) }
     var retryToken by remember { mutableIntStateOf(0) }
+    var selectedInstallEnvironment by remember { mutableStateOf(terminalEnvironmentFromWorkingMode(Settings.working_Mode)) }
+    var selectedInstallVersion by remember { mutableStateOf(Settings.linux_distribution_version) }
+    var installRequested by remember { mutableStateOf(Rootfs.isFilesDownloaded(Settings.working_Mode)) }
 
     fun appendInstallerLog(line: String) {
         installerLogs += line
@@ -82,7 +89,10 @@ fun Downloader(
         }
     }
 
-    LaunchedEffect(retryToken) {
+    LaunchedEffect(installRequested, retryToken) {
+        if (!installRequested) {
+            return@LaunchedEffect
+        }
         progress = 0f
         rootfsProgress = 0f
         rootfsSpeedBytes = 0L
@@ -108,22 +118,37 @@ fun Downloader(
             } ?: throw RuntimeException("Unsupported CPU")
 
             val urls = abiMap[abi] ?: throw RuntimeException("Unsupported CPU ABI: $abi")
+            val ubuntuRootfs = if (workingMode == WorkingMode.UBUNTU || workingMode == WorkingMode.UBUNTU_ROOT) {
+                ubuntuRootfsAsset(Settings.linux_distribution_version, abi)
+                    ?: throw RuntimeException("Ubuntu ${Settings.linux_distribution_version} is not supported for ABI: $abi")
+            } else {
+                null
+            }
             val rootfsUrls = when (workingMode) {
                 WorkingMode.ARCH,
                 WorkingMode.ARCH_ROOT -> urls.arch ?: throw RuntimeException("Arch Linux is not supported for ABI: $abi")
+                WorkingMode.UBUNTU,
+                WorkingMode.UBUNTU_ROOT -> listOf(ubuntuRootfs!!.url)
                 else -> listOf(urls.alpine)
             }
 
             val rootfsFileName = when (workingMode) {
                 WorkingMode.ARCH,
                 WorkingMode.ARCH_ROOT -> "arch.tar.gz"
+                WorkingMode.UBUNTU,
+                WorkingMode.UBUNTU_ROOT -> ubuntuRootfs!!.archiveName
                 else -> "alpine.tar.gz"
             }
 
             val filesToDownload = listOf(
                 DownloadFile(listOf(urls.talloc.url), Rootfs.reTerminal.child("libtalloc.so.2"), urls.talloc.sha256),
                 DownloadFile(listOf(urls.proot.url), Rootfs.reTerminal.child("proot"), urls.proot.sha256),
-                DownloadFile(rootfsUrls, Rootfs.reTerminal.child(rootfsFileName))
+                DownloadFile(
+                    urls = rootfsUrls,
+                    outputFile = Rootfs.reTerminal.child(rootfsFileName),
+                    checksumUrl = ubuntuRootfs?.sha256SumsUrl,
+                    checksumFileName = ubuntuRootfs?.fileName,
+                )
             )
 
             needsDownload = filesToDownload.any { !it.outputFile.exists() }
@@ -186,7 +211,116 @@ fun Downloader(
     }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (!isSetupComplete) {
+        if (!installRequested) {
+            var environmentExpanded by remember { mutableStateOf(false) }
+            var versionExpanded by remember { mutableStateOf(false) }
+            val installOptions = TerminalEnvironmentOption.entries.filter { it != TerminalEnvironmentOption.ANDROID }
+            val versionOptions = selectedInstallEnvironment.versions
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = modifier
+                    .fillMaxWidth(0.92f)
+                    .padding(horizontal = 12.dp, vertical = 16.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f)),
+                    tonalElevation = 1.dp,
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp)
+                    ) {
+                        Text(
+                            text = downloadPanelTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        ExposedDropdownMenuBox(
+                            expanded = environmentExpanded,
+                            onExpandedChange = { environmentExpanded = !environmentExpanded },
+                        ) {
+                            OutlinedTextField(
+                                value = stringResource(selectedInstallEnvironment.labelRes),
+                                onValueChange = {},
+                                readOnly = true,
+                                singleLine = true,
+                                label = { Text("Linux 系统") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = environmentExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = environmentExpanded,
+                                onDismissRequest = { environmentExpanded = false },
+                            ) {
+                                installOptions.forEach { environment ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(environment.labelRes)) },
+                                        onClick = {
+                                            selectedInstallEnvironment = environment
+                                            if (selectedInstallVersion !in environment.versions && environment.versions.isNotEmpty()) {
+                                                selectedInstallVersion = environment.versions.first()
+                                            }
+                                            environmentExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        if (versionOptions.isNotEmpty()) {
+                            if (selectedInstallVersion !in versionOptions) {
+                                selectedInstallVersion = versionOptions.first()
+                            }
+                            ExposedDropdownMenuBox(
+                                expanded = versionExpanded,
+                                onExpandedChange = { versionExpanded = !versionExpanded },
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedInstallVersion,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    singleLine = true,
+                                    label = { Text("系统版本") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = versionExpanded) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = versionExpanded,
+                                    onDismissRequest = { versionExpanded = false },
+                                ) {
+                                    versionOptions.forEach { version ->
+                                        DropdownMenuItem(
+                                            text = { Text(version) },
+                                            onClick = {
+                                                selectedInstallVersion = version
+                                                versionExpanded = false
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        FilledTonalButton(
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            onClick = {
+                                Settings.linux_distribution_version = selectedInstallVersion
+                                Settings.working_Mode = terminalEnvironmentToWorkingMode(
+                                    selectedInstallEnvironment,
+                                    workingModeIsRoot(Settings.working_Mode) && selectedInstallEnvironment.supportsRoot,
+                                )
+                                installRequested = true
+                                retryToken++
+                            },
+                        ) {
+                            Text(stringResource(strings.installing))
+                        }
+                    }
+                }
+            }
+        } else if (!isSetupComplete) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -384,7 +518,18 @@ fun Downloader(
 private data class DownloadFile(
     val urls: List<String>,
     val outputFile: File,
-    val expectedSha256: String? = null
+    val expectedSha256: String? = null,
+    val checksumUrl: String? = null,
+    val checksumFileName: String? = null,
+) {
+    fun hasChecksum(): Boolean = expectedSha256 != null || (checksumUrl != null && checksumFileName != null)
+}
+
+private data class UbuntuRootfsAsset(
+    val url: String,
+    val sha256SumsUrl: String,
+    val fileName: String,
+    val archiveName: String,
 )
 
 private suspend fun setupEnvironment(
@@ -420,9 +565,10 @@ private suspend fun setupEnvironment(
                         onInstallLog("Detected usable Arch rootfs; skipping arch.tar.gz download")
                     }
                 } else {
-                    if (outputFile.exists() && file.expectedSha256 != null && !outputFile.matchesSha256(file.expectedSha256)) {
+                    val expectedSha256 = file.resolveExpectedSha256()
+                    if (outputFile.exists() && expectedSha256 != null && !outputFile.matchesSha256(expectedSha256)) {
                         runOnUiThread {
-                            onInstallLog("Checksum mismatch for existing ${outputFile.name}; redownloading")
+                            onInstallLog("Checksum mismatch for existing ${outputFile.name}; deleting and redownloading")
                         }
                         if (!outputFile.delete()) {
                             throw Exception("Checksum mismatch for ${outputFile.name} and failed to delete stale file")
@@ -439,7 +585,14 @@ private suspend fun setupEnvironment(
                         var lastDownloaded = 0L
                         var smoothedSpeed = 0.0
 
-                        downloadFileWithFallback(file.urls, tempOutputFile) { downloaded, total ->
+                        var checksumAttempt = 0
+                        while (true) {
+                            checksumAttempt++
+                            if (tempOutputFile.exists()) {
+                                tempOutputFile.delete()
+                            }
+
+                            downloadFileWithFallback(file.urls, tempOutputFile) { downloaded, total ->
                             val now = System.nanoTime()
                             val deltaNanos = now - lastSampleAt
                             if (deltaNanos > 0) {
@@ -477,12 +630,25 @@ private suspend fun setupEnvironment(
                             }
                         }
 
-                        if (outputFile.exists()) {
-                            outputFile.delete()
-                        }
+                            if (outputFile.exists()) {
+                                outputFile.delete()
+                            }
 
-                        file.expectedSha256?.let { expectedSha256 ->
-                            verifySha256OrThrow(tempOutputFile, expectedSha256)
+                            if (expectedSha256 != null) {
+                                try {
+                                    verifySha256OrThrow(tempOutputFile, expectedSha256)
+                                } catch (e: Exception) {
+                                    tempOutputFile.delete()
+                                    runOnUiThread {
+                                        onInstallLog("Checksum verification failed for ${outputFile.name} (attempt $checksumAttempt/$MAX_CHECKSUM_ATTEMPTS)")
+                                    }
+                                    if (checksumAttempt < MAX_CHECKSUM_ATTEMPTS) {
+                                        continue
+                                    }
+                                    throw Exception("Checksum verification failed after $MAX_CHECKSUM_ATTEMPTS attempts for ${outputFile.name}", e)
+                                }
+                            }
+                            break
                         }
 
                         if (!tempOutputFile.renameTo(outputFile)) {
@@ -754,6 +920,33 @@ private suspend fun downloadFile(url: String, outputFile: File, onProgress: (Lon
     }
 }
 
+private fun DownloadFile.resolveExpectedSha256(): String? {
+    expectedSha256?.let { return it }
+    val sumsUrl = checksumUrl ?: return null
+    val fileName = checksumFileName ?: return null
+    val sums = OkHttpClient().newCall(Request.Builder().url(sumsUrl).build()).execute().use { response ->
+        if (!response.isSuccessful) {
+            throw Exception("Failed to download checksum file from $sumsUrl: HTTP ${response.code}")
+        }
+        response.body?.string() ?: throw Exception("Empty checksum file from $sumsUrl")
+    }
+    return parseSha256Sums(sums, fileName)
+        ?: throw Exception("Checksum for $fileName not found in $sumsUrl")
+}
+
+private fun parseSha256Sums(sums: String, fileName: String): String? {
+    return sums.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .firstNotNullOfOrNull { line ->
+            val parts = line.split(Regex("\\s+"), limit = 2)
+            if (parts.size != 2) return@firstNotNullOfOrNull null
+            val hash = parts[0]
+            val listedFileName = parts[1].removePrefix("*")
+            hash.takeIf { listedFileName == fileName && it.matches(Regex("[a-fA-F0-9]{64}")) }
+        }
+}
+
 private fun verifySha256OrThrow(file: File, expectedSha256: String) {
     val actualSha256 = file.sha256()
     if (!actualSha256.equals(expectedSha256, ignoreCase = true)) {
@@ -846,6 +1039,7 @@ private data class RuntimeAsset(
 private const val ARCH_EXTRACT_TIMEOUT_MINUTES = 30L
 private const val ARCH_READY_MARKER = ".termix-arch-installed"
 private const val MAX_INSTALL_LOG_LINES = 220
+private const val MAX_CHECKSUM_ATTEMPTS = 3
 private const val NANOS_PER_SECOND = 1_000_000_000.0
 
 private data class DownloadProgressSnapshot(
@@ -863,8 +1057,45 @@ private data class DownloadProgressSnapshot(
 private fun modeLabel(workingMode: Int): String = when (workingMode) {
     WorkingMode.ARCH -> "ARCH"
     WorkingMode.ARCH_ROOT -> "ARCH ROOT"
+    WorkingMode.UBUNTU -> "UBUNTU ${Settings.linux_distribution_version}"
+    WorkingMode.UBUNTU_ROOT -> "UBUNTU ${Settings.linux_distribution_version} ROOT"
     WorkingMode.ALPINE_ROOT -> "ALPINE ROOT"
     else -> "ALPINE"
+}
+
+private fun String.normalizedRootfsVersion(): String = lowercase().replace(" ", "-")
+
+private fun ubuntuRootfsAsset(version: String, abi: String): UbuntuRootfsAsset? {
+    val ubuntuAbi = when (abi) {
+        "arm64-v8a" -> "arm64"
+        "armeabi-v7a" -> "armhf"
+        "x86" -> "i386"
+        else -> return null
+    }
+    val file = when (version) {
+        "18.04" -> "ubuntu-base-18.04.5-base-$ubuntuAbi.tar.gz"
+        "20.04" -> "ubuntu-base-20.04.5-base-$ubuntuAbi.tar.gz"
+        "22.04" -> "ubuntu-base-22.04.5-base-$ubuntuAbi.tar.gz"
+        "24.04" -> "ubuntu-base-24.04.4-base-$ubuntuAbi.tar.gz"
+        "25.10" -> "ubuntu-base-25.10-base-$ubuntuAbi.tar.gz"
+        "26.04" -> "ubuntu-base-26.04-base-$ubuntuAbi.tar.gz"
+        "26.10 snapshot-1" -> "ubuntu-base-26.10-snapshot1-base-$ubuntuAbi.tar.gz"
+        "26.10 snapshot-2" -> "ubuntu-base-26.10-snapshot2-base-$ubuntuAbi.tar.gz"
+        else -> return null
+    }
+    if (version == "18.04" && ubuntuAbi !in setOf("arm64", "armhf", "i386")) return null
+    if (version != "18.04" && ubuntuAbi !in setOf("arm64", "armhf")) return null
+    val path = when (version) {
+        "26.10 snapshot-1" -> "26.10/release/snapshot-1"
+        "26.10 snapshot-2" -> "26.10/release/snapshot-2"
+        else -> "$version/release"
+    }
+    return UbuntuRootfsAsset(
+        url = "https://cdimage.ubuntu.com/ubuntu-base/releases/$path/$file",
+        sha256SumsUrl = "https://cdimage.ubuntu.com/ubuntu-base/releases/$path/SHA256SUMS",
+        fileName = file,
+        archiveName = "ubuntu-${version.normalizedRootfsVersion()}-$ubuntuAbi.tar.gz",
+    )
 }
 
 private fun formatRate(bytesPerSecond: Long): String {

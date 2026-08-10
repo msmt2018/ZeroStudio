@@ -1,6 +1,7 @@
 package android.zero.studio.termux.ui.screens.terminal
 
 import android.os.Environment
+import android.os.Build
 import android.zero.studio.termux.libcommons.alpineDir
 import android.zero.studio.termux.libcommons.alpineHomeDir
 import android.zero.studio.termux.libcommons.archHomeDir
@@ -41,9 +42,15 @@ object MkSession {
                 "EXTERNAL_STORAGE" to System.getenv("EXTERNAL_STORAGE")
             )
 
+            val ubuntuRootfsAbi = Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" || it == "armeabi-v7a" || it == "x86" }
+                ?.let { if (it == "arm64-v8a") "arm64" else if (it == "armeabi-v7a") "armhf" else "i386" }
+                ?: "unknown"
+            val ubuntuRootfsId = "ubuntu-${Settings.linux_distribution_version.lowercase().replace(" ", "-")}-$ubuntuRootfsAbi"
             val defaultWorkingDir = when (workingMode) {
                 WorkingMode.ARCH,
                 WorkingMode.ARCH_ROOT -> archHomeDir().path
+                WorkingMode.UBUNTU,
+                WorkingMode.UBUNTU_ROOT -> filesDir.child("LinuxSystem").child(ubuntuRootfsId).child("root").path
                 else -> alpineHomeDir().path
             }
             val workingDir = pendingCommand?.workingDir ?: defaultWorkingDir
@@ -90,6 +97,12 @@ object MkSession {
                 setExecutable(true)
             }
 
+            localBinDir().child("init-ubuntu-host").apply {
+                createFileIfNot()
+                writeText(assets.open("init-ubuntu-host.sh").bufferedReader().use { it.readText() })
+                setExecutable(true)
+            }
+
 
             val sessionTmpDir = getTempDir().child(session_id).also {
                 if (it.exists()) {
@@ -108,6 +121,8 @@ object MkSession {
                 "BIN=${localBinDir()}",
                 "DEBUG=${BuildConfig.DEBUG}",
                 "PREFIX=${filesDir.parentFile!!.path}",
+                "TERMIX_ROOTFS_ID=$ubuntuRootfsId",
+                "TERMIX_ROOTFS_ARCHIVE=$ubuntuRootfsId.tar.gz",
                 "LD_LIBRARY_PATH=${localLibDir().absolutePath}",
                 "LINKER=${if(File("/system/bin/linker64").exists()){"/system/bin/linker64"}else{"/system/bin/linker"}}",
                 "NATIVE_LIB_DIR=${applicationInfo.nativeLibraryDir}",
@@ -156,6 +171,8 @@ object MkSession {
                     WorkingMode.ALPINE_ROOT -> arrayOf("-c", localBinDir().child("init-root").absolutePath)
                     WorkingMode.ARCH -> arrayOf("-c", localBinDir().child("init-arch-host").absolutePath)
                     WorkingMode.ARCH_ROOT -> arrayOf("-c", localBinDir().child("init-arch-root").absolutePath)
+                    WorkingMode.UBUNTU,
+                    WorkingMode.UBUNTU_ROOT -> arrayOf("-c", localBinDir().child("init-ubuntu-host").absolutePath)
                     else -> arrayOf()
                 }
                 "/system/bin/sh"

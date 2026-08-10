@@ -305,6 +305,8 @@ private fun getSessionColor(workingMode: Int?, selected: Boolean): Color {
     return when (workingMode) {
         WorkingMode.ALPINE_ROOT -> Color(0xFFEF5350)
         WorkingMode.ARCH_ROOT -> Color(0xFFEF5350)
+        WorkingMode.UBUNTU -> Color(0xFFFFB300)
+        WorkingMode.UBUNTU_ROOT -> Color(0xFFEF5350)
         WorkingMode.ANDROID -> Color(0xFFFFA726)
         else -> if (selected) {
             MaterialTheme.colorScheme.onSurface
