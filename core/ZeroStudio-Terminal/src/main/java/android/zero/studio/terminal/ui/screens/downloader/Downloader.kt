@@ -26,6 +26,10 @@ import android.zero.studio.termux.App
 import android.zero.studio.termux.model.WorkingMode
 import android.zero.studio.termux.ui.screens.terminal.Rootfs
 import android.zero.studio.termux.ui.screens.terminal.TerminalScreen
+import android.zero.studio.termux.ui.components.TerminalEnvironmentOption
+import android.zero.studio.termux.ui.components.terminalEnvironmentFromWorkingMode
+import android.zero.studio.termux.ui.components.terminalEnvironmentToWorkingMode
+import android.zero.studio.termux.ui.components.workingModeIsRoot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -68,6 +72,9 @@ fun Downloader(
     var needsDownload by remember { mutableStateOf(false) }
     var setupError by remember { mutableStateOf<String?>(null) }
     var retryToken by remember { mutableIntStateOf(0) }
+    var selectedInstallEnvironment by remember { mutableStateOf(terminalEnvironmentFromWorkingMode(Settings.working_Mode)) }
+    var selectedInstallVersion by remember { mutableStateOf(Settings.linux_distribution_version) }
+    var installRequested by remember { mutableStateOf(Rootfs.isFilesDownloaded(Settings.working_Mode)) }
 
     fun appendInstallerLog(line: String) {
         installerLogs += line
@@ -82,7 +89,10 @@ fun Downloader(
         }
     }
 
-    LaunchedEffect(retryToken) {
+    LaunchedEffect(installRequested, retryToken) {
+        if (!installRequested) {
+            return@LaunchedEffect
+        }
         progress = 0f
         rootfsProgress = 0f
         rootfsSpeedBytes = 0L
@@ -201,7 +211,116 @@ fun Downloader(
     }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (!isSetupComplete) {
+        if (!installRequested) {
+            var environmentExpanded by remember { mutableStateOf(false) }
+            var versionExpanded by remember { mutableStateOf(false) }
+            val installOptions = TerminalEnvironmentOption.entries.filter { it != TerminalEnvironmentOption.ANDROID }
+            val versionOptions = selectedInstallEnvironment.versions
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = modifier
+                    .fillMaxWidth(0.92f)
+                    .padding(horizontal = 12.dp, vertical = 16.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f)),
+                    tonalElevation = 1.dp,
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp)
+                    ) {
+                        Text(
+                            text = downloadPanelTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        ExposedDropdownMenuBox(
+                            expanded = environmentExpanded,
+                            onExpandedChange = { environmentExpanded = !environmentExpanded },
+                        ) {
+                            OutlinedTextField(
+                                value = stringResource(selectedInstallEnvironment.labelRes),
+                                onValueChange = {},
+                                readOnly = true,
+                                singleLine = true,
+                                label = { Text("Linux 系统") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = environmentExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = environmentExpanded,
+                                onDismissRequest = { environmentExpanded = false },
+                            ) {
+                                installOptions.forEach { environment ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(environment.labelRes)) },
+                                        onClick = {
+                                            selectedInstallEnvironment = environment
+                                            if (selectedInstallVersion !in environment.versions && environment.versions.isNotEmpty()) {
+                                                selectedInstallVersion = environment.versions.first()
+                                            }
+                                            environmentExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        if (versionOptions.isNotEmpty()) {
+                            if (selectedInstallVersion !in versionOptions) {
+                                selectedInstallVersion = versionOptions.first()
+                            }
+                            ExposedDropdownMenuBox(
+                                expanded = versionExpanded,
+                                onExpandedChange = { versionExpanded = !versionExpanded },
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedInstallVersion,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    singleLine = true,
+                                    label = { Text("系统版本") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = versionExpanded) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = versionExpanded,
+                                    onDismissRequest = { versionExpanded = false },
+                                ) {
+                                    versionOptions.forEach { version ->
+                                        DropdownMenuItem(
+                                            text = { Text(version) },
+                                            onClick = {
+                                                selectedInstallVersion = version
+                                                versionExpanded = false
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        FilledTonalButton(
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            onClick = {
+                                Settings.linux_distribution_version = selectedInstallVersion
+                                Settings.working_Mode = terminalEnvironmentToWorkingMode(
+                                    selectedInstallEnvironment,
+                                    workingModeIsRoot(Settings.working_Mode) && selectedInstallEnvironment.supportsRoot,
+                                )
+                                installRequested = true
+                                retryToken++
+                            },
+                        ) {
+                            Text(stringResource(strings.installing))
+                        }
+                    }
+                }
+            }
+        } else if (!isSetupComplete) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -820,7 +939,7 @@ private fun parseSha256Sums(sums: String, fileName: String): String? {
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .firstNotNullOfOrNull { line ->
-            val parts = line.split(Regex("\s+"), limit = 2)
+            val parts = line.split(Regex("\\s+"), limit = 2)
             if (parts.size != 2) return@firstNotNullOfOrNull null
             val hash = parts[0]
             val listedFileName = parts[1].removePrefix("*")
