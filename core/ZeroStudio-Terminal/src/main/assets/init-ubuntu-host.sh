@@ -49,6 +49,34 @@ repair_usrmerge_links() {
   ensure_usrmerge_link lib64 usr/lib64
 }
 
+normalize_l2s_hardlinks() {
+  # proot --link2symlink converts hardlinks into .l2s.* symlinks. New Ubuntu
+  # coreutils multicall binaries reject execution when argv[0] resolves to a
+  # .l2s.* backing name, so convert those symlinks into regular file copies.
+  find "$ROOTFS_DIR" -type l 2>/dev/null | while IFS= read -r link_path; do
+    link_target=$(readlink "$link_path" 2>/dev/null || true)
+    case "/$link_target" in
+      */.l2s.*) ;;
+      *) continue ;;
+    esac
+
+    link_dir=${link_path%/*}
+    case "$link_target" in
+      /*) target_path="$ROOTFS_DIR$link_target" ;;
+      *) target_path="$link_dir/$link_target" ;;
+    esac
+
+    if [ -f "$target_path" ]; then
+      tmp_path="$link_path.copy.$$"
+      cp "$target_path" "$tmp_path" && chmod 755 "$tmp_path" 2>/dev/null || true
+      if [ -f "$tmp_path" ]; then
+        rm -f "$link_path"
+        mv "$tmp_path" "$link_path"
+      fi
+    fi
+  done
+}
+
 probe_guest_bins() {
   GUEST_SH=/bin/sh
   [ -x "$ROOTFS_DIR$GUEST_SH" ] || GUEST_SH=/usr/bin/sh
@@ -63,10 +91,10 @@ rootfs_is_complete() {
   [ -d "$ROOTFS_DIR/usr/bin" ] || return 1
 
   repair_usrmerge_links
+  normalize_l2s_hardlinks
   probe_guest_bins
 
   [ -x "$ROOTFS_DIR$GUEST_SH" ] || return 1
-  [ -x "$ROOTFS_DIR$GUEST_ENV" ] || return 1
   return 0
 }
 
@@ -87,13 +115,14 @@ extract_ubuntu_rootfs() {
   EXTRACT_ARGS="--kill-on-exit -0 --link2symlink -r / -w /"
   EXTRACT_ARGS="$EXTRACT_ARGS -b /dev -b /proc -b /sys -b /data -b $PREFIX"
   "$LINKER" "$PROOT_BIN" $EXTRACT_ARGS /system/bin/sh -c "cd '$ROOTFS_DIR' && tar -xpf '$ROOTFS_ARCHIVE'"
+  normalize_l2s_hardlinks
   repair_usrmerge_links
 }
 
 if [ ! -f "$ROOTFS_READY_MARKER" ] || ! rootfs_is_complete; then
   extract_ubuntu_rootfs
   if ! rootfs_is_complete; then
-    echo "Ubuntu rootfs extraction failed: missing required symlinks or executables (/usr/bin/env, /bin/sh)."
+    echo "Ubuntu rootfs extraction failed: missing required symlinks or shell executable (/bin/sh)."
     exit 1
   fi
   : > "$ROOTFS_READY_MARKER"
@@ -155,18 +184,7 @@ export TERM=${TERM:-xterm-256color}
 export LANG=C.UTF-8
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-if [ -x "$ROOTFS_DIR$GUEST_BASH" ]; then
-  GUEST_LOGIN_SHELL=$GUEST_BASH
-  GUEST_LOGIN_ARG=--login
-else
-  GUEST_LOGIN_SHELL=$GUEST_SH
-  GUEST_LOGIN_ARG=-l
-fi
-
-if [ -x "$ROOTFS_DIR$GUEST_ENV" ]; then
-  exec "$LINKER" "$PROOT_BIN" $ARGS "$GUEST_ENV" -i HOME=/root TERM="$TERM" LANG="$LANG" PATH="$PATH" "$GUEST_LOGIN_SHELL" "$GUEST_LOGIN_ARG"
-fi
-
-# Fallback for damaged/minimal rootfs images that really do not contain env.
-# PATH and the rest of the baseline environment are exported by the guest shell.
+# Start through the guest shell instead of /usr/bin/env. Ubuntu 25.10+ may ship
+# coreutils as hardlinked multicall applets; after link2symlink extraction, env can
+# reject the .l2s.* backing name even though the rootfs is otherwise usable.
 exec "$LINKER" "$PROOT_BIN" $ARGS "$GUEST_SH" -lc 'export HOME=/root TERM="${TERM:-xterm-256color}" LANG="${LANG:-C.UTF-8}" PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; cd "$HOME" 2>/dev/null || cd /; if [ -x /bin/bash ]; then exec /bin/bash -l; elif [ -x /usr/bin/bash ]; then exec /usr/bin/bash -l; else exec /bin/sh -l; fi'
