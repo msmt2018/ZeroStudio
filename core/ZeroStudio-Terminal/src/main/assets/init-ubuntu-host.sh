@@ -28,16 +28,24 @@ if [ ! -d "$ROOTFS_DIR/etc" ]; then
   tar -xf "$ROOTFS_ARCHIVE" -C "$ROOTFS_DIR"
 fi
 
-# Ubuntu base images are usr-merged. Some Android tar/proot combinations can leave
-# top-level compatibility links absent after extraction, causing paths such as
-# /bin/sh or /usr/bin/env to fail when proot starts the guest process.
-[ -e "$ROOTFS_DIR/bin" ] || [ ! -d "$ROOTFS_DIR/usr/bin" ] || ln -s usr/bin "$ROOTFS_DIR/bin"
-[ -e "$ROOTFS_DIR/sbin" ] || [ ! -d "$ROOTFS_DIR/usr/sbin" ] || ln -s usr/sbin "$ROOTFS_DIR/sbin"
-[ -e "$ROOTFS_DIR/lib" ] || [ ! -d "$ROOTFS_DIR/usr/lib" ] || ln -s usr/lib "$ROOTFS_DIR/lib"
-[ -e "$ROOTFS_DIR/lib64" ] || [ ! -d "$ROOTFS_DIR/usr/lib64" ] || ln -s usr/lib64 "$ROOTFS_DIR/lib64"
+# Ubuntu base images are usr-merged. Try to recreate the compatibility links,
+# but do not depend on them: Android devices can differ in how symlink creation
+# behaves in app-private storage. The launcher below probes both /bin/* and
+# /usr/bin/* paths before entering proot.
+[ -e "$ROOTFS_DIR/bin" ] || [ -L "$ROOTFS_DIR/bin" ] || [ ! -d "$ROOTFS_DIR/usr/bin" ] || ln -s usr/bin "$ROOTFS_DIR/bin" 2>/dev/null || true
+[ -e "$ROOTFS_DIR/sbin" ] || [ -L "$ROOTFS_DIR/sbin" ] || [ ! -d "$ROOTFS_DIR/usr/sbin" ] || ln -s usr/sbin "$ROOTFS_DIR/sbin" 2>/dev/null || true
+[ -e "$ROOTFS_DIR/lib" ] || [ -L "$ROOTFS_DIR/lib" ] || [ ! -d "$ROOTFS_DIR/usr/lib" ] || ln -s usr/lib "$ROOTFS_DIR/lib" 2>/dev/null || true
+[ -e "$ROOTFS_DIR/lib64" ] || [ -L "$ROOTFS_DIR/lib64" ] || [ ! -d "$ROOTFS_DIR/usr/lib64" ] || ln -s usr/lib64 "$ROOTFS_DIR/lib64" 2>/dev/null || true
 
-if [ ! -x "$ROOTFS_DIR/bin/sh" ] && [ ! -x "$ROOTFS_DIR/usr/bin/sh" ]; then
-  echo "Ubuntu rootfs is invalid: missing /bin/sh"
+GUEST_SH=/bin/sh
+[ -x "$ROOTFS_DIR$GUEST_SH" ] || GUEST_SH=/usr/bin/sh
+GUEST_BASH=/bin/bash
+[ -x "$ROOTFS_DIR$GUEST_BASH" ] || GUEST_BASH=/usr/bin/bash
+GUEST_ENV=/usr/bin/env
+[ -x "$ROOTFS_DIR$GUEST_ENV" ] || GUEST_ENV=/bin/env
+
+if [ ! -x "$ROOTFS_DIR$GUEST_SH" ]; then
+  echo "Ubuntu rootfs is invalid: missing /bin/sh and /usr/bin/sh"
   exit 1
 fi
 
@@ -96,6 +104,18 @@ export TERM=${TERM:-xterm-256color}
 export LANG=C.UTF-8
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Start the shell directly instead of via /usr/bin/env so proot does not abort
-# before the guest PATH is initialized if /usr/bin/env is absent or inaccessible.
-exec "$LINKER" "$PROOT_BIN" $ARGS /bin/sh -lc 'export HOME=/root TERM="${TERM:-xterm-256color}" LANG="${LANG:-C.UTF-8}" PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; cd "$HOME" 2>/dev/null || cd /; if [ -x /bin/bash ]; then exec /bin/bash -l; else exec /bin/sh -l; fi'
+if [ -x "$ROOTFS_DIR$GUEST_BASH" ]; then
+  GUEST_LOGIN_SHELL=$GUEST_BASH
+  GUEST_LOGIN_ARG=--login
+else
+  GUEST_LOGIN_SHELL=$GUEST_SH
+  GUEST_LOGIN_ARG=-l
+fi
+
+if [ -x "$ROOTFS_DIR$GUEST_ENV" ]; then
+  exec "$LINKER" "$PROOT_BIN" $ARGS "$GUEST_ENV" -i HOME=/root TERM="$TERM" LANG="$LANG" PATH="$PATH" "$GUEST_LOGIN_SHELL" "$GUEST_LOGIN_ARG"
+fi
+
+# Fallback for damaged/minimal rootfs images that really do not contain env.
+# PATH and the rest of the baseline environment are exported by the guest shell.
+exec "$LINKER" "$PROOT_BIN" $ARGS "$GUEST_SH" -lc 'export HOME=/root TERM="${TERM:-xterm-256color}" LANG="${LANG:-C.UTF-8}" PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; cd "$HOME" 2>/dev/null || cd /; if [ -x /bin/bash ]; then exec /bin/bash -l; elif [ -x /usr/bin/bash ]; then exec /usr/bin/bash -l; else exec /bin/sh -l; fi'
