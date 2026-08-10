@@ -235,6 +235,9 @@ fun TerminalScreen(
         var startNewSessionWithRoot by remember {
             mutableStateOf(workingModeIsRoot(Settings.working_Mode))
         }
+        var selectedNewSessionVersion by remember {
+            mutableStateOf(Settings.linux_distribution_version)
+        }
         var showRenameDialogFor by remember { mutableStateOf<String?>(null) }
         var pendingEmptySessionCreate by remember { mutableStateOf(false) }
 
