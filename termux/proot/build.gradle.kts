@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "android.zero.studio"
+    namespace = "android.zero.studio.proot"
     ndkVersion = BuildConfig.ndkVersion
 
     defaultConfig {
