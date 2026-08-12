@@ -127,6 +127,12 @@ if [ ! -f "$ROOTFS_READY_MARKER" ] || ! rootfs_is_complete; then
   fi
   : > "$ROOTFS_READY_MARKER"
 else
+  # Re-run on every startup: proot --link2symlink may have left .l2s.*
+  # symlinks from a prior extraction, and usrmerge symlinks can be lost
+  # after Android storage cleanup. This ensures coreutils applets resolve
+  # correctly for both GNU (Ubuntu 18-24) and uutils (Ubuntu 25-26).
+  repair_usrmerge_links
+  normalize_l2s_hardlinks
   probe_guest_bins
 fi
 
