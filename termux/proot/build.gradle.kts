@@ -8,8 +8,6 @@ android {
     namespace = "android.zero.studio"
     ndkVersion = BuildConfig.ndkVersion
 
-    
-
     defaultConfig {
         minSdk = 26
 
@@ -35,6 +33,15 @@ android {
         cmake {
             path("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
+        }
+    }
+    // CMakeLists.txt stages libproot.so / libloader.so / libloader32.so into
+    // src/main/jniLibs/<abi>/ after each build. AGP picks them up from here
+    // and packages them into the APK's lib/<abi>/ directory so they end up in
+    // applicationInfo.nativeLibraryDir at runtime.
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jniLibs")
         }
     }
     compileOptions {

@@ -64,6 +64,7 @@ dependencies {
     // Project modules (termux)
     api(project(":termux:view"))
     api(project(":termux:emulator"))
+    api(project(":termux:proot"))
 
     // Other
     api(libs.common.utilcode)

@@ -142,8 +142,9 @@ fun Downloader(
             }
 
             val filesToDownload = listOf(
-                DownloadFile(listOf(urls.talloc.url), Rootfs.reTerminal.child("libtalloc.so.2"), urls.talloc.sha256),
-                DownloadFile(listOf(urls.proot.url), Rootfs.reTerminal.child("proot"), urls.proot.sha256),
+                // proot and libtalloc.so.2 are no longer downloaded — proot is built
+                // from source (termux/proot Gradle module) and packaged inside the APK.
+                // talloc is statically linked into libproot.so.
                 DownloadFile(
                     urls = rootfsUrls,
                     outputFile = Rootfs.reTerminal.child(rootfsFileName),
@@ -742,7 +743,14 @@ private fun installArchRootfsIfNeeded(onInstallLog: (String) -> Unit) {
 
     val prefix = filesDir.parentFile!!.absolutePath
     val linker = if (File("/system/bin/linker64").exists()) "/system/bin/linker64" else "/system/bin/linker"
-    val prootBin = filesDir.child("proot")
+    val nativeLibDir = File(application!!.applicationInfo.nativeLibraryDir)
+    // proot is now packaged inside the APK as libproot.so (built from termux/proot
+    // module). Use the nativeLibraryDir copy directly for Arch extraction.
+    val prootBin = if (File(nativeLibDir, "libproot.so").exists()) {
+        File(nativeLibDir, "libproot.so")
+    } else {
+        filesDir.child("proot")
+    }
     val stagingDir = File(localBase, "arch.installing")
 
     if (!prootBin.exists()) {
@@ -790,10 +798,15 @@ private fun installArchRootfsIfNeeded(onInstallLog: (String) -> Unit) {
 
         val env = process.environment()
         val existingLdPath = env["LD_LIBRARY_PATH"]
-        val joinedLdPath = listOfNotNull(filesDir.absolutePath, existingLdPath).joinToString(":")
+        val joinedLdPath = listOfNotNull(filesDir.absolutePath, nativeLibDir.absolutePath, existingLdPath).joinToString(":")
         env["LD_LIBRARY_PATH"] = joinedLdPath
         env["PROOT_TMP_DIR"] = tempDir.absolutePath
         env["PREFIX"] = prefix
+        // Point proot at the unbundled libloader.so in nativeLibraryDir.
+        val libLoader = File(nativeLibDir, "libloader.so")
+        if (libLoader.exists()) env["PROOT_LOADER"] = libLoader.absolutePath
+        val libLoader32 = File(nativeLibDir, "libloader32.so")
+        if (libLoader32.exists()) env["PROOT_LOADER_32"] = libLoader32.absolutePath
 
         val output = StringBuilder()
         val running = process.start()

@@ -111,6 +111,7 @@ object MkSession {
                 it.mkdirs()
             }
 
+            val nativeLibDir = File(applicationInfo.nativeLibraryDir)
             val env = mutableListOf(
                 "PATH=${System.getenv("PATH")}:/sbin:${localBinDir().absolutePath}",
                 "HOME=/sdcard",
@@ -123,7 +124,7 @@ object MkSession {
                 "PREFIX=${filesDir.parentFile!!.path}",
                 "TERMIX_ROOTFS_ID=$ubuntuRootfsId",
                 "TERMIX_ROOTFS_ARCHIVE=$ubuntuRootfsId.tar.gz",
-                "LD_LIBRARY_PATH=${localLibDir().absolutePath}",
+                "LD_LIBRARY_PATH=${localLibDir().absolutePath}:${applicationInfo.nativeLibraryDir}",
                 "LINKER=${if(File("/system/bin/linker64").exists()){"/system/bin/linker64"}else{"/system/bin/linker"}}",
                 "NATIVE_LIB_DIR=${applicationInfo.nativeLibraryDir}",
                 "PKG=${packageName}",
@@ -133,9 +134,15 @@ object MkSession {
                 "TMPDIR=${getTempDir().absolutePath}"
             )
 
-            // Do NOT set PROOT_LOADER/PROOT_LOADER32 — let proot use its embedded loader.
-            // External loaders from jniLibs conflict with proot's ashmem_memfd extension
-            // and fail on Android 10+ due to W^X (Write XOR Execute) policy.
+            // proot is built from source (termux/proot module) in unbundled loader
+            // mode (PROOT_UNBUNDLE_LOADER). It execve()s libloader.so directly
+            // instead of extracting an embedded loader to a temp file, which
+            // eliminates the "prooted-NNNN-XXXXXX" AT_EXECFN leak and avoids W^X
+            // issues on Android 10+ since nativeLibraryDir files are executable.
+            val libLoader = File(nativeLibDir, "libloader.so")
+            if (libLoader.exists()) env.add("PROOT_LOADER=${libLoader.absolutePath}")
+            val libLoader32 = File(nativeLibDir, "libloader32.so")
+            if (libLoader32.exists()) env.add("PROOT_LOADER_32=${libLoader32.absolutePath}")
 
             val shellPath = when (Settings.default_shell) {
                 ShellType.BASH -> "/bin/bash"

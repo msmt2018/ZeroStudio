@@ -301,4 +301,30 @@ if(HAS_LOADER_32BIT)
     )
 endif()
 
+# Copy build artifacts to jniLibs so AGP packages them into the APK's
+# lib/<abi>/ directory. add_executable outputs are not auto-packaged by AGP
+# (only add_library SHARED is), so we stage them manually. The proot module's
+# build.gradle.kts points jniLibs.srcDirs at "src/main/jniLibs".
+if(ANDROID)
+    set(_JNI_LIBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}")
+    file(MAKE_DIRECTORY "${_JNI_LIBS_DIR}")
+
+    add_custom_command(TARGET proot POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            $<TARGET_FILE:proot> "${_JNI_LIBS_DIR}/libproot.so"
+        COMMAND ${CMAKE_COMMAND} -E copy
+            $<TARGET_FILE:loader_64> "${_JNI_LIBS_DIR}/libloader.so"
+        COMMENT "Staging libproot.so and libloader.so for jniLibs/${ANDROID_ABI}"
+    )
+
+    if(HAS_LOADER_32BIT)
+        add_custom_command(TARGET proot POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
+                $<TARGET_FILE:loader_-m32> "${_JNI_LIBS_DIR}/libloader32.so"
+            COMMENT "Staging libloader32.so for jniLibs/${ANDROID_ABI}"
+        )
+    endif()
+    unset(_JNI_LIBS_DIR)
+endif()
+
 install(TARGETS proot DESTINATION bin)

@@ -23,6 +23,15 @@ fi
 
 [ ! -e "$PREFIX/local/bin/proot" ] && cp "$PREFIX/files/proot" "$PREFIX/local/bin"
 
+# proot is now built from source (termux/proot module) and packaged inside the
+# APK as libproot.so. Prefer the APK-bundled copy over the legacy download.
+if [ -n "$NATIVE_LIB_DIR" ] && [ -e "$NATIVE_LIB_DIR/libproot.so" ]; then
+  cp "$NATIVE_LIB_DIR/libproot.so" "$PREFIX/local/bin/proot"
+  chmod +x "$PREFIX/local/bin/proot" 2>/dev/null || true
+  [ -e "$NATIVE_LIB_DIR/libloader.so" ] && export PROOT_LOADER="$NATIVE_LIB_DIR/libloader.so"
+  [ -e "$NATIVE_LIB_DIR/libloader32.so" ] && export PROOT_LOADER_32="$NATIVE_LIB_DIR/libloader32.so"
+fi
+
 for sofile in "$PREFIX/files/"*.so.2; do
     dest="$PREFIX/local/lib/$(basename "$sofile")"
     [ ! -e "$dest" ] && cp "$sofile" "$dest"

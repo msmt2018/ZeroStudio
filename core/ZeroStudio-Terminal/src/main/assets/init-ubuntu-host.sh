@@ -11,14 +11,27 @@ LINKER=${LINKER:-/system/bin/linker}
 export PROOT_TMP_DIR=${PROOT_TMP_DIR:-$PREFIX/tmp}
 
 mkdir -p "$ROOTFS_DIR" "$PREFIX/local/bin" "$LIB_DIR" "$PREFIX/tmp"
-[ ! -e "$PROOT_BIN" ] && cp "$PREFIX/files/proot" "$PROOT_BIN"
+# proot and its loader are built from source (termux/proot module) and packaged
+# inside the APK. They land in applicationInfo.nativeLibraryDir at install time,
+# which the host exposes as $NATIVE_LIB_DIR. Copy them into $PREFIX/local/bin
+# so the init scripts can invoke them by a stable path. talloc is statically
+# linked into libproot.so, so libtalloc.so.2 is no longer downloaded.
+if [ -n "$NATIVE_LIB_DIR" ] && [ -e "$NATIVE_LIB_DIR/libproot.so" ]; then
+  cp "$NATIVE_LIB_DIR/libproot.so" "$PROOT_BIN"
+  chmod +x "$PROOT_BIN" 2>/dev/null || true
+elif [ ! -e "$PROOT_BIN" ]; then
+  cp "$PREFIX/files/proot" "$PROOT_BIN" 2>/dev/null || true
+fi
 chmod +x "$PROOT_BIN" 2>/dev/null || true
 
-for sofile in "$PREFIX/files/"*.so.2; do
-  [ -e "$sofile" ] || continue
-  dest="$LIB_DIR/$(basename "$sofile")"
-  [ ! -e "$dest" ] && cp "$sofile" "$dest"
-done
+# Unbundled loader mode (PROOT_UNBUNDLE_LOADER): proot execve()s libloader.so
+# directly instead of extracting an embedded loader to a temp file. Pointing
+# PROOT_LOADER at the nativeLibraryDir copy avoids W^X issues on Android 10+
+# and eliminates the "prooted-NNNN-XXXXXX" temp file leak into AT_EXECFN.
+if [ -n "$NATIVE_LIB_DIR" ] && [ -e "$NATIVE_LIB_DIR/libloader.so" ]; then
+  export PROOT_LOADER="$NATIVE_LIB_DIR/libloader.so"
+  [ -e "$NATIVE_LIB_DIR/libloader32.so" ] && export PROOT_LOADER_32="$NATIVE_LIB_DIR/libloader32.so"
+fi
 
 ROOTFS_READY_MARKER=$ROOTFS_DIR/.zerostudio-rootfs-ready
 
