@@ -124,7 +124,7 @@ object MkSession {
                 "PREFIX=${filesDir.parentFile!!.path}",
                 "TERMIX_ROOTFS_ID=$ubuntuRootfsId",
                 "TERMIX_ROOTFS_ARCHIVE=$ubuntuRootfsId.tar.gz",
-                "LD_LIBRARY_PATH=${localLibDir().absolutePath}:${applicationInfo.nativeLibraryDir}",
+                "LD_LIBRARY_PATH=${localLibDir().absolutePath}",
                 "LINKER=${if(File("/system/bin/linker64").exists()){"/system/bin/linker64"}else{"/system/bin/linker"}}",
                 "NATIVE_LIB_DIR=${applicationInfo.nativeLibraryDir}",
                 "PKG=${packageName}",
