@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">jdwp-injector-for-android</string>
+    <string name="wireless_debugging_not_available_have_you_opened_it">Wireless debugging not available, have you opened it?</string>
+    <string name="development_settings_has_been_disabled_please_reopen_it">Development settings has been disabled, please reopen it</string>
+    <string name="wireless_debugging_not_available">Wireless debugging not available</string>
+    <string name="the_pairing_code_has_been_closed_please_reopen_it">Wireless debugging unpaired:\nthe pairing code has been closed, please reopen it</string>
+    <string name="entered_an_incorrect_pairing_code">Wireless debugging unpaired:\nentered an incorrect pairing code, please retry</string>
+    <string name="please_open_the_wireless_debugging">please close the Wireless debugging, then reopen it</string>
+    <string name="please_show_the_pairing_code">please open the Wireless debugging and show the pairing code</string>
+    <string name="wireless_debugging_pairing_successful">Wireless debugging pairing successful</string>
+    <string name="load_debuggable_app_list">load debuggable app list</string>
+    <string name="open">open</string>
+    <string name="show_dialog">show dialog</string>
+    <string name="show_toast">show toast</string>
+    <string name="paring_code">paring code</string>
+    <string name="target_process_not_found_please_open_it_first">Target process not found, please open it first</string>
+    <string name="unknown_error">An unknown error occurred:\n%s</string>
+    <string name="time_out_to_connect_to_target_process">Time out to connect to target process, please disconnect other adb connections(such as Android Studio) and try again</string>
+    <string name="adb_communication_failure">Adb communication failure, please disconnect other adb connections(such as Android Studio) and try again</string>
+    <string name="pairing">Pairing</string>
+    <string name="please_enter_pairing_code">Please enter the pairing code you see</string>
+    <string name="failed_to_switch_uid">Failed to switch uid, please ensure root has been granted, or target app is debuggable</string>
+    <string name="failed_to_switch_uid2">Failed to switch uid, please ensure root has been granted</string>
+    <string name="check_if_your_device_is_rooted">The system apps and release apk require root privileges to continue, check if your device is rooted</string>
+    <string name="make_debuggable">make debuggable</string>
+    <string name="this_operation_will_reboot_the_system">This operation will reboot the system, continue?</string>
+</resources>

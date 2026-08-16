@@ -1,5 +1,0 @@
-1.compose的UI 控件代码在layout布局层次上和安卓layout xml的控件一样。
-所以父布局一般都是android.widget.FrameLayout，android.widget.LinearLayout，android.view.ViewGroup
-
-其中父布局一般都是包裹androidx.compose.ui.platform.ComposeView控件，这控件里就包含很多子控件来包裹android.view.View，然后android.view.View中又可能包裹控件，比如android.widget.TextView控件等
-

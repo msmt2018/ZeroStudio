@@ -1,7 +1,0 @@
-LocalTcpProtocol ：通过本地无网络的127.0.0.1传输
-
-IpcSocketProtocol : 进程/线程之间等的传输
-
-TcpProtocol : http网络传输
-
-grpc协议
