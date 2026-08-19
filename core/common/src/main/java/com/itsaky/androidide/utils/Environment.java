@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import com.itsaky.androidide.app.BaseApplication;
@@ -293,35 +294,86 @@ public final class Environment {
 
   public static void putEnvironment(Map<String, String> env, boolean forFailsafe) {
     ensureInitialized();
+    env.putAll(createTerminalEnvironment(forFailsafe));
+  }
 
-    env.put("HOME", HOME.getAbsolutePath());
+  /**
+   * Builds the Linux/rootfs environment shared by the IDE and ZeroStudio terminal.
+   *
+   * <p>The map intentionally mirrors Termux' shell environment model: start from Android process
+   * variables, then override rootfs-critical paths (HOME/PREFIX/TMPDIR/PATH) and finally append IDE
+   * development tool locations such as the SDK, NDK, Gradle, Java, CMake, Kotlin and protoc.
+   */
+  @NonNull
+  public static Map<String, String> createTerminalEnvironment(boolean forFailsafe) {
+    ensureInitialized();
+
+    final var env = new LinkedHashMap<String, String>(System.getenv());
+    final var prefix = PREFIX.getAbsolutePath();
+    final var home = HOME.getAbsolutePath();
+    final var javaBin = new File(JAVA_HOME, "bin").getAbsolutePath();
+    final var androidTools = new File(ANDROID_HOME, "cmdline-tools/latest/bin").getAbsolutePath();
+    final var platformTools = new File(ANDROID_HOME, "platform-tools").getAbsolutePath();
+    final var cmakeBin = CMAKE_BIN.getAbsolutePath();
+
+    env.put("HOME", home);
+    env.put("PREFIX", prefix);
     env.put("ANDROID_HOME", ANDROID_HOME.getAbsolutePath());
+    env.put("ANDROID_SDK_ROOT", ANDROID_HOME.getAbsolutePath());
+    env.put("ANDROID_USER_HOME", home + "/.android");
     env.put("ANDROID_NDK_HOME", ANDROID_NDK_HOME.getAbsolutePath());
     env.put("ANDROID_NDK_ROOT", ANDROID_NDK_HOME.getAbsolutePath());
     env.put("ANDROID_NDK", ANDROID_NDK_HOME.getAbsolutePath());
     env.put("NDK_HOME", NDK_HOME.getAbsolutePath());
     env.put("CMAKE_HOME", CMAKE_HOME.getAbsolutePath());
     env.put("CMAKE_ROOT", CMAKE_HOME.getAbsolutePath());
-    env.put("PROTOC_HOME", PROTOC_BIN.getParent()); 
+    env.put("PROTOC_HOME", PROTOC_BIN.getAbsolutePath());
     env.put("KOTLINC_HOME", KOTLINC_HOME.getAbsolutePath());
     env.put("KOTLIN_LSP_HOME", KOTLIN_LSP_HOME.getAbsolutePath());
-    env.put("ANDROID_SDK_ROOT", ANDROID_HOME.getAbsolutePath());
-    env.put("ANDROID_USER_HOME", HOME.getAbsolutePath() + "/.android");
     env.put("JAVA_HOME", JAVA_HOME.getAbsolutePath());
     env.put("GRADLE_USER_HOME", GRADLE_USER_HOME.getAbsolutePath());
-    env.put("SYSROOT", PREFIX.getAbsolutePath());
+    env.put("SYSROOT", prefix);
     env.put("PROJECTS", PROJECTS_DIR.getAbsolutePath());
     env.put("TMPDIR", TMP_DIR.getAbsolutePath());
-    
-    // LD_LIBRARY_PATH is crucial for binaries linked against libs in usr/lib
-    env.put("LD_LIBRARY_PATH", LIB_DIR.getAbsolutePath() + ":" + 
-                new File(JAVA_HOME, "lib").getAbsolutePath());
- 
-    // add user envs for non-failsafe sessions
+    env.put("PWD", home);
+    env.put("TERM", env.getOrDefault("TERM", "xterm-256color"));
+    env.put("COLORTERM", env.getOrDefault("COLORTERM", "truecolor"));
+    env.put("LANG", env.getOrDefault("LANG", "en_US.UTF-8"));
+
+    env.put("PATH", joinPaths(
+        BIN_DIR.getAbsolutePath(),
+        javaBin,
+        androidTools,
+        platformTools,
+        cmakeBin,
+        env.get("PATH")));
+
+    env.put("LD_LIBRARY_PATH", joinPaths(
+        LIB_DIR.getAbsolutePath(),
+        new File(JAVA_HOME, "lib").getAbsolutePath(),
+        env.get("LD_LIBRARY_PATH")));
+
     if (!forFailsafe) {
-      // No mirror select
       env.put("TERMUX_PKG_NO_MIRROR_SELECT", "true");
     }
+    return env;
+  }
+
+  private static String joinPaths(String... paths) {
+    final var builder = new StringBuilder();
+    for (String path : paths) {
+      if (path == null || path.isBlank()) {
+        continue;
+      }
+      if (builder.indexOf(path) >= 0) {
+        continue;
+      }
+      if (builder.length() > 0) {
+        builder.append(':');
+      }
+      builder.append(path);
+    }
+    return builder.toString();
   }
 
   @NonNull

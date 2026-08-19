@@ -56,6 +56,19 @@ abstract class BaseIDEActivity : AppCompatActivity() {
   val activityScope = CoroutineScope(Dispatchers.Default)
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    onCreateWithoutBinding(savedInstanceState)
+    preSetContentLayout()
+    setContentView(bindLayout())
+  }
+
+  /**
+   * Runs the shared IDE activity lifecycle setup without inflating a View hierarchy.
+   *
+   * Compose-based activities call this from their own [onCreate] and then install content with
+   * `setContent { ... }`, avoiding a redundant XML root while preserving theme and system-bar
+   * initialization.
+   */
+  protected fun onCreateWithoutBinding(savedInstanceState: Bundle?) {
     // Apply Theme BEFORE super.onCreate to ensure layout inflation uses correct styles
     IThemeManager.getInstance().applyTheme(this)
 
@@ -69,8 +82,6 @@ abstract class BaseIDEActivity : AppCompatActivity() {
     }
     IThemeManager.getInstance().applyTheme(this)
     super.onCreate(savedInstanceState)
-    preSetContentLayout()
-    setContentView(bindLayout())
   }
 
   override fun onResume() {
