@@ -18,7 +18,7 @@
 package com.itsaky.androidide.handlers
 
 import android.content.Context
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.eventbus.events.Event
 import com.itsaky.androidide.eventbus.events.EventReceiver
 import org.slf4j.Logger
@@ -37,7 +37,7 @@ abstract class BaseEventHandler : EventReceiver {
   }
 
   protected open fun checkIsEditorActivity(event: Event): Boolean {
-    return event.get(Context::class.java) is EditorHandlerActivity
+    return event.get(Context::class.java) is EditorActivityKt
   }
 
   protected open fun logCannotHandle(event: Event) {

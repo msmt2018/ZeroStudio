@@ -233,8 +233,8 @@ public final class DebugSessionLauncher {
                             @NonNull BasicAndroidVariantMetadata variant,
                             @NonNull File apk) {
         if (cancelled.get()) { log.info("runInstall: cancelled before start"); return; }
-        com.itsaky.androidide.activities.editor.EditorHandlerActivity activity =
-                (com.itsaky.androidide.activities.editor.EditorHandlerActivity) data.get(android.content.Context.class);
+        com.itsaky.androidide.activities.editor.EditorActivityKt activity =
+                (com.itsaky.androidide.activities.editor.EditorActivityKt) data.get(android.content.Context.class);
         if (activity == null) {
             fail(Step.INSTALL, "Editor activity no longer available");
             return;

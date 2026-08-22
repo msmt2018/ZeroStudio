@@ -7,7 +7,7 @@ import com.blankj.utilcode.util.KeyboardUtils
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
 import com.itsaky.androidide.actions.markInvisible
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment
 import com.itsaky.androidide.models.SaveResult
 import com.itsaky.androidide.resources.R
@@ -16,7 +16,7 @@ import java.io.File
 /**
  * Action menu item for previewing Markdown files in a tab.
  *
- * This action opens a Markdown preview tab in the EditorHandlerActivity
+ * This action opens a Markdown preview tab in the EditorActivityKt
  * when the user clicks the preview button in the editor toolbar.
  *
  * **注意**: 只匹配 [MarkdownPreviewFragment.SUPPORTED_EXTENSIONS] 中的
@@ -44,7 +44,7 @@ class MarkdownPreviewAction(context: Context, override val order: Int) : EditorR
   override fun prepare(data: ActionData) {
     super.prepare(data)
 
-    val activity = data.getActivity() as? EditorHandlerActivity
+    val activity = data.getActivity() as? EditorActivityKt
     if (activity == null) {
       markInvisible()
       return
@@ -79,7 +79,7 @@ class MarkdownPreviewAction(context: Context, override val order: Int) : EditorR
   }
 
   override suspend fun execAction(data: ActionData): Boolean {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return false
+    val activity = data.requireActivity() as? EditorActivityKt ?: return false
     val file = data.getEditor()?.file ?: return false
     val index = activity.findIndexOfEditorByFile(file)
     if (index >= 0) {
@@ -89,7 +89,7 @@ class MarkdownPreviewAction(context: Context, override val order: Int) : EditorR
   }
 
   override fun postExec(data: ActionData, result: Any) {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return
+    val activity = data.requireActivity() as? EditorActivityKt ?: return
     val editor = data.getEditor()
     val file = editor?.file
 
@@ -101,10 +101,10 @@ class MarkdownPreviewAction(context: Context, override val order: Int) : EditorR
   /**
    * Opens the Markdown preview tab with the given file.
    *
-   * @param activity The EditorHandlerActivity
+   * @param activity The EditorActivityKt
    * @param file The Markdown file to preview
    */
-  private fun openMarkdownPreview(activity: EditorHandlerActivity, file: File) {
+  private fun openMarkdownPreview(activity: EditorActivityKt, file: File) {
     val extension = file.extension.lowercase()
     val fragmentTabManager = activity.fragmentTabManager ?: return
 

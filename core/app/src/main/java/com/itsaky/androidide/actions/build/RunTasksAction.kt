@@ -21,7 +21,7 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.BaseBuildAction
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.fragments.RunTasksDialogFragment
 import com.itsaky.androidide.preferences.internal.EditorPreferences
 import com.itsaky.androidide.resources.R
@@ -49,7 +49,7 @@ class RunTasksAction(context: Context, override val order: Int) : BaseBuildActio
    */
   override suspend fun execAction(data: ActionData): Any {
     if (EditorPreferences.autoSaveBeforeBuild) {
-      val activity = data.getActivity() as? EditorHandlerActivity
+      val activity = data.getActivity() as? EditorActivityKt
       activity?.saveAll(notify = false, requestSync = false)
     }
     dialog?.dismiss()

@@ -26,7 +26,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.blankj.utilcode.util.FileIOUtils;
 import com.blankj.utilcode.util.FileUtils;
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity;
+import com.itsaky.androidide.activities.editor.EditorActivityKt;
 import com.itsaky.androidide.adapters.DiagnosticsAdapter;
 import com.itsaky.androidide.adapters.SearchListAdapter;
 import com.itsaky.androidide.editor.ui.IDEEditor;
@@ -84,18 +84,18 @@ public class IDELanguageClientImpl implements ILanguageClient {
   protected static final Logger LOG = LoggerFactory.getLogger(IDELanguageClientImpl.class);
   private static IDELanguageClientImpl mInstance;
   private final Map<File, List<DiagnosticItem>> diagnostics = new HashMap<>();
-  protected EditorHandlerActivity activity;
+  protected EditorActivityKt activity;
   private ProgressSheet lspProgressSheet;
 
-  private IDELanguageClientImpl(EditorHandlerActivity provider) {
+  private IDELanguageClientImpl(EditorActivityKt provider) {
     setActivity(provider);
   }
 
-  public void setActivity(EditorHandlerActivity provider) {
+  public void setActivity(EditorActivityKt provider) {
     this.activity = provider;
   }
 
-  public static IDELanguageClientImpl initialize(EditorHandlerActivity provider) {
+  public static IDELanguageClientImpl initialize(EditorActivityKt provider) {
     if (mInstance != null) {
       throw new IllegalStateException("Client is already initialized");
     }

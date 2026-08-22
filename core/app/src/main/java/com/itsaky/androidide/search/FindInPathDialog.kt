@@ -15,7 +15,7 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.itsaky.androidide.R
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.databinding.DialogFindInPathBinding
 import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.search.AdvancedSearchResultsAdapter
@@ -65,7 +65,7 @@ class FindInPathDialog : BottomSheetDialogFragment() {
     setupListeners()
     setupObservers()
 
-    val activity = requireActivity() as? EditorHandlerActivity
+    val activity = requireActivity() as? EditorActivityKt
     val editorView = activity?.getCurrentEditor()
     val editor = editorView?.editor
 
@@ -166,7 +166,7 @@ class FindInPathDialog : BottomSheetDialogFragment() {
       viewModel.replacement = binding.inputReplace.text.toString()
     }
 
-    val activity = requireActivity() as? EditorHandlerActivity
+    val activity = requireActivity() as? EditorActivityKt
     val currentFile = activity?.getCurrentEditor()?.file
     viewModel.startSearch(currentFile)
   }
@@ -237,7 +237,7 @@ class FindInPathDialog : BottomSheetDialogFragment() {
   }
 
   private fun navigateToItem(item: SearchResultItem) {
-    val activity = requireActivity() as? EditorHandlerActivity ?: return
+    val activity = requireActivity() as? EditorActivityKt ?: return
 
     when (item) {
       is FileHeaderResult -> {

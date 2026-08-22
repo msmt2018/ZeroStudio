@@ -92,7 +92,7 @@ class GitBranchSwitchAction(context: Context, override val order: Int) :
   }
 
   private fun showBranchDialog(
-      activity: com.itsaky.androidide.activities.editor.EditorHandlerActivity,
+      activity: com.itsaky.androidide.activities.editor.EditorActivityKt,
       sections: List<Pair<String, List<com.catpuppyapp.puppygit.git.BranchNameAndTypeDto>>>,
   ) {
     // 拼一个简单 array, header 不可点
@@ -147,7 +147,7 @@ class GitBranchSwitchAction(context: Context, override val order: Int) :
   }
 
   private fun switchBranch(
-      activity: com.itsaky.androidide.activities.editor.EditorHandlerActivity,
+      activity: com.itsaky.androidide.activities.editor.EditorActivityKt,
       branch: com.catpuppyapp.puppygit.git.BranchNameAndTypeDto,
   ) {
     // 二次确认 (如果当前分支有未保存修改)

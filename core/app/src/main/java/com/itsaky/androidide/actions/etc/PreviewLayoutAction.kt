@@ -30,7 +30,7 @@ import androidx.core.content.ContextCompat
 import com.blankj.utilcode.util.KeyboardUtils
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.editor.ui.IDEEditor
 import com.itsaky.androidide.resources.R
 import java.io.File
@@ -131,7 +131,7 @@ class PreviewLayoutAction(context: Context, override val order: Int) : EditorRel
   }
 
   /** Launches the LayoutEditor with the context of the provided file. */
-  private fun EditorHandlerActivity.previewLayout(file: File) {
+  private fun EditorActivityKt.previewLayout(file: File) {
     // FIX: Root-cause fix for "LayoutEditorContext is not initialized" IllegalArgumentException.
     //
     // Before this fix, `projectFile.currentLayout = layoutFile` below calls

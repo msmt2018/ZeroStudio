@@ -24,7 +24,7 @@ import com.blankj.utilcode.util.KeyboardUtils
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
 import com.itsaky.androidide.actions.markInvisible
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.compose.preview.ComposePreviewActivity
 import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.projects.ModuleProject
@@ -58,7 +58,7 @@ class PreviewComposeAction(context: Context, override val order: Int) : EditorRe
   override fun prepare(data: ActionData) {
     super.prepare(data)
 
-    val activity = data.getActivity() as? EditorHandlerActivity
+    val activity = data.getActivity() as? EditorActivityKt
     if (activity == null) {
       markInvisible()
       return
@@ -97,13 +97,13 @@ class PreviewComposeAction(context: Context, override val order: Int) : EditorRe
   }
 
   override suspend fun execAction(data: ActionData): Boolean {
-    val activity = data.requireActivity() as? EditorHandlerActivity
+    val activity = data.requireActivity() as? EditorActivityKt
     activity?.saveAll()
     return true
   }
 
   override fun postExec(data: ActionData, result: Any) {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return
+    val activity = data.requireActivity() as? EditorActivityKt ?: return
     val editor = data.getEditor() ?: return
     val file = editor.file ?: return
 

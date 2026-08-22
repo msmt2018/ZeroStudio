@@ -28,7 +28,7 @@ import com.itsaky.androidide.actions.BaseBuildAction
 import com.itsaky.androidide.actions.getContext
 import com.itsaky.androidide.actions.markInvisible
 import com.itsaky.androidide.actions.openApplicationModuleChooser
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.models.ApkMetadata
 import com.itsaky.androidide.preferences.internal.BuildPreferences
@@ -154,10 +154,10 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
     }
 
     val activity =
-        data.getActivity() as? EditorHandlerActivity
+        data.getActivity() as? EditorActivityKt
             ?: run {
               log.error(
-                  "Cannot execute task '{}'. Activity instance not provided in ActionData or is not an EditorHandlerActivity.",
+                  "Cannot execute task '{}'. Activity instance not provided in ActionData or is not an EditorActivityKt.",
                   taskName,
               )
               return
@@ -197,7 +197,7 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
     }
 
     if (BuildPreferences.clearLogcatBeforeRun) {
-      val activity = data.getActivity() as? EditorHandlerActivity
+      val activity = data.getActivity() as? EditorActivityKt
       activity?.runOnUiThread { activity.content.bottomSheet.clearBuildOutput() }
     }
 
@@ -259,7 +259,7 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
 
   private fun install(data: ActionData, apk: File) {
     val activity =
-        data.getActivity() as? EditorHandlerActivity
+        data.getActivity() as? EditorActivityKt
             ?: run {
               log.error("Cannot install APK. Unable to get activity instance.")
               return
@@ -285,7 +285,7 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
   private fun ActionData.isBuildInProgress(): Boolean {
     val context = getActivity()
     val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
-    return (context as? EditorHandlerActivity)?.editorViewModel?.let {
+    return (context as? EditorActivityKt)?.editorViewModel?.let {
       it.isInitializing || it.isBuildInProgress
     } == true || buildService?.isBuildInProgress == true
   }

@@ -18,7 +18,7 @@
 package com.itsaky.androidide.handlers
 
 import com.itsaky.androidide.R
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.preferences.internal.GeneralPreferences
 import com.itsaky.androidide.resources.R.string
 import com.itsaky.androidide.services.builder.GradleBuildService
@@ -32,7 +32,7 @@ import java.lang.ref.WeakReference
 import org.slf4j.LoggerFactory
 
 /**
- * Handles events received from [GradleBuildService] updates [EditorHandlerActivity].
+ * Handles events received from [GradleBuildService] updates [EditorActivityKt].
  *
  * @author Akash Yadav
  * @author android_zero
@@ -40,20 +40,20 @@ import org.slf4j.LoggerFactory
 class EditorBuildEventListener : GradleBuildService.EventListener {
 
   private var enabled = true
-  private var activityReference: WeakReference<EditorHandlerActivity> = WeakReference(null)
+  private var activityReference: WeakReference<EditorActivityKt> = WeakReference(null)
 
   companion object {
 
     private val log = LoggerFactory.getLogger(EditorBuildEventListener::class.java)
   }
 
-  private val _activity: EditorHandlerActivity?
+  private val _activity: EditorActivityKt?
     get() = activityReference.get()
 
-  private val activity: EditorHandlerActivity
+  private val activity: EditorActivityKt
     get() = checkNotNull(activityReference.get()) { "Activity reference has been destroyed!" }
 
-  fun setActivity(activity: EditorHandlerActivity) {
+  fun setActivity(activity: EditorActivityKt) {
     this.activityReference = WeakReference(activity)
     this.enabled = true
   }
@@ -138,7 +138,7 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
    * crucial for preventing IllegalStateException when trying to update UI bindings that have
    * already been torn down by the system.
    */
-  private fun checkActivity(action: String): EditorHandlerActivity? {
+  private fun checkActivity(action: String): EditorActivityKt? {
     if (!enabled) return null
 
     val act = _activity

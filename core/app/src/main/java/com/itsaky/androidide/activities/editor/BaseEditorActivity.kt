@@ -135,7 +135,7 @@ abstract class BaseEditorActivity :
   // 改为每次都从 view 实时读取, 不要缓存. EditorBottomSheet 在 onFinishInflate
   // 时会把默认的 BottomSheetBehavior 替换为 SymbolInputAwareBottomSheetBehavior;
   // 缓存字段会拿不到这个新 Behavior 的 state/expandedOffset, 后续基类与派生类
-  // (例如 EditorHandlerActivity 通过 mBuildEventListener.setActivity(this) 在
+  // (例如 EditorActivityKt 通过 mBuildEventListener.setActivity(this) 在
   // build 完成时读这个状态) 都会读旧 Behavior 的 state, 引发"状态不同步"问题.
   // 改成"懒属性 + 实时从 view 读"是唯一稳的写法.
   protected val editorBottomSheet: BottomSheetBehavior<out View?>?
@@ -705,7 +705,7 @@ abstract class BaseEditorActivity :
   /**
    * PR-D4: 调试器在 suspend / logpoint 事件里要自动切到某个 fragment tab
    * 时调用。先把抽屉展开,再选中目标 Fragment 对应的 tab。
-   * 这个方法会在所有派生 Activity(例如 EditorHandlerActivity)里也可见。
+   * 这个方法会在所有派生 Activity(例如 EditorActivityKt)里也可见。
    */
   open fun openDebuggerTab(fragmentClass: Class<out androidx.fragment.app.Fragment>) {
     if (isDestroying || _binding == null) return

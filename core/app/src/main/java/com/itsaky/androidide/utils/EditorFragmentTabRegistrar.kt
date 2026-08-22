@@ -13,12 +13,12 @@ import com.zerostudio.preview.UniversalPreviewEngineFragment
 /**
  * 编辑器 Fragment Tab 注册器。
  *
- * 把原本内联在 [com.itsaky.androidide.activities.editor.EditorHandlerActivity]
+ * 把原本内联在 [com.itsaky.androidide.activities.editor.EditorActivityKt]
  * 里的 `FragmentTabRegistry.register(...)` 调用集中到这个单独的 class,
- * 让 EditorHandlerActivity 只负责调用 [registerAll], 不关心具体注册了哪些 tab。
+ * 让 EditorActivityKt 只负责调用 [registerAll], 不关心具体注册了哪些 tab。
  *
  * 新增预览 tab 时只需在本文件的 [registerAll] 里追加一个 [register] 调用,
- * EditorHandlerActivity 零改动。
+ * EditorActivityKt 零改动。
  *
  * @author ZeroStudio
  */
@@ -46,7 +46,7 @@ object EditorFragmentTabRegistrar {
    * 注册全部编辑器 Fragment Tab。
    *
    * 幂等: 如果已注册过 (以 [MARKDOWN_PREVIEW] 为标志), 直接 return。
-   * 在 [com.itsaky.androidide.activities.editor.EditorHandlerActivity] 初始化时调用一次。
+   * 在 [com.itsaky.androidide.activities.editor.EditorActivityKt] 初始化时调用一次。
    */
   fun registerAll() {
     // 只注册一次

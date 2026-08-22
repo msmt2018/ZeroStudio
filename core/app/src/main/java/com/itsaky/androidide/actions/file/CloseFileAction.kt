@@ -21,7 +21,7 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionData
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 
 /**
  * Closes the current file.
@@ -37,7 +37,7 @@ class CloseFileAction(context: Context, override val order: Int) : FileTabAction
     icon = ContextCompat.getDrawable(context, R.drawable.ic_close_this)
   }
 
-  override fun EditorHandlerActivity.doAction(data: ActionData): Boolean {
+  override fun EditorActivityKt.doAction(data: ActionData): Boolean {
     // Use the tab-aware close entry point so that fragment-backed tabs
     // (e.g. MarkdownPreviewFragment) hosted in the same TabLayout as editor file
     // tabs can be closed too. closeFile(int) treats the index as a file index in

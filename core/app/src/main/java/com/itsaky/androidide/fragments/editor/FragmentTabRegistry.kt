@@ -1,7 +1,7 @@
 package com.itsaky.androidide.fragments.editor
 
 /**
- * Registry for managing fragment tabs in EditorHandlerActivity.
+ * Registry for managing fragment tabs in EditorActivityKt.
  *
  * This registry provides a pluggable way to register and manage fragment tabs
  * similar to how EditorToolboxActions manages toolbox entries.
