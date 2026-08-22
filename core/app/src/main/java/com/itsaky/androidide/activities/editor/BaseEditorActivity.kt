@@ -45,6 +45,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.core.view.updatePaddingRelative
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.blankj.utilcode.constant.MemoryConstants
 import com.blankj.utilcode.util.ConvertUtils.byte2MemorySize
 import com.blankj.utilcode.util.FileUtils
@@ -128,6 +131,15 @@ import org.slf4j.LoggerFactory
 @Suppress("MemberVisibilityCanBePrivate")
 abstract class BaseEditorActivity :
     IDEActivity(), TabLayout.OnTabSelectedListener, DiagnosticClickListener {
+
+  /**
+   * Compose-facing editor chrome state.
+   *
+   * This is the single source of truth introduced for the XML-to-Compose migration. Legacy views
+   * are still updated during the transition, but Compose consumers no longer need to read a View.
+   */
+  protected var composeUiState by mutableStateOf(EditorComposeUiState())
+    private set
 
   protected val mLifecycleObserver = EditorActivityLifecyclerObserver()
   protected var diagnosticInfoBinding: LayoutDiagnosticInfoBinding? = null
@@ -796,6 +808,7 @@ abstract class BaseEditorActivity :
   private fun onBuildStatusChanged() {
     if (isDestroying || _binding == null) return
     val visible = editorViewModel.isBuildInProgress || editorViewModel.isInitializing
+    composeUiState = composeUiState.copy(isBottomPanelVisible = visible)
     content.progressIndicator.visibility = if (visible) View.VISIBLE else View.GONE
     invalidateOptionsMenu()
   }
@@ -804,12 +817,15 @@ abstract class BaseEditorActivity :
     editorViewModel._isBuildInProgress.observe(this) { onBuildStatusChanged() }
     editorViewModel._isInitializing.observe(this) { onBuildStatusChanged() }
     editorViewModel._statusText.observe(this) {
+      composeUiState = composeUiState.copy(buildStatus = it.first)
       if (!isDestroying && _binding != null) {
         content.bottomSheet.setStatus(it.first, it.second)
       }
     }
 
     editorViewModel.observeFiles(this) { files ->
+      composeUiState =
+          composeUiState.copy(openFiles = files?.map { file -> file.filePath.substringAfterLast('/') }.orEmpty())
       if (isDestroying || _binding == null) return@observeFiles
       content.apply {
         if (files.isNullOrEmpty() && !hasNonEditorTabs()) {
@@ -1029,6 +1045,7 @@ abstract class BaseEditorActivity :
     val cursor = editorView.editor?.cursor ?: return
     val line = cursor.leftLine + 1
     val column = cursor.leftColumn + 1
+    composeUiState = composeUiState.copy(cursorPosition = "$line:$column")
     content.bottomSheet.binding.tvCursorPosition.text = "$line:$column"
   }
 }
