@@ -64,7 +64,7 @@ import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TABS
 import com.itsaky.androidide.actions.menu.EditorLineOperations
 import com.itsaky.androidide.adapters.DiagnosticsAdapter
 import com.itsaky.androidide.adapters.SearchListAdapter
-import com.itsaky.androidide.app.EdgeToEdgeIDEActivity
+import com.itsaky.androidide.app.IDEActivity
 import com.itsaky.androidide.databinding.ActivityEditorBinding
 import com.itsaky.androidide.databinding.ContentEditorBinding
 import com.itsaky.androidide.databinding.LayoutDiagnosticInfoBinding
@@ -127,7 +127,7 @@ import org.slf4j.LoggerFactory
  */
 @Suppress("MemberVisibilityCanBePrivate")
 abstract class BaseEditorActivity :
-    EdgeToEdgeIDEActivity(), TabLayout.OnTabSelectedListener, DiagnosticClickListener {
+    IDEActivity(), TabLayout.OnTabSelectedListener, DiagnosticClickListener {
 
   protected val mLifecycleObserver = EditorActivityLifecyclerObserver()
   protected var diagnosticInfoBinding: LayoutDiagnosticInfoBinding? = null
@@ -239,7 +239,7 @@ abstract class BaseEditorActivity :
    *
    * 【关键】必须用这个值作为基线手动调整 contentCard.height, 而不是依赖
    * `windowSoftInputMode="adjustResize"`. 原因: BaseEditorActivity 继承自
-   * EdgeToEdgeIDEActivity, 后者在 onCreate 里调用了
+   * IDEActivity，后者在 onCreate 里通过 AndroidX enableEdgeToEdge 调用了
    * `WindowCompat.setDecorFitsSystemWindows(window, false)`, 也就是 edge-to-edge
    * 模式. 在 edge-to-edge 模式下, `adjustResize` **不会自动 resize activity
    * 内容视图** 来给 IME 让位 (这是 Android 11+ 官方行为, 见

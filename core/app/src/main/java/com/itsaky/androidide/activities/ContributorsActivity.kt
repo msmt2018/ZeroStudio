@@ -22,15 +22,17 @@ import android.view.View
 import androidx.activity.viewModels
 import androidx.core.graphics.Insets
 import androidx.core.view.isVisible
+import dagger.hilt.android.AndroidEntryPoint
 import com.itsaky.androidide.R
 import com.itsaky.androidide.adapters.ContributorsGridAdapter
-import com.itsaky.androidide.app.EdgeToEdgeIDEActivity
+import com.itsaky.androidide.app.IDEActivity
 import com.itsaky.androidide.databinding.ActivityContributorsBinding
 import com.itsaky.androidide.utils.getConnectionInfo
 import com.itsaky.androidide.viewmodel.ContributorsViewModel
 
 /** @author Akash Yadav */
-class ContributorsActivity : EdgeToEdgeIDEActivity() {
+@AndroidEntryPoint
+class ContributorsActivity : IDEActivity() {
 
   private var _binding: ActivityContributorsBinding? = null
   private val binding: ActivityContributorsBinding

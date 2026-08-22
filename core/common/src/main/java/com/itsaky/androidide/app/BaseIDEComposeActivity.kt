@@ -18,7 +18,6 @@ package com.itsaky.androidide.app
 
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatDelegate
@@ -54,27 +53,31 @@ import org.greenrobot.eventbus.ThreadMode
 /**
  * Compose-first base activity for IDE screens.
  *
- * The content is always hosted in a Material 3 [MaterialTheme]. Dark mode is derived from
- * Compose's [isSystemInDarkTheme], so a configuration change caused by the application night-mode
- * preference automatically recomposes the screen instead of maintaining a second activity-level
- * dark-mode state. The application remains responsible for persisting the preferred night mode and
- * app locale through the official AndroidX [AppCompatDelegate] APIs.
+ * Compose content is hosted in a Material 3 [MaterialTheme] when [composeContent] is supplied.
+ * Dark mode is derived from Compose's [isSystemInDarkTheme], so a configuration change caused by
+ * the application night-mode preference automatically recomposes the screen instead of
+ * maintaining a second activity-level dark-mode state. Existing View/Fragment screens can share
+ * this lifecycle and migrate without a parallel activity hierarchy. The application remains
+ * responsible for persisting the preferred night mode and app locale through the official AndroidX
+ * [AppCompatDelegate] APIs.
  *
  * EventBus registration is limited to the `STARTED` lifecycle state. Work launched through
  * [launchWhileStarted] is cancelled while the activity is stopped and is recreated when it starts
  * again; use [lifecycleScope] for work that should instead live until the activity is destroyed.
  */
-abstract class BaseIDEComposeActivity : ComponentActivity() {
+abstract class BaseIDEComposeActivity : BaseIDEActivity() {
 
   private companion object {
     const val SELECTED_THEME_PREFERENCE = "idpref_general_theme"
   }
 
-  /** Whether this activity should receive EventBus events while it is visible. */
-  protected open val subscribeToEvents: Boolean = true
-
-  /** Whether [IDEComposeTheme] should synchronize system-bar colors with the Compose color scheme. */
-  protected open val enableSystemBarTheming: Boolean = true
+  /**
+   * Compose content for a Compose-first screen, or `null` for an existing View/Fragment screen.
+   *
+   * Keeping this optional allows activities to migrate incrementally without maintaining a second
+   * activity hierarchy. New activities should override this instead of calling `setContent`.
+   */
+  protected open val composeContent: (@Composable () -> Unit)? = null
 
   private var selectedTheme by mutableStateOf(IDETheme.DEFAULT)
 
@@ -98,9 +101,11 @@ abstract class BaseIDEComposeActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     selectedTheme = IThemeManager.getInstance().getCurrentTheme()
     lifecycle.addObserver(eventBusObserver)
-    setContent {
-      IDEComposeTheme(theme = selectedTheme, synchronizeSystemBars = enableSystemBarTheming) {
-        ComposeContent()
+    composeContent?.let { content ->
+      setContent {
+        IDEComposeTheme(theme = selectedTheme, synchronizeSystemBars = enableSystemBarTheming) {
+          content()
+        }
       }
     }
   }
@@ -109,9 +114,6 @@ abstract class BaseIDEComposeActivity : ComponentActivity() {
     lifecycle.removeObserver(eventBusObserver)
     super.onDestroy()
   }
-
-  /** The Compose UI supplied by an inheriting IDE activity. */
-  @Composable protected abstract fun ComposeContent()
 
   /**
    * Starts [block] only while this activity is visible.
@@ -145,6 +147,7 @@ abstract class BaseIDEComposeActivity : ComponentActivity() {
   open fun onBasePreferenceChanged(event: PreferenceChangeEvent) {
     if (event.key == SELECTED_THEME_PREFERENCE) {
       selectedTheme = IThemeManager.getInstance().getCurrentTheme()
+      if (composeContent == null) recreateActivitySafe()
     }
   }
 }

@@ -21,9 +21,11 @@ import android.os.Bundle;
 import android.view.View;
 import androidx.annotation.NonNull;
 import com.itsaky.androidide.app.IDEActivity;
+import dagger.hilt.android.AndroidEntryPoint;
 import com.itsaky.androidide.databinding.ActivityCrashHandlerBinding;
 import com.itsaky.androidide.fragments.CrashReportFragment;
 
+@AndroidEntryPoint
 public class CrashHandlerActivity extends IDEActivity {
 
   public static final String REPORT_ACTION = "com.itsaky.androidide.REPORT_CRASH";

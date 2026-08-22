@@ -17,8 +17,62 @@
 
 package com.itsaky.androidide.app
 
-abstract class IDEActivity : BaseIDEActivity() {
+import android.graphics.Color
+import android.os.Bundle
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
+import androidx.annotation.CallSuper
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnAttach
+import javax.inject.Inject
 
-  val app: IDEApplication
-    get() = application as IDEApplication
+/**
+ * The single base activity for IDE screens.
+ *
+ * It combines Compose theme/lifecycle support from [BaseIDEComposeActivity] with AndroidX's
+ * official edge-to-edge API. Insets are exposed to legacy View screens but never applied to the
+ * decor view: each screen owns padding for the content that needs protection.
+ */
+abstract class IDEActivity : BaseIDEComposeActivity() {
+
+  /** Application dependency supplied by Hilt instead of a cast from `application`. */
+  @Inject lateinit var app: IDEApplication
+
+  /** Last system-bar insets, retained for View-based screens during their Compose migration. */
+  protected var systemBarInsets: Insets? = null
+    private set
+
+  override var enableSystemBarTheming: Boolean
+    get() = false
+    set(@Suppress("UNUSED_PARAMETER") value) = Unit
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    // AndroidX applies transparent system bars and contrast enforcement before View/Compose setup.
+    enableEdgeToEdge(
+        statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+        navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+    )
+    super.onCreate(savedInstanceState)
+    installWindowInsetsListener()
+  }
+
+  private fun installWindowInsetsListener() {
+    val decorView = window.decorView
+    ViewCompat.setOnApplyWindowInsetsListener(decorView) { _, insets ->
+      onApplyWindowInsets(insets)
+      insets
+    }
+    decorView.doOnAttach { view -> ViewCompat.requestApplyInsets(view) }
+  }
+
+  @CallSuper
+  protected open fun onApplyWindowInsets(insets: WindowInsetsCompat) {
+    systemBarInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+    onApplySystemBarInsets(checkNotNull(systemBarInsets))
+  }
+
+  /** Called when system-bar insets change. Compose UI should use `WindowInsets` directly. */
+  protected open fun onApplySystemBarInsets(insets: Insets) = Unit
 }
