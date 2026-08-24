@@ -1,24 +1,27 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2024 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2024  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lang.completion
 
 import android.content.res.Resources
@@ -29,111 +32,109 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 
 interface FileIconProvider {
-  /**
-   * Attempts to load a file/folder icon from the given source string.
-   *
-   * @param src Source string (e.g., absolute or relative path)
-   * @param isFolder True if the source is a folder, false if it's a file
-   * @return A [Drawable] if successful, or null if no icon can be loaded.
-   */
-  fun load(src: String, isFolder: Boolean): Drawable?
+    /**
+     * Attempts to load a file/folder icon from the given source string.
+     * @param src Source string (e.g., absolute or relative path)
+     * @param isFolder True if the source is a folder, false if it's a file
+     * @return A [Drawable] if successful, or null if no icon can be loaded.
+     */
+    fun load(src: String, isFolder: Boolean): Drawable?
 }
 
 object SimpleCompletionIconDrawer {
-  var globalFileIconProvider: FileIconProvider? = null
+    var globalFileIconProvider: FileIconProvider? = null
 
-  @JvmStatic
-  @JvmOverloads
-  fun draw(kind: CompletionItemKind, circle: Boolean = true): Drawable {
-    return CircleDrawable(kind, circle)
-  }
+    @JvmStatic
+    @JvmOverloads
+    fun draw(kind: CompletionItemKind, circle: Boolean = true): Drawable {
+        return CircleDrawable(kind, circle)
+    }
 
-  fun drawFileFolder(src: String, isFolder: Boolean): Drawable? {
-    return globalFileIconProvider?.load(src, isFolder)
-  }
+    fun drawFileFolder(src: String, isFolder: Boolean): Drawable? {
+        return globalFileIconProvider?.load(src, isFolder)
+    }
 
-  fun drawColorSpan(colorSpan: Int): Drawable {
-    return ColorSpanDrawable(colorSpan)
-  }
+    fun drawColorSpan(colorSpan: Int): Drawable {
+        return ColorSpanDrawable(colorSpan)
+    }
 }
 
-internal class CircleDrawable(kind: CompletionItemKind, circle: Boolean) : Drawable() {
-  private val mPaint: Paint
-  private val mTextPaint: Paint
-  private val mKind: CompletionItemKind = kind
-  private val mCircle: Boolean = circle
+internal class CircleDrawable(kind: CompletionItemKind, circle: Boolean) :
+    Drawable() {
+    private val mPaint: Paint
+    private val mTextPaint: Paint
+    private val mKind: CompletionItemKind = kind
+    private val mCircle: Boolean = circle
 
-  init {
-    mPaint =
-        Paint().apply {
-          isAntiAlias = true
-          color = kind.defaultDisplayBackgroundColor.toInt()
+    init {
+        mPaint = Paint().apply {
+            isAntiAlias = true
+            color = kind.defaultDisplayBackgroundColor.toInt()
         }
-    mTextPaint =
-        Paint().apply {
-          color = -0x1
-          isAntiAlias = true
-          textSize = Resources.getSystem().displayMetrics.density * 14
-          textAlign = Paint.Align.CENTER
+        mTextPaint = Paint().apply {
+            color = -0x1
+            isAntiAlias = true
+            textSize = Resources.getSystem()
+                .displayMetrics.density * 14
+            textAlign = Paint.Align.CENTER
         }
-  }
-
-  override fun draw(canvas: Canvas) {
-    val width = bounds.right.toFloat()
-    val height = bounds.bottom.toFloat()
-    if (mCircle) {
-      canvas.drawCircle(width / 2, height / 2, width / 2, mPaint)
-    } else {
-      canvas.drawRect(0f, 0f, width, height, mPaint)
     }
-    canvas.save()
-    canvas.translate(width / 2f, height / 2f)
-    val textCenter = -(mTextPaint.descent() + mTextPaint.ascent()) / 2f
-    canvas.drawText(mKind.getDisplayChar(), 0f, textCenter, mTextPaint)
-    canvas.restore()
-  }
 
-  override fun setAlpha(p1: Int) {
-    mPaint.alpha = p1
-    mTextPaint.alpha = p1
-  }
+    override fun draw(canvas: Canvas) {
+        val width = bounds.right.toFloat()
+        val height = bounds.bottom.toFloat()
+        if (mCircle) {
+            canvas.drawCircle(width / 2, height / 2, width / 2, mPaint)
+        } else {
+            canvas.drawRect(0f, 0f, width, height, mPaint)
+        }
+        canvas.save()
+        canvas.translate(width / 2f, height / 2f)
+        val textCenter = -(mTextPaint.descent() + mTextPaint.ascent()) / 2f
+        canvas.drawText(mKind.getDisplayChar(), 0f, textCenter, mTextPaint)
+        canvas.restore()
+    }
 
-  override fun setColorFilter(colorFilter: ColorFilter?) {
-    mTextPaint.colorFilter = colorFilter
-  }
+    override fun setAlpha(p1: Int) {
+        mPaint.alpha = p1
+        mTextPaint.alpha = p1
+    }
 
-  @Deprecated(
-      "Deprecated in Java",
-      ReplaceWith("PixelFormat.OPAQUE", "android.graphics.PixelFormat"),
-  )
-  override fun getOpacity(): Int {
-    return PixelFormat.OPAQUE
-  }
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        mTextPaint.colorFilter = colorFilter
+    }
+
+    @Deprecated(
+        "Deprecated in Java",
+        ReplaceWith("PixelFormat.OPAQUE", "android.graphics.PixelFormat")
+    )
+    override fun getOpacity(): Int {
+        return PixelFormat.OPAQUE
+    }
 }
 
 internal class ColorSpanDrawable(colorSpan: Int) : Drawable() {
-  private val mColorPaint: Paint =
-      Paint().apply {
+    private val mColorPaint: Paint = Paint().apply {
         isAntiAlias = true
         color = colorSpan
-      }
+    }
 
-  override fun draw(canvas: Canvas) {
-    val width = bounds.right.toFloat()
-    val height = bounds.bottom.toFloat()
+    override fun draw(canvas: Canvas) {
+        val width = bounds.right.toFloat()
+        val height = bounds.bottom.toFloat()
 
-    canvas.drawRect(0f, 0f, width, height, mColorPaint)
-  }
+        canvas.drawRect(0f, 0f, width, height, mColorPaint)
+    }
 
-  override fun setAlpha(p1: Int) {}
+    override fun setAlpha(p1: Int) {}
 
-  override fun setColorFilter(colorFilter: ColorFilter?) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
 
-  @Deprecated(
-      "Deprecated in Java",
-      ReplaceWith("PixelFormat.OPAQUE", "android.graphics.PixelFormat"),
-  )
-  override fun getOpacity(): Int {
-    return PixelFormat.OPAQUE
-  }
+    @Deprecated(
+        "Deprecated in Java",
+        ReplaceWith("PixelFormat.OPAQUE", "android.graphics.PixelFormat")
+    )
+    override fun getOpacity(): Int {
+        return PixelFormat.OPAQUE
+    }
 }

@@ -1,24 +1,27 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2025 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2025  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lsp.events.highlight
 
 import io.github.rosemoe.sora.lsp.editor.LspEditor
@@ -31,56 +34,54 @@ import io.github.rosemoe.sora.lsp.requests.Timeouts
 import io.github.rosemoe.sora.lsp.utils.asLspPosition
 import io.github.rosemoe.sora.lsp.utils.createTextDocumentIdentifier
 import io.github.rosemoe.sora.text.CharPosition
-import java.util.concurrent.CompletableFuture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.eclipse.lsp4j.DocumentHighlight
 import org.eclipse.lsp4j.DocumentHighlightParams
+import java.util.concurrent.CompletableFuture
 
 class DocumentHighlightEvent : AsyncEventListener() {
-  override val eventName: String = EventType.documentHighlight
+    override val eventName: String = EventType.documentHighlight
 
-  var future: CompletableFuture<Void>? = null
+    var future: CompletableFuture<Void>? = null
 
-  override val isAsync = true
+    override val isAsync = true
 
-  data class DocumentHighlightRequest(
-      val selectionStart: CharPosition,
-  )
+    data class DocumentHighlightRequest(
+        val selectionStart: CharPosition,
+    )
 
-  override suspend fun doHandleAsync(context: EventContext) =
-      withContext(Dispatchers.IO) {
+    override suspend fun doHandleAsync(context: EventContext) = withContext(Dispatchers.IO) {
         val editor = context.get<LspEditor>("lsp-editor")
         val request = context.getByClass<DocumentHighlightRequest>() ?: return@withContext
 
         val requestManager = editor.requestManager
 
-        val params =
-            DocumentHighlightParams(
-                editor.uri.createTextDocumentIdentifier(),
-                request.selectionStart.asLspPosition(),
-            )
+        val params = DocumentHighlightParams(
+            editor.uri.createTextDocumentIdentifier(),
+            request.selectionStart.asLspPosition()
+        )
 
         val future = requestManager.documentHighlight(params) ?: return@withContext
 
-        this@DocumentHighlightEvent.future = future.thenAccept {}
+        this@DocumentHighlightEvent.future = future.thenAccept { }
 
         val documentHighlights: List<DocumentHighlight>?
 
-        withTimeout(Timeout[Timeouts.DOC_HIGHLIGHT].toLong()) {
-          documentHighlights = future.await()
+        withTimeout(Timeout[Timeouts.DOC_HIGHLIGHT, editor].toLong()) {
+            documentHighlights = future.await()
         }
 
         editor.showDocumentHighlight(documentHighlights)
-      }
+    }
 
-  override fun dispose() {
-    future?.cancel(true)
-    future = null
-  }
+    override fun dispose() {
+        future?.cancel(true)
+        future = null
+    }
 }
 
 val EventType.documentHighlight: String
-  get() = "textDocument/documentHighlight"
+    get() = "textDocument/documentHighlight"

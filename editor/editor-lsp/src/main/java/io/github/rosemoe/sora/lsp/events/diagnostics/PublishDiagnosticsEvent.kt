@@ -1,24 +1,27 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2023 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2023  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lsp.events.diagnostics
 
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer
@@ -31,31 +34,29 @@ import io.github.rosemoe.sora.widget.component.EditorDiagnosticTooltipWindow
 import io.github.rosemoe.sora.widget.getComponent
 import org.eclipse.lsp4j.Diagnostic
 
+
 class PublishDiagnosticsEvent : EventListener {
-  override val eventName: String = EventType.publishDiagnostics
+    override val eventName: String = EventType.publishDiagnostics
 
-  override fun handle(context: EventContext) {
-    val lspEditor = context.get<LspEditor>("lsp-editor")
-    val originEditor = lspEditor.editor ?: return
-    val data = context.getOrNull<List<Diagnostic>>("data") ?: return
+    override fun handle(context: EventContext) {
+        val lspEditor = context.get<LspEditor>("lsp-editor")
+        val originEditor = lspEditor.editor ?: return
+        val data = context.getOrNull<List<Diagnostic>>("data") ?: return
 
-    val diagnosticsContainer = originEditor.diagnostics ?: DiagnosticsContainer()
+        // transform lsp diagnostics to editor diagnostics
+        val diagnostics = data.transformToEditorDiagnostics(originEditor)
 
-    diagnosticsContainer.reset()
-
-    diagnosticsContainer.addDiagnostics(data.transformToEditorDiagnostics(originEditor))
-
-    // run on ui thread
-    originEditor.postOnAnimation {
-      if (data.isEmpty()) {
-        originEditor.diagnostics = null
-        originEditor.getComponent<EditorDiagnosticTooltipWindow>().dismiss()
-        return@postOnAnimation
-      }
-      originEditor.diagnostics = diagnosticsContainer
+        // run on ui thread
+        originEditor.post {
+            if (data.isEmpty()) {
+                lspEditor.uiDelegate.setDiagnostics(null)
+                originEditor.getComponent<EditorDiagnosticTooltipWindow>().dismiss()
+                return@post
+            }
+            lspEditor.uiDelegate.setDiagnostics(diagnostics)
+        }
     }
-  }
 }
 
 val EventType.publishDiagnostics: String
-  get() = "editor/publishDiagnostics"
+    get() = "editor/publishDiagnostics"

@@ -35,6 +35,7 @@ import java.io.Serializable;
 
 import io.github.rosemoe.sora.annotations.Experimental;
 import io.github.rosemoe.sora.annotations.InvalidateRequired;
+import io.github.rosemoe.sora.widget.minimap.MinimapConfig;
 
 /**
  * Direct-access properties.
@@ -151,6 +152,17 @@ public class DirectAccessProps implements Serializable {
      */
     @IntRange(from = 0)
     public int maxIPCTextLength = 32768;
+
+    /**
+     * Max text length for accessibility node info. The text is packed into an
+     * {@link android.os.Parcel} and transferred to accessibility services.
+     * <p>
+     * By default, we use the PARCEL_SAFE_TEXT_LENGTH value (100K) in {@link android.text.TextUtils}.
+     * <p>
+     * If set to {@code 0}, the editor will not send any text related information to accessibility services.
+     */
+    @IntRange(from = 0)
+    public int maxAccessibilityTextLength = 100000;
 
     /**
      * Whether over scroll is permitted.
@@ -416,11 +428,6 @@ public class DirectAccessProps implements Serializable {
     public boolean stickyScrollPreferInnerScope = false;
 
     /**
-     * Limit for sticky scroll dataset size
-     */
-    public int stickyScrollIterationLimit = 1000;
-
-    /**
      * Hide partially or all of the stuck lines when text is selected
      */
     @InvalidateRequired
@@ -556,5 +563,20 @@ public class DirectAccessProps implements Serializable {
      * Select the first completion item on enter for software keyboard
      */
     public boolean selectCompletionItemOnEnterForSoftKbd = true;
+
+    /**
+     * Show minimap for content
+     */
+    @Experimental
+    @InvalidateRequired
+    public boolean showMinimap = false;
+
+    /**
+     * Minimap config
+     */
+    @Experimental
+    @InvalidateRequired
+    @NonNull
+    public MinimapConfig minimapConfig = MinimapConfig.Companion.getDefaultConfig();
 
 }

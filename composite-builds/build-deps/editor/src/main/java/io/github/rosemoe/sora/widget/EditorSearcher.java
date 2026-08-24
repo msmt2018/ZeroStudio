@@ -77,6 +77,7 @@ public class EditorSearcher {
      */
     protected LongArrayList lastResults;
     private boolean cyclicJumping = true;
+    private boolean ensureOccurrenceVisible = false;
 
     EditorSearcher(@NonNull CodeEditor editor) {
         this.editor = editor;
@@ -102,6 +103,23 @@ public class EditorSearcher {
      */
     public boolean isCyclicJumping() {
         return cyclicJumping;
+    }
+
+    /**
+     * Set whether the editor should automatically scroll to the nearest occurrence
+     * when executing a search.
+     *
+     * @see #isEnsureOccurrenceVisible()
+     */
+    public void setEnsureOccurrenceVisible(boolean ensureOccurrenceVisible) {
+        this.ensureOccurrenceVisible = ensureOccurrenceVisible;
+    }
+
+    /**
+     * @see #setEnsureOccurrenceVisible(boolean)
+     */
+    public boolean isEnsureOccurrenceVisible() {
+        return ensureOccurrenceVisible;
     }
 
     /**
@@ -303,19 +321,6 @@ public class EditorSearcher {
      */
     public boolean isMatchedPositionSelected() {
         return getCurrentMatchedPositionIndex() > -1;
-    }
-
-    /**
-     * Replace currently selected region if the region is exactly a match of searching pattern.
-     * Otherwise, attempt to jump to next matched position.
-     *
-     * @param replacement The text for replacement
-     * @throws IllegalStateException if no search is in progress
-     * @deprecated Confusing method name. Use {@link #replaceCurrentMatch(String)} instead.
-     */
-    @Deprecated(since = "0.24.0", forRemoval = true)
-    public void replaceThis(@NonNull String replacement) {
-        replaceCurrentMatch(replacement);
     }
 
     /**
@@ -611,6 +616,19 @@ public class EditorSearcher {
                         editor.invalidate();
                         editor.dispatchEvent(new PublishSearchResultEvent(editor));
                         currentThread = null;
+                        if (ensureOccurrenceVisible && results.size() > 0) {
+                            var right = editor.getCursor().getRight();
+                            var index = results.lowerBoundByFirst(right);
+
+                            if (index >= results.size()) {
+                                index = results.size() - 1;
+                            }
+
+                            var match = results.get(index);
+                            var start = IntPair.getFirst(match);
+                            var startPos = editor.getText().getIndexer().getCharPosition(start);
+                            editor.ensurePositionVisible(startPos.line, startPos.column);
+                        }
                     }
                 });
             }

@@ -9,77 +9,74 @@ import org.eclipse.lsp4j.ServerCapabilities
 
 internal class LspEditorDelegate(private val editor: LspEditor) {
 
-  private data class SessionInfo(
-      val definition: LanguageServerDefinition,
-      val wrapper: LanguageServerWrapper,
-  )
+    private data class SessionInfo(
+        val definition: LanguageServerDefinition,
+        val wrapper: LanguageServerWrapper
+    )
 
-  private val sessionInfos = mutableListOf<SessionInfo>()
+    private val sessionInfos = mutableListOf<SessionInfo>()
 
-  val aggregatedRequestManager = AggregatedRequestManager(emptySet())
+    val aggregatedRequestManager = AggregatedRequestManager(emptySet())
 
-  private fun refreshSessions() {
-    val definitions =
-        editor.project.getServerDefinitions(editor.fileExt).ifEmpty {
-          editor.project.getServerDefinition(editor.fileExt)?.let { listOf(it) } ?: emptyList()
+    private fun refreshSessions() {
+        val definitions = editor.project.getServerDefinitions(editor.fileExt).ifEmpty {
+            editor.project.getServerDefinition(editor.fileExt)?.let { listOf(it) } ?: emptyList()
         }
 
-    sessionInfos.removeAll { session ->
-      definitions.none { it.name == session.definition.name && it.ext == session.definition.ext }
+        sessionInfos.removeAll { session ->
+            definitions.none { it.name == session.definition.name && it.ext == session.definition.ext }
+        }
+
+        definitions.forEach { definition ->
+            val exists = sessionInfos.any {
+                it.definition.name == definition.name && it.definition.ext == definition.ext
+            }
+            if (!exists) {
+                val wrapper =
+                    editor.project.getOrCreateLanguageServerWrapper(definition.ext, definition.name)
+                sessionInfos.add(SessionInfo(definition, wrapper))
+            }
+        }
     }
 
-    definitions.forEach { definition ->
-      val exists = sessionInfos.any {
-        it.definition.name == definition.name && it.definition.ext == definition.ext
-      }
-      if (!exists) {
-        val wrapper =
-            editor.project.getOrCreateLanguageServerWrapper(definition.ext, definition.name)
-        sessionInfos.add(SessionInfo(definition, wrapper))
-      }
-    }
-  }
-
-  fun onWrapperDisconnected(wrapper: LanguageServerWrapper) {
-    sessionInfos.removeAll { it.wrapper === wrapper }
-    val remaining =
-        sessionInfos
+    fun onWrapperDisconnected(wrapper: LanguageServerWrapper) {
+        sessionInfos.removeAll { it.wrapper === wrapper }
+        val remaining = sessionInfos
             .filter { it.wrapper.status == ServerStatus.INITIALIZED }
             .map { it.wrapper }
             .toSet()
-    aggregatedRequestManager.updateSessions(remaining)
-  }
-
-  @WorkerThread
-  fun connectAll(): ServerCapabilities? {
-    refreshSessions()
-    var lastCapabilities: ServerCapabilities? = null
-
-    for (info in sessionInfos) {
-      info.wrapper.start()
-      val capabilities = info.wrapper.getServerCapabilities()
-
-      info.wrapper.connect(editor)
-      lastCapabilities = capabilities ?: lastCapabilities
+        aggregatedRequestManager.updateSessions(remaining)
     }
 
-    val initializedWrappers =
-        sessionInfos
+    @WorkerThread
+    fun connectAll(): ServerCapabilities? {
+        refreshSessions()
+        var lastCapabilities: ServerCapabilities? = null
+
+        for (info in sessionInfos) {
+            info.wrapper.start()
+            val capabilities = info.wrapper.getServerCapabilities()
+
+            info.wrapper.connect(editor)
+            lastCapabilities = capabilities ?: lastCapabilities
+        }
+
+        val initializedWrappers = sessionInfos
             .filter { it.wrapper.status == ServerStatus.INITIALIZED }
             .map { it.wrapper }
             .toSet()
 
-    aggregatedRequestManager.updateSessions(initializedWrappers)
+        aggregatedRequestManager.updateSessions(initializedWrappers)
 
-    return aggregatedRequestManager.capabilities ?: lastCapabilities
-  }
+        return aggregatedRequestManager.capabilities ?: lastCapabilities
+    }
 
-  fun disconnectAll() {
-    sessionInfos.forEach { it.wrapper.disconnect(editor) }
-    sessionInfos.clear()
-  }
+    fun disconnectAll() {
+        sessionInfos.forEach { it.wrapper.disconnect(editor) }
+        sessionInfos.clear()
+    }
 
-  fun getPrimaryWrapper(): LanguageServerWrapper? {
-    return sessionInfos.firstOrNull()?.wrapper
-  }
+    fun getPrimaryWrapper(): LanguageServerWrapper? {
+        return sessionInfos.firstOrNull()?.wrapper
+    }
 }

@@ -1,24 +1,27 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2023 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2023  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lsp.editor
 
 import io.github.rosemoe.sora.lsp.client.languageserver.ShutdownReason
@@ -46,177 +49,165 @@ import io.github.rosemoe.sora.lsp.events.workspace.WorkSpaceApplyEditEvent
 import io.github.rosemoe.sora.lsp.events.workspace.WorkSpaceExecuteCommand
 import io.github.rosemoe.sora.lsp.utils.FileUri
 import io.github.rosemoe.sora.lsp.utils.toFileUri
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ForkJoinPool
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancelChildren
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ForkJoinPool
 
 class LspProject(
     projectPath: String,
 ) {
 
-  val projectUri = FileUri(projectPath)
+    val projectUri = FileUri(projectPath)
 
-  val eventEmitter = EventEmitter()
+    val eventEmitter = EventEmitter()
 
-  private data class ServerKey(val ext: String, val name: String)
+    private data class ServerKey(val ext: String, val name: String)
 
-  private val wrappers = ConcurrentHashMap<ServerKey, LanguageServerWrapper>()
+    private val wrappers = ConcurrentHashMap<ServerKey, LanguageServerWrapper>()
 
-  private val definitions = ConcurrentHashMap<ServerKey, LanguageServerDefinition>()
+    private val definitions = ConcurrentHashMap<ServerKey, LanguageServerDefinition>()
 
-  private val editors = ConcurrentHashMap<FileUri, LspEditor>()
+    private val editors = ConcurrentHashMap<FileUri, LspEditor>()
 
-  val diagnosticsContainer = DiagnosticsContainer()
+    val diagnosticsContainer = DiagnosticsContainer()
 
-  private var isInit = false
+    private var isInit = false
 
-  val coroutineScope =
-      CoroutineScope(ForkJoinPool.commonPool().asCoroutineDispatcher() + SupervisorJob())
+    val coroutineScope =
+        CoroutineScope(ForkJoinPool.commonPool().asCoroutineDispatcher() + SupervisorJob())
 
-  fun addServerDefinition(definition: LanguageServerDefinition) {
-    for (ext in definition.exts) {
-      val key = ServerKey(ext, definition.name)
-      if (definitions.containsKey(key)) {
-        throw IllegalArgumentException(
-            "Server definition already exists for ext $ext with name ${definition.name}"
-        )
-      }
-      definitions[key] = definition
+    fun addServerDefinition(definition: LanguageServerDefinition) {
+        for (ext in definition.exts) {
+            val key = ServerKey(ext, definition.name)
+            if (definitions.containsKey(key)) {
+                throw IllegalArgumentException("Server definition already exists for ext $ext with name ${definition.name}")
+            }
+            definitions[key] = definition
+        }
     }
-  }
 
-  fun addServerDefinitions(list: List<LanguageServerDefinition>) {
-    list.forEach { addServerDefinition(it) }
-  }
-
-  fun removeServerDefinition(ext: String, name: String? = null) {
-    if (name == null) {
-      definitions.keys.removeIf { it.ext == ext }
-    } else {
-      definitions.remove(ServerKey(ext, name))
+    fun addServerDefinitions(list: List<LanguageServerDefinition>) {
+        list.forEach { addServerDefinition(it) }
     }
-  }
 
-  fun getServerDefinition(ext: String, name: String? = null): LanguageServerDefinition? {
-    return definitions[ServerKey(ext, name ?: ext)]
-  }
-
-  fun getServerDefinitions(ext: String): Collection<LanguageServerDefinition> {
-    return definitions.entries.filter { it.key.ext == ext }.map { it.value }.distinctBy { it.name }
-  }
-
-  fun createEditor(path: String): LspEditor {
-    val uri = FileUri(path)
-    val editor = LspEditor(this, uri)
-    editors[uri] = editor
-    return editor
-  }
-
-  fun removeEditor(path: String) {
-    editors.remove(path.toFileUri())
-  }
-
-  fun getEditors(): List<LspEditor> {
-    return editors.values.toList()
-  }
-
-  fun getEditor(path: String): LspEditor? {
-    return editors[path.toFileUri()]
-  }
-
-  fun getEditor(uri: FileUri): LspEditor? {
-    return editors[uri]
-  }
-
-  fun getOrCreateEditor(path: String): LspEditor {
-    return getEditor(path) ?: createEditor(path)
-  }
-
-  fun closeAllEditors() {
-    val editorsSnapshot = getEditors()
-    editorsSnapshot.forEach { it.dispose() }
-    editors.clear()
-  }
-
-  fun getLanguageServerWrapper(ext: String, name: String): LanguageServerWrapper? {
-    return wrappers[ServerKey(ext, name)]
-  }
-
-  internal fun getOrCreateLanguageServerWrapper(
-      ext: String,
-      name: String = ext,
-  ): LanguageServerWrapper {
-    val key = ServerKey(ext, name)
-    return wrappers.computeIfAbsent(key) {
-      val definition =
-          getServerDefinition(ext, name)
-              ?: throw IllegalArgumentException(
-                  "No server definition for extension $ext with name $name"
-              )
-      LanguageServerWrapper(definition, this)
+    fun removeServerDefinition(ext: String, name: String? = null) {
+        if (name == null) {
+            definitions.keys.removeIf { it.ext == ext }
+        } else {
+            definitions.remove(ServerKey(ext, name))
+        }
     }
-  }
 
-  internal fun createLanguageServerWrapper(ext: String, name: String): LanguageServerWrapper {
-    val definition =
-        getServerDefinition(ext, name)
-            ?: throw IllegalArgumentException(
-                "No server definition for extension $ext with name $name"
-            )
-    val wrapper = LanguageServerWrapper(definition, this)
-    wrappers[ServerKey(ext, name)] = wrapper
-    return wrapper
-  }
-
-  fun getLanguageServerWrappers(ext: String): List<LanguageServerWrapper> {
-    return wrappers.entries.filter { it.key.ext == ext }.map { it.value }
-  }
-
-  fun dispose() {
-    closeAllEditors()
-    wrappers.values.forEach { it.stop(true, ShutdownReason.UNUSED) }
-    wrappers.clear()
-    definitions.clear()
-    coroutineScope.coroutineContext.cancelChildren()
-  }
-
-  fun init() {
-    if (!isInit) {
-      initEventEmitter()
+    fun getServerDefinition(ext: String, name: String? = null): LanguageServerDefinition? {
+        return definitions[ServerKey(ext, name ?: ext)]
     }
-    isInit = true
-  }
 
-  private fun initEventEmitter() {
-    val events =
-        listOf(
-            ::SignatureHelpEvent,
-            ::DocumentChangeEvent,
-            ::DocumentCloseEvent,
-            ::DocumentSaveEvent,
-            ::ApplyEditsEvent,
-            ::CompletionEvent,
-            ::PublishDiagnosticsEvent,
-            ::FullFormattingEvent,
-            ::RangeFormattingEvent,
-            ::QueryDocumentDiagnosticsEvent,
-            ::DocumentOpenEvent,
-            ::HoverEvent,
-            ::CodeActionEvent,
-            ::WorkSpaceApplyEditEvent,
-            ::WorkSpaceExecuteCommand,
-            ::InlayHintEvent,
-            ::DocumentHighlightEvent,
-            ::DocumentColorEvent,
+    fun getServerDefinitions(ext: String): Collection<LanguageServerDefinition> {
+        return definitions.entries
+            .filter { it.key.ext == ext }
+            .map { it.value }
+            .distinctBy { it.name }
+    }
+
+    fun createEditor(path: String): LspEditor {
+        val uri = FileUri(path)
+        val editor = LspEditor(this, uri)
+        editors[uri] = editor
+        return editor
+    }
+
+    fun removeEditor(path: String) {
+        editors.remove(path.toFileUri())
+    }
+
+    fun getEditors(): List<LspEditor> {
+        return editors.values.toList()
+    }
+
+    fun getEditor(path: String): LspEditor? {
+        return editors[path.toFileUri()]
+    }
+
+    fun getEditor(uri: FileUri): LspEditor? {
+        return editors[uri]
+    }
+
+    fun getOrCreateEditor(path: String): LspEditor {
+        return getEditor(path) ?: createEditor(path)
+    }
+
+    fun closeAllEditors() {
+        val editorsSnapshot = getEditors()
+        editorsSnapshot.forEach {
+            it.dispose()
+        }
+        editors.clear()
+    }
+
+    fun getLanguageServerWrapper(ext: String, name: String): LanguageServerWrapper? {
+        return wrappers[ServerKey(ext, name)]
+    }
+
+    internal fun getOrCreateLanguageServerWrapper(ext: String, name: String = ext): LanguageServerWrapper {
+        val key = ServerKey(ext, name)
+        return wrappers.computeIfAbsent(key) {
+            val definition = getServerDefinition(ext, name)
+                ?: throw IllegalArgumentException("No server definition for extension $ext with name $name")
+            LanguageServerWrapper(definition, this)
+        }
+    }
+
+    internal fun createLanguageServerWrapper(ext: String, name: String): LanguageServerWrapper {
+        val definition = getServerDefinition(ext, name)
+            ?: throw IllegalArgumentException("No server definition for extension $ext with name $name")
+        val wrapper = LanguageServerWrapper(definition, this)
+        wrappers[ServerKey(ext, name)] = wrapper
+        return wrapper
+    }
+
+    fun getLanguageServerWrappers(ext: String): List<LanguageServerWrapper> {
+        return wrappers.entries.filter { it.key.ext == ext }.map { it.value }
+    }
+
+    fun dispose() {
+        closeAllEditors()
+        wrappers.values.forEach {
+            it.stop(true, ShutdownReason.UNUSED)
+        }
+        wrappers.clear()
+        definitions.clear()
+        coroutineScope.coroutineContext.cancelChildren()
+    }
+
+    fun init() {
+        if (!isInit) {
+            initEventEmitter()
+        }
+        isInit = true
+    }
+
+    private fun initEventEmitter() {
+        val events = listOf(
+            ::SignatureHelpEvent, ::DocumentChangeEvent,
+            ::DocumentCloseEvent, ::DocumentSaveEvent,
+            ::ApplyEditsEvent, ::CompletionEvent,
+            ::PublishDiagnosticsEvent, ::FullFormattingEvent,
+            ::RangeFormattingEvent, ::QueryDocumentDiagnosticsEvent,
+            ::DocumentOpenEvent, ::HoverEvent, ::CodeActionEvent,
+            ::WorkSpaceApplyEditEvent, ::WorkSpaceExecuteCommand,
+            ::InlayHintEvent, ::DocumentHighlightEvent,
+            ::DocumentColorEvent
         )
 
-    events.forEach { eventEmitter.addListener(it.invoke()) }
-  }
+        events.forEach {
+            eventEmitter.addListener(it.invoke())
+        }
+    }
 
-  internal fun removeEditor(editor: LspEditor) {
-    editors.remove(editor.uri)
-  }
+    internal fun removeEditor(editor: LspEditor) {
+        editors.remove(editor.uri)
+    }
 }

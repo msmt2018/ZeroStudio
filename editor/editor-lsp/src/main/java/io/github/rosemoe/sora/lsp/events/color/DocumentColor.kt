@@ -1,24 +1,27 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2025 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2025  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lsp.events.color
 
 import io.github.rosemoe.sora.annotations.Experimental
@@ -30,8 +33,6 @@ import io.github.rosemoe.sora.lsp.requests.Timeout
 import io.github.rosemoe.sora.lsp.requests.Timeouts
 import io.github.rosemoe.sora.lsp.utils.FileUri
 import io.github.rosemoe.sora.lsp.utils.createTextDocumentIdentifier
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -44,80 +45,100 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.eclipse.lsp4j.ColorInformation
 import org.eclipse.lsp4j.DocumentColorParams
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 
 @OptIn(FlowPreview::class)
 @Experimental
 class DocumentColorEvent : AsyncEventListener() {
-  override val eventName: String = EventType.documentColor
+    override val eventName: String = EventType.documentColor
 
-  var future: CompletableFuture<Void>? = null
+    var future: CompletableFuture<Void>? = null
 
-  override val isAsync = true
+    override val isAsync = true
 
-  private val requestFlows = ConcurrentHashMap<FileUri, MutableSharedFlow<DocumentColorRequest>>()
+    private val requestFlows = ConcurrentHashMap<FileUri, MutableSharedFlow<DocumentColorRequest>>()
 
-  data class DocumentColorRequest(val editor: LspEditor, val uri: FileUri)
+    data class DocumentColorRequest(
+        val editor: LspEditor,
+        val uri: FileUri
+    )
 
-  private fun getOrCreateFlow(
-      coroutineScope: CoroutineScope,
-      uri: FileUri,
-  ): MutableSharedFlow<DocumentColorRequest> {
-    return requestFlows.getOrPut(uri) {
-      val flow =
-          MutableSharedFlow<DocumentColorRequest>(
-              replay = 0,
-              extraBufferCapacity = 1,
-              onBufferOverflow = BufferOverflow.DROP_OLDEST,
-          )
+    private fun getOrCreateFlow(
+        coroutineScope: CoroutineScope,
+        context: EventContext,
+        uri: FileUri
+    ): MutableSharedFlow<DocumentColorRequest> {
+        return requestFlows.getOrPut(uri) {
+            val flow = MutableSharedFlow<DocumentColorRequest>(
+                replay = 0,
+                extraBufferCapacity = 1,
+                onBufferOverflow = BufferOverflow.DROP_OLDEST
+            )
 
-      coroutineScope.launch(Dispatchers.Main) {
-        flow.debounce(50).collect { request -> processInlayHintRequest(request) }
-      }
+            coroutineScope.launch(Dispatchers.Main) {
+                flow
+                    .debounce(50)
+                    .collect { request ->
+                        processDocumentColorRequest(request, context)
+                    }
+            }
 
-      flow
+            flow
+        }
     }
-  }
 
-  override suspend fun doHandleAsync(context: EventContext) {
-    val editor = context.get<LspEditor>("lsp-editor")
-    val uri = editor.uri
+    override suspend fun doHandleAsync(context: EventContext) {
+        val editor = context.get<LspEditor>("lsp-editor")
+        val uri = editor.uri
 
-    val flow = getOrCreateFlow(editor.coroutineScope, uri)
-    flow.tryEmit(DocumentColorRequest(editor, uri))
-  }
+        val flow = getOrCreateFlow(editor.coroutineScope, context, uri)
+        flow.tryEmit(DocumentColorRequest(editor, uri))
+    }
 
-  private suspend fun processInlayHintRequest(request: DocumentColorRequest) =
-      withContext(Dispatchers.IO) {
-        val editor = request.editor
+    private suspend fun processDocumentColorRequest(
+        request: DocumentColorRequest,
+        context: EventContext
+    ) =
+        withContext(Dispatchers.IO) {
+            val editor = request.editor
 
-        val requestManager = editor.requestManager
+            val requestManager = editor.requestManager
 
-        val future =
-            requestManager.documentColor(
-                DocumentColorParams(request.uri.createTextDocumentIdentifier())
-            ) ?: return@withContext
+            val future =
+                requestManager.documentColor(DocumentColorParams(request.uri.createTextDocumentIdentifier()))
+                    ?: return@withContext
 
-        this@DocumentColorEvent.future = future.thenAccept {}
+            this@DocumentColorEvent.future = future.thenAccept { }
 
-        val documentColors: List<ColorInformation>?
+            val documentColors: List<ColorInformation>?
 
-        withTimeout(Timeout[Timeouts.DOC_HIGHLIGHT].toLong()) { documentColors = future.await() }
+            try {
+                withTimeout(Timeout[Timeouts.DOC_HIGHLIGHT, editor].toLong()) {
+                    documentColors =
+                        future.await()
+                }
+            } catch (e: Exception) {
+                onException(context, e)
+                return@withContext
+            }
 
-        if (documentColors.isNullOrEmpty()) {
-          editor.showDocumentColors(null)
-          return@withContext
+            if (documentColors.isNullOrEmpty()) {
+                editor.showDocumentColors(null)
+                return@withContext
+            }
+
+            editor.showDocumentColors(documentColors)
         }
 
-        editor.showDocumentColors(documentColors)
-      }
+    override fun dispose() {
+        future?.cancel(true)
+        future = null
+        requestFlows.clear()
+    }
 
-  override fun dispose() {
-    future?.cancel(true)
-    future = null
-    requestFlows.clear()
-  }
 }
 
 @get:Experimental
 val EventType.documentColor: String
-  get() = "textDocument/documentColor"
+    get() = "textDocument/documentColor"

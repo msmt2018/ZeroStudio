@@ -29,60 +29,59 @@ import org.eclipse.lsp4j.ServerCapabilities
 /**
  * Creates new instance with the given language id which is different from the file extension.
  *
- * @param ext The extension.
- * @param languageIds The language server ids mapping to extension(s).
+ * @param ext             The extension.
+ * @param languageIds     The language server ids mapping to extension(s).
  * @param connectProvider The connect provider.
  */
-open class CustomLanguageServerDefinition
-@JvmOverloads
-constructor(
+
+open class CustomLanguageServerDefinition @JvmOverloads constructor(
     ext: String,
     serverConnectProvider: ServerConnectProvider,
     override val name: String = ext,
     private val expectedCapabilitiesOverride: ServerCapabilities? = null,
-    private val extensionsOverride: List<String>? = null,
+    private val extensionsOverride: List<String>? = null
 ) : LanguageServerDefinition() {
 
-  protected var serverConnectProvider: ServerConnectProvider
+    protected var serverConnectProvider: ServerConnectProvider
 
-  init {
-    this.ext = ext
-    this.serverConnectProvider = serverConnectProvider
-  }
-
-  override val exts: List<String>
-    get() = extensionsOverride ?: super.exts
-
-  override fun expectedCapabilities(): ServerCapabilities? {
-    return expectedCapabilitiesOverride
-  }
-
-  override fun toString(): String {
-    return "CustomLanguageServerDefinition(name=$name, ext=$ext)"
-  }
-
-  override fun createConnectionProvider(workingDir: String): StreamConnectionProvider {
-    return serverConnectProvider.createConnectionProvider(workingDir)
-  }
-
-  override fun equals(other: Any?): Boolean {
-    if (other is CustomLanguageServerDefinition) {
-      return other.serverConnectProvider == serverConnectProvider
+    init {
+        this.ext = ext
+        this.serverConnectProvider = serverConnectProvider
     }
-    return false
-  }
 
-  override fun hashCode(): Int {
-    return ext.hashCode() + 3 * serverConnectProvider.hashCode()
-  }
+    override val exts: List<String>
+        get() = extensionsOverride ?: super.exts
 
-  fun interface ServerConnectProvider {
-    /**
-     * Creates a StreamConnectionProvider given the working directory
-     *
-     * @param workingDir The root directory
-     * @return The stream connection provider
-     */
-    fun createConnectionProvider(workingDir: String): StreamConnectionProvider
-  }
+    override fun expectedCapabilities(): ServerCapabilities? {
+        return expectedCapabilitiesOverride
+    }
+
+    override fun toString(): String {
+        return "CustomLanguageServerDefinition(name=$name, ext=$ext)"
+    }
+
+    override fun createConnectionProvider(workingDir: String): StreamConnectionProvider {
+        return serverConnectProvider.createConnectionProvider(workingDir)
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (other is CustomLanguageServerDefinition) {
+            return other.serverConnectProvider == serverConnectProvider
+        }
+        return false
+    }
+
+    override fun hashCode(): Int {
+        return ext.hashCode() + 3 * serverConnectProvider.hashCode()
+    }
+
+    fun interface ServerConnectProvider {
+        /**
+         * Creates a StreamConnectionProvider given the working directory
+         *
+         * @param workingDir The root directory
+         * @return The stream connection provider
+         */
+        fun createConnectionProvider(workingDir: String): StreamConnectionProvider
+    }
 }

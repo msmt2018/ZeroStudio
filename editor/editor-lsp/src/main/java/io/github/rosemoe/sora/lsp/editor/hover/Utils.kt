@@ -1,57 +1,60 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2025 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2025  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lsp.editor.hover
 
-import kotlin.collections.any
-import kotlin.collections.orEmpty
 import org.eclipse.lsp4j.Hover
 import org.eclipse.lsp4j.MarkedString
 import org.eclipse.lsp4j.MarkupContent
 import org.eclipse.lsp4j.jsonrpc.messages.Either
+import kotlin.collections.any
+import kotlin.collections.orEmpty
 
 fun Hover.hasContent(): Boolean {
-  val hoverContents = contents ?: return false
-  return if (hoverContents.isLeft) {
-    hoverContents.left.orEmpty().any { either -> !formatMarkedStringEither(either).isNullOrBlank() }
-  } else {
-    !formatMarkupContent(hoverContents.right).isNullOrBlank()
-  }
+    val hoverContents = contents ?: return false
+    return if (hoverContents.isLeft) {
+        hoverContents.left.orEmpty().any { either -> !formatMarkedStringEither(either).isNullOrBlank() }
+    } else {
+        !formatMarkupContent(hoverContents.right).isNullOrBlank()
+    }
 }
 
 fun formatMarkedStringEither(either: Either<String, MarkedString>?): String? {
-  either ?: return null
-  return if (either.isLeft) {
-    either.left
-  } else {
-    formatMarkedString(either.right)
-  }
+    either ?: return null
+    return if (either.isLeft) {
+        either.left
+    } else {
+        formatMarkedString(either.right)
+    }
 }
 
 fun formatMarkedString(markedString: MarkedString?): String? {
-  val value = markedString?.value ?: return null
-  val language = markedString.language
-  return if (language.isNullOrEmpty()) value else "```$language\n$value\n```"
+    val value = markedString?.value ?: return null
+    val language = markedString.language
+    return if (language.isNullOrEmpty()) value else  "```$language\n$value\n```"
 }
 
 fun formatMarkupContent(markupContent: MarkupContent?): String? {
-  return markupContent?.value
+    return markupContent?.value
 }

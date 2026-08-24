@@ -8,8 +8,13 @@ import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.event.SubscriptionReceipt
 import io.github.rosemoe.sora.graphics.inlayHint.ColorInlayHintRenderer
 import io.github.rosemoe.sora.graphics.inlayHint.TextInlayHintRenderer
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticProvider
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer
 import io.github.rosemoe.sora.lang.styling.HighlightTextContainer
+import io.github.rosemoe.sora.lang.styling.HighlightTextProvider
 import io.github.rosemoe.sora.lang.styling.color.EditorColor
+import io.github.rosemoe.sora.lang.styling.inlayHint.InlayHintProvider
 import io.github.rosemoe.sora.lang.styling.inlayHint.InlayHintsContainer
 import io.github.rosemoe.sora.lsp.editor.codeaction.CodeActionWindow
 import io.github.rosemoe.sora.lsp.editor.diagnostics.LspDiagnosticTooltipLayout
@@ -27,10 +32,9 @@ import io.github.rosemoe.sora.widget.component.EditorDiagnosticTooltipWindow
 import io.github.rosemoe.sora.widget.getComponent
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import io.github.rosemoe.sora.widget.subscribeEvent
-import java.lang.ref.WeakReference
 import kotlinx.coroutines.launch
-import org.eclipse.lsp4j.CodeAction
 import org.eclipse.lsp4j.ColorInformation
+import org.eclipse.lsp4j.CodeAction
 import org.eclipse.lsp4j.Command
 import org.eclipse.lsp4j.DocumentHighlight
 import org.eclipse.lsp4j.DocumentHighlightKind
@@ -39,299 +43,330 @@ import org.eclipse.lsp4j.InlayHint
 import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.SignatureHelp
 import org.eclipse.lsp4j.jsonrpc.messages.Either
+import java.lang.ref.WeakReference
 
-internal class LspEditorUIDelegate(private val editor: LspEditor) {
+internal class LspEditorUIDelegate(private val editor: LspEditor) : InlayHintProvider, DiagnosticProvider, HighlightTextProvider {
 
-  private var currentEditorRef: WeakReference<CodeEditor?> = WeakReference(null as CodeEditor?)
-  private var hoverWindowRef: WeakReference<HoverWindow?> = WeakReference(null as HoverWindow?)
-  private var signatureHelpWindowRef: WeakReference<SignatureHelpWindow?> =
-      WeakReference(null as SignatureHelpWindow?)
-  private var subscriptionReceipts: MutableList<SubscriptionReceipt<out Event>> = mutableListOf()
-  private var codeActionWindowRef: WeakReference<CodeActionWindow?> =
-      WeakReference(null as CodeActionWindow?)
+    private var currentEditorRef: WeakReference<CodeEditor?> = WeakReference(null as CodeEditor?)
+    private var hoverWindowRef: WeakReference<HoverWindow?> = WeakReference(null as HoverWindow?)
+    private var signatureHelpWindowRef: WeakReference<SignatureHelpWindow?> = WeakReference(null as SignatureHelpWindow?)
+    private var subscriptionReceipts: MutableList<SubscriptionReceipt<out Event>> = mutableListOf()
+    private var codeActionWindowRef: WeakReference<CodeActionWindow?> = WeakReference(null as CodeActionWindow?)
 
-  private var cachedInlayHints: List<InlayHint>? = null
-  private var cachedDocumentColors: List<ColorInformation>? = null
+    private var cachedInlayHints: List<InlayHint>? = null
+    private var cachedHighlights: List<HighlightTextContainer.HighlightText>? = null
+    private var cachedDiagnostics: List<DiagnosticRegion>? = null
+    internal var cachedDocumentColors: List<ColorInformation>? = null
+        private set
 
-  var isEnableHover = true
-    set(value) {
-      if (field == value) {
-        return
-      }
-      field = value
-      if (value) {
-        currentEditorRef.get()?.let {
-          hoverWindowRef.clear()
-          hoverWindowRef = WeakReference(HoverWindow(it, editor.coroutineScope))
+    var isEnableHover = true
+        set(value) {
+            if (field == value) {
+                return
+            }
+            field = value
+            if (value) {
+                currentEditorRef.get()?.let {
+                    hoverWindowRef.clear()
+                    hoverWindowRef = WeakReference(HoverWindow(it, editor.coroutineScope))
+                }
+            } else {
+                hoverWindow?.setEnabled(false)
+                hoverWindowRef.clear()
+            }
         }
-      } else {
+
+    var isEnableSignatureHelp = true
+        set(value) {
+            if (field == value) {
+                return
+            }
+            field = value
+            if (value) {
+                currentEditorRef.get()?.let {
+                    signatureHelpWindowRef.clear()
+                    signatureHelpWindowRef = WeakReference(SignatureHelpWindow(it, editor.coroutineScope))
+                }
+            } else {
+                signatureHelpWindow?.setEnabled(false)
+                signatureHelpWindowRef.clear()
+            }
+        }
+
+    var isEnableInlayHint = false
+        set(value) {
+            if (field == value) {
+                return
+            }
+            field = value
+            currentEditorRef.get()?.let {
+                if (value) {
+                    it.registerInlayHintRenderers(
+                        TextInlayHintRenderer.DefaultInstance,
+                        ColorInlayHintRenderer.DefaultInstance
+                    )
+                    it.registerInlayHintProvider(this@LspEditorUIDelegate)
+                    it.registerDiagnosticProvider(this@LspEditorUIDelegate)
+                    it.registerHighlightTextProvider(this@LspEditorUIDelegate)
+                    editor.coroutineScope.launch {
+                        editor.requestInlayHint(CharPosition(0, 0))
+                        editor.requestDocumentColor()
+                    }
+                } else {
+                    it.unregisterInlayHintProvider(this@LspEditorUIDelegate)
+                    it.unregisterDiagnosticProvider(this@LspEditorUIDelegate)
+                    it.unregisterHighlightTextProvider(this@LspEditorUIDelegate)
+                    resetInlinePresentations()
+                }
+            }
+        }
+
+    val isShowSignatureHelp
+        get() = signatureHelpWindow?.isShowing ?: false
+
+    val isShowHover
+        get() = hoverWindow?.isShowing ?: false
+
+    val isShowCodeActions
+        get() = codeActionWindow?.isShowing ?: false
+
+    val hoverWindow
+        get() = hoverWindowRef.get()
+
+    val signatureHelpWindow
+        get() = signatureHelpWindowRef.get()
+
+    val codeActionWindow
+        get() = codeActionWindowRef.get()
+
+    fun attachEditor(codeEditor: CodeEditor) {
+        clearSubscriptions()
+
+        currentEditorRef.clear()
+        hoverWindowRef.clear()
+        signatureHelpWindowRef.clear()
+        codeActionWindowRef.clear()
+
+        currentEditorRef = WeakReference(codeEditor)
+
+        if (isEnableSignatureHelp) {
+            signatureHelpWindowRef = WeakReference(SignatureHelpWindow(codeEditor, editor.coroutineScope))
+        }
+
+        if (isEnableHover) {
+            hoverWindowRef = WeakReference(HoverWindow(codeEditor, editor.coroutineScope))
+        }
+
+        if (isEnableInlayHint) {
+            codeEditor.registerInlayHintRenderers(
+                TextInlayHintRenderer.DefaultInstance,
+                ColorInlayHintRenderer.DefaultInstance
+            )
+            codeEditor.registerInlayHintProvider(this)
+            codeEditor.registerDiagnosticProvider(this)
+            codeEditor.registerHighlightTextProvider(this)
+            editor.coroutineScope.launch {
+                editor.requestInlayHint(CharPosition(0, 0))
+                editor.requestDocumentColor()
+            }
+        }
+
+        codeActionWindowRef = WeakReference(CodeActionWindow(editor, codeEditor))
+
+        val diagnosticWindow = codeEditor.getComponent<EditorDiagnosticTooltipWindow>()
+        if (diagnosticWindow.layout is DefaultDiagnosticTooltipLayout) {
+            diagnosticWindow.layout = LspDiagnosticTooltipLayout()
+        }
+
+        subscriptionReceipts = mutableListOf(
+            codeEditor.subscribeEvent<ContentChangeEvent>(
+                LspEditorContentChangeEvent(editor)
+            ),
+            codeEditor.subscribeEvent<SelectionChangeEvent>(
+                LspEditorSelectionChangeEvent(editor)
+            ),
+            codeEditor.subscribeEvent<HoverEvent>(
+                LspEditorHoverEvent(editor)
+            ),
+            codeEditor.subscribeEvent<ScrollEvent>(
+                LspEditorScrollEvent(editor)
+            )
+        )
+    }
+
+    fun clearWrapperState() {
+        hoverWindow?.dismiss()
+        signatureHelpWindow?.dismiss()
+        codeActionWindow?.dismiss()
+        resetInlinePresentations()
+    }
+
+    fun detachEditor() {
+        clearSubscriptions()
+
+        currentEditorRef.get()?.let {
+            it.unregisterInlayHintProvider(this)
+            it.unregisterDiagnosticProvider(this)
+            it.unregisterHighlightTextProvider(this)
+        }
+
         hoverWindow?.setEnabled(false)
         hoverWindowRef.clear()
-      }
-    }
 
-  var isEnableSignatureHelp = true
-    set(value) {
-      if (field == value) {
-        return
-      }
-      field = value
-      if (value) {
-        currentEditorRef.get()?.let {
-          signatureHelpWindowRef.clear()
-          signatureHelpWindowRef = WeakReference(SignatureHelpWindow(it, editor.coroutineScope))
-        }
-      } else {
         signatureHelpWindow?.setEnabled(false)
         signatureHelpWindowRef.clear()
-      }
+
+        codeActionWindow?.setEnabled(false)
+        codeActionWindow?.dismiss()
+        codeActionWindowRef.clear()
+
+        resetInlinePresentations()
+        currentEditorRef.clear()
     }
 
-  var isEnableInlayHint = false
-    set(value) {
-      if (field == value) {
-        return
-      }
-      field = value
-      currentEditorRef.get()?.let {
-        if (value) {
-          it.registerInlayHintRenderers(
-              TextInlayHintRenderer.DefaultInstance,
-              ColorInlayHintRenderer.DefaultInstance,
-          )
-          editor.coroutineScope.launch {
-            editor.requestInlayHint(CharPosition(0, 0))
-            editor.requestDocumentColor()
-          }
-        } else {
-          resetInlinePresentations()
+    fun clearSubscriptions() {
+        val iterator = subscriptionReceipts.iterator()
+        while (iterator.hasNext()) {
+            iterator.next().unsubscribe()
+            iterator.remove()
         }
-      }
     }
 
-  val isShowSignatureHelp
-    get() = signatureHelpWindow?.isShowing ?: false
+    fun showSignatureHelp(signatureHelp: SignatureHelp?) {
+        val window = signatureHelpWindow ?: return
+        val editorInstance = currentEditorRef.get() ?: return
 
-  val isShowHover
-    get() = hoverWindow?.isShowing ?: false
+        if (signatureHelp == null) {
+            editorInstance.post { window.dismiss() }
+            return
+        }
 
-  val isShowCodeActions
-    get() = codeActionWindow?.isShowing ?: false
-
-  val hoverWindow
-    get() = hoverWindowRef.get()
-
-  val signatureHelpWindow
-    get() = signatureHelpWindowRef.get()
-
-  val codeActionWindow
-    get() = codeActionWindowRef.get()
-
-  fun attachEditor(codeEditor: CodeEditor) {
-    clearSubscriptions()
-
-    currentEditorRef.clear()
-    hoverWindowRef.clear()
-    signatureHelpWindowRef.clear()
-    codeActionWindowRef.clear()
-
-    currentEditorRef = WeakReference(codeEditor)
-
-    if (isEnableSignatureHelp) {
-      signatureHelpWindowRef = WeakReference(SignatureHelpWindow(codeEditor, editor.coroutineScope))
+        editorInstance.post { window.show(signatureHelp) }
     }
 
-    if (isEnableHover) {
-      hoverWindowRef = WeakReference(HoverWindow(codeEditor, editor.coroutineScope))
+    fun showHover(hover: Hover?) {
+        val window = hoverWindow ?: return
+        val editorInstance = currentEditorRef.get() ?: return
+        val isInSignatureHelp = isShowSignatureHelp
+
+        if (hover == null || isInSignatureHelp) {
+            editorInstance.post { window.dismiss() }
+            return
+        }
+
+        editorInstance.post { window.show(hover) }
     }
 
-    if (isEnableInlayHint) {
-      codeEditor.registerInlayHintRenderers(
-          TextInlayHintRenderer.DefaultInstance,
-          ColorInlayHintRenderer.DefaultInstance,
-      )
-      editor.coroutineScope.launch {
-        editor.requestInlayHint(CharPosition(0, 0))
-        editor.requestDocumentColor()
-      }
+    fun showCodeActions(range: Range?, actions: List<Either<Command, CodeAction>>?) {
+        val window = codeActionWindow ?: return
+        val editorInstance = currentEditorRef.get() ?: return
+
+        val isInCompletion = editorInstance.getComponent<EditorAutoCompletion>().isShowing
+        val isInSignatureHelp = isShowSignatureHelp
+
+        if (range == null || actions.isNullOrEmpty() || isInCompletion || isInSignatureHelp) {
+            editorInstance.post { window.dismiss() }
+            return
+        }
+
+        editorInstance.post { window.show(range, actions) }
     }
 
-    codeActionWindowRef = WeakReference(CodeActionWindow(editor, codeEditor))
+    fun showDocumentHighlight(highlights: List<DocumentHighlight>?) {
+        val editorInstance = currentEditorRef.get() ?: return
 
-    val diagnosticWindow = codeEditor.getComponent<EditorDiagnosticTooltipWindow>()
-    if (diagnosticWindow.layout is DefaultDiagnosticTooltipLayout) {
-      diagnosticWindow.layout = LspDiagnosticTooltipLayout()
-    }
+        if (highlights.isNullOrEmpty()) {
+            cachedHighlights = null
+            editorInstance.post { editorInstance.invalidateHighlightTexts() }
+            return
+        }
 
-    subscriptionReceipts =
-        mutableListOf(
-            codeEditor.subscribeEvent<ContentChangeEvent>(LspEditorContentChangeEvent(editor)),
-            codeEditor.subscribeEvent<SelectionChangeEvent>(LspEditorSelectionChangeEvent(editor)),
-            codeEditor.subscribeEvent<HoverEvent>(LspEditorHoverEvent(editor)),
-            codeEditor.subscribeEvent<ScrollEvent>(LspEditorScrollEvent(editor)),
-        )
-  }
-
-  fun clearWrapperState() {
-    hoverWindow?.dismiss()
-    signatureHelpWindow?.dismiss()
-    codeActionWindow?.dismiss()
-    resetInlinePresentations()
-  }
-
-  fun detachEditor() {
-    clearSubscriptions()
-
-    hoverWindow?.setEnabled(false)
-    hoverWindowRef.clear()
-
-    signatureHelpWindow?.setEnabled(false)
-    signatureHelpWindowRef.clear()
-
-    codeActionWindow?.setEnabled(false)
-    codeActionWindow?.dismiss()
-    codeActionWindowRef.clear()
-
-    resetInlinePresentations()
-    currentEditorRef.clear()
-  }
-
-  fun clearSubscriptions() {
-    val iterator = subscriptionReceipts.iterator()
-    while (iterator.hasNext()) {
-      iterator.next().unsubscribe()
-      iterator.remove()
-    }
-  }
-
-  fun showSignatureHelp(signatureHelp: SignatureHelp?) {
-    val window = signatureHelpWindow ?: return
-    val editorInstance = currentEditorRef.get() ?: return
-
-    if (signatureHelp == null) {
-      editorInstance.post { window.dismiss() }
-      return
-    }
-
-    editorInstance.post { window.show(signatureHelp) }
-  }
-
-  fun showHover(hover: Hover?) {
-    val window = hoverWindow ?: return
-    val editorInstance = currentEditorRef.get() ?: return
-    val isInSignatureHelp = isShowSignatureHelp
-
-    if (hover == null || isInSignatureHelp) {
-      editorInstance.post { window.dismiss() }
-      return
-    }
-
-    editorInstance.post { window.show(hover) }
-  }
-
-  fun showCodeActions(range: Range?, actions: List<Either<Command, CodeAction>>?) {
-    val window = codeActionWindow ?: return
-    val editorInstance = currentEditorRef.get() ?: return
-
-    val isInCompletion = editorInstance.getComponent<EditorAutoCompletion>().isShowing
-    val isInSignatureHelp = isShowSignatureHelp
-
-    if (range == null || actions.isNullOrEmpty() || isInCompletion || isInSignatureHelp) {
-      editorInstance.post { window.dismiss() }
-      return
-    }
-
-    editorInstance.post { window.show(range, actions) }
-  }
-
-  fun showDocumentHighlight(highlights: List<DocumentHighlight>?) {
-    val editorInstance = currentEditorRef.get() ?: return
-
-    if (highlights.isNullOrEmpty()) {
-      editorInstance.post { editorInstance.highlightTexts = null }
-      return
-    }
-
-    val container = HighlightTextContainer()
-
-    val colors =
-        mapOf(
-            DocumentHighlightKind.Write to
-                EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_STRONG_BACKGROUND),
+        val colors = mapOf(
+            DocumentHighlightKind.Write to EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_STRONG_BACKGROUND),
             DocumentHighlightKind.Read to EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_BACKGROUND),
-            DocumentHighlightKind.Text to EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_BACKGROUND),
+            DocumentHighlightKind.Text to EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_BACKGROUND)
         )
 
-    val borderColors =
-        mapOf(
-            DocumentHighlightKind.Write to
-                EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_STRONG_BORDER),
+        val borderColors = mapOf(
+            DocumentHighlightKind.Write to EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_STRONG_BORDER),
             DocumentHighlightKind.Read to EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_BORDER),
-            DocumentHighlightKind.Text to EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_BORDER),
+            DocumentHighlightKind.Text to EditorColor(EditorColorScheme.TEXT_HIGHLIGHT_BORDER)
         )
 
-    highlights.forEach {
-      container.add(
-          HighlightTextContainer.HighlightText(
-              it.range.start.line,
-              it.range.start.character,
-              it.range.end.line,
-              it.range.end.character,
-              colors.getValue(it.kind ?: DocumentHighlightKind.Text),
-              borderColors.getValue(it.kind ?: DocumentHighlightKind.Text),
-          )
-      )
+        val newHighlights = mutableListOf<HighlightTextContainer.HighlightText>()
+        highlights.forEach {
+            newHighlights.add(
+                HighlightTextContainer.HighlightText(
+                    it.range.start.line,
+                    it.range.start.character,
+                    it.range.end.line,
+                    it.range.end.character,
+                    colors.getValue(it.kind ?: DocumentHighlightKind.Text),
+                    borderColors.getValue(it.kind ?: DocumentHighlightKind.Text)
+                )
+            )
+        }
+        cachedHighlights = newHighlights
+
+        editorInstance.post { editorInstance.invalidateHighlightTexts() }
     }
 
-    editorInstance.post { editorInstance.highlightTexts = container }
-  }
-
-  fun showInlayHints(inlayHints: List<InlayHint>?) {
-    val normalized = inlayHints.normalizeList()
-    if (cachedInlayHints == normalized) {
-      return
-    }
-    cachedInlayHints = normalized
-    updateInlinePresentations()
-  }
-
-  fun showDocumentColors(documentColors: List<ColorInformation>?) {
-    val normalized = documentColors.normalizeList()
-    if (cachedDocumentColors == normalized) {
-      return
-    }
-    cachedDocumentColors = normalized
-    updateInlinePresentations()
-  }
-
-  private fun updateInlinePresentations() {
-    val editorInstance = currentEditorRef.get() ?: return
-
-    val hasInlayHints = !cachedInlayHints.isNullOrEmpty()
-    val hasDocumentColors = !cachedDocumentColors.isNullOrEmpty()
-
-    if (!hasInlayHints && !hasDocumentColors) {
-      editorInstance.post { editorInstance.inlayHints = null }
-      return
+    fun showInlayHints(inlayHints: List<InlayHint>?) {
+        val normalized = inlayHints.normalizeList()
+        if (cachedInlayHints == normalized) {
+            return
+        }
+        cachedInlayHints = normalized
+        updateInlinePresentations()
     }
 
-    val container = InlayHintsContainer()
-    cachedInlayHints?.inlayHintToDisplay()?.forEach(container::add)
-    cachedDocumentColors?.colorInfoToDisplay()?.forEach(container::add)
-
-    editorInstance.post { editorInstance.inlayHints = container }
-  }
-
-  private fun resetInlinePresentations() {
-    cachedInlayHints = null
-    cachedDocumentColors = null
-    currentEditorRef.get()?.let {
-      if (it.inlayHints != null) {
-        it.post { it.inlayHints = null }
-      }
-      if (it.highlightTexts != null) {
-        it.post { it.highlightTexts = null }
-      }
+    fun showDocumentColors(documentColors: List<ColorInformation>?) {
+        val normalized = documentColors.normalizeList()
+        if (cachedDocumentColors == normalized) {
+            return
+        }
+        cachedDocumentColors = normalized
+        updateInlinePresentations()
     }
-  }
+
+    private fun updateInlinePresentations() {
+        val editorInstance = currentEditorRef.get() ?: return
+        editorInstance.post {
+            editorInstance.invalidateInlayHints()
+        }
+    }
+
+    override fun provideInlayHints(container: InlayHintsContainer) {
+        cachedInlayHints?.inlayHintToDisplay()?.forEach(container::add)
+        cachedDocumentColors?.colorInfoToDisplay()?.forEach(container::add)
+    }
+
+    fun setDiagnostics(diagnostics: List<DiagnosticRegion>?) {
+        cachedDiagnostics = diagnostics
+        currentEditorRef.get()?.let {
+            it.post { it.invalidateDiagnostics() }
+        }
+    }
+
+    override fun provideDiagnostics(container: DiagnosticsContainer) {
+        cachedDiagnostics?.let { container.addDiagnostics(it) }
+    }
+
+    override fun provideHighlightTexts(container: HighlightTextContainer) {
+        cachedHighlights?.let { container.addAll(it) }
+    }
+
+    private fun resetInlinePresentations() {
+        cachedInlayHints = null
+        cachedDocumentColors = null
+        cachedHighlights = null
+        cachedDiagnostics = null
+        currentEditorRef.get()?.let {
+            it.post {
+                it.invalidateInlayHints()
+                it.invalidateDiagnostics()
+                it.invalidateHighlightTexts()
+            }
+        }
+    }
 }

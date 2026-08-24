@@ -1,33 +1,36 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2023 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2023  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lsp.client
 
 import android.util.Log
 import io.github.rosemoe.sora.lsp.events.EventContext
 import io.github.rosemoe.sora.lsp.events.EventType
 import io.github.rosemoe.sora.lsp.events.workspace.workSpaceApplyEdit
+
+
 import io.github.rosemoe.sora.lsp.utils.toFileUri
-import java.net.URI
-import java.util.concurrent.CompletableFuture
 import org.eclipse.lsp4j.ApplyWorkspaceEditParams
 import org.eclipse.lsp4j.ApplyWorkspaceEditResponse
 import org.eclipse.lsp4j.ConfigurationParams
@@ -39,96 +42,99 @@ import org.eclipse.lsp4j.ShowMessageRequestParams
 import org.eclipse.lsp4j.UnregistrationParams
 import org.eclipse.lsp4j.WorkspaceFolder
 import org.eclipse.lsp4j.services.LanguageClient
+import java.net.URI
+import java.util.concurrent.CompletableFuture
 
-open class DefaultLanguageClient(protected val context: ClientContext) : LanguageClient {
 
-  override fun applyEdit(
-      params: ApplyWorkspaceEditParams
-  ): CompletableFuture<ApplyWorkspaceEditResponse> {
-    val project = context.project ?: return CompletableFuture.completedFuture(null)
-    val eventContext =
-        EventContext().apply {
-          put("arg-0", params.edit)
-          put("lsp-project", context.project)
+open class DefaultLanguageClient(protected val context: ClientContext) :
+    LanguageClient {
+
+    override fun applyEdit(params: ApplyWorkspaceEditParams): CompletableFuture<ApplyWorkspaceEditResponse> {
+        val project = context.project ?: return CompletableFuture.completedFuture(null)
+        val eventContext = EventContext().apply {
+            put("arg-0", params.edit)
+            put("lsp-project", context.project)
         }
 
-    try {
-      project.eventEmitter.emit(EventType.workSpaceApplyEdit, eventContext, true)
+        try {
+            project.eventEmitter.emit(EventType.workSpaceApplyEdit, eventContext, true)
 
-      return CompletableFuture.completedFuture(ApplyWorkspaceEditResponse(true))
-    } catch (e: Throwable) {
-      return CompletableFuture.completedFuture(
-          ApplyWorkspaceEditResponse().apply {
-            isApplied = false
-            failureReason = e.message
-          }
-      )
+            return CompletableFuture.completedFuture(
+                ApplyWorkspaceEditResponse(true)
+            )
+        } catch (e: Throwable) {
+            return CompletableFuture.completedFuture(
+                ApplyWorkspaceEditResponse().apply {
+                    isApplied = false
+                    failureReason = e.message
+                }
+            )
+        }
     }
-  }
 
-  override fun configuration(
-      configurationParams: ConfigurationParams
-  ): CompletableFuture<List<Any>> {
-    // Not prepared to support this feature
-    return CompletableFuture.completedFuture(emptyList())
-  }
+    override fun configuration(configurationParams: ConfigurationParams): CompletableFuture<List<Any>> {
+        // Not prepared to support this feature
+        return CompletableFuture.completedFuture(emptyList())
+    }
 
-  override fun workspaceFolders(): CompletableFuture<List<WorkspaceFolder>> {
-    val workSpaceFolder = WorkspaceFolder()
-    workSpaceFolder.uri = context.projectPath.toFileUri()
-    // Always return the current project path
-    return CompletableFuture.completedFuture(listOf(workSpaceFolder))
-  }
+    override fun workspaceFolders(): CompletableFuture<List<WorkspaceFolder>> {
+        val workSpaceFolder = WorkspaceFolder()
+        workSpaceFolder.uri =
+            context.projectPath.toFileUri()
+        // Always return the current project path
+        return CompletableFuture.completedFuture(listOf(workSpaceFolder))
+    }
 
-  override fun registerCapability(params: RegistrationParams): CompletableFuture<Void> {
-    // Not prepared to support this feature
-    return CompletableFuture.completedFuture(null)
-  }
+    override fun registerCapability(params: RegistrationParams): CompletableFuture<Void> {
+        // Not prepared to support this feature
+        return CompletableFuture.completedFuture(null)
+    }
 
-  override fun unregisterCapability(params: UnregistrationParams): CompletableFuture<Void> {
-    // Not prepared to support this feature
-    return CompletableFuture.completedFuture(null)
-  }
+    override fun unregisterCapability(params: UnregistrationParams): CompletableFuture<Void> {
+        // Not prepared to support this feature
+        return CompletableFuture.completedFuture(null)
+    }
 
-  override fun telemetryEvent(o: Any) {
-    Log.i(TAG, "telemetryEvent: $o")
-  }
+    override fun telemetryEvent(o: Any) {
+        Log.i(TAG, "telemetryEvent: $o")
+    }
 
-  override fun publishDiagnostics(publishDiagnosticsParams: PublishDiagnosticsParams) {
-    val project = context.project ?: return
-    val diagnosticsContainer = project.diagnosticsContainer
-    val uri = URI(publishDiagnosticsParams.uri).toFileUri()
+    override fun publishDiagnostics(publishDiagnosticsParams: PublishDiagnosticsParams) {
+        val project = context.project ?: return
+        val diagnosticsContainer = project.diagnosticsContainer
+        val uri = URI(publishDiagnosticsParams.uri).toFileUri()
 
-    val serverName = context.serverName
-    diagnosticsContainer.clearDiagnostics(uri)
+        val serverName = context.serverName
+        diagnosticsContainer.clearDiagnostics(uri)
 
-    diagnosticsContainer.addDiagnostics(uri, publishDiagnosticsParams.diagnostics)
+        diagnosticsContainer.addDiagnostics(
+            uri,
+            publishDiagnosticsParams.diagnostics
+        )
 
-    val editor = context.getEditor(uri)
+        val editor = context.getEditor(uri)
 
-    editor?.onDiagnosticsUpdate()
-  }
+        editor?.onDiagnosticsUpdate()
+    }
 
-  override fun refreshDiagnostics(): CompletableFuture<Void> {
-    // TODO: support it.
-    return CompletableFuture.completedFuture(null)
-  }
+    override fun refreshDiagnostics(): CompletableFuture<Void> {
+        //TODO: support it.
+        return CompletableFuture.completedFuture(null)
+    }
 
-  override fun showMessage(messageParams: MessageParams) {
-    context.eventListener.onShowMessage(messageParams)
-  }
+    override fun showMessage(messageParams: MessageParams) {
+        context.eventListener.onShowMessage(messageParams)
+    }
 
-  override fun showMessageRequest(
-      showMessageRequestParams: ShowMessageRequestParams
-  ): CompletableFuture<MessageActionItem> {
-    return CompletableFuture.completedFuture(MessageActionItem())
-  }
+    override fun showMessageRequest(showMessageRequestParams: ShowMessageRequestParams): CompletableFuture<MessageActionItem> {
+        return CompletableFuture.completedFuture(MessageActionItem())
+    }
 
-  override fun logMessage(messageParams: MessageParams) {
-    context.eventListener.onLogMessage(messageParams)
-  }
+    override fun logMessage(messageParams: MessageParams) {
+        context.eventListener.onLogMessage(messageParams)
+    }
 
-  companion object {
-    private const val TAG = "DefaultLanguageClient"
-  }
+    companion object {
+        private const val TAG = "DefaultLanguageClient"
+    }
 }
