@@ -25,10 +25,11 @@ import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
+import dagger.hilt.android.AndroidEntryPoint
 import com.itsaky.androidide.R
 import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.app.BaseApplication
-import com.itsaky.androidide.app.EdgeToEdgeIDEActivity
+import com.itsaky.androidide.app.IDEActivity
 import com.itsaky.androidide.fragments.MainFragment
 import com.itsaky.androidide.fragments.TemplateDetailsFragment
 import com.itsaky.androidide.fragments.TemplateListFragment
@@ -48,7 +49,8 @@ import kotlinx.coroutines.withContext
  *
  * @author android_zero
  */
-class MainActivity : EdgeToEdgeIDEActivity() {
+@AndroidEntryPoint
+class MainActivity : IDEActivity() {
 
   private val viewModel by viewModels<MainViewModel>()
 

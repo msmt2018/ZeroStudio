@@ -56,7 +56,7 @@ class OpenDeviceConnectionAction(context: Context, override val order: Int) :
 
   override fun prepare(data: ActionData) {
     super.prepare(data)
-    // 仅在 EditorHandlerActivity 上下文中可见
+    // 仅在 EditorActivityKt 上下文中可见
     data.getActivity() ?: run {
       markInvisible()
       return

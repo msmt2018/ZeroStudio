@@ -26,7 +26,7 @@ import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TREE
 import com.itsaky.androidide.actions.ActionMenu
 import com.itsaky.androidide.actions.ActionsRegistry
 import com.itsaky.androidide.actions.internal.DefaultActionsRegistry
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
 import com.itsaky.androidide.events.ExpandTreeNodeRequestEvent
@@ -68,7 +68,7 @@ class FileTreeActionHandler : BaseEventHandler() {
    *    预览 Fragment 或安装器。这类文件的解码器只支持特定格式, 扩展名匹配就
    *    足够, 不需要也不应该尝试用文本编辑器打开。
    * 2. **文本类型文件** —— 不通过扩展名判断 (文本文件后缀极其广泛, 无法穷举),
-   *    而是作为默认 fallback 走 [EditorHandlerActivity.openFile]。无论是否有
+   *    而是作为默认 fallback 走 [EditorActivityKt.openFile]。无论是否有
    *    扩展名、扩展名是否已知, 只要没被上面的二进制路由命中, 都交给文本编辑器。
    *
    * 不在前置做文件大小硬性拦截。文本文件是否 OOM 取决于 openFile 内部的
@@ -84,7 +84,7 @@ class FileTreeActionHandler : BaseEventHandler() {
 
     if (event.file.isDirectory) return
 
-    val context = event[Context::class.java]!! as EditorHandlerActivity
+    val context = event[Context::class.java]!! as EditorActivityKt
     context.binding.root.closeDrawer(GravityCompat.START)
 
     // === APK 安装路由 ===
@@ -204,13 +204,13 @@ class FileTreeActionHandler : BaseEventHandler() {
     }
 
     this.lastHeld = event[Node::class.java] as? Node<FileObject>
-    val context = event[Context::class.java]!! as EditorHandlerActivity
+    val context = event[Context::class.java]!! as EditorActivityKt
     createFileOptionsFragment(context, event.file)
         .show(context.supportFragmentManager, TAG_FILE_OPTIONS_FRAGMENT)
   }
 
   private fun createFileOptionsFragment(
-      context: EditorHandlerActivity,
+      context: EditorActivityKt,
       file: File,
   ): OptionsListFragment {
     val fragment = OptionsListFragment()

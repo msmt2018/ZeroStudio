@@ -7,7 +7,7 @@ import com.blankj.utilcode.util.KeyboardUtils
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
 import com.itsaky.androidide.actions.markInvisible
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.fragments.editor.image.ImagePreviewFragment
 import com.itsaky.androidide.models.SaveResult
 import com.itsaky.androidide.resources.R
@@ -16,7 +16,7 @@ import java.io.File
 /**
  * Action menu item for previewing image files in a tab.
  *
- * This action opens an Image preview tab in the EditorHandlerActivity
+ * This action opens an Image preview tab in the EditorActivityKt
  * when the user clicks the preview button in the editor toolbar.
  *
  * 支持的格式: PNG / JPG / WebP / GIF / HEIC / BMP / AVIF / ICO / TIFF /
@@ -48,7 +48,7 @@ class ImagePreviewAction(context: Context, override val order: Int) : EditorRela
   override fun prepare(data: ActionData) {
     super.prepare(data)
 
-    val activity = data.getActivity() as? EditorHandlerActivity
+    val activity = data.getActivity() as? EditorActivityKt
     if (activity == null) {
       markInvisible()
       return
@@ -82,7 +82,7 @@ class ImagePreviewAction(context: Context, override val order: Int) : EditorRela
   }
 
   override suspend fun execAction(data: ActionData): Boolean {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return false
+    val activity = data.requireActivity() as? EditorActivityKt ?: return false
     val file = data.getEditor()?.file ?: return false
     val index = activity.findIndexOfEditorByFile(file)
     if (index >= 0) {
@@ -92,7 +92,7 @@ class ImagePreviewAction(context: Context, override val order: Int) : EditorRela
   }
 
   override fun postExec(data: ActionData, result: Any) {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return
+    val activity = data.requireActivity() as? EditorActivityKt ?: return
     val editor = data.getEditor()
     val file = editor?.file
 
@@ -104,10 +104,10 @@ class ImagePreviewAction(context: Context, override val order: Int) : EditorRela
   /**
    * Opens the Image preview tab with the given file.
    *
-   * @param activity The EditorHandlerActivity
+   * @param activity The EditorActivityKt
    * @param file The image file to preview
    */
-  private fun openImagePreview(activity: EditorHandlerActivity, file: File) {
+  private fun openImagePreview(activity: EditorActivityKt, file: File) {
     val extension = file.extension.lowercase()
     val fragmentTabManager = activity.fragmentTabManager ?: return
 

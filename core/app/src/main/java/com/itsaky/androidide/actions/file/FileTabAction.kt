@@ -22,7 +22,7 @@ import com.itsaky.androidide.actions.ActionItem.Location
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TABS
 import com.itsaky.androidide.actions.EditorActivityAction
 import com.itsaky.androidide.actions.markInvisible
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 
 /**
  * Action related to file tabs. Shown only when there is at least one file opened.
@@ -62,5 +62,5 @@ abstract class FileTabAction : EditorActivityAction() {
     return activity.doAction(data)
   }
 
-  abstract fun EditorHandlerActivity.doAction(data: ActionData): Boolean
+  abstract fun EditorActivityKt.doAction(data: ActionData): Boolean
 }

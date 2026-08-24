@@ -482,7 +482,7 @@ class EditorBottomSheet @JvmOverloads constructor(
       //
       // 之前这里用 `peekHeight = headerHeight + imeBottom` 的累加写法, 假设
       // parentHeight 在 IME 弹出前后保持不变. 这个假设是错的:
-      //   - EdgeToEdgeIDEActivity.applyEdgeToEdge() 调了
+      //   - IDEActivity.enableEdgeToEdge() 调了
       //     WindowCompat.setDecorFitsSystemWindows(window, false) 开了 edge-to-edge
       //   - edge-to-edge 模式下, `windowSoftInputMode="adjustResize"` 不会再
       //     自动 resize activity content view, 跟旧版 v2.0.7 之前的 IDE 行为不一致

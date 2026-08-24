@@ -45,6 +45,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.core.view.updatePaddingRelative
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.blankj.utilcode.constant.MemoryConstants
 import com.blankj.utilcode.util.ConvertUtils.byte2MemorySize
 import com.blankj.utilcode.util.FileUtils
@@ -64,7 +67,7 @@ import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TABS
 import com.itsaky.androidide.actions.menu.EditorLineOperations
 import com.itsaky.androidide.adapters.DiagnosticsAdapter
 import com.itsaky.androidide.adapters.SearchListAdapter
-import com.itsaky.androidide.app.EdgeToEdgeIDEActivity
+import com.itsaky.androidide.app.IDEActivity
 import com.itsaky.androidide.databinding.ActivityEditorBinding
 import com.itsaky.androidide.databinding.ContentEditorBinding
 import com.itsaky.androidide.databinding.LayoutDiagnosticInfoBinding
@@ -127,7 +130,16 @@ import org.slf4j.LoggerFactory
  */
 @Suppress("MemberVisibilityCanBePrivate")
 abstract class BaseEditorActivity :
-    EdgeToEdgeIDEActivity(), TabLayout.OnTabSelectedListener, DiagnosticClickListener {
+    IDEActivity(), TabLayout.OnTabSelectedListener, DiagnosticClickListener {
+
+  /**
+   * Compose-facing editor chrome state.
+   *
+   * This is the single source of truth introduced for the XML-to-Compose migration. Legacy views
+   * are still updated during the transition, but Compose consumers no longer need to read a View.
+   */
+  protected var composeUiState by mutableStateOf(EditorComposeUiState())
+    private set
 
   protected val mLifecycleObserver = EditorActivityLifecyclerObserver()
   protected var diagnosticInfoBinding: LayoutDiagnosticInfoBinding? = null
@@ -135,7 +147,7 @@ abstract class BaseEditorActivity :
   // 改为每次都从 view 实时读取, 不要缓存. EditorBottomSheet 在 onFinishInflate
   // 时会把默认的 BottomSheetBehavior 替换为 SymbolInputAwareBottomSheetBehavior;
   // 缓存字段会拿不到这个新 Behavior 的 state/expandedOffset, 后续基类与派生类
-  // (例如 EditorHandlerActivity 通过 mBuildEventListener.setActivity(this) 在
+  // (例如 EditorActivityKt 通过 mBuildEventListener.setActivity(this) 在
   // build 完成时读这个状态) 都会读旧 Behavior 的 state, 引发"状态不同步"问题.
   // 改成"懒属性 + 实时从 view 读"是唯一稳的写法.
   protected val editorBottomSheet: BottomSheetBehavior<out View?>?
@@ -239,7 +251,7 @@ abstract class BaseEditorActivity :
    *
    * 【关键】必须用这个值作为基线手动调整 contentCard.height, 而不是依赖
    * `windowSoftInputMode="adjustResize"`. 原因: BaseEditorActivity 继承自
-   * EdgeToEdgeIDEActivity, 后者在 onCreate 里调用了
+   * IDEActivity，后者在 onCreate 里通过 AndroidX enableEdgeToEdge 调用了
    * `WindowCompat.setDecorFitsSystemWindows(window, false)`, 也就是 edge-to-edge
    * 模式. 在 edge-to-edge 模式下, `adjustResize` **不会自动 resize activity
    * 内容视图** 来给 IME 让位 (这是 Android 11+ 官方行为, 见
@@ -705,7 +717,7 @@ abstract class BaseEditorActivity :
   /**
    * PR-D4: 调试器在 suspend / logpoint 事件里要自动切到某个 fragment tab
    * 时调用。先把抽屉展开,再选中目标 Fragment 对应的 tab。
-   * 这个方法会在所有派生 Activity(例如 EditorHandlerActivity)里也可见。
+   * 这个方法会在所有派生 Activity(例如 EditorActivityKt)里也可见。
    */
   open fun openDebuggerTab(fragmentClass: Class<out androidx.fragment.app.Fragment>) {
     if (isDestroying || _binding == null) return
@@ -796,6 +808,7 @@ abstract class BaseEditorActivity :
   private fun onBuildStatusChanged() {
     if (isDestroying || _binding == null) return
     val visible = editorViewModel.isBuildInProgress || editorViewModel.isInitializing
+    composeUiState = composeUiState.copy(isBottomPanelVisible = visible)
     content.progressIndicator.visibility = if (visible) View.VISIBLE else View.GONE
     invalidateOptionsMenu()
   }
@@ -804,12 +817,15 @@ abstract class BaseEditorActivity :
     editorViewModel._isBuildInProgress.observe(this) { onBuildStatusChanged() }
     editorViewModel._isInitializing.observe(this) { onBuildStatusChanged() }
     editorViewModel._statusText.observe(this) {
+      composeUiState = composeUiState.copy(buildStatus = it.first)
       if (!isDestroying && _binding != null) {
         content.bottomSheet.setStatus(it.first, it.second)
       }
     }
 
     editorViewModel.observeFiles(this) { files ->
+      composeUiState =
+          composeUiState.copy(openFiles = files?.map { file -> file.filePath.substringAfterLast('/') }.orEmpty())
       if (isDestroying || _binding == null) return@observeFiles
       content.apply {
         if (files.isNullOrEmpty() && !hasNonEditorTabs()) {
@@ -1029,6 +1045,7 @@ abstract class BaseEditorActivity :
     val cursor = editorView.editor?.cursor ?: return
     val line = cursor.leftLine + 1
     val column = cursor.leftColumn + 1
+    composeUiState = composeUiState.copy(cursorPosition = "$line:$column")
     content.bottomSheet.binding.tvCursorPosition.text = "$line:$column"
   }
 }

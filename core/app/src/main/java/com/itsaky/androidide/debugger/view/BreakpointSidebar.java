@@ -193,7 +193,7 @@ public class BreakpointSidebar extends View {
                         int row = rowAtY(e.getY());
                         if (row < 0) return false;
                         // Phase 23 续: 区分"空白行"和"已有断点"两个事件,
-                        // 让 IDE 端 (EditorHandlerActivity) 走不同路径。
+                        // 让 IDE 端 (EditorActivityKt) 走不同路径。
                         IdeBreakpoint existing = findAt(currentFile, row);
                         if (existing != null) {
                             clickListener.onBreakpointExistingClick(existing, e.getRawX(), e.getRawY());

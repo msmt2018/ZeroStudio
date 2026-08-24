@@ -7,7 +7,7 @@ import com.blankj.utilcode.util.KeyboardUtils
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
 import com.itsaky.androidide.actions.markInvisible
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.fragments.editor.audio.AudioPreviewFragment
 import com.itsaky.androidide.models.SaveResult
 import com.itsaky.androidide.resources.R
@@ -16,7 +16,7 @@ import java.io.File
 /**
  * Action menu item for previewing audio files in a tab.
  *
- * This action opens an Audio preview tab in the EditorHandlerActivity
+ * This action opens an Audio preview tab in the EditorActivityKt
  * when the user clicks the preview button in the editor toolbar.
  *
  * 支持的格式: mp3 / wav / ogg / flac / aac / m4a / opus / mid / midi /
@@ -47,7 +47,7 @@ class AudioPreviewAction(context: Context, override val order: Int) : EditorRela
   override fun prepare(data: ActionData) {
     super.prepare(data)
 
-    val activity = data.getActivity() as? EditorHandlerActivity
+    val activity = data.getActivity() as? EditorActivityKt
     if (activity == null) {
       markInvisible()
       return
@@ -81,7 +81,7 @@ class AudioPreviewAction(context: Context, override val order: Int) : EditorRela
   }
 
   override suspend fun execAction(data: ActionData): Boolean {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return false
+    val activity = data.requireActivity() as? EditorActivityKt ?: return false
     val file = data.getEditor()?.file ?: return false
     val index = activity.findIndexOfEditorByFile(file)
     if (index >= 0) {
@@ -91,7 +91,7 @@ class AudioPreviewAction(context: Context, override val order: Int) : EditorRela
   }
 
   override fun postExec(data: ActionData, result: Any) {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return
+    val activity = data.requireActivity() as? EditorActivityKt ?: return
     val editor = data.getEditor()
     val file = editor?.file
 
@@ -103,10 +103,10 @@ class AudioPreviewAction(context: Context, override val order: Int) : EditorRela
   /**
    * Opens the Audio preview tab with the given file.
    *
-   * @param activity The EditorHandlerActivity
+   * @param activity The EditorActivityKt
    * @param file The audio file to preview
    */
-  private fun openAudioPreview(activity: EditorHandlerActivity, file: File) {
+  private fun openAudioPreview(activity: EditorActivityKt, file: File) {
     val extension = file.extension.lowercase()
     val fragmentTabManager = activity.fragmentTabManager ?: return
 

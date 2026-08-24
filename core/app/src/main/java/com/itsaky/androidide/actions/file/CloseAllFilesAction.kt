@@ -21,7 +21,7 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionData
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 
 /**
  * Closes all opened files.
@@ -37,7 +37,7 @@ class CloseAllFilesAction(context: Context, override val order: Int) : FileTabAc
     icon = ContextCompat.getDrawable(context, R.drawable.ic_close_all)
   }
 
-  override fun EditorHandlerActivity.doAction(data: ActionData): Boolean {
+  override fun EditorActivityKt.doAction(data: ActionData): Boolean {
     closeAll { invalidateOptionsMenu() }
     return true
   }

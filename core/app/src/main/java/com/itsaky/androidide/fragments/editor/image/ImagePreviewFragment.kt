@@ -130,7 +130,7 @@ import org.slf4j.LoggerFactory
  *
  * 跟 [com.itsaky.androidide.fragments.editor.markdown.MarkdownPreviewFragment]
  * 一样, 通过 [com.itsaky.androidide.fragments.editor.FragmentTabRegistry] 在
- * [com.itsaky.androidide.activities.editor.EditorHandlerActivity] 注册.
+ * [com.itsaky.androidide.activities.editor.EditorActivityKt] 注册.
  *
  * @author android_zero
  */

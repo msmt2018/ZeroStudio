@@ -888,7 +888,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
 
   private fun initLspClient() {
     if (!IDELanguageClientImpl.isInitialized()) {
-      IDELanguageClientImpl.initialize(this as EditorHandlerActivity)
+      IDELanguageClientImpl.initialize(this as EditorActivityKt)
     }
     connectClient(IDELanguageClientImpl.getInstance())
   }

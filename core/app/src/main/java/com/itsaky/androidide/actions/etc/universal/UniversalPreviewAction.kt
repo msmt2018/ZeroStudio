@@ -7,7 +7,7 @@ import com.blankj.utilcode.util.KeyboardUtils
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.EditorRelatedAction
 import com.itsaky.androidide.actions.markInvisible
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.models.SaveResult
 import com.itsaky.androidide.resources.R
 import com.zerostudio.preview.UniversalPreviewEngineFragment
@@ -18,7 +18,7 @@ import java.io.File
  * preview tab.
  *
  * This action opens a [UniversalPreviewEngineFragment] tab in the
- * EditorHandlerActivity when the user clicks the preview button in the
+ * EditorActivityKt when the user clicks the preview button in the
  * editor toolbar.
  *
  * 支持的格式: C/C++ 源码 (c / cpp / cc / cxx / h / hpp / hxx / cu /
@@ -49,7 +49,7 @@ class UniversalPreviewAction(context: Context, override val order: Int) : Editor
   override fun prepare(data: ActionData) {
     super.prepare(data)
 
-    val activity = data.getActivity() as? EditorHandlerActivity
+    val activity = data.getActivity() as? EditorActivityKt
     if (activity == null) {
       markInvisible()
       return
@@ -83,7 +83,7 @@ class UniversalPreviewAction(context: Context, override val order: Int) : Editor
   }
 
   override suspend fun execAction(data: ActionData): Boolean {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return false
+    val activity = data.requireActivity() as? EditorActivityKt ?: return false
     val file = data.getEditor()?.file ?: return false
     val index = activity.findIndexOfEditorByFile(file)
     if (index >= 0) {
@@ -93,7 +93,7 @@ class UniversalPreviewAction(context: Context, override val order: Int) : Editor
   }
 
   override fun postExec(data: ActionData, result: Any) {
-    val activity = data.requireActivity() as? EditorHandlerActivity ?: return
+    val activity = data.requireActivity() as? EditorActivityKt ?: return
     val editor = data.getEditor()
     val file = editor?.file
 
@@ -105,10 +105,10 @@ class UniversalPreviewAction(context: Context, override val order: Int) : Editor
   /**
    * Opens the Universal preview tab with the given file.
    *
-   * @param activity The EditorHandlerActivity
+   * @param activity The EditorActivityKt
    * @param file The C/C++ source file to preview
    */
-  private fun openUniversalPreview(activity: EditorHandlerActivity, file: File) {
+  private fun openUniversalPreview(activity: EditorActivityKt, file: File) {
     val extension = file.extension.lowercase()
     val fragmentTabManager = activity.fragmentTabManager ?: return
 

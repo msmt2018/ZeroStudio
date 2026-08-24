@@ -19,7 +19,7 @@ package com.itsaky.androidide.actions
 
 import android.content.Context
 import android.graphics.drawable.Drawable
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.tasks.cancelIfActive
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -50,11 +50,11 @@ abstract class EditorActivityAction : ActionItem {
     }
   }
 
-  fun ActionData.getActivity(): EditorHandlerActivity? {
-    return this[Context::class.java] as? EditorHandlerActivity
+  fun ActionData.getActivity(): EditorActivityKt? {
+    return this[Context::class.java] as? EditorActivityKt
   }
 
-  fun ActionData.requireActivity(): EditorHandlerActivity {
+  fun ActionData.requireActivity(): EditorActivityKt {
     return getActivity()!!
   }
 

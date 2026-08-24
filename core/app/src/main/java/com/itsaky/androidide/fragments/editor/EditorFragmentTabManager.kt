@@ -9,7 +9,7 @@ import java.io.File
 import java.util.UUID
 
 /**
- * Manager for handling fragment tabs in EditorHandlerActivity.
+ * Manager for handling fragment tabs in EditorActivityKt.
  *
  * This class manages the lifecycle of fragment tabs, including:
  * - Adding new tabs

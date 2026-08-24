@@ -45,7 +45,7 @@ import androidx.fragment.app.viewModels
 import com.catpuppyapp.puppygit.utils.Libgit2Helper
 import com.github.git24j.core.Repository
 import com.itsaky.androidide.R
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.databinding.FragmentGitProjectsBinding
 import com.itsaky.androidide.eventbus.events.filetree.FileClickEvent
 import com.itsaky.androidide.eventbus.events.filetree.FileLongClickEvent
@@ -215,7 +215,7 @@ class GitProjectsFragment :
     }
 
     addToolbarAction(ResR.drawable.ic_target_positioning_24dp, "Locate Current File") {
-      val activity = context as? EditorHandlerActivity
+      val activity = context as? EditorActivityKt
       val currentFile = activity?.getCurrentEditor()?.file
       if (currentFile != null && currentFile.exists()) {
         fileTreeView?.locateFileAndScroll(currentFile.absolutePath)

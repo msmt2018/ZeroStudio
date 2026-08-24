@@ -57,7 +57,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.viewModels
 import com.itsaky.androidide.R
-import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.activities.editor.EditorActivityKt
 import com.itsaky.androidide.fragments.BaseFragment
 import com.itsaky.androidide.preferences.internal.GeneralPreferences
 import com.itsaky.androidide.projects.materials.MaterialSourceType
@@ -90,7 +90,7 @@ class ProjectMaterialsFragment : BaseFragment() {
     // openFile() must run on the main thread because the editor view inflates a layout
     // that uses ValueAnimator (LinearProgressIndicator), which crashes on background
     // threads with "Animators may only be run on Looper threads".
-    (activity as? EditorHandlerActivity)?.openFile(file)
+    (activity as? EditorActivityKt)?.openFile(file)
   }
 }
 
