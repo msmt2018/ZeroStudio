@@ -67,6 +67,9 @@ import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TABS
 import com.itsaky.androidide.actions.menu.EditorLineOperations
 import com.itsaky.androidide.adapters.DiagnosticsAdapter
 import com.itsaky.androidide.adapters.SearchListAdapter
+import com.itsaky.androidide.activities.editor.compose.EditorTabUiState
+import com.itsaky.androidide.activities.editor.compose.EditorEvent
+import com.itsaky.androidide.activities.editor.compose.EditorUiState
 import com.itsaky.androidide.app.IDEActivity
 import com.itsaky.androidide.databinding.ActivityEditorBinding
 import com.itsaky.androidide.databinding.ContentEditorBinding
@@ -133,12 +136,12 @@ abstract class BaseEditorActivity :
     IDEActivity(), TabLayout.OnTabSelectedListener, DiagnosticClickListener {
 
   /**
-   * Compose-facing editor chrome state.
+   * Immutable rendering state for the Compose editor shell.
    *
-   * This is the single source of truth introduced for the XML-to-Compose migration. Legacy views
-   * are still updated during the transition, but Compose consumers no longer need to read a View.
+   * Activity code only turns lifecycle and business callbacks into this state. The Compose layer
+   * owns the corresponding chrome rendering and emits [EditorEvent]s back through its host.
    */
-  protected var composeUiState by mutableStateOf(EditorComposeUiState())
+  protected var composeUiState by mutableStateOf(EditorUiState())
     private set
 
   protected val mLifecycleObserver = EditorActivityLifecyclerObserver()
@@ -628,6 +631,7 @@ abstract class BaseEditorActivity :
     val position = resolveEditorIndexForTab(tab)
     if (position < 0) return
     editorViewModel.displayedFileIndex = position
+    composeUiState = composeUiState.copy(selectedFileIndex = position)
 
     val editorView = provideEditorAt(position) ?: return
     EditorLineOperations.applyReadOnlyState(editorView.editor!!, this)
@@ -776,6 +780,35 @@ abstract class BaseEditorActivity :
     }
   }
 
+  /**
+   * Bridges user intents from [com.itsaky.androidide.activities.editor.compose.EditorRootScreen]
+   * to the existing editor services while those services complete their Android-view migration.
+   * Keeping this boundary explicit prevents composables from reaching into Activity views.
+   */
+  protected fun handleEditorEvent(event: EditorEvent) {
+    if (isDestroying || _binding == null) return
+    when (event) {
+      EditorEvent.OpenDrawer -> {
+        composeUiState = composeUiState.copy(isDrawerOpen = true)
+        binding.editorDrawerLayout.openDrawer(GravityCompat.START)
+      }
+      EditorEvent.CloseDrawer -> {
+        composeUiState = composeUiState.copy(isDrawerOpen = false)
+        binding.editorDrawerLayout.closeDrawer(GravityCompat.START)
+      }
+      EditorEvent.ExpandBottomPanel -> {
+        composeUiState = composeUiState.copy(isBottomPanelVisible = true)
+        content.bottomSheet.tryExpandSheetFromControl()
+      }
+      EditorEvent.CollapseBottomPanel -> {
+        composeUiState = composeUiState.copy(isBottomPanelVisible = false)
+        content.bottomSheet.forceCollapse()
+      }
+      is EditorEvent.SelectTab -> content.tabs.getTabAt(event.index)?.select()
+      is EditorEvent.ReselectTab -> content.tabs.getTabAt(event.index)?.let(::onTabReselected)
+    }
+  }
+
   private fun checkIsDestroying() {
     if (!isDestroying && isFinishing) {
       isDestroying = true
@@ -785,13 +818,23 @@ abstract class BaseEditorActivity :
   private fun setupDrawers() {
     if (_binding == null) return
     val toggle =
-        ActionBarDrawerToggle(
+        object : ActionBarDrawerToggle(
             this,
             binding.editorDrawerLayout,
             content.editorToolbar,
             string.app_name,
             string.app_name,
-        )
+        ) {
+          override fun onDrawerOpened(drawerView: View) {
+            super.onDrawerOpened(drawerView)
+            composeUiState = composeUiState.copy(isDrawerOpen = true)
+          }
+
+          override fun onDrawerClosed(drawerView: View) {
+            super.onDrawerClosed(drawerView)
+            composeUiState = composeUiState.copy(isDrawerOpen = false)
+          }
+        }
 
     binding.editorDrawerLayout.addDrawerListener(toggle)
     toggle.syncState()
@@ -808,7 +851,7 @@ abstract class BaseEditorActivity :
   private fun onBuildStatusChanged() {
     if (isDestroying || _binding == null) return
     val visible = editorViewModel.isBuildInProgress || editorViewModel.isInitializing
-    composeUiState = composeUiState.copy(isBottomPanelVisible = visible)
+    composeUiState = composeUiState.copy(isBottomPanelVisible = visible, isBuildInProgress = visible)
     content.progressIndicator.visibility = if (visible) View.VISIBLE else View.GONE
     invalidateOptionsMenu()
   }
@@ -825,7 +868,18 @@ abstract class BaseEditorActivity :
 
     editorViewModel.observeFiles(this) { files ->
       composeUiState =
-          composeUiState.copy(openFiles = files?.map { file -> file.filePath.substringAfterLast('/') }.orEmpty())
+          composeUiState.copy(
+              openFiles =
+                  files
+                      ?.map { file ->
+                        EditorTabUiState(
+                            id = file.filePath,
+                            title = file.filePath.substringAfterLast('/'),
+                        )
+                      }
+                      .orEmpty(),
+              selectedFileIndex = editorViewModel.displayedFileIndex,
+          )
       if (isDestroying || _binding == null) return@observeFiles
       content.apply {
         if (files.isNullOrEmpty() && !hasNonEditorTabs()) {
