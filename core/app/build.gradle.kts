@@ -260,7 +260,7 @@ dependencies {
   implementation(projects.modules.zeroOnboardingGuide)
   implementation(projects.editor.impl)
   implementation(projects.editor.lexers)
-  implementation(projects.editor.editorLsp)
+ // implementation(projects.editor.editorLsp)
   implementation(projects.java.javacServices)
   implementation(projects.java.lsp)
   implementation(projects.lsp.kotlin)
