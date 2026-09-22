@@ -180,7 +180,7 @@ include(
     ":editor:impl",
     ":editor:lexers",
     ":editor:treesitter",
-    ":editor:editor-lsp",
+   // ":editor:editor-lsp",
     
     ":editor:tree-sitter-ndk:android-tree-sitter",
     ":editor:tree-sitter-ndk:annotation-processors",
