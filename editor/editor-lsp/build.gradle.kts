@@ -23,7 +23,7 @@
  ******************************************************************************/
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.publish)
+   // alias(libs.plugins.publish)
 }
 
 android {
