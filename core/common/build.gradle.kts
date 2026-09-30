@@ -20,9 +20,14 @@ import com.itsaky.androidide.build.config.BuildConfig
 plugins {
   id("com.android.library")
   id("kotlin-android")
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 
-android { namespace = "${BuildConfig.packageName}.common" }
+android {
+  namespace = "${BuildConfig.packageName}.common"
+
+  buildFeatures { compose = true }
+}
 
 dependencies {
   api(libs.common.editor)
