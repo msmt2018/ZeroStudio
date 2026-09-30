@@ -1,5 +1,9 @@
 package com.itsaky.androidide.activities.editor.ui.screen
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.ViewGroup
+import android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
@@ -25,28 +29,30 @@ import androidx.compose.material.icons.automirrored.filled.FileUpload
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.fragment.app.FragmentActivity
+import androidx.coordinatorlayout.widget.CoordinatorLayout
+import com.github.mikephil.charting.charts.LineChart
 import com.itsaky.androidide.R
+import com.itsaky.androidide.ui.EdgeSnapBubbleView
+import com.itsaky.androidide.ui.EditorBottomSheet
+import io.github.rosemoe.sora.widget.CodeEditor
 
 /** Compose equivalent of `layout_search_project.xml`. */
 @Composable
@@ -74,10 +80,23 @@ private fun EditorTextField(value: String, onValueChange: (String) -> Unit, labe
     OutlinedTextField(value, onValueChange, Modifier.fillMaxWidth().padding(horizontal = 8.dp), label = { Text(label) }, leadingIcon = { Icon(icon, null) }, supportingText = helper?.let { { Text(it) } }, singleLine = true)
 }
 
-/** Compose equivalent of `layout_mem_usage.xml`; callers provide the chart implementation. */
+/**
+ * Hosts the MPAndroidChart control used by `layout_mem_usage.xml`.
+ *
+ * `LineChart` is deliberately retained instead of drawing a look-alike Canvas chart: the editor's
+ * memory watcher updates its [LineChart.data], axes, legend, and invalidation state directly.
+ */
 @Composable
-fun MemoryUsageScreen(modifier: Modifier = Modifier, chart: @Composable BoxScope.() -> Unit = {}) {
-    Box(modifier = modifier.fillMaxWidth().height(200.dp), content = chart)
+fun MemoryUsageScreen(
+    modifier: Modifier = Modifier,
+    onChartCreated: (LineChart) -> Unit = {},
+    onChartUpdated: (LineChart) -> Unit = {},
+) {
+    AndroidView(
+        factory = { context -> LineChart(context).also(onChartCreated) },
+        modifier = modifier.fillMaxWidth().height(200.dp),
+        update = onChartUpdated,
+    )
 }
 
 /** Compose equivalent of the padded, medium-corner launcher image in `layout_editor_sidebar_header.xml`. */
@@ -144,48 +163,84 @@ fun DiagnosticInfo(message: String, modifier: Modifier = Modifier) {
 /**
  * Compose equivalent of `layout_editor_bottom_sheet.xml`.
  *
- * The Android-only gesture bubble, symbol input, tabs, and pager are explicit slots so existing
- * editor implementations can move to Compose independently without losing their behavior.
+ * This function intentionally hosts [EditorBottomSheet], rather than reimplementing its children
+ * as empty Compose slots. `EditorBottomSheet` owns the symbol-input touch exclusion, IME/peek
+ * height synchronization, page adapter, TabLayoutMediator, and custom bottom-sheet behavior.
+ * Replacing it with Compose placeholders breaks these contracts.
  */
 @Composable
 fun EditorBottomSheetScreen(
-    cursorPosition: String,
-    showBottomAction: Boolean,
     modifier: Modifier = Modifier,
-    gestureBubble: @Composable () -> Unit = {},
-    buildStatus: @Composable () -> Unit = {},
-    bottomAction: @Composable () -> Unit = {},
-    symbolInput: @Composable () -> Unit = {},
-    tabs: @Composable () -> Unit = {},
-    drawerContent: @Composable BoxScope.() -> Unit = {},
-    bottomSpace: @Composable () -> Unit = {},
+    onBottomSheetCreated: (EditorBottomSheet) -> Unit = {},
+    onBottomSheetUpdated: (EditorBottomSheet) -> Unit = {},
 ) {
-    Column(modifier.fillMaxSize().background(Color.Transparent)) {
-        Column(Modifier.fillMaxWidth()) {
-            Box(Modifier.fillMaxWidth().height(24.dp)) { gestureBubble() }
-            Surface(color = MaterialTheme.colorScheme.surface) {
-                Box {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).scale(0.9f),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                    ) {}
-                    Column {
-                    HorizontalDivider(thickness = 0.1.dp)
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f)) { if (showBottomAction) bottomAction() else buildStatus() }
-                        Text(cursorPosition, Modifier.padding(end = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, fontFamily = FontFamily.Monospace)
-                    }
-                    }
-                }
+    val activity = requireFragmentActivity()
+    AndroidView(
+        factory = {
+            CoordinatorLayout(activity).apply {
+                addView(
+                    EditorBottomSheet(activity).also(onBottomSheetCreated),
+                    CoordinatorLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
             }
-            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-            Surface(color = MaterialTheme.colorScheme.surface) { symbolInput() }
-        }
-        Column(Modifier.fillMaxWidth().weight(1f).background(MaterialTheme.colorScheme.surface)) {
-            tabs()
-            Box(Modifier.fillMaxWidth().weight(1f), content = drawerContent)
-            bottomSpace()
-        }
+        },
+        modifier = modifier.fillMaxSize(),
+        update = { coordinator ->
+            (coordinator.getChildAt(0) as? EditorBottomSheet)?.let(onBottomSheetUpdated)
+        },
+    )
+}
+
+/** Hosts the real custom gesture view and preserves its click and drag callbacks. */
+@Composable
+fun EdgeSnapBubble(
+    modifier: Modifier = Modifier,
+    onViewCreated: (EdgeSnapBubbleView) -> Unit = {},
+    onViewUpdated: (EdgeSnapBubbleView) -> Unit = {},
+) {
+    AndroidView(
+        factory = { context -> EdgeSnapBubbleView(context).also(onViewCreated) },
+        modifier = modifier.fillMaxWidth().height(24.dp),
+        update = onViewUpdated,
+    )
+}
+
+/**
+ * Hosts the real advanced symbol input control, including its paging, preferences, and editor
+ * insertion gestures. Callers must pass the live Sora [CodeEditor] instance.
+ */
+@Composable
+fun AdvancedSymbolInput(
+    editor: CodeEditor?,
+    modifier: Modifier = Modifier,
+    onOpenManager: (() -> Unit)? = null,
+    onViewCreated: (AdvancedSymbolInputView) -> Unit = {},
+) {
+    AndroidView(
+        factory = { context ->
+            AdvancedSymbolInputView(context).also {
+                it.elevation = 4f * context.resources.displayMetrics.density
+                onViewCreated(it)
+            }
+        },
+        modifier = modifier.fillMaxWidth(),
+        update = { view ->
+            editor?.let(view::bindEditor)
+            view.onOpenManagerListener = onOpenManager
+        },
+    )
+}
+
+@Composable
+private fun requireFragmentActivity(): FragmentActivity {
+    var context: Context = androidx.compose.ui.platform.LocalContext.current
+    while (context is ContextWrapper) {
+        if (context is FragmentActivity) return context
+        context = context.baseContext
     }
+    return context as? FragmentActivity
+        ?: error("EditorBottomSheetScreen must be hosted by a FragmentActivity")
 }
