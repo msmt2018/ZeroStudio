@@ -1,8 +1,5 @@
 package com.itsaky.androidide.activities.editor.ui.screen
 
-import android.content.Context
-import android.content.ContextWrapper
-import android.view.ViewGroup
 import android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -11,34 +8,37 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.CallSplit
-import androidx.compose.material.icons.automirrored.filled.FileDownload
-import androidx.compose.material.icons.automirrored.filled.FileUpload
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -46,13 +46,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.fragment.app.FragmentActivity
-import androidx.coordinatorlayout.widget.CoordinatorLayout
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.github.mikephil.charting.charts.LineChart
+import com.google.android.material.tabs.TabLayout
 import com.itsaky.androidide.R
 import com.itsaky.androidide.ui.EdgeSnapBubbleView
-import com.itsaky.androidide.ui.EditorBottomSheet
 import io.github.rosemoe.sora.widget.CodeEditor
+import androidx.viewpager2.widget.ViewPager2
 
 /** Compose equivalent of `layout_search_project.xml`. */
 @Composable
@@ -61,23 +63,36 @@ fun SearchProjectScreen(
     filterText: String,
     onSearchTextChange: (String) -> Unit,
     onFilterTextChange: (String) -> Unit,
+    modules: List<SearchProjectModule> = emptyList(),
+    onModuleCheckedChange: (moduleId: String, checked: Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
-    modules: @Composable ColumnScope.() -> Unit = {},
 ) {
     Column(
         modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)
             .verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
     ) {
         Text(stringResource(R.string.msg_search_modules), modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp))
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), content = modules)
-        EditorTextField(searchText, onSearchTextChange, stringResource(R.string.text_to_search), Icons.Default.Search)
-        EditorTextField(filterText, onFilterTextChange, stringResource(R.string.hint_find_project_filter), Icons.Default.FilterList, stringResource(R.string.msg_find_project_filter))
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+            modules.forEach { module ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = module.checked,
+                        onCheckedChange = { checked -> onModuleCheckedChange(module.id, checked) },
+                    )
+                    Text(module.name)
+                }
+            }
+        }
+        EditorTextField(searchText, onSearchTextChange, stringResource(R.string.text_to_search), R.drawable.ic_search)
+        EditorTextField(filterText, onFilterTextChange, stringResource(R.string.hint_find_project_filter), R.drawable.ic_filter, stringResource(R.string.msg_find_project_filter))
     }
 }
 
+data class SearchProjectModule(val id: String, val name: String, val checked: Boolean = true)
+
 @Composable
-private fun EditorTextField(value: String, onValueChange: (String) -> Unit, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, helper: String? = null) {
-    OutlinedTextField(value, onValueChange, Modifier.fillMaxWidth().padding(horizontal = 8.dp), label = { Text(label) }, leadingIcon = { Icon(icon, null) }, supportingText = helper?.let { { Text(it) } }, singleLine = true)
+private fun EditorTextField(value: String, onValueChange: (String) -> Unit, label: String, iconRes: Int, helper: String? = null) {
+    OutlinedTextField(value, onValueChange, Modifier.fillMaxWidth().padding(horizontal = 8.dp), label = { Text(label) }, leadingIcon = { Icon(painterResource(iconRes), null) }, supportingText = helper?.let { { Text(it) } }, singleLine = true)
 }
 
 /**
@@ -122,10 +137,10 @@ fun EditorFileTreeScreen(
 ) {
     Column(modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
         Row(Modifier.fillMaxWidth().height(46.dp).padding(top = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.AutoMirrored.Filled.CallSplit, stringResource(R.string.git_action_branch_switch), Modifier.size(20.dp))
+            Icon(painterResource(R.drawable.ic_git), stringResource(R.string.git_action_branch_switch), Modifier.size(20.dp))
             Text(branchStatus, Modifier.weight(1f).padding(start = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            IconButton(onPull, Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.FileDownload, stringResource(R.string.git_action_pull)) }
-            IconButton(onPush, Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.FileUpload, stringResource(R.string.git_action_push)) }
+            IconButton(onPull, Modifier.size(36.dp)) { Icon(painterResource(R.drawable.ic_git_pull), stringResource(R.string.git_action_pull)) }
+            IconButton(onPush, Modifier.size(36.dp)) { Icon(painterResource(R.drawable.ic_git_push), stringResource(R.string.git_action_push)) }
         }
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState()), content = fileTree)
@@ -163,36 +178,85 @@ fun DiagnosticInfo(message: String, modifier: Modifier = Modifier) {
 /**
  * Compose equivalent of `layout_editor_bottom_sheet.xml`.
  *
- * This function intentionally hosts [EditorBottomSheet], rather than reimplementing its children
- * as empty Compose slots. `EditorBottomSheet` owns the symbol-input touch exclusion, IME/peek
- * height synchronization, page adapter, TabLayoutMediator, and custom bottom-sheet behavior.
- * Replacing it with Compose placeholders breaks these contracts.
+ * The custom controls that Compose cannot replace ([EdgeSnapBubbleView],
+ * [AdvancedSymbolInputView], [TabLayout], and [ViewPager2]) remain real Android Views. This is
+ * the supported migration path for their existing gesture, adapter, and editor-binding contracts.
  */
 @Composable
 fun EditorBottomSheetScreen(
+    cursorPosition: String,
+    headerPage: EditorBottomSheetHeaderPage,
+    buildStatus: String,
+    actionText: String,
+    actionProgress: Float,
+    editor: CodeEditor?,
     modifier: Modifier = Modifier,
-    onBottomSheetCreated: (EditorBottomSheet) -> Unit = {},
-    onBottomSheetUpdated: (EditorBottomSheet) -> Unit = {},
+    onBubbleCreated: (EdgeSnapBubbleView) -> Unit = {},
+    onBubbleUpdated: (EdgeSnapBubbleView) -> Unit = {},
+    onSymbolInputCreated: (AdvancedSymbolInputView) -> Unit = {},
+    onOpenSymbolManager: (() -> Unit)? = null,
+    onTabsCreated: (TabLayout) -> Unit = {},
+    onTabsUpdated: (TabLayout) -> Unit = {},
+    onPagerCreated: (ViewPager2) -> Unit = {},
+    onPagerUpdated: (ViewPager2) -> Unit = {},
+    bottomSpace: @Composable () -> Unit = {},
 ) {
-    val activity = requireFragmentActivity()
-    AndroidView(
-        factory = {
-            CoordinatorLayout(activity).apply {
-                addView(
-                    EditorBottomSheet(activity).also(onBottomSheetCreated),
-                    CoordinatorLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
+    Column(modifier = modifier.fillMaxSize()) {
+        EdgeSnapBubble(onViewCreated = onBubbleCreated, onViewUpdated = onBubbleUpdated)
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            Box {
+                Surface(
+                    modifier = Modifier.matchParentSize().padding(horizontal = 16.dp).scale(0.9f),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                ) {}
+                Column {
+                    HorizontalDivider(thickness = 0.1.dp)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) {
+                            when (headerPage) {
+                                EditorBottomSheetHeaderPage.BuildStatus ->
+                                    EditorBuildStatus(buildStatus)
+                                EditorBottomSheetHeaderPage.Action ->
+                                    EditorBottomAction(actionText, actionProgress)
+                            }
+                        }
+                        Text(
+                            text = cursorPosition,
+                            modifier = Modifier.padding(end = 16.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        )
+                    }
+                }
             }
-        },
-        modifier = modifier.fillMaxSize(),
-        update = { coordinator ->
-            (coordinator.getChildAt(0) as? EditorBottomSheet)?.let(onBottomSheetUpdated)
-        },
-    )
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp) {
+            AdvancedSymbolInput(
+                editor = editor,
+                onOpenManager = onOpenSymbolManager,
+                onViewCreated = onSymbolInputCreated,
+            )
+        }
+        Column(Modifier.fillMaxWidth().weight(1f).background(MaterialTheme.colorScheme.surface)) {
+            AndroidView(
+                factory = { context -> TabLayout(context, null, 0, R.style.AppTheme_TabLayout).also(onTabsCreated) },
+                modifier = Modifier.fillMaxWidth(),
+                update = onTabsUpdated,
+            )
+            AndroidView(
+                factory = { context -> ViewPager2(context).also(onPagerCreated) },
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                update = onPagerUpdated,
+            )
+            bottomSpace()
+        }
+    }
 }
+
+enum class EditorBottomSheetHeaderPage { BuildStatus, Action }
 
 /** Hosts the real custom gesture view and preserves its click and drag callbacks. */
 @Composable
@@ -219,10 +283,23 @@ fun AdvancedSymbolInput(
     onOpenManager: (() -> Unit)? = null,
     onViewCreated: (AdvancedSymbolInputView) -> Unit = {},
 ) {
+    var symbolInput by remember { mutableStateOf<AdvancedSymbolInputView?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, symbolInput) {
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            symbolInput?.onHostResume()
+        }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) symbolInput?.onHostResume()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     AndroidView(
         factory = { context ->
             AdvancedSymbolInputView(context).also {
                 it.elevation = 4f * context.resources.displayMetrics.density
+                symbolInput = it
                 onViewCreated(it)
             }
         },
@@ -232,15 +309,4 @@ fun AdvancedSymbolInput(
             view.onOpenManagerListener = onOpenManager
         },
     )
-}
-
-@Composable
-private fun requireFragmentActivity(): FragmentActivity {
-    var context: Context = androidx.compose.ui.platform.LocalContext.current
-    while (context is ContextWrapper) {
-        if (context is FragmentActivity) return context
-        context = context.baseContext
-    }
-    return context as? FragmentActivity
-        ?: error("EditorBottomSheetScreen must be hosted by a FragmentActivity")
 }
