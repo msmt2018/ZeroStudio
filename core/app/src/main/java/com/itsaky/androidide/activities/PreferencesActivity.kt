@@ -21,13 +21,13 @@ import android.view.View
 import androidx.core.graphics.Insets
 import androidx.fragment.app.Fragment
 import com.itsaky.androidide.R
-import com.itsaky.androidide.app.EdgeToEdgeIDEActivity
+import com.itsaky.androidide.app.IDEActivity
 import com.itsaky.androidide.databinding.ActivityPreferencesBinding
 import com.itsaky.androidide.fragments.IDEPreferencesFragment
 import com.itsaky.androidide.preferences.IDEPreferences as prefs
 import com.itsaky.androidide.preferences.addRootPreferences
 
-class PreferencesActivity : EdgeToEdgeIDEActivity() {
+class PreferencesActivity : IDEActivity() {
 
   private var _binding: ActivityPreferencesBinding? = null
   private val binding: ActivityPreferencesBinding

@@ -18,10 +18,10 @@ package com.itsaky.androidide.app
 
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.Composable
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentActivity
 import com.google.android.material.R.attr
 import com.itsaky.androidide.eventbus.events.preferences.PreferenceChangeEvent
 import com.itsaky.androidide.tasks.cancelIfActive
@@ -36,13 +36,13 @@ import org.greenrobot.eventbus.ThreadMode
 /**
  * Compose counterpart of [BaseIDEActivity].
  *
- * [FragmentActivity] is a Jetpack [androidx.activity.ComponentActivity], so it provides the
+ * [AppCompatActivity] is a Jetpack [androidx.activity.ComponentActivity], so it provides the
  * standard Compose `setContent` host while retaining `supportFragmentManager` for activities that
  * are migrated incrementally. Apart from replacing `bindLayout()` with [ComposeContent], the
  * theme, system-bar, EventBus, coroutine, preference, and fragment contracts intentionally match
  * [BaseIDEActivity].
  */
-abstract class BaseComposeIDEActivity : FragmentActivity() {
+abstract class BaseComposeIDEActivity : AppCompatActivity() {
 
   companion object {
     private const val KEY_UI_MODE = "idepref_general_uiMode"
