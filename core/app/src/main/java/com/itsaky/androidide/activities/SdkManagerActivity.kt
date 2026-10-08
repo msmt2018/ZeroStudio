@@ -3,11 +3,11 @@ package com.itsaky.androidide.activities
 import android.os.Bundle
 import android.view.View
 import android.widget.FrameLayout
-import com.itsaky.androidide.app.EdgeToEdgeIDEActivity
+import com.itsaky.androidide.app.IDEActivity
 import com.itsaky.androidide.repository.sdkmanager.SdkHostFragment
 
 /** @author android_zero */
-class SdkManagerActivity : EdgeToEdgeIDEActivity() {
+class SdkManagerActivity : IDEActivity() {
 
   override fun bindLayout(): View {
     return FrameLayout(this).apply { id = android.R.id.content }
