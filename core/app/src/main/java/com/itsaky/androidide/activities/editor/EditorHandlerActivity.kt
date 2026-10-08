@@ -31,7 +31,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.tabs.TabLayout.Tab
+import com.itsaky.androidide.ui.ComposeEditorTabs.Tab
 import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
 import com.itsaky.androidide.utils.EditorFragmentTabRegistrar
 import com.itsaky.androidide.resources.R
@@ -105,6 +105,50 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
   private var openedFilesCacheWriteJob: Job? = null
   private var lastOpenedFilesCacheSignature: String? = null
 
+  private val composeTabs = mutableMapOf<String, androidx.compose.ui.platform.ComposeView>()
+
+  /** Opens or focuses a Compose page. [id] must identify the page, not its current position. */
+  fun openComposeTab(id: String, title: String, page: @androidx.compose.runtime.Composable () -> Unit): String {
+    val tabId = "compose:$id"
+    val existing = (0 until content.tabs.tabCount).mapNotNull(content.tabs::getTabAt)
+      .firstOrNull { it.tag == tabId }
+    if (existing != null) {
+      if (content.tabs.selectedTabPosition != existing.position) existing.select()
+      return tabId
+    }
+    val view = androidx.compose.ui.platform.ComposeView(this).apply {
+      this.id = android.view.View.generateViewId()
+      setViewCompositionStrategy(androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+      setContent { androidx.compose.material3.MaterialTheme { page() } }
+    }
+    composeTabs[tabId] = view
+    content.viewContainer.addView(view)
+    val tab = content.tabs.newTab().apply { tag = tabId; text = title }
+    content.tabs.addTab(tab)
+    if (content.tabs.selectedTabPosition != tab.position) tab.select()
+    return tabId
+  }
+
+  private fun closeComposeTab(tabId: String) {
+    val view = composeTabs.remove(tabId) ?: return
+    content.viewContainer.removeView(view)
+    view.disposeComposition()
+    (0 until content.tabs.tabCount).mapNotNull(content.tabs::getTabAt)
+      .firstOrNull { it.tag == tabId }?.let(content.tabs::removeTab)
+    refreshTabContent()
+  }
+
+  private fun refreshTabContent() {
+    val selected = content.tabs.getTabAt(content.tabs.selectedTabPosition)
+    if (selected == null) {
+      content.tabs.visibility = android.view.View.GONE
+      content.viewContainer.displayedChild = NO_EDITOR_CONTAINER_INDEX
+    } else {
+      onTabSelected(selected)
+    }
+    invalidateOptionsMenu()
+  }
+
   /** Fragment tab manager for managing fragment tabs like Markdown Preview */
   var fragmentTabManager: EditorFragmentTabManager? = null
     private set
@@ -129,9 +173,15 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     return getEditorAtIndex(index)
   }
 
-  /** Handles both file editor tabs and lifecycle-backed fragment tabs in the same TabLayout. */
+  /** Dispatches selection to file editors, lifecycle Fragments, or Compose pages. */
   override fun onTabSelected(tab: Tab) {
     val tabId = tab.tag as? String
+    composeTabs[tabId]?.let { view ->
+      fragmentTabManager?.hideAllTabs()
+      content.viewContainer.displayedChild = content.viewContainer.indexOfChild(view)
+      invalidateOptionsMenu()
+      return
+    }
     if (EditorFragmentTabManager.isFragmentTabId(tabId)) {
       content.viewContainer.displayedChild = FRAGMENT_CONTAINER_INDEX
       fragmentTabManager?.switchToTab(tabId!!)
@@ -144,7 +194,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     super.onTabSelected(tab)
   }
 
-  override fun hasNonEditorTabs(): Boolean = fragmentTabManager?.hasOpenTabs() == true
+  override fun hasNonEditorTabs(): Boolean = composeTabs.isNotEmpty() || fragmentTabManager?.hasOpenTabs() == true
 
   override fun resolveEditorIndexForTab(tab: Tab): Int {
     val tag = tab.tag as? String
@@ -179,6 +229,8 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
       binding = content,
       containerId = content.fragmentContainer.id
     )
+
+    content.tabs.onCloseTab = { tab -> closeTabAt(tab.position) }
 
     editorViewModel._displayedFile.observe(this) {
       this.content.editorContainer.displayedChild = it
@@ -915,7 +967,10 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     val editor = getEditorAtIndex(index)
     if (editor?.isModified == true) {
       log.info("File has been modified: {}", opened)
-      notifyFilesUnsaved(listOf(editor)) { closeFile(index, runAfter) }
+      notifyFilesUnsaved(listOf(editor)) {
+        val currentIndex = findIndexOfEditorByFile(opened)
+        if (currentIndex >= 0) closeFile(currentIndex, runAfter) else runAfter()
+      }
       return
     }
 
@@ -945,7 +1000,6 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     val closingEditor = getEditorAtIndex(index)
     val closingCodeEditor = closingEditor?.editor
     content.apply {
-      tabToRemove?.let { tabs.removeTab(it) }
       // PR-D6: 关闭前先取 CodeEditor,detach 断点侧边栏(并取消 Sora 事件订阅),
       // 避免侧边栏继续占用已销毁 view + NPE。
       val closingEditor = getEditorAtIndex(index)
@@ -953,6 +1007,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
         com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(codeEditor)
       }
       editorContainer.removeViewAt(index)
+      tabToRemove?.let { tabs.removeTab(it) }
     }
     if (closingCodeEditor != null) {
       com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(closingCodeEditor)
@@ -961,30 +1016,30 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     editorViewModel.areFilesModified = hasUnsavedFiles()
 
     updateTabs()
+    refreshTabContent()
     runAfter()
   }
 
   /**
-   * Close the tab at the given [tabIndex] in [content.tabs], dispatching to either the
-   * editor file close path or the fragment tab close path based on the tab's tag.
-   *
-   * The TabLayout position of a fragment tab is NOT a valid index for [closeFile]
-   * (which operates on the [editorViewModel] file list), so this method exists to
-   * give the tab-close actions a single entry point that understands both kinds of
-   * tabs.
+   * Closes a file, Fragment or Compose tab. A tab position is not a file index:
+   * file identity is resolved against the current file list before checking for unsaved edits.
    */
   override fun closeTabAt(tabIndex: Int, runAfter: () -> Unit) {
     if (isFinishing || isDestroyed) return
     val tab = content.tabs.getTabAt(tabIndex) ?: run {
-      // Fall back to the legacy file-index behaviour for any caller that may still
-      // hand us a stale file index (e.g. notifications, last-tab cleanup).
-      closeFile(tabIndex, runAfter)
+      runAfter()
       return
     }
     val tabId = tab.tag as? String
+    if (tabId in composeTabs) {
+      closeComposeTab(tabId!!)
+      runAfter()
+      return
+    }
     if (EditorFragmentTabManager.isFragmentTabId(tabId)) {
       log.info("Closing fragment tab at index {}: {}", tabIndex, tabId)
       fragmentTabManager?.closeTab(tabId!!)
+      refreshTabContent()
       runAfter()
       return
     }
@@ -1066,6 +1121,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
 
     editorViewModel.removeAllFiles()
     fragmentTabManager?.closeAllTabs()
+    composeTabs.keys.toList().forEach(::closeComposeTab)
     content.apply {
       // PR-D6: 在 removeAllViews 之前 detach 所有已注册的断点侧边栏
       // + 取消它们的 Sora 事件订阅,避免 NPE / 内存泄漏。
@@ -1079,6 +1135,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
       tabs.requestLayout()
       editorContainer.removeAllViews()
     }
+    refreshTabContent()
 
     runAfter()
   }
@@ -1099,50 +1156,25 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
       return
     }
 
-    val keepTab = content.tabs.getTabAt(keepTabIndex)
-    val keepTabId = keepTab?.tag as? String
-
-    val unsavedFiles =
-        editorViewModel.getOpenedFiles().map(this::getEditorForFile).filter {
-          it != null && it.isModified
-        }
+    val keepTab = content.tabs.getTabAt(keepTabIndex) ?: return
+    val keepTabId = keepTab.tag as? String ?: return
+    val unsavedFiles = editorViewModel.getOpenedFiles().map(this::getEditorForFile)
+      .filter { it != null && it.isModified }
     if (unsavedFiles.isNotEmpty()) {
-      notifyFilesUnsaved(unsavedFiles) { closeOtherTabs(keepTabIndex) }
+      notifyFilesUnsaved(unsavedFiles) {
+        val currentIndex = (0 until content.tabs.tabCount)
+          .firstOrNull { content.tabs.getTabAt(it)?.tag == keepTabId }
+        if (currentIndex != null) closeOtherTabs(currentIndex)
+      }
       return
     }
-
-    // Snapshot the tab ids to close before mutating the TabLayout, because closing a
-    // tab can shift positions and the caller expects the "keep" tab to remain at the
-    // same position when the operation completes.
-    val toClose = mutableListOf<String>()
-    for (i in 0 until content.tabs.tabCount) {
-      if (i == keepTabIndex) continue
-      val tag = content.tabs.getTabAt(i)?.tag as? String ?: continue
-      toClose.add(tag)
+    val toClose = (0 until content.tabs.tabCount).mapNotNull(content.tabs::getTabAt)
+      .filter { it !== keepTab }
+    toClose.forEach { tab ->
+      // Resolve each current position after previous closes shift both tab and file indices.
+      if (tab.position >= 0) closeTabAt(tab.position)
     }
-
-    // Close fragment tabs first; their lifecycle fragments are independent of the
-    // editor file indices so the order with the file-tab close loop does not matter.
-    val manager = fragmentTabManager
-    toClose.forEach { tabId ->
-      if (EditorFragmentTabManager.isFragmentTabId(tabId) && tabId != keepTabId) {
-        manager?.closeTab(tabId)
-      }
-    }
-
-    // Now close file-editor tabs. We close from the highest file index to the lowest
-    // so that the indices remain valid while the list shrinks.
-    val fileIndices = mutableListOf<Int>()
-    for (i in 0 until content.tabs.tabCount) {
-      if (i == keepTabIndex) continue
-      val tabId = content.tabs.getTabAt(i)?.tag as? String ?: continue
-      if (tabId.startsWith(EDITOR_TAB_PREFIX)) {
-        val idx = findIndexOfEditorByFile(File(tabId.removePrefix(EDITOR_TAB_PREFIX)))
-        if (idx >= 0) fileIndices.add(idx)
-      }
-    }
-    fileIndices.sortDescending()
-    fileIndices.forEach { idx -> closeFile(idx) }
+    if (content.tabs.selectedTabPosition != keepTab.position) keepTab.select()
   }
 
   /**
@@ -1153,7 +1185,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
    */
   override fun hasOpenTabs(): Boolean {
     return editorViewModel.getOpenedFiles().isNotEmpty() ||
-        (fragmentTabManager?.hasOpenTabs() == true)
+        (fragmentTabManager?.hasOpenTabs() == true) || composeTabs.isNotEmpty()
   }
 
   override fun getOpenedFiles() =
@@ -1202,6 +1234,8 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     }
 
     val editor = getEditorAtIndex(index) ?: return
+    val tab = getEditorTabAtIndex(index)
+    tab?.tag = editorTabId(event.newFile)
     editorViewModel.updateFile(index, event.newFile)
     editor.updateFile(event.newFile)
 
@@ -1353,7 +1387,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
             val t = content.tabs.getTabAt(i) ?: continue
             val tag = t.tag as? String ?: continue
             // fragment tab 由 fragmentTabManager 单独管理, 这里不碰
-            if (EditorFragmentTabManager.isFragmentTabId(tag)) continue
+            if (EditorFragmentTabManager.isFragmentTabId(tag) || tag in composeTabs) continue
             if (tag !in currentFileTags) {
                 log.warn("updateTabs: removing stale editor tab with tag={} (file no longer in model)", tag)
                 staleTabs.add(t)

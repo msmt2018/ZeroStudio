@@ -56,8 +56,8 @@ import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.IAxisValueFormatter
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.snackbar.Snackbar
-import com.google.android.material.tabs.TabLayout
-import com.google.android.material.tabs.TabLayout.Tab
+import com.itsaky.androidide.ui.ComposeEditorTabs
+import com.itsaky.androidide.ui.ComposeEditorTabs.Tab
 import com.itsaky.androidide.R
 import com.itsaky.androidide.R.string
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TABS
@@ -127,7 +127,7 @@ import org.slf4j.LoggerFactory
  */
 @Suppress("MemberVisibilityCanBePrivate")
 abstract class BaseEditorActivity :
-    IDEActivity(), TabLayout.OnTabSelectedListener, DiagnosticClickListener {
+    IDEActivity(), ComposeEditorTabs.OnTabSelectedListener, DiagnosticClickListener {
 
   protected val mLifecycleObserver = EditorActivityLifecyclerObserver()
   protected var diagnosticInfoBinding: LayoutDiagnosticInfoBinding? = null
@@ -817,7 +817,8 @@ abstract class BaseEditorActivity :
           viewContainer.displayedChild = NO_EDITOR_CONTAINER_INDEX
         } else {
           tabs.visibility = View.VISIBLE
-          viewContainer.displayedChild = EDITOR_CONTAINER_INDEX
+          val selected = tabs.getTabAt(tabs.selectedTabPosition)
+          if (selected != null) onTabSelected(selected)
         }
       }
       invalidateOptionsMenu()

@@ -1,6 +1,5 @@
 package com.itsaky.androidide.activities.editor.ui.screen
 
-import android.view.LayoutInflater
 import android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -28,6 +27,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.itsaky.androidide.ui.EditorTabStrip
+import androidx.compose.runtime.key
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -49,11 +52,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.github.mikephil.charting.charts.LineChart
-import com.google.android.material.tabs.TabLayout
 import com.itsaky.androidide.R
 import com.itsaky.androidide.ui.EdgeSnapBubbleView
 import io.github.rosemoe.sora.widget.CodeEditor
-import androidx.viewpager2.widget.ViewPager2
 
 /** Compose equivalent of `layout_search_project.xml`. */
 @Composable
@@ -177,9 +178,9 @@ fun DiagnosticInfo(message: String, modifier: Modifier = Modifier) {
 /**
  * Compose equivalent of `layout_editor_bottom_sheet.xml`.
  *
- * The custom controls that Compose cannot replace ([EdgeSnapBubbleView],
- * [AdvancedSymbolInputView], [TabLayout], and [ViewPager2]) remain real Android Views. This is
- * the supported migration path for their existing gesture, adapter, and editor-binding contracts.
+ * Tabs and pages are Compose content. Only the existing gesture and symbol-input controls
+ * use AndroidView. Selection and close requests belong to the caller, so closing a tab can
+ * first ask the user to save its content.
  */
 @Composable
 fun EditorBottomSheetScreen(
@@ -194,10 +195,10 @@ fun EditorBottomSheetScreen(
     onBubbleUpdated: (EdgeSnapBubbleView) -> Unit = {},
     onSymbolInputCreated: (AdvancedSymbolInputView) -> Unit = {},
     onOpenSymbolManager: (() -> Unit)? = null,
-    onTabsCreated: (TabLayout) -> Unit = {},
-    onTabsUpdated: (TabLayout) -> Unit = {},
-    onPagerCreated: (ViewPager2) -> Unit = {},
-    onPagerUpdated: (ViewPager2) -> Unit = {},
+    tabs: List<EditorScreenTab> = emptyList(),
+    selectedTabId: String? = null,
+    onSelectTab: (String) -> Unit = {},
+    onCloseTab: (String) -> Unit = {},
     bottomSpace: @Composable () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -240,24 +241,36 @@ fun EditorBottomSheetScreen(
             )
         }
         Column(Modifier.fillMaxWidth().weight(1f).background(MaterialTheme.colorScheme.surface)) {
-            AndroidView(
-                factory = { context ->
-                    (LayoutInflater.from(context).inflate(
-                        R.layout.layout_editor_bottom_sheet_tabs, null, false,
-                    ) as TabLayout).also(onTabsCreated)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                update = onTabsUpdated,
+            val selected = tabs.firstOrNull { it.id == selectedTabId } ?: tabs.firstOrNull()
+            EditorTabStrip(
+                tabs = tabs.map { it.id },
+                selectedTab = selected?.id,
+                title = { id -> tabs.first { it.id == id }.title },
+                onSelect = onSelectTab,
+                onClose = onCloseTab,
             )
-            AndroidView(
-                factory = { context -> ViewPager2(context).also(onPagerCreated) },
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                update = onPagerUpdated,
-            )
+            val pageState = rememberSaveableStateHolder()
+            val previousIds = remember { mutableSetOf<String>() }
+            LaunchedEffect(tabs.map { it.id }) {
+                val currentIds = tabs.map { it.id }.toSet()
+                (previousIds - currentIds).forEach(pageState::removeState)
+                previousIds.clear()
+                previousIds.addAll(currentIds)
+            }
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                selected?.let { tab ->
+                    key(tab.id) {
+                        pageState.SaveableStateProvider(tab.id) { tab.content() }
+                    }
+                }
+            }
             bottomSpace()
         }
     }
 }
+
+/** A stable page ID keeps saved Compose state attached to its tab across insertions/removals. */
+data class EditorScreenTab(val id: String, val title: String, val content: @Composable () -> Unit)
 
 enum class EditorBottomSheetHeaderPage { BuildStatus, Action }
 

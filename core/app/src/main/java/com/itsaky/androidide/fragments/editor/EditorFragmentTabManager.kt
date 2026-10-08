@@ -3,6 +3,7 @@ package com.itsaky.androidide.fragments.editor
 import android.os.Bundle
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.ContentEditorBinding
 import java.io.File
@@ -80,11 +81,9 @@ class EditorFragmentTabManager(
 
     openTabs[tabId] = openTab
 
-    // Add tab to TabLayout
-    addTabToLayout(entry, filePath, tabId)
-
-    // Add fragment to container
+    // Install the Fragment before adding the first tab triggers selection.
     addFragmentToContainer(fragment, tabId)
+    addTabToLayout(entry, filePath, tabId)
 
     // Switch to the new tab
     switchToTab(tabId)
@@ -151,7 +150,7 @@ class EditorFragmentTabManager(
     val tabIndex = findTabIndex(tabId)
     if (tabIndex >= 0) {
       val tab = binding.tabs.getTabAt(tabIndex)
-      if (tab != null) {
+      if (tab != null && binding.tabs.selectedTabPosition != tabIndex) {
         binding.tabs.selectTab(tab)
       }
     }
@@ -166,7 +165,9 @@ class EditorFragmentTabManager(
   fun hideAllTabs() {
     if (openTabs.isEmpty()) return
     val transaction = activity.supportFragmentManager.beginTransaction()
-    openTabs.values.forEach { transaction.hide(it.fragment) }
+    openTabs.values.forEach {
+      transaction.hide(it.fragment).setMaxLifecycle(it.fragment, Lifecycle.State.STARTED)
+    }
     transaction.commitAllowingStateLoss()
   }
 
@@ -259,6 +260,7 @@ class EditorFragmentTabManager(
     activity.supportFragmentManager.beginTransaction()
       .add(containerId, fragment, tabId)
       .hide(fragment)
+      .setMaxLifecycle(fragment, Lifecycle.State.STARTED)
       .commitNowAllowingStateLoss()
   }
 
@@ -266,9 +268,9 @@ class EditorFragmentTabManager(
     val transaction = activity.supportFragmentManager.beginTransaction()
     openTabs.values.forEach { openTab ->
       if (openTab.fragment == fragment) {
-        transaction.show(openTab.fragment)
+        transaction.show(openTab.fragment).setMaxLifecycle(openTab.fragment, Lifecycle.State.RESUMED)
       } else {
-        transaction.hide(openTab.fragment)
+        transaction.hide(openTab.fragment).setMaxLifecycle(openTab.fragment, Lifecycle.State.STARTED)
       }
     }
     transaction.commitAllowingStateLoss()
