@@ -26,6 +26,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.annotation.CallSuper
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView

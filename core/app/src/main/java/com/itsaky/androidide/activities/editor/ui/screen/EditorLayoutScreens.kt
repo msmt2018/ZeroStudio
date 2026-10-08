@@ -1,5 +1,6 @@
 package com.itsaky.androidide.activities.editor.ui.screen
 
+import android.view.LayoutInflater
 import android.zero.studio.widget.editor.symbolinput.AdvancedSymbolInputView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -12,10 +13,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,7 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.github.mikephil.charting.charts.LineChart
 import com.google.android.material.tabs.TabLayout
 import com.itsaky.androidide.R
@@ -242,7 +241,11 @@ fun EditorBottomSheetScreen(
         }
         Column(Modifier.fillMaxWidth().weight(1f).background(MaterialTheme.colorScheme.surface)) {
             AndroidView(
-                factory = { context -> TabLayout(context, null, 0, R.style.AppTheme_TabLayout).also(onTabsCreated) },
+                factory = { context ->
+                    (LayoutInflater.from(context).inflate(
+                        R.layout.layout_editor_bottom_sheet_tabs, null, false,
+                    ) as TabLayout).also(onTabsCreated)
+                },
                 modifier = Modifier.fillMaxWidth(),
                 update = onTabsUpdated,
             )
