@@ -50,7 +50,6 @@ import com.itsaky.androidide.utils.flashError
 import com.itsaky.androidide.utils.flashSuccess
 import com.itsaky.androidide.viewmodel.FileTreeViewModel
 import java.io.File
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -206,7 +205,7 @@ class FileTreeFragment : BottomSheetDialogFragment(), FileClickListener, FileLon
       return
     }
 
-    CoroutineScope(Dispatchers.Main).launch {
+    viewLifecycleOwner.lifecycleScope.launch {
       binding!!.horizontalCroll.visibility = View.GONE
       binding!!.loading.visibility = View.VISIBLE
 

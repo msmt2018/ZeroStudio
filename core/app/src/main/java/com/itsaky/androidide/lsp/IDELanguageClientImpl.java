@@ -292,7 +292,7 @@ public void publishDiagnostics(DiagnosticResult result) {
       if (file.exists() && file.isFile() && FileUtils.isUtf8(file)) {
         final var range = params.getSelection();
         var frag =
-            activity.getEditorAtIndex(activity.getContent().tabs.getSelectedTabPosition());
+            activity.getCurrentEditor();
         if (frag != null
             && frag.getFile() != null
             && frag.getEditor() != null

@@ -1,0 +1,8 @@
+<resources>
+    <string name="editor_guide_drawer">Tap the arrow or build status to open the IDE drawer. Drag the sheet to resize or dismiss it.</string>
+    <string name="editor_guide_symbols">Swipe horizontally to switch symbol groups. Use the arrow to expand or collapse symbols; long press a symbol for its alternate action.</string>
+    <string name="editor_memory_usage">Memory usage</string>
+    <string name="editor_actions">Actions</string>
+    <string name="editor_clear_output">Clear output</string>
+    <string name="editor_share_output">Share output</string>
+</resources>

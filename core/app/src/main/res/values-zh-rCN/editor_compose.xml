@@ -1,0 +1,8 @@
+<resources>
+    <string name="editor_guide_drawer">点击箭头或构建状态打开 IDE 抽屉，拖动抽屉可调整高度或关闭。</string>
+    <string name="editor_guide_symbols">左右滑动切换符号分组，点击箭头展开或收起，长按符号执行备用操作。</string>
+    <string name="editor_memory_usage">内存使用情况</string>
+    <string name="editor_actions">操作</string>
+    <string name="editor_clear_output">清空输出</string>
+    <string name="editor_share_output">分享输出</string>
+</resources>

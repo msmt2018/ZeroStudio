@@ -49,7 +49,7 @@ class FileTreeSidebarAction(context: Context, override val order: Int) : Abstrac
 
   init {
     icon = null
-    // label = context.getString(R.string.msg_file_tree)
+    label = context.getString(R.string.msg_file_tree)
     icon = ContextCompat.getDrawable(context, R.drawable.ic_folder)
   }
 }

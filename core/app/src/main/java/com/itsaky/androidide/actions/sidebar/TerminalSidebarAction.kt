@@ -70,7 +70,7 @@ class TerminalSidebarAction(context: Context, override val order: Int) : Abstrac
   override val fragmentClass: KClass<out Fragment> = TermuxFragment::class
 
   init {
-    // label = context.getString(R.string.title_terminal)
+    label = context.getString(R.string.title_terminal)
     icon = ContextCompat.getDrawable(context, R.drawable.ic_terminal)
   }
 }

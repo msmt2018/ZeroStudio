@@ -164,20 +164,8 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
   @SuppressLint("ClickableViewAccessibility")
   private fun bindBottomBarHeightListener() {
     val activity = context as? BaseEditorActivity ?: return
-    val symbolInputView = activity.symbolInputView
-    if (symbolInputView == null || symbolInputView === bottomBarListenerView) return
-    // Remove any previous listener to avoid leaks.
-    bottomBarListenerView?.removeOnLayoutChangeListener(bottomBarListener)
-    bottomBarHeight = symbolInputView.height
-    val listener = View.OnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
-      val newHeight = bottom - top
-      if (newHeight != bottomBarHeight) {
-        bottomBarHeight = newHeight
-      }
-    }
-    symbolInputView.addOnLayoutChangeListener(listener)
-    bottomBarListenerView = symbolInputView
-    bottomBarListener = listener
+    // Compose measures the editor above the symbol bar and IME; there is no overlaid View.
+    bottomBarHeight = 0
   }
 
   private fun adjustCursorLineForObscuredArea(

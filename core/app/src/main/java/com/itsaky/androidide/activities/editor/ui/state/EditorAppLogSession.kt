@@ -1,0 +1,170 @@
+/*
+ *  This file is part of AndroidIDE.
+ *
+ *  AndroidIDE is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  AndroidIDE is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package com.itsaky.androidide.activities.editor.ui.state
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.itsaky.androidide.debugger.DebuggerController
+import com.itsaky.androidide.preferences.internal.DevOpsPreferences
+import com.itsaky.androidide.services.log.ConnectionObserverParams
+import com.itsaky.androidide.services.log.LogReceiverImpl
+import com.itsaky.androidide.services.log.LogReceiverService
+import com.itsaky.androidide.services.log.LogReceiverServiceConnection
+import com.itsaky.androidide.services.log.lookupLogService
+import java.util.concurrent.atomic.AtomicBoolean
+import org.slf4j.LoggerFactory
+
+/** Receives application logs for the editor lifetime, including while the drawer is closed. */
+class EditorAppLogSession(private val context: Context, private val appendLog: (com.itsaky.androidide.models.LogLine) -> Unit) {
+  private val isBoundToLogReceiver = AtomicBoolean(false)
+
+  private var logServiceConnection: LogReceiverServiceConnection? = null
+  private var logReceiverImpl: LogReceiverImpl? = null
+  private val debuggerLogConsumer = DebuggerController.AppLogConsumer { appendLog(it) }
+
+  private val logServiceConnectionObserver =
+      object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+          if (intent?.action != LogReceiverService.ACTION_CONNECTION_UPDATE) {
+            log.warn(
+                "Received invalid broadcast. Action '${LogReceiverService.ACTION_CONNECTION_UPDATE}' is expected."
+            )
+            return
+          }
+
+          val params =
+              ConnectionObserverParams.from(intent)
+                  ?: run {
+                    log.warn(
+                        "Received ${LogReceiverService.ACTION_CONNECTION_UPDATE} broadcast, but invalid extras were provided: $intent"
+                    )
+                    return
+                  }
+
+          val isBound = isBoundToLogReceiver.get()
+          if (!isBound && params.totalConnections > 0) {
+            // log receiver has been connected to one or more log senders
+            // bind to the receiver and notify senders to start reading logs
+            bindToLogReceiver()
+            return
+          }
+
+          if (isBound && params.totalConnections == 0) {
+            // all log senders have been disconnected from the log receiver
+            // unbind from the log receiver
+            unbindFromLogReceiver()
+            return
+          }
+        }
+      }
+
+  companion object {
+
+    private val log = LoggerFactory.getLogger(EditorAppLogSession::class.java)
+  }
+
+  fun start() {
+    registerLogConnectionObserver()
+    bindToLogReceiver()
+    DebuggerController.getInstance().addAppLogConsumer(debuggerLogConsumer)
+  }
+  fun close() {
+    unregisterLogConnectionObserver()
+    DebuggerController.getInstance().removeAppLogConsumer(debuggerLogConsumer)
+    if (isBoundToLogReceiver.get()) unbindFromLogReceiver()
+  }
+  private fun registerLogConnectionObserver() {
+    try {
+      val intentFilter = IntentFilter(LogReceiverService.ACTION_CONNECTION_UPDATE)
+      LocalBroadcastManager.getInstance(context)
+          .registerReceiver(logServiceConnectionObserver, intentFilter)
+    } catch (e: Exception) {
+      log.warn("Failed to register connection observer for LogReceiverService", e)
+    }
+  }
+
+  private fun unregisterLogConnectionObserver() {
+    try {
+      LocalBroadcastManager.getInstance(context)
+          .unregisterReceiver(logServiceConnectionObserver)
+    } catch (e: Exception) {
+      log.warn("Failed to unregister connection observer for LogReceiverService", e)
+    }
+  }
+
+  private fun bindToLogReceiver() {
+    try {
+      if (!DevOpsPreferences.logsenderEnabled) {
+        log.info("LogSender is disabled. LogReceiver service won't be started...")
+
+        // release the connection listener
+        logServiceConnection?.onConnected = null
+        return
+      }
+
+      val intent =
+          Intent(context, LogReceiverService::class.java)
+              .setAction(LogReceiverService.ACTION_CONNECT_LOG_CONSUMER)
+
+      val serviceConnection =
+          logServiceConnection
+              ?: LogReceiverServiceConnection { binder ->
+                    logReceiverImpl = binder
+                    lookupLogService()?.setConsumer(appendLog)
+                  }
+                  .also { serviceConnection -> logServiceConnection = serviceConnection }
+
+      val flags = Context.BIND_IMPORTANT or Context.BIND_AUTO_CREATE
+      check(context.bindService(intent, serviceConnection, flags))
+      this.isBoundToLogReceiver.set(true)
+      log.info("LogReceiver service is being started and bound to the app-log consumer")
+    } catch (err: Throwable) {
+      log.error("Failed to start LogReceiver service", err)
+    }
+  }
+
+  private fun unbindFromLogReceiver() {
+    try {
+
+      lookupLogService()?.setConsumer(null)
+      logReceiverImpl?.disconnectAll()
+
+      val serviceConnection =
+          logServiceConnection
+              ?: run {
+                log.warn("Trying to unbind from LogReceiverService, but ServiceConnection is null")
+                return
+              }
+
+      context.unbindService(serviceConnection)
+
+      this.isBoundToLogReceiver.set(false)
+      log.info("Unbound from LogReceiver service")
+    } catch (e: Exception) {
+      log.error("Failed to unbind from LogReceiver service")
+    } finally {
+      this.logServiceConnection?.onConnected = null
+      this.logServiceConnection = null
+
+      this.logReceiverImpl = null
+    }
+  }
+}

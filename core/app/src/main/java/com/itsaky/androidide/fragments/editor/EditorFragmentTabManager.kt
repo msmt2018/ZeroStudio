@@ -2,300 +2,58 @@ package com.itsaky.androidide.fragments.editor
 
 import android.os.Bundle
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.Lifecycle
-import com.itsaky.androidide.R
-import com.itsaky.androidide.databinding.ContentEditorBinding
+import com.itsaky.androidide.activities.editor.ui.state.EditorPage
+import com.itsaky.androidide.activities.editor.ui.state.EditorUiState
 import java.io.File
 import java.util.UUID
 
-/**
- * Manager for handling fragment tabs in EditorHandlerActivity.
- *
- * This class manages the lifecycle of fragment tabs, including:
- * - Adding new tabs
- * - Switching between tabs
- * - Closing tabs
- * - Handling fragment arguments
- *
- * @author ZeroStudio
- */
-class EditorFragmentTabManager(
-  private val activity: FragmentActivity,
-  private val binding: ContentEditorBinding,
-  private val containerId: Int
-) {
+/** Registers Fragment-backed documents; AndroidFragment owns their actual lifecycle. */
+class EditorFragmentTabManager(private val state: EditorUiState) {
+  data class OpenTab(val id: String, val entry: FragmentTabEntry, val arguments: Bundle?, val filePath: String?)
+  private val openTabs = linkedMapOf<String, OpenTab>()
 
-  /**
-   * Data class representing an open fragment tab.
-   */
-  data class OpenTab(
-    val id: String,
-    val entry: FragmentTabEntry,
-    val fragment: Fragment,
-    val arguments: Bundle?,
-    val filePath: String?
-  )
-
-  private val openTabs = mutableMapOf<String, OpenTab>()
-
-  /**
-   * Opens a fragment tab with the given entry and optional file path.
-   *
-   * @param entry The FragmentTabEntry to open
-   * @param filePath Optional file path to associate with this tab
-   * @param args Optional arguments to pass to the fragment
-   * @return The id of the opened tab
-   */
-  fun openTab(
-    entry: FragmentTabEntry,
-    filePath: String? = null,
-    args: Bundle? = null
-  ): String {
-    val tabId = generateTabId(entry, filePath)
-
-    // If tab already open, just switch to it
-    if (openTabs.containsKey(tabId)) {
-      switchToTab(tabId)
-      return tabId
-    }
-
-    // Create new fragment instance
-    val fragment = entry.createFragment()
-
-    // Prepare arguments
-    val fragmentArgs = args ?: Bundle()
-    if (filePath != null) {
-      fragmentArgs.putString(ARG_FILE_PATH, filePath)
-    }
-    fragment.arguments = fragmentArgs
-
-    // Create open tab
-    val openTab = OpenTab(
-      id = tabId,
-      entry = entry,
-      fragment = fragment,
-      arguments = fragmentArgs,
-      filePath = filePath
-    )
-
-    openTabs[tabId] = openTab
-
-    // Install the Fragment before adding the first tab triggers selection.
-    addFragmentToContainer(fragment, tabId)
-    addTabToLayout(entry, filePath, tabId)
-
-    // Switch to the new tab
-    switchToTab(tabId)
-
-    return tabId
+  fun openTab(entry: FragmentTabEntry, filePath: String? = null, args: Bundle? = null): String {
+    val id = "$FRAGMENT_TAB_PREFIX${entry.id}:${filePath ?: UUID.randomUUID()}"
+    if (id in openTabs) { switchToTab(id); return id }
+    val arguments = Bundle(args ?: Bundle.EMPTY).apply { filePath?.let { putString(ARG_FILE_PATH, it) } }
+    val title = filePath?.let { File(it).name } ?: entry.title
+    openTabs[id] = OpenTab(id, entry, arguments, filePath)
+    state.documents.register(EditorPage.FragmentPage(id, title, entry.fragmentClass, arguments))
+    val tab = state.tabs.newTab().apply { tag = id; text = title; setIcon(entry.iconRes) }
+    state.tabs.addTab(tab)
+    switchToTab(id)
+    return id
   }
-
-  /**
-   * Opens a fragment tab for a file with the given path.
-   *
-   * @param filePath The path of the file to open
-   * @param fileExtension The file extension (e.g., "md", "txt")
-   * @param args Optional arguments to pass to the fragment
-   * @return The id of the opened tab, or null if no matching entry found
-   */
-  fun openFileTab(
-    filePath: String,
-    fileExtension: String,
-    args: Bundle? = null
-  ): String? {
-    val entries = FragmentTabRegistry.getByFileExtension(fileExtension)
-    if (entries.isEmpty()) {
-      return null
+  fun openFileTab(filePath: String, fileExtension: String, args: Bundle? = null): String? =
+    FragmentTabRegistry.getByFileExtension(fileExtension).firstOrNull()?.let { openTab(it, filePath, args) }
+  fun switchToTab(id: String): Boolean {
+    if (id !in openTabs) return false
+    state.documents.select(id)
+    state.surface = 1
+    (0 until state.tabs.tabCount).mapNotNull(state.tabs::getTabAt).firstOrNull { it.tag == id }?.let {
+      if (it.position != state.tabs.selectedTabPosition) it.select()
     }
-
-    // Use the first matching entry (highest priority due to ordering)
-    val entry = entries.first()
-    return openTab(entry, filePath, args)
-  }
-
-  /**
-   * Closes a tab by its id.
-   *
-   * @param tabId The id of the tab to close
-   * @return true if the tab was found and closed, false otherwise
-   */
-  fun closeTab(tabId: String): Boolean {
-    val openTab = openTabs.remove(tabId) ?: return false
-
-    // Remove from TabLayout
-    val tabIndex = findTabIndex(tabId)
-    if (tabIndex >= 0) {
-      binding.tabs.removeTabAt(tabIndex)
-    }
-
-    // Remove fragment from container
-    activity.supportFragmentManager.beginTransaction()
-      .remove(openTab.fragment)
-      .commitAllowingStateLoss()
-
     return true
   }
-
-  /**
-   * Switches to a tab by its id.
-   *
-   * @param tabId The id of the tab to switch to
-   * @return true if the tab was found and switched to, false otherwise
-   */
-  fun switchToTab(tabId: String): Boolean {
-    val openTab = openTabs[tabId] ?: return false
-
-    // Update tab selection in TabLayout
-    val tabIndex = findTabIndex(tabId)
-    if (tabIndex >= 0) {
-      val tab = binding.tabs.getTabAt(tabIndex)
-      if (tab != null && binding.tabs.selectedTabPosition != tabIndex) {
-        binding.tabs.selectTab(tab)
-      }
-    }
-
-    // Show the fragment, hide others
-    showFragment(openTab.fragment)
-
+  fun closeTab(id: String): Boolean {
+    if (openTabs.remove(id) == null) return false
+    state.documents.unregister(id)
+    (0 until state.tabs.tabCount).mapNotNull(state.tabs::getTabAt).firstOrNull { it.tag == id }?.let(state.tabs::removeTab)
     return true
   }
-
-  /** Hides all lifecycle fragment tabs while an editor-file tab is selected. */
-  fun hideAllTabs() {
-    if (openTabs.isEmpty()) return
-    val transaction = activity.supportFragmentManager.beginTransaction()
-    openTabs.values.forEach {
-      transaction.hide(it.fragment).setMaxLifecycle(it.fragment, Lifecycle.State.STARTED)
-    }
-    transaction.commitAllowingStateLoss()
-  }
-
-  /**
-   * Gets the currently open tab id.
-   *
-   * @return The id of the current tab, or null if no tabs are open
-   */
-  fun getCurrentTabId(): String? {
-    val selectedTabPosition = binding.tabs.selectedTabPosition
-    val selectedTab = if (selectedTabPosition != -1) {
-      binding.tabs.getTabAt(selectedTabPosition)
-    } else {
-      null
-    }
-    return selectedTab?.tag as? String
-  }
-
-  /**
-   * Gets all open tabs.
-   *
-   * @return List of all open tabs
-   */
-  fun getOpenTabs(): List<OpenTab> {
-    return openTabs.values.toList()
-  }
-
+  fun hideAllTabs() = Unit // Leaving the composition saves and destroys the Fragment view via AndroidX.
+  fun getCurrentTabId(): String? = state.tabs.getTabAt(state.tabs.selectedTabPosition)?.tag as? String
+  fun getOpenTabs(): List<OpenTab> = openTabs.values.toList()
   fun hasOpenTabs(): Boolean = openTabs.isNotEmpty()
-
-  /**
-   * Checks if a tab is open for the given file path.
-   *
-   * @param filePath The file path to check
-   * @return true if a tab is open for this file, false otherwise
-   */
-  fun isTabOpen(filePath: String): Boolean {
-    return openTabs.values.any { it.filePath == filePath }
+  fun isTabOpen(filePath: String): Boolean = openTabs.values.any { it.filePath == filePath }
+  fun getTab(id: String): OpenTab? = openTabs[id]
+  fun updateTabTitle(id: String, title: String) {
+    (0 until state.tabs.tabCount).mapNotNull(state.tabs::getTabAt).firstOrNull { it.tag == id }?.text = title
   }
-
-  /**
-   * Gets an open tab by its id.
-   *
-   * @param tabId The id of the tab to retrieve
-   * @return The OpenTab if found, null otherwise
-   */
-  fun getTab(tabId: String): OpenTab? {
-    return openTabs[tabId]
-  }
-
-  /**
-   * Updates the title of a tab.
-   *
-   * @param tabId The id of the tab to update
-   * @param newTitle The new title to set
-   */
-  fun updateTabTitle(tabId: String, newTitle: String) {
-    openTabs[tabId]?.let { openTab ->
-      val tabIndex = findTabIndex(tabId)
-      if (tabIndex >= 0) {
-        binding.tabs.getTabAt(tabIndex)?.text = newTitle
-      }
-    }
-  }
-
-  private fun generateTabId(entry: FragmentTabEntry, filePath: String?): String {
-    return if (filePath != null) {
-      "$FRAGMENT_TAB_PREFIX${entry.id}:$filePath"
-    } else {
-      "$FRAGMENT_TAB_PREFIX${entry.id}:${UUID.randomUUID()}"
-    }
-  }
-
-  private fun addTabToLayout(entry: FragmentTabEntry, filePath: String?, tabId: String) {
-    val tab = binding.tabs.newTab()
-    tab.tag = tabId
-    tab.text = getTabTitle(entry, filePath)
-    tab.setIcon(entry.iconRes)
-    binding.tabs.addTab(tab)
-  }
-
-  private fun getTabTitle(entry: FragmentTabEntry, filePath: String?): String {
-    return if (filePath != null) {
-      File(filePath).name
-    } else {
-      entry.title
-    }
-  }
-
-  private fun addFragmentToContainer(fragment: Fragment, tabId: String) {
-    activity.supportFragmentManager.beginTransaction()
-      .add(containerId, fragment, tabId)
-      .hide(fragment)
-      .setMaxLifecycle(fragment, Lifecycle.State.STARTED)
-      .commitNowAllowingStateLoss()
-  }
-
-  private fun showFragment(fragment: Fragment) {
-    val transaction = activity.supportFragmentManager.beginTransaction()
-    openTabs.values.forEach { openTab ->
-      if (openTab.fragment == fragment) {
-        transaction.show(openTab.fragment).setMaxLifecycle(openTab.fragment, Lifecycle.State.RESUMED)
-      } else {
-        transaction.hide(openTab.fragment).setMaxLifecycle(openTab.fragment, Lifecycle.State.STARTED)
-      }
-    }
-    transaction.commitAllowingStateLoss()
-  }
-
-  private fun findTabIndex(tabId: String): Int {
-    for (i in 0 until binding.tabs.tabCount) {
-      if (binding.tabs.getTabAt(i)?.tag == tabId) {
-        return i
-      }
-    }
-    return -1
-  }
-
-  /**
-   * Cleans up all open tabs and releases resources.
-   */
-  fun closeAllTabs() {
-    openTabs.keys.toList().forEach { closeTab(it) }
-  }
-
+  fun closeAllTabs() { openTabs.keys.toList().forEach(::closeTab) }
   companion object {
     private const val FRAGMENT_TAB_PREFIX = "fragment:"
     const val ARG_FILE_PATH = "file_path"
-
-    fun isFragmentTabId(tabId: String?): Boolean = tabId?.startsWith(FRAGMENT_TAB_PREFIX) == true
+    fun isFragmentTabId(id: String?): Boolean = id?.startsWith(FRAGMENT_TAB_PREFIX) == true
   }
 }

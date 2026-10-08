@@ -2,9 +2,10 @@ package com.itsaky.androidide.ui
 
 import android.content.Context
 import android.graphics.drawable.Drawable
-import android.util.AttributeSet
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -21,8 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.AbstractComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -58,6 +57,8 @@ fun <T> EditorTabStrip(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 icon(tab)
                                 Text(title(tab), maxLines = 1)
+                                // Keep the close button's expanded touch target away from short titles.
+                                Spacer(Modifier.width(8.dp))
                                 IconButton(onClick = { onClose(tab) }, modifier = Modifier.size(40.dp)) {
                                     Icon(
                                         painterResource(R.drawable.ic_close),
@@ -75,14 +76,12 @@ fun <T> EditorTabStrip(
 }
 
 /**
- * Compose tab strip for the View-based editor host. No Material View TabLayout is used.
+ * Observable tab controller and Compose renderer for editor hosts.
  * The small imperative facade keeps existing file-save and Fragment lifecycle controllers
  * responsible for accepting close requests; the close button never discards a file itself.
  */
-class ComposeEditorTabs @JvmOverloads constructor(
-    context: Context,
-    attrs: AttributeSet? = null,
-) : AbstractComposeView(context, attrs) {
+class ComposeEditorTabs(private val context: Context) {
+    var visible by mutableStateOf(true)
     private var tabs by mutableStateOf<List<Tab>>(emptyList())
     private var selectedTab by mutableStateOf<Tab?>(null)
     private val listeners = mutableListOf<OnTabSelectedListener>()
@@ -90,16 +89,12 @@ class ComposeEditorTabs @JvmOverloads constructor(
     val tabCount get() = tabs.size
     val selectedTabPosition get() = tabs.indexOf(selectedTab)
 
-    init {
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-    }
-
     inner class Tab internal constructor() {
         var tag: Any? = null
         var text: CharSequence? by mutableStateOf(null)
         var icon: Drawable? by mutableStateOf(null)
         val position get() = tabs.indexOf(this)
-        val view get() = this@ComposeEditorTabs
+        val isSelected get() = selectedTab === this
         fun select() = selectTab(this)
         fun setIcon(resource: Int) { icon = AppCompatResources.getDrawable(context, resource) }
     }
@@ -117,7 +112,7 @@ class ComposeEditorTabs @JvmOverloads constructor(
     fun addTab(tab: Tab) {
         if (tab in tabs) return
         tabs = tabs + tab
-        visibility = VISIBLE
+        visible = true
         if (selectedTab == null) selectTab(tab)
     }
 
@@ -148,7 +143,7 @@ class ComposeEditorTabs @JvmOverloads constructor(
     }
 
     @Composable
-    override fun Content() {
+    fun Content() {
         MaterialTheme {
             EditorTabStrip(
                 tabs = tabs,

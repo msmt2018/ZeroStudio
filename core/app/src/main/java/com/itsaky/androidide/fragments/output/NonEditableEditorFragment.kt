@@ -18,7 +18,7 @@ abstract class NonEditableEditorFragment :
     ShareableOutputFragment {
 
   val editor: IDEEditor?
-    get() = binding?.editor
+    get() = _binding?.editor
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
