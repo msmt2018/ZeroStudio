@@ -20,19 +20,17 @@ package com.itsaky.androidide.activities.editor
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
-import android.view.ViewGroup.MarginLayoutParams
-import android.view.WindowManager
-import android.widget.CheckBox
 import androidx.activity.viewModels
 import androidx.annotation.GravityInt
-import androidx.appcompat.app.AlertDialog
-import com.blankj.utilcode.util.SizeUtils
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import com.blankj.utilcode.util.ThreadUtils
 import com.itsaky.androidide.R
 import com.itsaky.androidide.R.string
-import com.itsaky.androidide.databinding.LayoutSearchProjectBinding
-import com.itsaky.androidide.flashbar.Flashbar
-import com.itsaky.androidide.fragments.sheets.ProgressSheet
+import com.itsaky.androidide.activities.editor.ui.state.EditorDialogHandle
 import com.itsaky.androidide.handlers.EditorBuildEventListener
 import com.itsaky.androidide.handlers.LspHandler.connectClient
 import com.itsaky.androidide.handlers.LspHandler.destroyLanguageServers
@@ -57,22 +55,15 @@ import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult.Fai
 import com.itsaky.androidide.tooling.api.messages.result.TaskExecutionResult.Failure.PROJECT_NOT_FOUND
 import com.itsaky.androidide.tooling.api.models.BuildVariantInfo
 import com.itsaky.androidide.tooling.api.models.mapToSelectedVariants
-import com.itsaky.androidide.utils.DURATION_INDEFINITE
-import com.itsaky.androidide.utils.DialogUtils.newMaterialDialogBuilder
 import com.itsaky.androidide.utils.RecursiveFileSearcher
 import com.itsaky.androidide.utils.flashError
-import com.itsaky.androidide.utils.flashbarBuilder
-import com.itsaky.androidide.utils.resolveAttr
-import com.itsaky.androidide.utils.showOnUiThread
-import com.itsaky.androidide.utils.withIcon
 import com.itsaky.androidide.viewmodel.BuildVariantsViewModel
 import java.io.File
 import java.util.concurrent.CompletableFuture
-import java.util.regex.Pattern
 import java.util.stream.Collectors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
 
 /** @author Akash Yadav */
 @Suppress("MemberVisibilityCanBePrivate")
@@ -80,16 +71,16 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
 
   protected val buildVariantsViewModel by viewModels<BuildVariantsViewModel>()
 
-  protected var mSearchingProgress: ProgressSheet? = null
-  protected var mFindInProjectDialog: AlertDialog? = null
-  protected var syncNotificationFlashbar: Flashbar? = null
+  protected var mSearchingProgress: EditorDialogHandle? = null
+  protected var mFindInProjectDialog: EditorDialogHandle? = null
+  protected var syncNotificationFlashbar: EditorDialogHandle? = null
 
   protected var isFromSavedInstance = false
   protected var shouldInitialize = false
 
   protected var initializingFuture: CompletableFuture<out InitializeResult?>? = null
 
-  val findInProjectDialog: AlertDialog
+  val findInProjectDialog: EditorDialogHandle
     get() {
       if (mFindInProjectDialog == null) {
         createFindInProjectDialog()
@@ -141,7 +132,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
         return@observe
       }
 
-      if (syncNotificationFlashbar?.isShowing() == true) {
+      if (syncNotificationFlashbar?.isShowing == true) {
         // already shown
         return@observe
       }
@@ -223,19 +214,19 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
 
   fun setStatus(status: CharSequence, @GravityInt gravity: Int) {
     // 增加销毁和安全绑定拦截，避免崩溃
-    if (isDestroying || isFinishing || _binding == null) return
+    if (isDestroying || isFinishing || _editorUi == null) return
     doSetStatus(status, gravity)
   }
 
   fun appendBuildOutput(str: String) {
     // 增加销毁和安全绑定拦截，避免收到延迟的异步线程请求导致的崩溃
-    if (isDestroying || isFinishing || _binding == null) return
+    if (isDestroying || isFinishing || _editorUi == null) return
     content.bottomSheet.appendBuildOut(str)
   }
 
   fun clearBuildOutputSafely() {
     // 提供给 EventListener 使用的安全清屏 API
-    if (isDestroying || isFinishing || _binding == null) return
+    if (isDestroying || isFinishing || _editorUi == null) return
     content.bottomSheet.clearBuildOutput()
   }
 
@@ -244,7 +235,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
   }
 
   private fun notifySyncNeeded(onConfirm: () -> Unit) {
-    if (isDestroying || isFinishing || _binding == null) return
+    if (isDestroying || isFinishing || _editorUi == null) return
 
     val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
     if (buildService == null || editorViewModel.isInitializing || buildService.isBuildInProgress)
@@ -252,27 +243,15 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
 
     this.syncNotificationFlashbar?.dismiss()
 
-    this.syncNotificationFlashbar =
-        flashbarBuilder(
-                duration = DURATION_INDEFINITE,
-                backgroundColor = resolveAttr(R.attr.colorSecondaryContainer),
-                messageColor = resolveAttr(R.attr.colorOnSecondaryContainer),
-            )
-            .withIcon(
-                R.drawable.ic_sync,
-                colorFilter = resolveAttr(R.attr.colorOnSecondaryContainer),
-            )
-            .message(string.msg_sync_needed)
-            .positiveActionText(string.btn_sync)
-            .positiveActionTapListener {
-              onConfirm()
-              it.dismiss()
-            }
-            .negativeActionText(string.btn_ignore_changes)
-            .negativeActionTapListener(Flashbar::dismiss)
-            .build()
+    syncNotificationFlashbar = EditorDialogHandle({ _editorUi }) { dismiss ->
+      AlertDialog(
+        onDismissRequest = dismiss,
+        text = { Text(getString(string.msg_sync_needed)) },
+        confirmButton = { TextButton(onClick = { dismiss(); onConfirm() }) { Text(getString(string.btn_sync)) } },
+        dismissButton = { TextButton(onClick = dismiss) { Text(getString(string.btn_ignore_changes)) } },
+      )
+    }.also { it.show() }
 
-    this.syncNotificationFlashbar?.showOnUiThread()
   }
 
   fun startServices() {
@@ -615,55 +594,17 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
       return
     }
 
-    val builder = newMaterialDialogBuilder(this)
-    builder.setTitle("Project Setup Failed")
-    builder.setMessage(
-        "The project could not be initialized properly.\n\n$errorMessage\n\nFull error details have been copied to clipboard.\n\nYou can try:\n• Update top level build.gradle\n• Syncing the project again\n• Checking if all required files are present\n• Restarting the IDE"
-    )
-    builder.setIcon(R.drawable.ic_error)
-    builder.setCancelable(false)
-
-    builder.setPositiveButton("Retry") { dialog, _ ->
-      dialog.dismiss()
-      if (!isFinishing && !isDestroyed) {
-        initializeProject()
-      }
-    }
-
-    builder.setNegativeButton("Close Project") { dialog, _ ->
-      dialog.dismiss()
-      if (!isFinishing && !isDestroyed) {
-        confirmProjectClose()
-      }
-    }
-
-    builder.setNeutralButton("View Error") { dialog, _ ->
-      if (isFinishing || isDestroyed) {
-        return@setNeutralButton
-      }
-
-      val errorBuilder = newMaterialDialogBuilder(this)
-      errorBuilder.setTitle("Full Error Details")
-      errorBuilder.setMessage(fullErrorDetails)
-      errorBuilder.setPositiveButton("OK") { d, _ -> d.dismiss() }
-      errorBuilder.setNeutralButton("Copy Again") { d, _ ->
-        try {
-          val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-          val clip = android.content.ClipData.newPlainText("Project Setup Error", fullErrorDetails)
-          clipboard.setPrimaryClip(clip)
-        } catch (e: Exception) {
-          log.error("Failed to copy error to clipboard", e)
-        }
-      }
-      errorBuilder.show()
-    }
-
-    try {
-      if (!isFinishing && !isDestroyed) {
-        builder.show()
-      }
-    } catch (e: WindowManager.BadTokenException) {
-      log.error("Failed to show dialog - activity token invalid", e)
+    content.dialog = {
+      AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Project Setup Failed") },
+        text = { Text(errorMessage) },
+        confirmButton = { TextButton(onClick = { content.dialog = null; initializeProject() }) { Text("Retry") } },
+        dismissButton = {
+          TextButton(onClick = { content.dialog = null; confirmProjectClose() }) { Text(getString(R.string.title_close_project)) }
+          TextButton(onClick = { showEditorMessage("Error Details", fullErrorDetails) }) { Text("Details") }
+        },
+      )
     }
   }
 
@@ -712,7 +653,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
     }
   }
 
-  protected open fun createFindInProjectDialog(): AlertDialog? {
+  protected open fun createFindInProjectDialog(): EditorDialogHandle? {
     val manager = ProjectManagerImpl.getInstance()
     if (manager.getWorkspace() == null) {
       log.warn("No root project model found. Is the project initialized?")
@@ -736,94 +677,18 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
     return createFindInProjectDialog(moduleDirs)
   }
 
-  protected open fun createFindInProjectDialog(moduleDirs: List<File>): AlertDialog? {
-    val srcDirs = mutableListOf<File>()
-    val binding = LayoutSearchProjectBinding.inflate(layoutInflater)
-    binding.modulesContainer.removeAllViews()
-
-    for (i in moduleDirs.indices) {
-      val module = moduleDirs[i]
-      val src = File(module, "src")
-
-      if (!module.exists() || !module.isDirectory || !src.exists() || !src.isDirectory) {
-        continue
+  protected open fun createFindInProjectDialog(moduleDirs: List<File>): EditorDialogHandle? {
+    val modules = moduleDirs.filter { it.isDirectory && File(it, "src").isDirectory }
+    mFindInProjectDialog = EditorDialogHandle({ _editorUi }) { dismiss ->
+      com.itsaky.androidide.activities.editor.ui.screen.EditorFindDialog(modules, dismiss) { text, extensions, dirs ->
+        dismiss()
+        getProgressSheet(string.msg_searching_project)?.show()
+        RecursiveFileSearcher.searchRecursiveAsync(text, extensions, dirs) { results -> handleSearchResults(results) }
       }
-
-      val check = CheckBox(this)
-      check.text = module.name
-      check.isChecked = true
-
-      val params = MarginLayoutParams(-2, -2)
-      params.bottomMargin = SizeUtils.dp2px(4f)
-      binding.modulesContainer.addView(check, params)
-      srcDirs.add(src)
+    }.apply {
+      setOnShowListener { requestBottomSheetHeaderHide(BOTTOM_SHEET_HIDE_REASON_FIND_DIALOG) }
+      setOnDismissListener { releaseBottomSheetHeaderHide(BOTTOM_SHEET_HIDE_REASON_FIND_DIALOG) }
     }
-
-    val builder = newMaterialDialogBuilder(this)
-    builder.setTitle(string.menu_find_project)
-    builder.setView(binding.root)
-    builder.setCancelable(false)
-
-    builder.setPositiveButton(string.menu_find) { dialog, _ ->
-      val text = binding.input.editText!!.text.toString().trim()
-      if (text.isEmpty()) {
-        flashError(string.msg_empty_search_query)
-        return@setPositiveButton
-      }
-
-      val searchDirs = mutableListOf<File>()
-      for (i in 0 until binding.modulesContainer.childCount) {
-        val check = binding.modulesContainer.getChildAt(i) as CheckBox
-        if (check.isChecked) {
-          searchDirs.add(srcDirs[i])
-        }
-      }
-
-      val extensions = binding.filter.editText!!.text.toString().trim()
-      val extensionList = mutableListOf<String>()
-      if (extensions.isNotEmpty()) {
-        if (extensions.contains("|")) {
-          for (str in
-              extensions
-                  .split(Pattern.quote("|").toRegex())
-                  .dropLastWhile { it.isEmpty() }
-                  .toTypedArray()) {
-            if (str.trim().isEmpty()) {
-              continue
-            }
-            extensionList.add(str)
-          }
-        } else {
-          extensionList.add(extensions)
-        }
-      }
-
-      if (searchDirs.isEmpty()) {
-        flashError(string.msg_select_search_modules)
-      } else {
-        dialog.dismiss()
-
-        getProgressSheet(string.msg_searching_project)?.apply {
-          show(supportFragmentManager, "search_in_project_progress")
-        }
-
-        RecursiveFileSearcher.searchRecursiveAsync(text, extensionList, searchDirs) { results ->
-          handleSearchResults(results)
-        }
-      }
-    }
-
-    builder.setNegativeButton(android.R.string.cancel) { dialog, _ -> dialog.dismiss() }
-    mFindInProjectDialog = builder.create()
-
-    mFindInProjectDialog?.setOnShowListener {
-      requestBottomSheetHeaderHide(BOTTOM_SHEET_HIDE_REASON_FIND_DIALOG)
-    }
-
-    mFindInProjectDialog?.setOnDismissListener {
-      releaseBottomSheetHeaderHide(BOTTOM_SHEET_HIDE_REASON_FIND_DIALOG)
-    }
-
     return mFindInProjectDialog
   }
 
@@ -875,15 +740,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
   }
 
   private fun confirmProjectClose() {
-    val builder = newMaterialDialogBuilder(this)
-    builder.setTitle(string.title_confirm_project_close)
-    builder.setMessage(string.msg_confirm_project_close)
-    builder.setNegativeButton(string.no, null)
-    builder.setPositiveButton(string.yes) { dialog, _ ->
-      dialog.dismiss()
-      closeProject(true)
-    }
-    builder.show()
+    confirmEditorAction(getString(string.title_confirm_project_close), getString(string.msg_confirm_project_close), { closeProject(true) })
   }
 
   private fun initLspClient() {
@@ -893,16 +750,16 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
     connectClient(IDELanguageClientImpl.getInstance())
   }
 
-  open fun getProgressSheet(msg: Int): ProgressSheet? {
+  open fun getProgressSheet(msg: Int): EditorDialogHandle? {
     doDismissSearchProgress()
-
-    mSearchingProgress =
-        ProgressSheet().also {
-          it.isCancelable = false
-          it.setMessage(getString(msg))
-          it.setSubMessageEnabled(false)
+    mSearchingProgress = EditorDialogHandle({ _editorUi }) { _ ->
+      AlertDialog(onDismissRequest = {}, text = {
+        Column {
+          CircularProgressIndicator()
+          Text(getString(msg))
         }
-
+      }, confirmButton = {})
+    }
     return mSearchingProgress
   }
 }

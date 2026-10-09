@@ -26,21 +26,24 @@ import android.view.MenuItem
 import android.view.ViewGroup.LayoutParams
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.collection.MutableIntObjectMap
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.core.content.res.ResourcesCompat
-import androidx.core.view.GravityCompat
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentFactory
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.tabs.TabLayout.Tab
-import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
-import com.itsaky.androidide.utils.EditorFragmentTabRegistrar
-import com.itsaky.androidide.resources.R
 import com.blankj.utilcode.util.ImageUtils
 import com.itsaky.androidide.R.string
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_TOOLBAR
 import com.itsaky.androidide.actions.ActionsRegistry.Companion.getInstance
 import com.itsaky.androidide.actions.FillMenuParams
+import com.itsaky.androidide.activities.editor.ui.screen.EditorTextInputDialog
+import com.itsaky.androidide.activities.editor.ui.state.EditorDialogHandle
+import com.itsaky.androidide.activities.editor.ui.state.EditorPage
 import com.itsaky.androidide.editor.language.treesitter.AidlLanguage
 import com.itsaky.androidide.editor.language.treesitter.CLang
 import com.itsaky.androidide.editor.language.treesitter.CmakeLanguage
@@ -51,8 +54,8 @@ import com.itsaky.androidide.editor.language.treesitter.JsonLanguage
 import com.itsaky.androidide.editor.language.treesitter.KotlinLanguage
 import com.itsaky.androidide.editor.language.treesitter.LogLanguage
 import com.itsaky.androidide.editor.language.treesitter.TSLanguageRegistry
-import com.itsaky.androidide.editor.language.treesitter.TreeSitterLanguage
 import com.itsaky.androidide.editor.language.treesitter.TomlLanguage
+import com.itsaky.androidide.editor.language.treesitter.TreeSitterLanguage
 import com.itsaky.androidide.editor.language.treesitter.XMLLanguage
 import com.itsaky.androidide.editor.language.treesitter.YamlLanguage
 import com.itsaky.androidide.editor.schemes.IDEColorSchemeProvider
@@ -61,11 +64,12 @@ import com.itsaky.androidide.eventbus.events.editor.DocumentChangeEvent
 import com.itsaky.androidide.eventbus.events.editor.DocumentSaveEvent
 import com.itsaky.androidide.eventbus.events.file.FileRenameEvent
 import com.itsaky.androidide.eventbus.events.preferences.PreferenceChangeEvent
+import com.itsaky.androidide.fragments.editor.EditorFragmentTabManager
 import com.itsaky.androidide.interfaces.IEditorHandler
+import com.itsaky.androidide.lsp.kotlin.KotlinLspIntegration
+import com.itsaky.androidide.lsp.kotlin.ui.LspInstallerDialog
 import com.itsaky.androidide.lsp.kotlin.ui.events.LspEventBus
 import com.itsaky.androidide.lsp.kotlin.ui.events.LspInstallRequestEvent
-import com.itsaky.androidide.lsp.kotlin.ui.LspInstallerDialog
-import com.itsaky.androidide.lsp.kotlin.KotlinLspIntegration
 import com.itsaky.androidide.models.FileExtension
 import com.itsaky.androidide.models.OpenedFile
 import com.itsaky.androidide.models.OpenedFilesCache
@@ -73,10 +77,11 @@ import com.itsaky.androidide.models.Range
 import com.itsaky.androidide.models.SaveResult
 import com.itsaky.androidide.preferences.internal.EditorPreferences
 import com.itsaky.androidide.projects.internal.ProjectManagerImpl
+import com.itsaky.androidide.R
 import com.itsaky.androidide.tasks.executeAsync
 import com.itsaky.androidide.ui.CodeEditorView
-import com.itsaky.androidide.utils.DialogUtils.newMaterialDialogBuilder
-import com.itsaky.androidide.utils.DialogUtils.newYesNoDialog
+import com.itsaky.androidide.ui.ComposeEditorTabs.Tab
+import com.itsaky.androidide.utils.EditorFragmentTabRegistrar
 import com.itsaky.androidide.utils.IntentUtils.openImage
 import com.itsaky.androidide.utils.UniqueNameBuilder
 import com.itsaky.androidide.utils.flashSuccess
@@ -90,6 +95,7 @@ import kotlinx.coroutines.withContext
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 
+
 /**
  * Base class for EditorActivity. Handles logic for working with file editors.
  *
@@ -100,10 +106,48 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
   com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider.Host {
 
   protected val isOpenedFilesSaved = AtomicBoolean(false)
-  private var kotlinLspInstallDialog: androidx.appcompat.app.AlertDialog? = null
+  private var kotlinLspInstallDialog: EditorDialogHandle? = null
   private var kotlinLspInstallCollectorJob: Job? = null
   private var openedFilesCacheWriteJob: Job? = null
   private var lastOpenedFilesCacheSignature: String? = null
+
+  private val composeTabs = mutableSetOf<String>()
+
+  /** Opens or focuses a Compose page. [id] must identify the page, not its current position. */
+  fun openComposeTab(id: String, title: String, page: @Composable () -> Unit): String {
+    val tabId = "compose:$id"
+    val existing = (0 until content.tabs.tabCount).mapNotNull(content.tabs::getTabAt)
+      .firstOrNull { it.tag == tabId }
+    if (existing != null) {
+      if (content.tabs.selectedTabPosition != existing.position) existing.select()
+      return tabId
+    }
+    content.documents.register(EditorPage.ScreenPage(tabId, title, page))
+    composeTabs.add(tabId)
+    val tab = content.tabs.newTab().apply { tag = tabId; text = title }
+    content.tabs.addTab(tab)
+    if (content.tabs.selectedTabPosition != tab.position) tab.select()
+    return tabId
+  }
+
+  private fun closeComposeTab(tabId: String) {
+    if (!composeTabs.remove(tabId)) return
+    content.documents.unregister(tabId)
+    (0 until content.tabs.tabCount).mapNotNull(content.tabs::getTabAt)
+      .firstOrNull { it.tag == tabId }?.let(content.tabs::removeTab)
+    refreshTabContent()
+  }
+
+  private fun refreshTabContent() {
+    val selected = content.tabs.getTabAt(content.tabs.selectedTabPosition)
+    if (selected == null) {
+      content.tabs.visible = false
+      content.surface = NO_EDITOR_CONTAINER_INDEX
+    } else {
+      onTabSelected(selected)
+    }
+    invalidateOptionsMenu()
+  }
 
   /** Fragment tab manager for managing fragment tabs like Markdown Preview */
   var fragmentTabManager: EditorFragmentTabManager? = null
@@ -129,22 +173,28 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     return getEditorAtIndex(index)
   }
 
-  /** Handles both file editor tabs and lifecycle-backed fragment tabs in the same TabLayout. */
+  /** Dispatches selection to file editors, lifecycle Fragments, or Compose pages. */
   override fun onTabSelected(tab: Tab) {
     val tabId = tab.tag as? String
+    if (tabId in composeTabs) {
+      content.documents.select(tabId!!)
+      content.surface = FRAGMENT_CONTAINER_INDEX
+      invalidateOptionsMenu()
+      return
+    }
     if (EditorFragmentTabManager.isFragmentTabId(tabId)) {
-      content.viewContainer.displayedChild = FRAGMENT_CONTAINER_INDEX
+      content.surface = FRAGMENT_CONTAINER_INDEX
       fragmentTabManager?.switchToTab(tabId!!)
       invalidateOptionsMenu()
       return
     }
 
-    content.viewContainer.displayedChild = EDITOR_CONTAINER_INDEX
+    content.surface = EDITOR_CONTAINER_INDEX
     fragmentTabManager?.hideAllTabs()
     super.onTabSelected(tab)
   }
 
-  override fun hasNonEditorTabs(): Boolean = fragmentTabManager?.hasOpenTabs() == true
+  override fun hasNonEditorTabs(): Boolean = composeTabs.isNotEmpty() || fragmentTabManager?.hasOpenTabs() == true
 
   override fun resolveEditorIndexForTab(tab: Tab): Int {
     val tag = tab.tag as? String
@@ -161,6 +211,15 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    // Install before Fragment restoration; AndroidFragment uses this same factory.
+    val fallbackFactory = supportFragmentManager.fragmentFactory
+    supportFragmentManager.fragmentFactory = object : FragmentFactory() {
+      override fun instantiate(classLoader: ClassLoader, className: String): Fragment {
+        val contribution = com.itsaky.androidide.fragments.editor.FragmentTabRegistry.entries
+          .firstOrNull { it.fragmentClass.name == className && it.fragmentFactory != null }
+        return contribution?.createFragment() ?: fallbackFactory.instantiate(classLoader, className)
+      }
+    }
     mBuildEventListener.setActivity(this)
     super.onCreate(savedInstanceState)
 
@@ -170,23 +229,19 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     // 以及 bottom ActionMode 中。`addMenuProvider` 是 androidx.core 提供的
     // 菜单挂载点,只需一行就能让菜单在 toolbar + overflow + ActionMode 三个
     // 出现位置都可见。
-    addMenuProvider(
+    registerEditorMenuProvider(
         com.itsaky.androidide.debugger.menu.DebuggerActionMenuProvider(this),
     )
 
-    fragmentTabManager = EditorFragmentTabManager(
-      activity = this,
-      binding = content,
-      containerId = content.fragmentContainer.id
-    )
+    fragmentTabManager = EditorFragmentTabManager(content)
+
+    content.tabs.onCloseTab = { tab -> closeTabAt(tab.position) }
 
     editorViewModel._displayedFile.observe(this) {
       this.content.editorContainer.displayedChild = it
     }
     editorViewModel._startDrawerOpened.observe(this) { opened ->
-      this.binding.editorDrawerLayout.apply {
-        if (opened) openDrawer(GravityCompat.START) else closeDrawer(GravityCompat.START)
-      }
+      content.drawerOpen = opened
     }
 
     editorViewModel._filesModified.observe(this) { invalidateOptionsMenu() }
@@ -354,21 +409,9 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
   private fun showKotlinLspInstallerDialog(request: LspInstallRequestEvent) {
     kotlinLspInstallDialog?.dismiss()
 
-    val composeView =
-        ComposeView(this).apply {
-          setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-          setContent {
-            LspInstallerDialog(request = request) {
-              kotlinLspInstallDialog?.dismiss()
-              kotlinLspInstallDialog = null
-            }
-          }
-        }
-
-    kotlinLspInstallDialog =
-        newMaterialDialogBuilder(this).setCancelable(false).setView(composeView).create().also {
-          it.show()
-        }
+    kotlinLspInstallDialog = EditorDialogHandle({ _editorUi }) { dismiss ->
+      LspInstallerDialog(request = request) { dismiss(); kotlinLspInstallDialog = null }
+    }.also { it.show() }
   }
 
   private fun onReadOpenedFilesCache(cache: OpenedFilesCache?) {
@@ -444,10 +487,10 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
 
         item.setShowAsAction(showAsAction)
 
-        action.createActionView(data)?.let { item.actionView = it }
+
       }
     }
-    content.editorToolbar.updateMenuDisplay()
+    content.toolbarVersion++
   }
 
   private fun createToolbarActionData(): ActionData {
@@ -479,7 +522,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
   override fun requireContext(): Context = this
 
   override fun getEditorAtIndex(index: Int): CodeEditorView? {
-    return _binding?.content?.editorContainer?.getChildAt(index) as CodeEditorView?
+    return _editorUi?.editorContainer?.getChildAt(index) as CodeEditorView?
   }
 
   override fun openFileAndSelect(file: File, selection: Range?) {
@@ -594,73 +637,50 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
         getString(com.itsaky.androidide.R.string.debugger_action_edit_log),
         getString(com.itsaky.androidide.R.string.debugger_action_bp_delete)
     )
-    androidx.appcompat.app.AlertDialog.Builder(this)
-        .setTitle("断点 @ ${bp.file.substringAfterLast('/')}:${bp.line}")
-        .setItems(items) { _, which ->
-            when (which) {
+    content.dialog = {
+      AlertDialog(onDismissRequest = { content.dialog = null }, title = { Text("断点 @ ${bp.file.substringAfterLast('/')}:${bp.line}") }, text = {
+        Column {
+          items.forEachIndexed { which, label ->
+            TextButton(onClick = {
+              content.dialog = null
+              when (which) {
                 0 -> mgr.setEnabled(bp.id, !bp.isActive())
                 1 -> promptCondition(File(bp.file), bp.line, bp.condition)
                 2 -> promptLogMessage(File(bp.file), bp.line, bp.logMessage)
                 3 -> mgr.remove(bp.id)
-            }
+              }
+            }) { Text(label.toString()) }
+          }
         }
-        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
-        .show()
+      }, confirmButton = { TextButton(onClick = { content.dialog = null }) { Text(getString(android.R.string.cancel)) } })
+    }
   }
 
   /** PR-D6: 让用户输入条件表达式。 */
   private fun promptCondition(file: File, line: Int, current: String? = null) {
-    val input = android.widget.EditText(this)
-    input.setText(current ?: "")
-    input.hint = "i > 0 && !done"
-    androidx.appcompat.app.AlertDialog.Builder(this)
-        .setTitle(com.itsaky.androidide.R.string.debugger_bcd_condition_label)
-        .setView(input)
-        .setPositiveButton(com.itsaky.androidide.R.string.debugger_bcd_btn_save) { _, _ ->
-            val expr = input.text.toString().trim()
-            if (expr.isNotEmpty()) {
-                val bm = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
-                val bp = bm.findAt(file.absolutePath, line)
-                if (bp != null) {
-                    // 用 manager 的 setCondition 触发 reinstallOnDebugger
-                    // (直接 bp.setCondition 只改状态,JDWP 端不会更新)
-                    bm.setCondition(bp.id, expr)
-                } else {
-                    val newBp = com.itsaky.androidide.debugger.model.IdeBreakpoint(
-                        file.absolutePath, line)
-                    newBp.setCondition(expr)
-                    bm.add(newBp)
-                }
-            }
+    content.dialog = {
+      EditorTextInputDialog(getString(R.string.debugger_bcd_condition_label), current.orEmpty(), "i > 0 && !done", { content.dialog = null }) { expression ->
+        val manager = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+        val existing = manager.findAt(file.absolutePath, line)
+        if (existing != null) manager.setCondition(existing.id, expression)
+        else if (expression.isNotEmpty()) {
+          manager.add(com.itsaky.androidide.debugger.model.IdeBreakpoint(file.absolutePath, line).apply { setCondition(expression) })
         }
-        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
-        .show()
+      }
+    }
   }
 
-  /** PR-D6: 让用户输入日志消息表达式。 */
   private fun promptLogMessage(file: File, line: Int, current: String? = null) {
-    val input = android.widget.EditText(this)
-    input.setText(current ?: "")
-    input.hint = "\"x=\" + x"
-    androidx.appcompat.app.AlertDialog.Builder(this)
-        .setTitle(com.itsaky.androidide.R.string.debugger_bcd_log_label)
-        .setView(input)
-        .setPositiveButton(com.itsaky.androidide.R.string.debugger_bcd_btn_save) { _, _ ->
-            val expr = input.text.toString().trim()
-            val bm = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
-            val bp = bm.findAt(file.absolutePath, line)
-            if (bp != null) {
-                // 走 manager 触发 reinstallOnDebugger
-                bm.setLogMessage(bp.id, expr)
-            } else if (expr.isNotEmpty()) {
-                val newBp = com.itsaky.androidide.debugger.model.IdeBreakpoint(
-                    file.absolutePath, line)
-                newBp.setLogMessage(expr)
-                bm.add(newBp)
-            }
+    content.dialog = {
+      EditorTextInputDialog(getString(R.string.debugger_bcd_log_label), current.orEmpty(), "\"x=\" + x", { content.dialog = null }) { expression ->
+        val manager = com.itsaky.androidide.debugger.model.BreakpointManager.getInstance()
+        val existing = manager.findAt(file.absolutePath, line)
+        if (existing != null) manager.setLogMessage(existing.id, expression)
+        else if (expression.isNotEmpty()) {
+          manager.add(com.itsaky.androidide.debugger.model.IdeBreakpoint(file.absolutePath, line).apply { setLogMessage(expression) })
         }
-        .setNegativeButton(com.itsaky.androidide.R.string.debugger_bcd_btn_cancel, null)
-        .show()
+      }
+    }
   }
 
   private fun isKotlinSourceFile(file: File): Boolean {
@@ -915,7 +935,10 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     val editor = getEditorAtIndex(index)
     if (editor?.isModified == true) {
       log.info("File has been modified: {}", opened)
-      notifyFilesUnsaved(listOf(editor)) { closeFile(index, runAfter) }
+      notifyFilesUnsaved(listOf(editor)) {
+        val currentIndex = findIndexOfEditorByFile(opened)
+        if (currentIndex >= 0) closeFile(currentIndex, runAfter) else runAfter()
+      }
       return
     }
 
@@ -945,7 +968,6 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     val closingEditor = getEditorAtIndex(index)
     val closingCodeEditor = closingEditor?.editor
     content.apply {
-      tabToRemove?.let { tabs.removeTab(it) }
       // PR-D6: 关闭前先取 CodeEditor,detach 断点侧边栏(并取消 Sora 事件订阅),
       // 避免侧边栏继续占用已销毁 view + NPE。
       val closingEditor = getEditorAtIndex(index)
@@ -953,6 +975,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
         com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(codeEditor)
       }
       editorContainer.removeViewAt(index)
+      tabToRemove?.let { tabs.removeTab(it) }
     }
     if (closingCodeEditor != null) {
       com.itsaky.androidide.debugger.view.BreakpointGutterManager.detach(closingCodeEditor)
@@ -961,30 +984,30 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     editorViewModel.areFilesModified = hasUnsavedFiles()
 
     updateTabs()
+    refreshTabContent()
     runAfter()
   }
 
   /**
-   * Close the tab at the given [tabIndex] in [content.tabs], dispatching to either the
-   * editor file close path or the fragment tab close path based on the tab's tag.
-   *
-   * The TabLayout position of a fragment tab is NOT a valid index for [closeFile]
-   * (which operates on the [editorViewModel] file list), so this method exists to
-   * give the tab-close actions a single entry point that understands both kinds of
-   * tabs.
+   * Closes a file, Fragment or Compose tab. A tab position is not a file index:
+   * file identity is resolved against the current file list before checking for unsaved edits.
    */
   override fun closeTabAt(tabIndex: Int, runAfter: () -> Unit) {
     if (isFinishing || isDestroyed) return
     val tab = content.tabs.getTabAt(tabIndex) ?: run {
-      // Fall back to the legacy file-index behaviour for any caller that may still
-      // hand us a stale file index (e.g. notifications, last-tab cleanup).
-      closeFile(tabIndex, runAfter)
+      runAfter()
       return
     }
     val tabId = tab.tag as? String
+    if (tabId in composeTabs) {
+      closeComposeTab(tabId!!)
+      runAfter()
+      return
+    }
     if (EditorFragmentTabManager.isFragmentTabId(tabId)) {
       log.info("Closing fragment tab at index {}: {}", tabIndex, tabId)
       fragmentTabManager?.closeTab(tabId!!)
+      refreshTabContent()
       runAfter()
       return
     }
@@ -1066,6 +1089,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
 
     editorViewModel.removeAllFiles()
     fragmentTabManager?.closeAllTabs()
+    composeTabs.toList().forEach(::closeComposeTab)
     content.apply {
       // PR-D6: 在 removeAllViews 之前 detach 所有已注册的断点侧边栏
       // + 取消它们的 Sora 事件订阅,避免 NPE / 内存泄漏。
@@ -1076,9 +1100,9 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
         }
       }
       tabs.removeAllTabs()
-      tabs.requestLayout()
       editorContainer.removeAllViews()
     }
+    refreshTabContent()
 
     runAfter()
   }
@@ -1099,50 +1123,25 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
       return
     }
 
-    val keepTab = content.tabs.getTabAt(keepTabIndex)
-    val keepTabId = keepTab?.tag as? String
-
-    val unsavedFiles =
-        editorViewModel.getOpenedFiles().map(this::getEditorForFile).filter {
-          it != null && it.isModified
-        }
+    val keepTab = content.tabs.getTabAt(keepTabIndex) ?: return
+    val keepTabId = keepTab.tag as? String ?: return
+    val unsavedFiles = editorViewModel.getOpenedFiles().map(this::getEditorForFile)
+      .filter { it != null && it.isModified }
     if (unsavedFiles.isNotEmpty()) {
-      notifyFilesUnsaved(unsavedFiles) { closeOtherTabs(keepTabIndex) }
+      notifyFilesUnsaved(unsavedFiles) {
+        val currentIndex = (0 until content.tabs.tabCount)
+          .firstOrNull { content.tabs.getTabAt(it)?.tag == keepTabId }
+        if (currentIndex != null) closeOtherTabs(currentIndex)
+      }
       return
     }
-
-    // Snapshot the tab ids to close before mutating the TabLayout, because closing a
-    // tab can shift positions and the caller expects the "keep" tab to remain at the
-    // same position when the operation completes.
-    val toClose = mutableListOf<String>()
-    for (i in 0 until content.tabs.tabCount) {
-      if (i == keepTabIndex) continue
-      val tag = content.tabs.getTabAt(i)?.tag as? String ?: continue
-      toClose.add(tag)
+    val toClose = (0 until content.tabs.tabCount).mapNotNull(content.tabs::getTabAt)
+      .filter { it !== keepTab }
+    toClose.forEach { tab ->
+      // Resolve each current position after previous closes shift both tab and file indices.
+      if (tab.position >= 0) closeTabAt(tab.position)
     }
-
-    // Close fragment tabs first; their lifecycle fragments are independent of the
-    // editor file indices so the order with the file-tab close loop does not matter.
-    val manager = fragmentTabManager
-    toClose.forEach { tabId ->
-      if (EditorFragmentTabManager.isFragmentTabId(tabId) && tabId != keepTabId) {
-        manager?.closeTab(tabId)
-      }
-    }
-
-    // Now close file-editor tabs. We close from the highest file index to the lowest
-    // so that the indices remain valid while the list shrinks.
-    val fileIndices = mutableListOf<Int>()
-    for (i in 0 until content.tabs.tabCount) {
-      if (i == keepTabIndex) continue
-      val tabId = content.tabs.getTabAt(i)?.tag as? String ?: continue
-      if (tabId.startsWith(EDITOR_TAB_PREFIX)) {
-        val idx = findIndexOfEditorByFile(File(tabId.removePrefix(EDITOR_TAB_PREFIX)))
-        if (idx >= 0) fileIndices.add(idx)
-      }
-    }
-    fileIndices.sortDescending()
-    fileIndices.forEach { idx -> closeFile(idx) }
+    if (content.tabs.selectedTabPosition != keepTab.position) keepTab.select()
   }
 
   /**
@@ -1153,7 +1152,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
    */
   override fun hasOpenTabs(): Boolean {
     return editorViewModel.getOpenedFiles().isNotEmpty() ||
-        (fragmentTabManager?.hasOpenTabs() == true)
+        (fragmentTabManager?.hasOpenTabs() == true) || composeTabs.isNotEmpty()
   }
 
   override fun getOpenedFiles() =
@@ -1174,24 +1173,12 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     }
 
     val mapped = unsavedEditors.mapNotNull { it?.file?.absolutePath }
-    val builder =
-        newYesNoDialog(
-            context = this,
-            title = getString(string.title_files_unsaved),
-            message = getString(string.msg_files_unsaved, TextUtils.join("\n", mapped)),
-            positiveClickListener = { dialog, _ ->
-              dialog.dismiss()
-              saveAllAsync(notify = true, runAfter = { runOnUiThread(invokeAfter) })
-            },
-        ) { dialog, _ ->
-          dialog.dismiss()
-          // Mark all the files as saved, then try to close them all
-          for (editor in unsavedEditors) {
-            editor?.markAsSaved()
-          }
-          invokeAfter.run()
-        }
-    builder.show()
+    confirmEditorAction(
+      getString(string.title_files_unsaved),
+      getString(string.msg_files_unsaved, TextUtils.join("\n", mapped)),
+      yes = { saveAllAsync(notify = true, runAfter = { runOnUiThread(invokeAfter) }) },
+      no = { unsavedEditors.forEach { it?.markAsSaved() }; invokeAfter.run() },
+    )
   }
 
   @Subscribe(threadMode = ThreadMode.MAIN)
@@ -1202,6 +1189,8 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
     }
 
     val editor = getEditorAtIndex(index) ?: return
+    val tab = getEditorTabAtIndex(index)
+    tab?.tag = editorTabId(event.newFile)
     editorViewModel.updateFile(index, event.newFile)
     editor.updateFile(event.newFile)
 
@@ -1353,7 +1342,7 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
             val t = content.tabs.getTabAt(i) ?: continue
             val tag = t.tag as? String ?: continue
             // fragment tab 由 fragmentTabManager 单独管理, 这里不碰
-            if (EditorFragmentTabManager.isFragmentTabId(tag)) continue
+            if (EditorFragmentTabManager.isFragmentTabId(tag) || tag in composeTabs) continue
             if (tag !in currentFileTags) {
                 log.warn("updateTabs: removing stale editor tab with tag={} (file no longer in model)", tag)
                 staleTabs.add(t)

@@ -37,11 +37,15 @@ class IDELogFragment : LogViewFragment() {
 
   override fun isSimpleFormattingEnabled() = true
 
+  fun appendIdeLine(line: String) = appendLine(line)
+
   override fun getFilename() = "ide_logs"
 
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
     emptyMessage = getString(R.string.msg_emptyview_idelogs)
+
+    if (activity is com.itsaky.androidide.activities.editor.BaseEditorActivity) return
 
     lifecycleAwareAppender.consumer = this::appendLine
     lifecycleAwareAppender.attachTo(viewLifecycleOwner)

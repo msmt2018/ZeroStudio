@@ -20,7 +20,6 @@ package com.itsaky.androidide.handlers
 import android.content.Context
 import android.zero.studio.view.filetree.interfaces.FileObject
 import android.zero.studio.view.filetree.model.Node
-import androidx.core.view.GravityCompat
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TREE
 import com.itsaky.androidide.actions.ActionMenu
@@ -85,7 +84,7 @@ class FileTreeActionHandler : BaseEventHandler() {
     if (event.file.isDirectory) return
 
     val context = event[Context::class.java]!! as EditorHandlerActivity
-    context.binding.root.closeDrawer(GravityCompat.START)
+    context.editorViewModel.startDrawerOpened = false
 
     // === APK 安装路由 ===
     // apk 是二进制安装包, 按扩展名匹配走系统安装器。

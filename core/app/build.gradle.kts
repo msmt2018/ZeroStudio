@@ -220,6 +220,7 @@ dependencies {
   implementation(libs.androidx.navigation.compose)
   // Compose Foundation — HorizontalPager / rememberPagerState (GitHostScreen 标签页)
   implementation(libs.androidx.compose.foundation)
+  implementation("androidx.fragment:fragment-compose:1.8.9")
   // 磨砂玻璃 (Frosted glass) - 音频/视频预览 fragment 控件
   implementation(libs.haze)
   implementation(libs.haze.blur)
@@ -370,6 +371,8 @@ dependencies {
   coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")
   testImplementation(projects.testing.unitTest)
+  testImplementation(libs.androidx.compose.ui.test.junit4)
+  debugImplementation(libs.androidx.compose.ui.test.manifest)
   androidTestImplementation(projects.testing.androidTest)
   debugImplementation(libs.common.leakcanary)
   implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))

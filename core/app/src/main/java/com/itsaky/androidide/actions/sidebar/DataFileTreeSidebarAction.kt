@@ -20,7 +20,7 @@ class DataFileTreeSidebarAction(context: Context, override val order: Int) :
 
   init {
     // 设置标签
-    // label = context.getString(R.string.msg_data_file_tree)
+    label = context.getString(R.string.msg_data_file_tree)
     loadIcon(context, R.drawable.ic_internal_data)
   }
 }
