@@ -1324,18 +1324,6 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
           tab.text = name
         }
 
-        // !!! Bug fix - 清理"幽灵 tab" !!!
-        // 之前 updateTabs 只负责"按 tag 找 tab, 更新 text/icon". 关闭文件时
-        // 如果上一个版本的 closeFile 漏删了某个 tab (例如上面已修的 removeFile/
-        // getEditorTabAtIndex 顺序问题), 那个 tab 会以"已关闭文件"的 tag 永远
-        // 留在 TabLayout 里 - 它的 view 已经被 editorContainer.removeViewAt
-        // 移走, 但 TabLayout 还显示着它的 text/icon, 用户看到的就是"关闭后
-        // tab 还在"+"内容变成邻近 tab".
-        //
-        // 这里加一道保险: 扫一遍 TabLayout, 凡是 tag 不在当前文件列表里的 tab
-        // (并且不是 fragment tab - 那些由 fragmentTabManager 单独管理), 一律
-        // 移除. 配合 closeFile 修法, 保证 TabLayout 和 editorViewModel 永远
-        // 1:1 对齐, 不会再有幽灵 tab.
         val currentFileTags = files.map { editorTabId(it) }.toSet()
         val staleTabs = mutableListOf<Tab>()
         for (i in 0 until content.tabs.tabCount) {
