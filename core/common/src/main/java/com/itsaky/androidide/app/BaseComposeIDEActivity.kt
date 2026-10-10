@@ -58,20 +58,20 @@ abstract class BaseComposeIDEActivity : ComponentActivity() {
   val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    // 同步主题配置到全局 ThemeManager
+    // 1. 同步主题配置到全局 ThemeManager
     IThemeManager.getInstance().applyTheme(this)
 
-    // 启用 Edge-to-Edge 全屏沉浸式
+    // 2. 启用 Edge-to-Edge 全屏沉浸式
     if (enableSystemBarTheming) {
       enableEdgeToEdge()
     }
 
     super.onCreate(savedInstanceState)
 
-    // 布局设置前置同步钩子
+    // 3. 布局设置前置同步钩子
     preSetContentLayout()
 
-    // 纯 Compose 根视图装载并注入主题
+    // 4. 纯 Compose 根视图装载并注入主题
     setContent {
       AndroidIDETheme {
         ComposeContent()
