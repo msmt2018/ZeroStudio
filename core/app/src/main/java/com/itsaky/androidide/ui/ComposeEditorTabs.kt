@@ -3,32 +3,27 @@ package com.itsaky.androidide.ui
 import android.content.Context
 import android.graphics.drawable.Drawable
 import androidx.appcompat.content.res.AppCompatResources
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.itsaky.androidide.R
 
-/** A content-sized, horizontally scrolling tab strip shared by editor hosts. */
+/**
+ * 紧凑型 Tab 条：支持双轴紧凑高度与吸附式关闭/多选下拉菜单 (DropdownMenu)。
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun <T> EditorTabStrip(
     tabs: List<T>,
@@ -36,39 +31,89 @@ fun <T> EditorTabStrip(
     title: (T) -> String,
     onSelect: (T) -> Unit,
     onClose: (T) -> Unit,
+    onCloseOthers: (T) -> Unit,
+    onCloseAll: () -> Unit,
     modifier: Modifier = Modifier,
     icon: @Composable (T) -> Unit = {},
 ) {
     if (tabs.isEmpty()) return
-    // Recreate TabRow's measured positions when tabs are removed/reordered. Selection is
-    // derived from identity, never from a remembered index into an older list.
+    val tabHeight = 28.dp // 规范化：高度减少 40%
+
     key(tabs) {
         ScrollableTabRow(
             selectedTabIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
-            modifier = modifier.fillMaxWidth(),
-            edgePadding = 0.dp,
+            modifier = modifier.fillMaxWidth().height(tabHeight),
+            edgePadding = 4.dp,
         ) {
             tabs.forEach { tab ->
-                key(tab) {
+                var menuExpanded by remember { mutableStateOf(false) }
+
+                Box {
                     Tab(
                         selected = tab == selectedTab,
                         onClick = { onSelect(tab) },
+                        modifier = Modifier
+                            .height(tabHeight)
+                            .combinedClickable(
+                                onClick = { onSelect(tab) },
+                                onLongClick = { menuExpanded = true },
+                            ),
                         text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            ) {
                                 icon(tab)
-                                Text(title(tab), maxLines = 1)
-                                // Keep the close button's expanded touch target away from short titles.
-                                Spacer(Modifier.width(8.dp))
-                                IconButton(onClick = { onClose(tab) }, modifier = Modifier.size(40.dp)) {
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = title(tab),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = { onClose(tab) },
+                                    modifier = Modifier.size(18.dp),
+                                ) {
                                     Icon(
-                                        painterResource(R.drawable.ic_close),
-                                        contentDescription = "${stringResource(R.string.btn_close)} ${title(tab)}",
-                                        modifier = Modifier.size(16.dp),
+                                        painter = painterResource(R.drawable.ic_close),
+                                        contentDescription = "Close",
+                                        modifier = Modifier.size(11.dp),
                                     )
                                 }
                             }
                         },
                     )
+
+                    // 核心：长按或重选 Tab 时，弹出吸附在当前 Tab 下方的纯 Compose DropdownMenu
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        offset = DpOffset(0.dp, 2.dp),
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("关闭当前标签", fontSize = 12.sp) },
+                            onClick = {
+                                menuExpanded = false
+                                onClose(tab)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("关闭其他标签", fontSize = 12.sp) },
+                            onClick = {
+                                menuExpanded = false
+                                onCloseOthers(tab)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("关闭全部标签", fontSize = 12.sp) },
+                            onClick = {
+                                menuExpanded = false
+                                onCloseAll()
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -76,9 +121,7 @@ fun <T> EditorTabStrip(
 }
 
 /**
- * Observable tab controller and Compose renderer for editor hosts.
- * The small imperative facade keeps existing file-save and Fragment lifecycle controllers
- * responsible for accepting close requests; the close button never discards a file itself.
+ * Tab 控制器适配层
  */
 class ComposeEditorTabs(private val context: Context) {
     var visible by mutableStateOf(true)
@@ -86,6 +129,8 @@ class ComposeEditorTabs(private val context: Context) {
     private var selectedTab by mutableStateOf<Tab?>(null)
     private val listeners = mutableListOf<OnTabSelectedListener>()
     var onCloseTab: (Tab) -> Unit = {}
+    var onCloseOtherTabs: (Tab) -> Unit = {}
+    var onCloseAllTabs: () -> Unit = {}
     val tabCount get() = tabs.size
     val selectedTabPosition get() = tabs.indexOf(selectedTab)
 
@@ -151,12 +196,19 @@ class ComposeEditorTabs(private val context: Context) {
                 title = { it.text?.toString().orEmpty() },
                 onSelect = ::selectTab,
                 onClose = { onCloseTab(it) },
+                onCloseOthers = { onCloseOtherTabs(it) },
+                onCloseAll = { onCloseAllTabs() },
                 icon = { tab ->
                     tab.icon?.let { drawable ->
-                        val bitmap = androidx.compose.runtime.remember(drawable) {
-                            drawable.toBitmap(24, 24).asImageBitmap()
+                        val bitmap = remember(drawable) {
+                            drawable.toBitmap(20, 20).asImageBitmap()
                         }
-                        Icon(bitmap, null, modifier = Modifier.size(18.dp), tint = androidx.compose.ui.graphics.Color.Unspecified)
+                        Icon(
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.Unspecified,
+                        )
                     }
                 },
             )

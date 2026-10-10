@@ -17,137 +17,109 @@
 
 package com.itsaky.androidide.app
 
-import android.annotation.SuppressLint
-import android.content.res.Configuration
-import android.graphics.Rect
-import android.os.Build
 import android.os.Bundle
-import android.view.View
-import android.view.WindowInsets
-import android.view.WindowManager
-import androidx.annotation.CallSuper
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.graphics.Insets
-import androidx.core.view.OnApplyWindowInsetsListener
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.doOnAttach
-import com.itsaky.androidide.utils.EdgeToEdgeUtils
-import com.itsaky.androidide.utils.getSystemBarInsets
-
+import com.androidide.theme.AndroidIDETheme
+import com.itsaky.androidide.eventbus.events.preferences.PreferenceChangeEvent
+import com.itsaky.androidide.tasks.cancelIfActive
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import org.greenrobot.eventbus.EventBus
+import org.greenrobot.eventbus.Subscribe
+import org.greenrobot.eventbus.ThreadMode
+import com.itsaky.androidide.app.BaseComposeIDEActivity
 /**
- * Compose-first, edge-to-edge base for IDE activities.
+ * 纯粹遵循 Google 官方现代标准的 Jetpack Compose + Material 3 基准 Activity。
  *
- * This class merges the former `IDEActivity` and `EdgeToEdgeIDEActivity`. It is backed by
- * [BaseComposeIDEActivity], preserves the IDE application accessor and all inset callbacks, and
- * installs edge-to-edge before the Compose hierarchy is created. Existing XML activities remain
- * supported through [bindLayout] and are hosted with [AndroidView] while they migrate.
+ * @author android_zero
  */
 abstract class IDEActivity : BaseComposeIDEActivity() {
 
+  /** 全局 Application 单例快捷访问 */
   val app: IDEApplication
     get() = application as IDEApplication
 
-  /** Whether edge-to-edge should be applied to the Activity window. */
-  protected open var edgeToEdgeEnabled = true
+  /** 后台非 UI 任务协程作用域，将在 Activity 销毁时自动取消 */
+  protected val activityScope = CoroutineScope(Dispatchers.Default)
 
-  /** Apply decor padding for system bars while the device is in landscape orientation. */
-  protected open var eteUpdateDecorViewPaddingInLandscape = true
+  /** 是否自动监听 EventBus 事件（例如主题与设置变动） */
+  open val subscribeToEvents: Boolean = true
 
-  protected open val statusBarStyle = EdgeToEdgeUtils.DEFAULT_STATUS_BAR_STYLE!!
-  protected open val navigationBarStyle = EdgeToEdgeUtils.DEFAULT_NAVIGATION_BAR_STYLE!!
-
-  /** Original decor padding, restored whenever landscape padding is not in effect. */
-  protected open var decorViewPadding: Rect? = null
-
-  /** Latest system-bar insets, available to Compose and legacy subclasses. */
-  protected open var systemBarInsets: Insets? = null
-
-  override var enableSystemBarTheming: Boolean
-    get() = false
-    set(@Suppress("UNUSED_PARAMETER") value) {
-      throw UnsupportedOperationException("Use edgeToEdgeEnabled and systemBarStyles instead")
-    }
-
-  /**
-   * Transitional content mode. Override to `false` in a migrated screen and implement
-   * [ComposeScreen]. Existing subclasses can continue overriding [bindLayout] without losing
-   * their ViewBinding or fragment behavior.
-   */
-  protected open val useLegacyViewContent: Boolean = true
-
-  @Composable
-  final override fun ComposeContent() {
-    if (useLegacyViewContent) {
-      AndroidView(factory = { bindLayout() }, modifier = Modifier.fillMaxSize())
-    } else {
-      ComposeScreen()
-    }
-  }
-
-  /** Compose root for migrated activities. */
-  @Composable protected open fun ComposeScreen() = Unit
-
-  /**
-   * Legacy root factory. It is only read in [useLegacyViewContent] mode; Compose-only activities
-   * should override [ComposeScreen] instead.
-   */
-  protected open fun bindLayout(): View =
-      error("Override ComposeScreen() or bindLayout() in ${javaClass.name}")
+  /** 是否开启官方标准边缘沉浸式（Edge-to-Edge） */
+  open val enableEdgeToEdgeScreen: Boolean = true
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    if (edgeToEdgeEnabled) applyEdgeToEdge()
+    //采用官方标准 Edge-to-Edge 沉浸式 API
+    if (enableEdgeToEdgeScreen) {
+      enableEdgeToEdge()
+    }
+
     super.onCreate(savedInstanceState)
-  }
 
-  @SuppressLint("WrongConstant")
-  private fun applyEdgeToEdge() {
-    window.apply {
-      addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-      @Suppress("DEPRECATION") clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
-    }
-    EdgeToEdgeUtils.applyEdgeToEdge(this, statusBarStyle, navigationBarStyle)
-    ViewCompat.setOnApplyWindowInsetsListener(window.decorView, onApplyWindowInsetsListener)
-    window.decorView.doOnAttach { onApplySystemBarInsets(getSystemBarInsets(it)) }
-  }
-
-  @SuppressLint("WrongConstant")
-  private val onApplyWindowInsetsListener = OnApplyWindowInsetsListener { view, insets ->
-    onApplyWindowInsets(insets)
-    if (
-        !eteUpdateDecorViewPaddingInLandscape ||
-            view.resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
-    ) {
-      decorViewPadding?.let { padding ->
-        view.setPadding(padding.left, padding.top, padding.right, padding.bottom)
+    //  Jetpack Compose 根视图装载
+    setContent {
+      AndroidIDETheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+          ComposeContent()
+        }
       }
-      return@OnApplyWindowInsetsListener insets
     }
-
-    if (decorViewPadding == null) {
-      decorViewPadding =
-          Rect(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
-    }
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-      val bars = insets.getInsets(WindowInsets.Type.systemBars())
-      view.setPadding(bars.left, 0, bars.right, bars.bottom)
-    } else {
-      @Suppress("DEPRECATION")
-      view.setPadding(insets.stableInsetLeft, 0, insets.stableInsetRight, insets.stableInsetBottom)
-    }
-    insets
   }
 
-  /** Called on every insets dispatch. Insets are deliberately not consumed. */
-  @CallSuper
-  protected open fun onApplyWindowInsets(insets: WindowInsetsCompat) {
-    systemBarInsets = getSystemBarInsets(insets)
+  /**
+   * 子类唯一的 UI 实现入口。
+   * 完全遵循声明式 UI 规范，编写纯粹的 Jetpack Compose 与 Material 3 界面。
+   */
+  @Composable
+  protected abstract fun ComposeContent()
+
+  override fun onStart() {
+    super.onStart()
+    if (subscribeToEvents && !EventBus.getDefault().isRegistered(this)) {
+      EventBus.getDefault().register(this)
+    }
   }
 
-  /** Called after the decor view attaches with the current system-bar insets. */
-  protected open fun onApplySystemBarInsets(insets: Insets) = Unit
+  override fun onStop() {
+    super.onStop()
+    if (EventBus.getDefault().isRegistered(this)) {
+      EventBus.getDefault().unregister(this)
+    }
+  }
+
+  override fun onDestroy() {
+    super.onDestroy()
+    // 销毁时释放该 Activity 的后台任务，防止内存泄漏
+    activityScope.cancelIfActive("Activity is being destroyed")
+  }
+
+  /**
+   * 全局偏好设置变动监听。
+   * 当用户在主题设置中切换了日夜模式或静态主题包时，平滑更新页面状态。
+   */
+  @Subscribe(threadMode = ThreadMode.MAIN)
+  open fun onPreferenceChanged(event: PreferenceChangeEvent) {
+    when (event.key) {
+      // 日间/夜间模式变动（由 AppCompatDelegate 统一调度）
+      KEY_UI_MODE -> Unit
+      // 切换了调色盘/应用主题，安全重建页面以应用资源刷新
+      KEY_SELECTED_THEME -> recreate()
+    }
+  }
+
+  companion object {
+    private const val KEY_UI_MODE = "idepref_general_uiMode"
+    private const val KEY_SELECTED_THEME = "idpref_general_theme"
+  }
 }

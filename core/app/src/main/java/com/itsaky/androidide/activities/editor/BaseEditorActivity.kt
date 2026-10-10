@@ -189,6 +189,10 @@ abstract class BaseEditorActivity : IDEActivity(), ComposeEditorTabs.OnTabSelect
     memoryUsageWatcher.watchProcess(Process.myPid(), PROC_IDE)
     resetMemUsageChart()
     invalidateOptionsMenu()
+    
+    content.tabs.onCloseTab = { tab -> closeTabAt(tab.position) }
+content.tabs.onCloseOtherTabs = { tab -> closeOtherTabs(tab.position) }
+content.tabs.onCloseAllTabs = { closeAll {} }
   }
 
   fun registerEditorMenuProvider(provider: MenuProvider) {

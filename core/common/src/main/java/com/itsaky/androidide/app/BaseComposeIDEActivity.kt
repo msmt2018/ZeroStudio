@@ -14,130 +14,115 @@
  *  You should have received a copy of the GNU General Public License
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 package com.itsaky.androidide.app
 
 import android.os.Bundle
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
-import androidx.core.view.WindowInsetsControllerCompat
-import androidx.fragment.app.Fragment
-import com.google.android.material.R.attr
+import com.androidide.theme.AndroidIDETheme
 import com.itsaky.androidide.eventbus.events.preferences.PreferenceChangeEvent
 import com.itsaky.androidide.tasks.cancelIfActive
 import com.itsaky.androidide.ui.themes.IThemeManager
-import com.itsaky.androidide.utils.resolveAttr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 
 /**
- * Compose counterpart of [BaseIDEActivity].
+ * 完全基于 [ComponentActivity] 开发的纯粹 Jetpack Compose 核心基类。
  *
- * [AppCompatActivity] is a Jetpack [androidx.activity.ComponentActivity], so it provides the
- * standard Compose `setContent` host while retaining `supportFragmentManager` for activities that
- * are migrated incrementally. Apart from replacing `bindLayout()` with [ComposeContent], the
- * theme, system-bar, EventBus, coroutine, preference, and fragment contracts intentionally match
- * [BaseIDEActivity].
+ * @author android_zero
  */
-abstract class BaseComposeIDEActivity : AppCompatActivity() {
+abstract class BaseComposeIDEActivity : ComponentActivity() {
 
   companion object {
     private const val KEY_UI_MODE = "idepref_general_uiMode"
     private const val KEY_SELECTED_THEME = "idpref_general_theme"
   }
 
-  /** Defaults to true so base preference events are always observed. */
+  /** 是否监听 EventBus 基础配置事件（如主题切换、全局配置变更等）。 */
   open val subscribeToEvents: Boolean = true
 
-  /** Set false for activities that manage system bars with edge-to-edge APIs themselves. */
+  /** 是否启用官方标准边缘沉浸式（Edge-to-Edge），默认启用。 */
   open var enableSystemBarTheming: Boolean = true
 
-  open val navigationBarColor: Int
-    get() = resolveAttr(attr.colorSurface)
-
-  open val statusBarColor: Int
-    get() = resolveAttr(attr.colorSurface)
-
-  /** Scope for non-UI background work; it is cancelled with the Activity. */
-  val activityScope = CoroutineScope(Dispatchers.Default)
+  /**
+   * 用于执行非 UI 后台任务的结构化协程作用域。
+   * 使用 [SupervisorJob] 保证任务异常隔离，在 Activity [onDestroy] 时统一取消。
+   */
+  val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    // Apply before super so Compose, AndroidView, and any incrementally hosted legacy View all
-    // receive the same theme resources as BaseIDEActivity layouts.
+    // 同步主题配置到全局 ThemeManager
     IThemeManager.getInstance().applyTheme(this)
 
+    // 启用 Edge-to-Edge 全屏沉浸式
     if (enableSystemBarTheming) {
-      window.apply {
-        navigationBarColor = this@BaseComposeIDEActivity.navigationBarColor
-        statusBarColor = this@BaseComposeIDEActivity.statusBarColor
-      }
-      applySystemBarIconAppearance()
+      enableEdgeToEdge()
     }
 
-    // Preserve BaseIDEActivity's second application of the current theme. Theme implementations
-    // use this pass to update configuration-dependent resources before content is installed.
-    IThemeManager.getInstance().applyTheme(this)
     super.onCreate(savedInstanceState)
+
+    // 布局设置前置同步钩子
     preSetContentLayout()
-    setContent { ComposeContent() }
-  }
 
-  override fun onResume() {
-    super.onResume()
-    if (enableSystemBarTheming) applySystemBarIconAppearance()
-  }
-
-  override fun onDestroy() {
-    super.onDestroy()
-    activityScope.cancelIfActive("Activity is being destroyed")
+    // 纯 Compose 根视图装载并注入主题
+    setContent {
+      AndroidIDETheme {
+        ComposeContent()
+      }
+    }
   }
 
   override fun onStart() {
     super.onStart()
-    if (!EventBus.getDefault().isRegistered(this) && subscribeToEvents) {
+    if (subscribeToEvents && !EventBus.getDefault().isRegistered(this)) {
       EventBus.getDefault().register(this)
     }
   }
 
   override fun onStop() {
     super.onStop()
-    if (EventBus.getDefault().isRegistered(this)) EventBus.getDefault().unregister(this)
+    if (EventBus.getDefault().isRegistered(this)) {
+      EventBus.getDefault().unregister(this)
+    }
   }
 
-  /** Global preference listener with the same recreation behavior as [BaseIDEActivity]. */
+  override fun onDestroy() {
+    super.onDestroy()
+    // 销毁时清理未执行完毕的后台协程，防止持有 Activity 造成泄漏
+    activityScope.cancelIfActive("Activity is being destroyed")
+  }
+
+  /**
+   * 全局配置变动事件监听。
+   */
   @Subscribe(threadMode = ThreadMode.MAIN)
   open fun onBasePreferenceChanged(event: PreferenceChangeEvent) {
     when (event.key) {
-      KEY_UI_MODE -> Unit // IDEApplication updates this centrally through AppCompatDelegate.
+      KEY_UI_MODE -> Unit
       KEY_SELECTED_THEME -> recreateActivitySafe()
     }
   }
 
-  /** Makes the Activity's fragment API available during gradual XML-to-Compose migration. */
-  fun loadFragment(fragment: Fragment, id: Int) {
-    supportFragmentManager.beginTransaction().replace(id, fragment).commit()
-  }
-
-  /** Recreate after a theme change so Compose and Android resources are both re-resolved. */
+  /** 主题或关键资源变更时安全重建当前页面。 */
   protected fun recreateActivitySafe() {
     recreate()
   }
 
-  /** Hook invoked before [ComposeContent], matching BaseIDEActivity's layout hook. */
+  /**
+   * 在 [setContent] 之前执行的轻量级初始化钩子，子类可根据需要重写。
+   */
   protected open fun preSetContentLayout() = Unit
 
-  /** The Activity's Compose root. This replaces BaseIDEActivity.bindLayout(). */
-  @Composable protected abstract fun ComposeContent()
-
-  private fun applySystemBarIconAppearance() {
-    val controller = WindowInsetsControllerCompat(window, window.decorView)
-    val isNightMode =
-        resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
-            android.content.res.Configuration.UI_MODE_NIGHT_YES
-    controller.isAppearanceLightStatusBars = !isNightMode
-    controller.isAppearanceLightNavigationBars = !isNightMode
-  }
+  /**
+   * 纯 Compose 页面实现入口，子类在此编写纯粹的声明式 UI。
+   */
+  @Composable
+  protected abstract fun ComposeContent()
 }
