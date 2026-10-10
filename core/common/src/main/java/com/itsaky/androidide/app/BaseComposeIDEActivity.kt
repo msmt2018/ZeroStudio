@@ -22,7 +22,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
-import com.androidide.theme.AndroidIDETheme
+import com.itsaky.androidide.ui.themes.AndroidIDETheme
 import com.itsaky.androidide.eventbus.events.preferences.PreferenceChangeEvent
 import com.itsaky.androidide.tasks.cancelIfActive
 import com.itsaky.androidide.ui.themes.IThemeManager

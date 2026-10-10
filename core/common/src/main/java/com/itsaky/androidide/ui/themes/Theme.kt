@@ -28,37 +28,15 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// 扩展颜色定义 (用于承载 XML 中特有的终端、涟漪、选择等非标准 M3 颜色)
-data class ExtendedColors(
-    val ripple: Color,                  // 控件触控反馈涟漪颜色 (对应 controlHighlight)
-    val selection: Color,               // 文本或代码选中高亮色 (对应 textColorHighlight)
-    val terminalTextColor: Color,       // 纯文本控制台/终端默认字符输出颜色
-    val terminalBackgroundColor: Color  // 纯文本控制台/终端背景底色
-)
-
-// 创建 Local 上下文以便在 Compose 树中向下传递扩展属性
-val LocalExtendedColors = staticCompositionLocalOf<ExtendedColors> {
-    error("No ExtendedColors provided! Make sure to wrap your content in AndroidIDETheme {}")
-}
-
-// 主题包数据规格
-data class AppThemeSpec(
-    val id: String,
-    val name: String,
-    val lightColorScheme: ColorScheme,
-    val darkColorScheme: ColorScheme,
-    val lightExtended: ExtendedColors,
-    val darkExtended: ExtendedColors
-)
-
-// 内置多套 XML 风格转换过来的主题包仓库
+// ============================================================================
+// 内置多套 XML 风格的主题包仓库
+// ============================================================================
 object BuiltInThemes {
 
     // ========================================================================
-    // 主题一：森林苔藓 (Forest Moss) - 护眼绿与自然大地色
+    // 主题一：森林苔藓 (Forest Moss) - 橄榄绿与大地色 自然护眼风格
     // ========================================================================
     val ForestMoss = AppThemeSpec(
         id = "forest_moss",
@@ -212,13 +190,14 @@ object DynamicThemeManager {
     var nightMode by mutableStateOf(NightMode.FOLLOW_SYSTEM)
 }
 
-// 全局主题 Composable 入口
+// 响应式全局主题组件入口
 @Composable
 fun AndroidIDETheme(content: @Composable () -> Unit) {
     val isDark = when (DynamicThemeManager.nightMode) {
         NightMode.FOLLOW_SYSTEM -> isSystemInDarkTheme()
         NightMode.FORCE_LIGHT -> false
         NightMode.FORCE_DARK -> true
+        else -> isSystemInDarkTheme()
     }
 
     val themeSpec = DynamicThemeManager.currentTheme
@@ -234,7 +213,7 @@ fun AndroidIDETheme(content: @Composable () -> Unit) {
 }
 
 // 统一属性读取单例
-object IDETheme {
+object ZeroStudioIDETheme {
     val colors: ColorScheme
         @Composable
         @ReadOnlyComposable
