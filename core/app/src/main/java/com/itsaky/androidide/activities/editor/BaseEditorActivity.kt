@@ -27,14 +27,14 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.viewModels
 import androidx.annotation.GravityInt
 import androidx.appcompat.view.menu.MenuBuilder
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import com.blankj.utilcode.util.FileUtils
@@ -50,7 +50,6 @@ import com.itsaky.androidide.actions.SidebarActionItem
 import com.itsaky.androidide.actions.internal.DefaultActionsRegistry
 import com.itsaky.androidide.actions.menu.EditorLineOperations
 import com.itsaky.androidide.activities.editor.ui.screen.EditorActivityContent
-import com.itsaky.androidide.activities.editor.ui.screen.EditorMenuDialog
 import com.itsaky.androidide.activities.editor.ui.state.EditorPage
 import com.itsaky.androidide.activities.editor.ui.state.EditorUiState
 import com.itsaky.androidide.adapters.DiagnosticsAdapter
@@ -79,7 +78,7 @@ import com.itsaky.androidide.ui.SymbolInputVisibilityManager
 import com.itsaky.androidide.utils.ApkInstallationSessionCallback
 import com.itsaky.androidide.utils.InstallationResultHandler.onResult
 import com.itsaky.androidide.utils.IntentUtils
-import com.itsaky.androidide.utils.MemoryUsageWatcher
+// import com.itsaky.androidide.utils.MemoryUsageWatcher
 import com.itsaky.androidide.utils.flashInfo
 import com.itsaky.androidide.viewmodel.EditorViewModel
 import com.itsaky.androidide.xml.resources.ResourceTableRegistry
@@ -95,30 +94,41 @@ import org.greenrobot.eventbus.ThreadMode.MAIN
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-
-
-/** Owns editor business callbacks; all editor chrome is rendered by Compose. */
+/**
+ * 编辑器核心基础 Activity：全面支持纯粹的 Jetpack Compose、高性能状态分发与现代 Android 规范。
+ *
+ * @author android_zero
+ */
 @Suppress("MemberVisibilityCanBePrivate")
-abstract class BaseEditorActivity : IDEActivity(), ComposeEditorTabs.OnTabSelectedListener, DiagnosticClickListener {
+abstract class BaseEditorActivity :
+    IDEActivity(),
+    ComposeEditorTabs.OnTabSelectedListener,
+    DiagnosticClickListener {
+
   protected val mLifecycleObserver = EditorActivityLifecyclerObserver()
-  protected val memoryUsageWatcher = MemoryUsageWatcher()
+  // protected val memoryUsageWatcher = MemoryUsageWatcher()
   private val bottomSheetHeaderHideReasons = mutableSetOf<String>()
   protected val editorActivityScope = CoroutineScope(Dispatchers.Default)
+
   var isDestroying = false
     protected set
+
   internal var installationCallback: ApkInstallationSessionCallback? = null
   var uiDesignerResultLauncher: ActivityResultLauncher<Intent>? = null
   val editorViewModel by viewModels<EditorViewModel>()
   internal var _editorUi: EditorUiState? = null
-  val content get() = checkNotNull(_editorUi)
-  override val subscribeToEvents get() = true
-  override val useLegacyViewContent get() = false
-  override var eteUpdateDecorViewPaddingInLandscape = false
+  val content: EditorUiState
+    get() = checkNotNull(_editorUi)
+
+  override val subscribeToEvents: Boolean
+    get() = true
+
   private var cursorPositionReceipt: SubscriptionReceipt<SelectionChangeEvent>? = null
   val toolbarMenu by lazy { MenuBuilder(this) }
   private val editorMenuProviders = mutableListOf<MenuProvider>()
   private var optionsMenuInvalidator: Runnable? = null
-  val symbolInputHeight: Int get() = _editorUi?.symbolHeight ?: 0
+  val symbolInputHeight: Int
+    get() = _editorUi?.symbolHeight ?: 0
 
   companion object {
     @JvmStatic protected val PROC_IDE = "IDE"
@@ -137,12 +147,17 @@ abstract class BaseEditorActivity : IDEActivity(), ComposeEditorTabs.OnTabSelect
   protected abstract fun doDismissSearchProgress()
   protected abstract fun getOpenedFiles(): List<OpenedFile>
   internal abstract fun doConfirmProjectClose()
+
   open fun getCurrentEditor(): CodeEditorView? = provideCurrentEditor()
-  open fun openFileAndSelect(file: File, selection: Range?) { doOpenFile(file, selection) }
-  open fun showFlashInfo(msg: String?) { flashInfo(msg) }
+  open fun openFileAndSelect(file: File, selection: Range?) {
+    doOpenFile(file, selection)
+  }
+  open fun showFlashInfo(msg: String?) {
+    flashInfo(msg)
+  }
 
   @Composable
-  final override fun ComposeScreen() {
+  final override fun ComposeContent() {
     _editorUi?.let { EditorActivityContent(this, it) }
   }
 
@@ -150,14 +165,36 @@ abstract class BaseEditorActivity : IDEActivity(), ComposeEditorTabs.OnTabSelect
     _editorUi = EditorUiState(this)
     super.onCreate(savedInstanceState)
     registerLanguageServers(this)
-    savedInstanceState?.getString(KEY_PROJECT_PATH)?.let { IProjectManager.getInstance().openProject(it) }
+
+    savedInstanceState?.getString(KEY_PROJECT_PATH)?.let {
+      IProjectManager.getInstance().openProject(it)
+    }
+
     lifecycle.addObserver(mLifecycleObserver)
+
+    // 绑定 ComposeEditorTabs 监听与关闭链条
     content.tabs.addOnTabSelectedListener(this)
-    toolbarMenu.setCallback(object : MenuBuilder.Callback {
-      override fun onMenuItemSelected(menu: MenuBuilder, item: MenuItem): Boolean =
-        editorMenuProviders.any { it.onMenuItemSelected(item) }
-      override fun onMenuModeChange(menu: MenuBuilder) = Unit
-    })
+    content.tabs.onCloseTab = { tab ->
+      val resolvedIndex = resolveEditorIndexForTab(tab)
+      if (resolvedIndex >= 0) closeTabAt(resolvedIndex)
+    }
+    content.tabs.onCloseOtherTabs = { tab ->
+      val resolvedIndex = resolveEditorIndexForTab(tab)
+      if (resolvedIndex >= 0) closeOtherTabs(resolvedIndex)
+    }
+    content.tabs.onCloseAllTabs = {
+      closeAll {}
+    }
+
+    toolbarMenu.setCallback(
+        object : MenuBuilder.Callback {
+          override fun onMenuItemSelected(menu: MenuBuilder, item: MenuItem): Boolean =
+              editorMenuProviders.any { it.onMenuItemSelected(item) }
+
+          override fun onMenuModeChange(menu: MenuBuilder) = Unit
+        }
+    )
+
     optionsMenuInvalidator = Runnable {
       if (!isDestroying && _editorUi != null) {
         toolbarMenu.clear()
@@ -168,16 +205,28 @@ abstract class BaseEditorActivity : IDEActivity(), ComposeEditorTabs.OnTabSelect
         content.toolbarVersion++
       }
     }
+
     setupSidebarPages()
     content.bottomSheet.start(this)
+
     savedInstanceState?.getString("editor.sidebar.page")?.let(content.sidebar::select)
     savedInstanceState?.getString("editor.bottom.page")?.let(content.bottomSheet.pages::select)
+
+    // 默认兜底选第一项（如文件树）
+    if (content.sidebar.selectedId == null) {
+      content.sidebar.select(com.itsaky.androidide.actions.sidebar.FileTreeSidebarAction.ID)
+    }
+
     content.drawerOpen = savedInstanceState?.getBoolean("editor.sidebar.open") ?: false
     editorViewModel.startDrawerOpened = content.drawerOpen
     content.bottomSheet.visible = savedInstanceState?.getBoolean("editor.bottom.open") ?: false
+
     editorViewModel._isBuildInProgress.observe(this) { updateBuildState() }
     editorViewModel._isInitializing.observe(this) { updateBuildState() }
-    editorViewModel._statusText.observe(this) { _editorUi?.bottomSheet?.setStatus(it.first, it.second) }
+    editorViewModel._statusText.observe(this) {
+      _editorUi?.bottomSheet?.setStatus(it.first, it.second)
+    }
+
     editorViewModel.observeFiles(this) { files ->
       if (_editorUi != null) {
         content.tabs.visible = !files.isNullOrEmpty() || hasNonEditorTabs()
@@ -185,14 +234,12 @@ abstract class BaseEditorActivity : IDEActivity(), ComposeEditorTabs.OnTabSelect
       }
       invalidateOptionsMenu()
     }
-    memoryUsageWatcher.listener = memoryUsageListener
-    memoryUsageWatcher.watchProcess(Process.myPid(), PROC_IDE)
-    resetMemUsageChart()
+
+    //考虑编辑器性能，所以彻底迁移memoryUsage到EditorProcessApmFragment
+    // memoryUsageWatcher.listener = memoryUsageListener
+    // memoryUsageWatcher.watchProcess(Process.myPid(), PROC_IDE)
+    // resetMemUsageChart()
     invalidateOptionsMenu()
-    
-    content.tabs.onCloseTab = { tab -> closeTabAt(tab.position) }
-content.tabs.onCloseOtherTabs = { tab -> closeOtherTabs(tab.position) }
-content.tabs.onCloseAllTabs = { closeAll {} }
   }
 
   fun registerEditorMenuProvider(provider: MenuProvider) {
@@ -200,7 +247,6 @@ content.tabs.onCloseAllTabs = { closeAll {} }
     invalidateOptionsMenu()
   }
 
-  /** Register Fragment or Compose contributions for this editor Activity. IDs must be unique. */
   fun registerSidebarPage(page: EditorPage) = content.sidebar.register(page)
   fun unregisterSidebarPage(id: String) = content.sidebar.unregister(id)
   fun registerIdePage(page: EditorPage) = content.bottomSheet.pages.register(page)
@@ -208,23 +254,33 @@ content.tabs.onCloseAllTabs = { closeAll {} }
 
   private fun setupSidebarPages() {
     ActionsRegistry.getInstance()
-      .getActions(ActionItem.Location.EDITOR_SIDEBAR).values
-      .sortedBy { it.order }.forEach { action ->
-        val sidebarAction = action as? SidebarActionItem ?: return@forEach
-        val type = sidebarAction.fragmentClass
-        if (type != null) content.sidebar.register(
-          EditorPage.FragmentPage(action.id, action.label.ifBlank { action.id.substringAfterLast('.') }, type.java)
-        ) else content.sidebar.register(
-          EditorPage.ActionPage(action.id, action.label) {
-            val data = ActionData().apply { put(Context::class.java, this@BaseEditorActivity) }
-            action.prepare(data)
-            if (action.enabled && action.visible) {
-              content.drawerOpen = false
-              (ActionsRegistry.getInstance() as DefaultActionsRegistry).executeAction(action, data)
-            }
+        .getActions(ActionItem.Location.EDITOR_SIDEBAR)
+        .values
+        .sortedBy { it.order }
+        .forEach { action ->
+          val sidebarAction = action as? SidebarActionItem ?: return@forEach
+          val type = sidebarAction.fragmentClass
+          if (type != null) {
+            content.sidebar.register(
+                EditorPage.FragmentPage(
+                    action.id,
+                    action.label.ifBlank { action.id.substringAfterLast('.') },
+                    type.java,
+                )
+            )
+          } else {
+            content.sidebar.register(
+                EditorPage.ActionPage(action.id, action.label) {
+                  val data = ActionData().apply { put(Context::class.java, this@BaseEditorActivity) }
+                  action.prepare(data)
+                  if (action.enabled && action.visible) {
+                    content.drawerOpen = false
+                    (ActionsRegistry.getInstance() as DefaultActionsRegistry).executeAction(action, data)
+                  }
+                }
+            )
           }
-        )
-      }
+        }
   }
 
   private fun updateBuildState() {
@@ -232,27 +288,35 @@ content.tabs.onCloseAllTabs = { closeAll {} }
     invalidateOptionsMenu()
   }
 
-  private val memoryUsageListener = MemoryUsageWatcher.MemoryUsageListener { usages ->
-    val samples = mutableListOf<Pair<String, List<Float>>>()
-    usages.forEachValue { proc -> samples.add(proc.pname to proc.usageHistory.map { it / (1024f * 1024f) }) }
-    runOnUiThread { _editorUi?.memories = samples }
-  }
-  protected fun resetMemUsageChart() { _editorUi?.memories = emptyList() }
+  // private val memoryUsageListener =
+      // MemoryUsageWatcher.MemoryUsageListener { usages ->
+        // val samples = mutableListOf<Pair<String, List<Float>>>()
+        // usages.forEachValue { proc ->
+          // samples.add(proc.pname to proc.usageHistory.map { it / (1024f * 1024f) })
+        // }
+        // runOnUiThread { _editorUi?.memories = samples }
+      // }
+
+  // protected fun resetMemUsageChart() {
+    // _editorUi?.memories = emptyList()
+  // }
 
   override fun onPause() {
     super.onPause()
-    memoryUsageWatcher.listener = null
-    memoryUsageWatcher.stopWatching(false)
+    // memoryUsageWatcher.listener = null
+    // memoryUsageWatcher.stopWatching(false)
     isDestroying = isFinishing
     getFileTreeFragment()?.saveTreeState()
   }
+
   override fun onResume() {
     super.onResume()
-    memoryUsageWatcher.listener = memoryUsageListener
-    memoryUsageWatcher.startWatching()
+    // memoryUsageWatcher.listener = memoryUsageListener
+    // memoryUsageWatcher.startWatching()
     invalidateOptionsMenu()
     runCatching { getFileTreeFragment()?.listProjectFiles() }
   }
+
   override fun onSaveInstanceState(outState: Bundle) {
     outState.putString("editor.sidebar.page", content.sidebar.selectedId)
     outState.putString("editor.bottom.page", content.bottomSheet.pages.selectedId)
@@ -261,8 +325,8 @@ content.tabs.onCloseAllTabs = { closeAll {} }
     outState.putString(KEY_PROJECT_PATH, IProjectManager.getInstance().projectDirPath.orEmpty())
     super.onSaveInstanceState(outState)
   }
+
   override fun onDestroy() {
-    // Project shutdown is reserved for an explicit finish, matching the existing lifecycle.
     isDestroying = isFinishing
     cursorPositionReceipt?.unsubscribe()
     preDestroy()
@@ -270,18 +334,20 @@ content.tabs.onCloseAllTabs = { closeAll {} }
     super.onDestroy()
     postDestroy()
   }
+
   protected open fun preDestroy() {
     optionsMenuInvalidator?.let { ThreadUtils.getMainHandler().removeCallbacks(it) }
     optionsMenuInvalidator = null
     installationCallback?.destroy()
     installationCallback = null
     SymbolInputVisibilityManager.unregister()
-    memoryUsageWatcher.stopWatching(true)
-    memoryUsageWatcher.listener = null
+    // memoryUsageWatcher.stopWatching(true)
+    // memoryUsageWatcher.listener = null
     editorActivityScope.cancelIfActive("Activity is being destroyed")
     _editorUi?.bottomSheet?.close()
     _editorUi = null
   }
+
   protected open fun postDestroy() {
     if (isFinishing) {
       Lookup.getDefault().unregisterAll()
@@ -290,21 +356,25 @@ content.tabs.onCloseAllTabs = { closeAll {} }
       WidgetTableRegistry.getInstance().clear()
     }
   }
+
   override fun invalidateOptionsMenu() {
     if (isDestroying || isFinishing) return
     optionsMenuInvalidator?.let {
       ThreadUtils.getMainHandler().removeCallbacks(it)
-      ThreadUtils.getMainHandler().postDelayed(it, 150)
+      ThreadUtils.getMainHandler().postDelayed(it, 100)
     }
   }
+
   protected fun releaseBottomSheetHeaderHide(reason: String) {
     bottomSheetHeaderHideReasons.remove(reason)
     _editorUi?.headerVisible = bottomSheetHeaderHideReasons.isEmpty()
   }
+
   protected fun requestBottomSheetHeaderHide(reason: String) {
     bottomSheetHeaderHideReasons.add(reason)
     _editorUi?.headerVisible = false
   }
+
   override fun onTabSelected(tab: Tab) {
     if (isDestroying || _editorUi == null) return
     val position = resolveEditorIndexForTab(tab)
@@ -320,62 +390,148 @@ content.tabs.onCloseAllTabs = { closeAll {} }
     refreshSymbolInput(view)
     invalidateOptionsMenu()
   }
+
   protected open fun resolveEditorIndexForTab(tab: Tab): Int = tab.position
   protected open fun hasNonEditorTabs(): Boolean = false
   override fun onTabUnselected(tab: Tab) = Unit
+
+  /**
+   * 标签长按或重选操作：已由 ComposeEditorTabs 中的 DropdownMenu 替代，无需全屏模态弹窗
+   */
   override fun onTabReselected(tab: Tab) {
     if (isDestroying) return
-    val menu = MenuBuilder(this)
-    val data = ActionData().apply { put(Context::class.java, this@BaseEditorActivity) }
-    ActionsRegistry.getInstance().fillMenu(FillMenuParams(data, EDITOR_FILE_TABS, menu))
-    content.dialog = { EditorMenuDialog(menu) { content.dialog = null } }
+    // 保留挂钩，UI 层通过 ComposeEditorTabs 自身的吸附式 DropdownMenu 执行
   }
-  fun refreshSymbolInput() { provideCurrentEditor()?.let(::refreshSymbolInput) }
-  fun refreshSymbolInput(editor: CodeEditorView) { _editorUi?.currentEditor = editor }
+
+  fun refreshSymbolInput() {
+    provideCurrentEditor()?.let(::refreshSymbolInput)
+  }
+
+  fun refreshSymbolInput(editor: CodeEditorView) {
+    _editorUi?.currentEditor = editor
+  }
+
   private fun bindCursorPositionSync(editorView: CodeEditorView) {
     cursorPositionReceipt?.unsubscribe()
-    cursorPositionReceipt = editorView.editor?.subscribeEvent(SelectionChangeEvent::class.java) { _, _ ->
-      if (_editorUi != null) updateCursorPositionIndicator(editorView)
+    cursorPositionReceipt =
+        editorView.editor?.subscribeEvent(SelectionChangeEvent::class.java) { _, _ ->
+          if (_editorUi != null) updateCursorPositionIndicator(editorView)
+        }
+  }
+
+  private fun updateCursorPositionIndicator(editorView: CodeEditorView) {
+    editorView.editor?.cursor?.let {
+      _editorUi?.cursor = "${it.leftLine + 1}:${it.leftColumn + 1}"
     }
   }
-  private fun updateCursorPositionIndicator(editorView: CodeEditorView) {
-    editorView.editor?.cursor?.let { _editorUi?.cursor = "${it.leftLine + 1}:${it.leftColumn + 1}" }
+
+  open fun hideBottomSheet() {
+    _editorUi?.bottomSheet?.forceCollapse()
   }
-  open fun hideBottomSheet() { _editorUi?.bottomSheet?.forceCollapse() }
-  open fun showSearchResults() { content.bottomSheet.selectTabByFragmentClass(SearchResultFragment::class.java); content.bottomSheet.tryExpandSheetFromControl() }
+
+  open fun showSearchResults() {
+    content.bottomSheet.selectTabByFragmentClass(SearchResultFragment::class.java)
+    content.bottomSheet.tryExpandSheetFromControl()
+  }
+
   open fun openDebuggerTab(fragmentClass: Class<out Fragment>) {
     content.bottomSheet.selectTabByFragmentClass(fragmentClass)
     content.bottomSheet.tryExpandSheetFromControl()
   }
-  open fun setSearchResultAdapter(adapter: SearchListAdapter) { content.bottomSheet.setSearchResultAdapter(adapter) }
-  open fun setDiagnosticsAdapter(adapter: DiagnosticsAdapter) { content.bottomSheet.setDiagnosticsAdapter(adapter) }
-  open fun handleDiagnosticsResultVisibility(errorVisible: Boolean) { content.bottomSheet.handleDiagnosticsResultVisibility(errorVisible) }
-  open fun handleSearchResultVisibility(errorVisible: Boolean) { content.bottomSheet.handleSearchResultVisibility(errorVisible) }
+
+  open fun setSearchResultAdapter(adapter: SearchListAdapter) {
+    content.bottomSheet.setSearchResultAdapter(adapter)
+  }
+
+  open fun setDiagnosticsAdapter(adapter: DiagnosticsAdapter) {
+    content.bottomSheet.setDiagnosticsAdapter(adapter)
+  }
+
+  open fun handleDiagnosticsResultVisibility(errorVisible: Boolean) {
+    content.bottomSheet.handleDiagnosticsResultVisibility(errorVisible)
+  }
+
+  open fun handleSearchResultVisibility(errorVisible: Boolean) {
+    content.bottomSheet.handleSearchResultVisibility(errorVisible)
+  }
+
   open fun getFileTreeFragment(): FileTreeFragment? {
     if (isDestroying) return null
-    // AndroidFragment owns the container tag and recreates the page after selection changes.
-    return supportFragmentManager.fragments.filterIsInstance<FileTreeFragment>()
-      .firstOrNull { it.isAdded && it.view != null }
+    return supportFragmentManager.fragments
+        .filterIsInstance<FileTreeFragment>()
+        .firstOrNull { it.isAdded && it.view != null }
   }
-  fun doSetStatus(text: CharSequence, @GravityInt gravity: Int) { editorViewModel.statusText = text; editorViewModel.statusGravity = gravity }
-  open fun showFirstBuildNotice() { showEditorMessage(getString(string.title_first_build), getString(string.msg_first_build)) }
+
+  fun doSetStatus(text: CharSequence, @GravityInt gravity: Int) {
+    editorViewModel.statusText = text
+    editorViewModel.statusGravity = gravity
+  }
+
+  open fun showFirstBuildNotice() {
+    showEditorMessage(getString(string.title_first_build), getString(string.msg_first_build))
+  }
+
   fun showEditorMessage(title: String, message: String, confirm: () -> Unit = {}) {
     content.dialog = {
-      AlertDialog(onDismissRequest = { content.dialog = null }, title = { Text(title) }, text = { SelectionContainer { Text(message, Modifier.verticalScroll(rememberScrollState())) } }, confirmButton = {
-        TextButton(onClick = { content.dialog = null; confirm() }) { Text(getString(android.R.string.ok)) }
-      })
+      AlertDialog(
+          onDismissRequest = { content.dialog = null },
+          title = { Text(title) },
+          text = {
+            SelectionContainer {
+              Text(message, Modifier.verticalScroll(rememberScrollState()))
+            }
+          },
+          confirmButton = {
+            TextButton(
+                onClick = {
+                  content.dialog = null
+                  confirm()
+                }
+            ) {
+              Text(getString(android.R.string.ok))
+            }
+          },
+      )
     }
   }
+
   fun confirmEditorAction(title: String, message: String, yes: () -> Unit, no: () -> Unit = {}) {
     content.dialog = {
-      AlertDialog(onDismissRequest = { content.dialog = null }, title = { Text(title) }, text = { SelectionContainer { Text(message, Modifier.verticalScroll(rememberScrollState())) } }, confirmButton = {
-        TextButton(onClick = { content.dialog = null; yes() }) { Text(getString(string.yes)) }
-      }, dismissButton = {
-        TextButton(onClick = { content.dialog = null; no() }) { Text(getString(string.no)) }
-      })
+      AlertDialog(
+          onDismissRequest = { content.dialog = null },
+          title = { Text(title) },
+          text = {
+            SelectionContainer {
+              Text(message, Modifier.verticalScroll(rememberScrollState()))
+            }
+          },
+          confirmButton = {
+            TextButton(
+                onClick = {
+                  content.dialog = null
+                  yes()
+                }
+            ) {
+              Text(getString(string.yes))
+            }
+          },
+          dismissButton = {
+            TextButton(
+                onClick = {
+                  content.dialog = null
+                  no()
+                }
+            ) {
+              Text(getString(string.no))
+            }
+          },
+      )
     }
   }
-  open fun installationSessionCallback(): SessionCallback = ApkInstallationSessionCallback(this).also { installationCallback = it }
+
+  open fun installationSessionCallback(): SessionCallback =
+      ApkInstallationSessionCallback(this).also { installationCallback = it }
+
   override fun onGroupClick(group: DiagnosticGroup?) {
     if (isDestroying || _editorUi == null) return
     if (group?.file?.exists() == true && FileUtils.isUtf8(group.file)) {
@@ -421,7 +577,10 @@ content.tabs.onCloseAllTabs = { closeAll {} }
       return
     }
 
-    confirmEditorAction(getString(string.app_name), getString(string.msg_action_open_application), { IntentUtils.launchApp(this, packageName) })
+    confirmEditorAction(
+        getString(string.app_name),
+        getString(string.msg_action_open_application),
+        { IntentUtils.launchApp(this, packageName) },
+    )
   }
-
 }

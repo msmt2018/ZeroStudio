@@ -467,7 +467,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
     if (!service.isToolingServerStarted()) {
       service.startToolingServer { pid ->
         try {
-          memoryUsageWatcher.watchProcess(pid, PROC_GRADLE_TOOLING)
+          // memoryUsageWatcher.watchProcess(pid, PROC_GRADLE_TOOLING)
           resetMemUsageChart()
         } catch (e: Exception) {
           log.warn("Failed to watch tooling server process: ${e.message}")
@@ -486,7 +486,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
                 metadata.pid,
             )
             try {
-              memoryUsageWatcher.watchProcess(metadata.pid, PROC_GRADLE_TOOLING)
+              // memoryUsageWatcher.watchProcess(metadata.pid, PROC_GRADLE_TOOLING)
               resetMemUsageChart()
             } catch (e: Exception) {
               log.warn("Failed to watch tooling server process (metadata): ${e.message}")

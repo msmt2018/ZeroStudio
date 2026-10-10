@@ -1,9 +1,27 @@
+/*
+ *  This file is part of AndroidIDE.
+ *
+ *  AndroidIDE is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  AndroidIDE is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.itsaky.androidide.fragments.output
 
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,9 +33,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -25,9 +48,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,7 +60,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -47,36 +70,43 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.itsaky.androidide.activities.editor.ProjectHandlerActivity
 import com.itsaky.androidide.lookup.Lookup
 import com.itsaky.androidide.lsp.IDELanguageClientImpl
 import com.itsaky.androidide.monitor.EditorHotClassStat
-import com.itsaky.androidide.monitor.EditorPssBreakdownStat
 import com.itsaky.androidide.monitor.EditorProcessApmMonitor
 import com.itsaky.androidide.monitor.EditorProcessApmSnapshot
+import com.itsaky.androidide.monitor.EditorPssBreakdownStat
 import com.itsaky.androidide.monitor.EditorSubsystemStat
+import com.itsaky.androidide.monitor.ProcessMemMetric
 import com.itsaky.androidide.projects.builder.BuildService
-import com.itsaky.androidide.utils.executioncommand.TermuxCommand
 import com.itsaky.androidide.resources.R as ResString
+import com.itsaky.androidide.utils.executioncommand.TermuxCommand
 import java.util.Locale
-import android.widget.Toast
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/** Editor bottom-sheet APM dashboard fragment rendered with Jetpack Compose. */
+/**
+ * 彻底重构后的 APM 监控控制台：
+ * 1. 采用纯 Jetpack Compose 与 Material 3 渲染。
+ * 2. 独立生命周期接管：停止监控时完全取消一切后台轮询、反射与 I/O，不影响 IDE 主界面帧率。
+ * 3. 监控 Linux / Termux 容器内的 JDK / Java / Gradle 进程与 Tooling 进程内存。
+ * 4. 彻底解决杀容器内 Gradle/Java 进程无效的痛点。
+ */
 class EditorProcessApmFragment : Fragment() {
 
   private var monitorJob: Job? = null
-  private var monitor: EditorProcessApmMonitor? = null
-  private val snapshotState = mutableStateOf<EditorProcessApmSnapshot?>(null)
   private val isMonitoringState = mutableStateOf(false)
+  private val snapshotState = mutableStateOf<EditorProcessApmSnapshot?>(null)
 
   override fun onCreateView(
       inflater: LayoutInflater,
@@ -85,29 +115,28 @@ class EditorProcessApmFragment : Fragment() {
   ): View {
     return ComposeView(requireContext()).apply {
       setContent {
-        EditorApmMonitorScreen(
-            snapshot = snapshotState.value,
-            onCleanProcesses = ::runCleanupViaTermux,
-            onInAppSelfCleanup = ::runInAppSelfCleanup,
-            isMonitoring = isMonitoringState.value,
-            onToggleMonitoring = ::toggleMonitoring,
-        )
+        MaterialTheme {
+          EditorApmMonitorScreen(
+              snapshot = snapshotState.value,
+              isMonitoring = isMonitoringState.value,
+              onToggleMonitoring = ::toggleMonitoring,
+              onCleanProcesses = ::runCleanGradleJavaInContainer,
+              onInAppSelfCleanup = ::runInAppSelfCleanup,
+          )
+        }
       }
     }
   }
 
-  override fun onStart() {
-    super.onStart()
-  }
-
-  override fun onStop() {
-    stopMonitoring(clearSnapshot = false)
-    super.onStop()
+  override fun onPause() {
+    super.onPause()
+    // 切出或关闭抽屉时停止监控，确保后台 0 资源占用
+    stopMonitoring(clearData = false)
   }
 
   private fun toggleMonitoring() {
     if (isMonitoringState.value) {
-      stopMonitoring(clearSnapshot = true)
+      stopMonitoring(clearData = true)
     } else {
       startMonitoring()
     }
@@ -115,37 +144,61 @@ class EditorProcessApmFragment : Fragment() {
 
   private fun startMonitoring() {
     if (isMonitoringState.value) return
-    val localMonitor = monitor ?: EditorProcessApmMonitor(requireContext().applicationContext).also { monitor = it }
-    monitorJob?.cancel()
     isMonitoringState.value = true
-    monitorJob =
-      viewLifecycleOwner.lifecycleScope.launch {
-        localMonitor.stream(intervalMs = 1000L).collect { snapshot -> snapshotState.value = snapshot }
+
+    val monitor = EditorProcessApmMonitor(requireContext().applicationContext)
+    monitorJob?.cancel()
+    monitorJob = viewLifecycleOwner.lifecycleScope.launch {
+      // 启动实时数据流收集
+      monitor.stream(intervalMs = 1000L).collect { snap ->
+        snapshotState.value = snap
       }
+    }
   }
 
-  private fun stopMonitoring(clearSnapshot: Boolean) {
+  private fun stopMonitoring(clearData: Boolean) {
     monitorJob?.cancel()
     monitorJob = null
-    monitor = null
     isMonitoringState.value = false
-    if (clearSnapshot) snapshotState.value = null
+    if (clearData) {
+      snapshotState.value = null
+    }
   }
 
-  private fun runCleanupViaTermux() {
+  /**
+   * 使用你建议的标准 Bash 脚本强杀 Termux/Linux 容器内的所有 Gradle 及 Java 进程
+   */
+  private fun runCleanGradleJavaInContainer() {
+    val context = requireContext().applicationContext
     viewLifecycleOwner.lifecycleScope.launch {
-      TermuxCommand.run(requireContext().applicationContext) {
-        label("APM Cleanup Gradle/JVM")
+      Toast.makeText(context, "正在停止容器 Gradle 并清理 Java 进程...", Toast.LENGTH_SHORT).show()
+
+      val killScript = """
+        #!/bin/bash
+        echo "🔍 Stopping the Gradle daemon..."
+        gradle --stop 2>/dev/null || true
+
+        echo "🔪 Force kill all Gradle/Java related processes..."
+        pkill -9 -f 'gradle.*daemon' 2>/dev/null || true
+        pkill -9 -f 'java.*gradle' 2>/dev/null || true
+        pkill -9 -f 'gradle' 2>/dev/null || true
+        pkill -9 -f 'java' 2>/dev/null || true
+
+        echo "✅ Gradle is all cleaned up! Memory is freed."
+      """.trimIndent()
+
+      val result = TermuxCommand.run(context) {
+        label("APM-Kill-Gradle-Java")
         executable("sh")
-        args(
-            "-c",
-            "gradle --stop 2>/dev/null; " +
-                "pkill -f 'gradle.*daemon' 2>/dev/null; " +
-                "pkill -f 'java.*gradle' 2>/dev/null; " +
-                "pkill -f 'gradle' 2>/dev/null; " +
-                "echo 'Gradle and Java cleanup done.'",
-        )
+        args("-c", killScript)
       }
+
+      val feedback = if (result.isSuccess) {
+        "Gradle/Java 容器进程已全部强杀清理完毕！"
+      } else {
+        "已执行清理命令，输出信息：${result.stdout.ifBlank { result.stderr }}"
+      }
+      Toast.makeText(context, feedback, Toast.LENGTH_LONG).show()
     }
   }
 
@@ -157,6 +210,7 @@ class EditorProcessApmFragment : Fragment() {
           ?.cleanupIdleResources("apm-menu-self-clean")
       Runtime.getRuntime().gc()
       System.gc()
+      Toast.makeText(requireContext(), "IDE 本地内存已完成 GC 自清理", Toast.LENGTH_SHORT).show()
     }
   }
 }
@@ -165,49 +219,91 @@ class EditorProcessApmFragment : Fragment() {
 @OptIn(ExperimentalMaterial3Api::class)
 private fun EditorApmMonitorScreen(
     snapshot: EditorProcessApmSnapshot?,
-    onCleanProcesses: () -> Unit,
-    onInAppSelfCleanup: () -> Unit,
     isMonitoring: Boolean,
     onToggleMonitoring: () -> Unit,
+    onCleanProcesses: () -> Unit,
+    onInAppSelfCleanup: () -> Unit,
 ) {
   val cpuHistory = remember { mutableStateListOf<Float>() }
-  val pssHistory = remember { mutableStateListOf<Float>() }
+  val idePssHistory = remember { mutableStateListOf<Float>() }
+  val containerPssHistory = remember { mutableStateListOf<Float>() }
   var menuExpanded by remember { mutableStateOf(false) }
 
-  LaunchedEffect(snapshot?.timestampMs) {
-    snapshot?.let {
-      cpuHistory.add(it.cpuUsagePercent.toFloat())
-      pssHistory.add(it.processPssMb.toFloat())
-      if (cpuHistory.size > MAX_HISTORY_POINTS) cpuHistory.removeAt(0)
-      if (pssHistory.size > MAX_HISTORY_POINTS) pssHistory.removeAt(0)
+  // 监控启停联动折线图历史
+  LaunchedEffect(snapshot?.timestampMs, isMonitoring) {
+    if (!isMonitoring) {
+      cpuHistory.clear()
+      idePssHistory.clear()
+      containerPssHistory.clear()
+    } else {
+      snapshot?.let {
+        cpuHistory.add(it.cpuUsagePercent.toFloat())
+        idePssHistory.add(it.ideMainProcess.pssMb.toFloat())
+        val toolingPss = it.gradleToolingProcess?.pssMb ?: 0.0
+        containerPssHistory.add((it.containerTotalPssMb + toolingPss).toFloat())
+
+        if (cpuHistory.size > MAX_HISTORY_POINTS) cpuHistory.removeAt(0)
+        if (idePssHistory.size > MAX_HISTORY_POINTS) idePssHistory.removeAt(0)
+        if (containerPssHistory.size > MAX_HISTORY_POINTS) containerPssHistory.removeAt(0)
+      }
     }
   }
 
   Scaffold(
       topBar = {
         TopAppBar(
-            title = { Text(stringResource(ResString.string.apm_title)) },
+            title = {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(ResString.string.apm_title),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isMonitoring) Color(0x334CAF50) else Color(0x339E9E9E),
+                ) {
+                  Text(
+                      text = if (isMonitoring) "RUNNING" else "STOPPED",
+                      color = if (isMonitoring) Color(0xFF4CAF50) else Color.Gray,
+                      fontSize = 11.sp,
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                  )
+                }
+              }
+            },
             actions = {
+              // 顶部快捷开始/停止按钮
+              IconButton(onClick = onToggleMonitoring) {
+                Icon(
+                    imageVector = if (isMonitoring) Icons.Default.Stop else Icons.Default.PlayArrow,
+                    contentDescription = "Toggle Monitoring",
+                    tint = if (isMonitoring) Color(0xFFFF5252) else Color(0xFF4CAF50),
+                )
+              }
+              // 下拉菜单
               IconButton(onClick = { menuExpanded = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = stringResource(ResString.string.apm_menu_more))
+                Icon(Icons.Default.MoreVert, contentDescription = "More")
               }
               DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(ResString.string.apm_menu_clean_gradle_java)) },
-                    onClick = {
-                      menuExpanded = false
-                      onCleanProcesses()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(if (isMonitoring) stringResource(ResString.string.apm_stop_monitoring) else stringResource(ResString.string.apm_start_monitoring)) },
+                    text = { Text(if (isMonitoring) "停止实时监控" else "启动实时监控") },
                     onClick = {
                       menuExpanded = false
                       onToggleMonitoring()
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text(stringResource(ResString.string.apm_menu_self_cleanup)) },
+                    text = { Text("强杀容器内所有 Gradle/Java 进程") },
+                    onClick = {
+                      menuExpanded = false
+                      onCleanProcesses()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("IDE 进程自清理 (GC/LSP 内存释放)") },
                     onClick = {
                       menuExpanded = false
                       onInAppSelfCleanup()
@@ -218,84 +314,179 @@ private fun EditorApmMonitorScreen(
         )
       },
   ) { contentPadding ->
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(contentPadding).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-      item {
-        Text(
-            text = if (isMonitoring) stringResource(ResString.string.apm_sampling_desc) else stringResource(ResString.string.apm_monitoring_paused_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
-      item {
-        MetricChartCard(
-            title = stringResource(ResString.string.apm_cpu_usage),
-            value = format(snapshot?.cpuUsagePercent, "%"),
-            values = cpuHistory,
-            lineColor = Color(0xFF7E57C2),
-        )
-      }
-      item {
-        MetricChartCard(
-            title = stringResource(ResString.string.apm_process_pss),
-            value = format(snapshot?.processPssMb, "MB"),
-            values = pssHistory,
-            lineColor = Color(0xFF26A69A),
-        )
-      }
-      item {
-        TemperatureStatusCard(snapshot = snapshot)
-      }
-      item {
-        AdvancedOverviewCard(snapshot = snapshot)
-      }
-      item {
-        HealthAlertsCard(alerts = snapshot?.healthAlerts.orEmpty())
-      }
-      item {
-        MetricGrid(
-            listOf(
-                stringResource(ResString.string.apm_metric_rss) to format(snapshot?.processRssMb, "MB"),
-                stringResource(ResString.string.apm_metric_uss) to format(snapshot?.processUssMb, "MB"),
-                stringResource(ResString.string.apm_metric_vss) to format(snapshot?.processVssMb, "MB"),
-                stringResource(ResString.string.apm_metric_java_heap) to
-                    "${format(snapshot?.javaHeapUsedMb, "MB")} / ${format(snapshot?.javaHeapMaxMb, "MB")}",
-                stringResource(ResString.string.apm_metric_native_heap) to format(snapshot?.nativeHeapMb, "MB"),
-                stringResource(ResString.string.apm_metric_thread_count) to "${snapshot?.threadCount ?: 0}",
-                stringResource(ResString.string.apm_metric_open_fd) to "${snapshot?.openFdCount ?: 0}",
-                stringResource(ResString.string.apm_metric_gc_count) to "${snapshot?.gcCount ?: 0}",
-                stringResource(ResString.string.apm_metric_gc_time) to "${snapshot?.gcTimeMs ?: 0} ms",
-                stringResource(ResString.string.apm_metric_uptime) to "${(snapshot?.appUptimeMs ?: 0L) / 1000}s",
-            ))
-      }
-      item {
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-          Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(stringResource(ResString.string.apm_class_loading_stats), fontWeight = FontWeight.SemiBold)
-            Text(stringResource(ResString.string.apm_dex_total_classes, snapshot?.dexClassStat?.totalClassCount ?: 0))
-            Text(stringResource(ResString.string.apm_app_package_classes, snapshot?.dexClassStat?.appPackageClassCount ?: 0))
-            Text(stringResource(ResString.string.apm_class_file_count, snapshot?.classArtifactStat?.classFileCount ?: 0))
-            Text(stringResource(ResString.string.apm_clazz_file_count, snapshot?.classArtifactStat?.clazzFileCount ?: 0))
-            Text(stringResource(ResString.string.apm_kt_file_count, snapshot?.classArtifactStat?.kotlinFileCount ?: 0))
+    if (!isMonitoring) {
+      Box(
+          modifier = Modifier
+              .fillMaxSize()
+              .padding(contentPadding),
+          contentAlignment = Alignment.Center,
+      ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          Text(
+              text = "APM 监控当前已停止",
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Spacer(Modifier.height(4.dp))
+          Text(
+              text = "后台处于 0 线程、0 反射与 0 资源占用状态",
+              fontSize = 12.sp,
+              color = Color.Gray,
+          )
+          Spacer(Modifier.height(16.dp))
+          Button(onClick = onToggleMonitoring) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null)
+            Spacer(Modifier.width(6.dp))
+            Text("立即启动 APM 监控")
           }
         }
       }
-      item {
-        PssBreakdownCard(stats = snapshot?.pssBreakdownStats.orEmpty())
+    } else {
+      LazyColumn(
+          modifier = Modifier
+              .fillMaxSize()
+              .padding(contentPadding)
+              .padding(horizontal = 12.dp),
+          verticalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        item {
+          HealthAlertsCard(alerts = snapshot?.healthAlerts.orEmpty())
+        }
+
+        item {
+          MetricChartCard(
+              title = "IDE CPU 使用率",
+              value = format(snapshot?.cpuUsagePercent, "%"),
+              values = cpuHistory,
+              lineColor = Color(0xFF7E57C2),
+          )
+        }
+
+        item {
+          MetricChartCard(
+              title = "IDE 主进程 PSS 内存",
+              value = format(snapshot?.ideMainProcess?.pssMb, "MB"),
+              values = idePssHistory,
+              lineColor = Color(0xFF26A69A),
+          )
+        }
+
+        // 新增：Linux 容器及 Java/Gradle 进程总内存图表
+        item {
+          val toolingPss = snapshot?.gradleToolingProcess?.pssMb ?: 0.0
+          val totalContainerPss = (snapshot?.containerTotalPssMb ?: 0.0) + toolingPss
+          MetricChartCard(
+              title = "Linux 容器 & 构建 Java 进程总内存",
+              value = format(totalContainerPss, "MB"),
+              values = containerPssHistory,
+              lineColor = Color(0xFFFFB300),
+          )
+        }
+
+        // 新增：Linux 容器内部运行的 JDK / Gradle 进程明细
+        item {
+          ContainerProcessesCard(
+              toolingProcess = snapshot?.gradleToolingProcess,
+              containerProcesses = snapshot?.containerJavaProcesses.orEmpty(),
+          )
+        }
+
+        item {
+          TemperatureStatusCard(snapshot = snapshot)
+        }
+
+        item {
+          MetricGrid(
+              listOf(
+                  stringResource(ResString.string.apm_metric_rss) to format(snapshot?.processRssMb, "MB"),
+                  stringResource(ResString.string.apm_metric_uss) to format(snapshot?.processUssMb, "MB"),
+                  stringResource(ResString.string.apm_metric_vss) to format(snapshot?.processVssMb, "MB"),
+                  stringResource(ResString.string.apm_metric_java_heap) to
+                      "${format(snapshot?.javaHeapUsedMb, "MB")} / ${format(snapshot?.javaHeapMaxMb, "MB")}",
+                  stringResource(ResString.string.apm_metric_native_heap) to format(snapshot?.nativeHeapMb, "MB"),
+                  stringResource(ResString.string.apm_metric_thread_count) to "${snapshot?.threadCount ?: 0}",
+                  stringResource(ResString.string.apm_metric_open_fd) to "${snapshot?.openFdCount ?: 0}",
+                  stringResource(ResString.string.apm_metric_gc_count) to "${snapshot?.gcCount ?: 0}",
+                  stringResource(ResString.string.apm_metric_gc_time) to "${snapshot?.gcTimeMs ?: 0} ms",
+                  stringResource(ResString.string.apm_metric_uptime) to "${(snapshot?.appUptimeMs ?: 0L) / 1000}s",
+              )
+          )
+        }
+
+        item {
+          PssBreakdownCard(stats = snapshot?.pssBreakdownStats.orEmpty())
+        }
+
+        item {
+          TermuxSubsystemCard(stats = snapshot?.termuxSubsystemStats.orEmpty())
+        }
+
+        item {
+          Spacer(Modifier.height(16.dp))
+        }
       }
-      item {
-        RuntimeSignalsCard(snapshot = snapshot)
+    }
+  }
+}
+
+/**
+ * 专门展示 Termux / proot 容器内部的 Java JDK 进程列表
+ */
+@Composable
+private fun ContainerProcessesCard(
+    toolingProcess: ProcessMemMetric?,
+    containerProcesses: List<ProcessMemMetric>,
+) {
+  Card(
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+      modifier = Modifier.fillMaxWidth(),
+  ) {
+    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text(
+          text = "Linux 容器 & Gradle/Java 进程明细",
+          fontWeight = FontWeight.Bold,
+          fontSize = 15.sp,
+      )
+
+      if (toolingProcess != null) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+          Text(toolingProcess.name, fontWeight = FontWeight.Medium)
+          Text(
+              "${format(toolingProcess.pssMb, "MB PSS")} / ${format(toolingProcess.rssMb, "MB RSS")}",
+              color = Color(0xFFFFB300),
+              fontWeight = FontWeight.SemiBold,
+          )
+        }
       }
-      item {
-        AdvancedHookCapabilityCard(snapshot = snapshot)
-      }
-      item {
-        HotClassActivityCard(classStats = snapshot?.hotClassStats.orEmpty())
-      }
-      item {
-        TermuxSubsystemCard(stats = snapshot?.termuxSubsystemStats.orEmpty())
+
+      if (containerProcesses.isEmpty() && toolingProcess == null) {
+        Text(
+            text = "当前未检测到活跃的 Java / Gradle 容器进程",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp,
+        )
+      } else {
+        containerProcesses.forEach { proc ->
+          Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+                text = proc.name,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "${format(proc.pssMb, "MB PSS")} (RSS: ${format(proc.rssMb, "MB")})",
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+            )
+          }
+        }
       }
     }
   }
@@ -305,19 +496,18 @@ private fun EditorApmMonitorScreen(
 private fun TemperatureStatusCard(snapshot: EditorProcessApmSnapshot?) {
   val temp = snapshot?.deviceThermalStat?.batteryTempCelsius
   val level = snapshot?.deviceThermalStat?.level ?: "unknown"
-  val (textColor, label) =
-      when (level) {
-        "danger" -> Color(0xFFC62828) to stringResource(ResString.string.apm_temp_state_danger)
-        "warning" -> Color(0xFFF9A825) to stringResource(ResString.string.apm_temp_state_warning)
-        "safe" -> Color(0xFF2E7D32) to stringResource(ResString.string.apm_temp_state_safe)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant to stringResource(ResString.string.apm_temp_state_unknown)
-      }
+  val (textColor, label) = when (level) {
+    "danger" -> Color(0xFFC62828) to stringResource(ResString.string.apm_temp_state_danger)
+    "warning" -> Color(0xFFF9A825) to stringResource(ResString.string.apm_temp_state_warning)
+    "safe" -> Color(0xFF2E7D32) to stringResource(ResString.string.apm_temp_state_safe)
+    else -> MaterialTheme.colorScheme.onSurfaceVariant to stringResource(ResString.string.apm_temp_state_unknown)
+  }
 
   Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       Text(stringResource(ResString.string.apm_temp_title), fontWeight = FontWeight.SemiBold)
       Text(
-          stringResource(
+          text = stringResource(
               ResString.string.apm_temp_value,
               temp?.let { formatFloat(it) } ?: "--",
           ),
@@ -326,31 +516,8 @@ private fun TemperatureStatusCard(snapshot: EditorProcessApmSnapshot?) {
           color = textColor,
       )
       Text(
-          stringResource(ResString.string.apm_temp_state, label),
+          text = stringResource(ResString.string.apm_temp_state, label),
           color = textColor,
-      )
-    }
-  }
-}
-
-@Composable
-private fun AdvancedOverviewCard(snapshot: EditorProcessApmSnapshot?) {
-  Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-    Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      Text(stringResource(ResString.string.apm_advanced_capabilities), fontWeight = FontWeight.SemiBold)
-      Text(stringResource(ResString.string.apm_cpu_apm_desc))
-      Text(stringResource(ResString.string.apm_memory_desc))
-      Text(stringResource(ResString.string.apm_gc_desc))
-      val pressureLevel = when {
-        (snapshot?.cpuUsagePercent ?: 0.0) >= 80.0 -> stringResource(ResString.string.apm_pressure_high)
-        (snapshot?.cpuUsagePercent ?: 0.0) >= 40.0 -> stringResource(ResString.string.apm_pressure_medium)
-        else -> stringResource(ResString.string.apm_pressure_low)
-      }
-      Text(stringResource(ResString.string.apm_pressure_level, pressureLevel))
-      Text(
-          stringResource(ResString.string.apm_hot_class_disclaimer),
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          fontSize = 12.sp,
       )
     }
   }
@@ -399,8 +566,10 @@ private fun MetricChartCard(
 ) {
   Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-      Text(title, fontWeight = FontWeight.SemiBold)
-      Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(title, fontWeight = FontWeight.SemiBold)
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+      }
       Spacer(modifier = Modifier.height(8.dp))
       Sparkline(values = values, lineColor = lineColor)
     }
@@ -414,12 +583,24 @@ private fun Sparkline(values: List<Float>, lineColor: Color) {
     val max = values.maxOrNull() ?: 0f
     val current = values.lastOrNull() ?: 0f
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-      Text(stringResource(ResString.string.apm_chart_min, formatFloat(min)), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      Text(stringResource(ResString.string.apm_chart_now, formatFloat(current)), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      Text(stringResource(ResString.string.apm_chart_max, formatFloat(max)), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Text(
+          stringResource(ResString.string.apm_chart_min, formatFloat(min)),
+          fontSize = 11.sp,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Text(
+          stringResource(ResString.string.apm_chart_now, formatFloat(current)),
+          fontSize = 11.sp,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Text(
+          stringResource(ResString.string.apm_chart_max, formatFloat(max)),
+          fontSize = 11.sp,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
     }
     Spacer(modifier = Modifier.height(6.dp))
-    Box(modifier = Modifier.fillMaxWidth().height(140.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().height(120.dp)) {
       Canvas(modifier = Modifier.fillMaxSize()) {
         if (values.size < 2) return@Canvas
         val maxValue = values.maxOrNull()?.takeIf { it > 0f } ?: 1f
@@ -450,14 +631,14 @@ private fun Sparkline(values: List<Float>, lineColor: Color) {
         repeat(5) { idx ->
           val y = idx * gridStep
           drawLine(
-              color = Color.Gray.copy(alpha = 0.22f),
+              color = Color.Gray.copy(alpha = 0.2f),
               start = Offset(0f, y),
               end = Offset(size.width, y),
               strokeWidth = 1.dp.toPx(),
           )
         }
 
-        drawPath(path = fillPath, color = lineColor.copy(alpha = 0.14f), style = Fill)
+        drawPath(path = fillPath, color = lineColor.copy(alpha = 0.15f), style = Fill)
         drawPath(path = linePath, color = lineColor, style = Stroke(width = 2.dp.toPx()))
       }
     }
@@ -488,89 +669,6 @@ private fun TermuxSubsystemCard(stats: List<EditorSubsystemStat>) {
 }
 
 @Composable
-private fun HotClassActivityCard(classStats: List<EditorHotClassStat>) {
-  val clipboardManager = LocalClipboardManager.current
-  val context = LocalContext.current
-  Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-    Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(stringResource(ResString.string.apm_hot_class_title), fontWeight = FontWeight.SemiBold)
-      if (classStats.isEmpty()) {
-        Text(stringResource(ResString.string.apm_waiting_data), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        return@Column
-      }
-
-      classStats.take(15).forEach { stat ->
-        Column(
-            modifier =
-                Modifier.fillMaxWidth().clickable {
-                  val payload =
-                      buildString {
-                        appendLine("Class: ${stat.className}")
-                        appendLine("calls=${stat.calls}")
-                        appendLine("totalCPU=${formatFloat(stat.totalCpuMs)} ms")
-                        appendLine("avgCPU=${formatFloat(stat.avgCpuMs)} ms")
-                        appendLine("totalMem=${formatFloat(stat.totalMemMb)} MB")
-                        appendLine("avgMem=${formatFloat(stat.avgMemMb)} MB")
-                        appendLine("peakA=${formatFloat(stat.peakMemMb)} MB")
-                      }
-                  clipboardManager.setText(AnnotatedString(payload))
-                  Toast.makeText(context, "已复制热点类指标到剪切板", Toast.LENGTH_SHORT).show()
-                },
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-          Text(stat.className, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-          Text(
-              "该类累计采样 ${stat.calls} 次，累计CPU ${formatFloat(stat.totalCpuMs)}ms，平均每次 ${formatFloat(stat.avgCpuMs)}ms。",
-              fontSize = 12.sp,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            MetricPill(
-                label = "调用",
-                value = stat.calls.toString(),
-                color = callsSeverityColor(stat.calls),
-                modifier = Modifier.weight(1f),
-            )
-            MetricPill(
-                label = "总CPU",
-                value = "${formatFloat(stat.totalCpuMs)}ms",
-                color = cpuSeverityColor(stat.totalCpuMs),
-                modifier = Modifier.weight(1f),
-            )
-            MetricPill(
-                label = "均CPU",
-                value = "${formatFloat(stat.avgCpuMs)}ms",
-                color = cpuLatencyColor(stat.avgCpuMs),
-                modifier = Modifier.weight(1f),
-            )
-          }
-          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            MetricPill(
-                label = "总内存",
-                value = "${formatFloat(stat.totalMemMb)}MB",
-                color = memSeverityColor(stat.totalMemMb),
-                modifier = Modifier.weight(1f),
-            )
-            MetricPill(
-                label = "均内存",
-                value = "${formatFloat(stat.avgMemMb)}MB",
-                color = memSeverityColor(stat.avgMemMb),
-                modifier = Modifier.weight(1f),
-            )
-            MetricPill(
-                label = "峰值",
-                value = "${formatFloat(stat.peakMemMb)}MB",
-                color = memSeverityColor(stat.peakMemMb),
-                modifier = Modifier.weight(1f),
-            )
-          }
-        }
-      }
-    }
-  }
-}
-
-@Composable
 private fun PssBreakdownCard(stats: List<EditorPssBreakdownStat>) {
   Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -589,139 +687,6 @@ private fun PssBreakdownCard(stats: List<EditorPssBreakdownStat>) {
   }
 }
 
-@Composable
-private fun RuntimeSignalsCard(snapshot: EditorProcessApmSnapshot?) {
-  val threadMax = snapshot?.topThreadStats?.maxOfOrNull { it.cpuDeltaTicks }?.coerceAtLeast(1L) ?: 1L
-  Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-    Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(stringResource(ResString.string.apm_runtime_signals_title), fontWeight = FontWeight.SemiBold)
-      SignalProgressRow(
-          label = stringResource(ResString.string.apm_runtime_cpu_user),
-          value = "${snapshot?.cpuBreakdownStat?.userCpuMs ?: 0L}ms",
-          progress = ((snapshot?.cpuBreakdownStat?.userCpuMs ?: 0L) / 2000f).coerceIn(0f, 1f),
-          tint = Color(0xFF7E57C2),
-      )
-      SignalProgressRow(
-          label = stringResource(ResString.string.apm_runtime_cpu_system),
-          value = "${snapshot?.cpuBreakdownStat?.systemCpuMs ?: 0L}ms",
-          progress = ((snapshot?.cpuBreakdownStat?.systemCpuMs ?: 0L) / 2000f).coerceIn(0f, 1f),
-          tint = Color(0xFF5C6BC0),
-      )
-      SignalProgressRow(
-          label = stringResource(ResString.string.apm_runtime_io_read),
-          value = "${snapshot?.ioStat?.readBytes ?: 0L}B",
-          progress = (((snapshot?.ioStat?.readBytes ?: 0L).toFloat()) / (1024f * 1024f)).coerceIn(0f, 1f),
-          tint = Color(0xFF00897B),
-      )
-      SignalProgressRow(
-          label = stringResource(ResString.string.apm_runtime_io_write),
-          value = "${snapshot?.ioStat?.writeBytes ?: 0L}B",
-          progress = (((snapshot?.ioStat?.writeBytes ?: 0L).toFloat()) / (1024f * 1024f)).coerceIn(0f, 1f),
-          tint = Color(0xFFF57C00),
-      )
-      SignalProgressRow(
-          label = stringResource(ResString.string.apm_runtime_jank_ratio),
-          value = "${formatFloat(snapshot?.frameJankStat?.frameDropPercent ?: 0.0)}%",
-          progress = (((snapshot?.frameJankStat?.frameDropPercent ?: 0.0) / 100.0).toFloat()).coerceIn(0f, 1f),
-          tint = Color(0xFFC62828),
-      )
-      if (snapshot?.topThreadStats?.isNotEmpty() == true) {
-        Text(stringResource(ResString.string.apm_runtime_top_threads), fontWeight = FontWeight.Medium)
-        snapshot.topThreadStats.take(5).forEach { thread ->
-          val progress = (thread.cpuDeltaTicks.toFloat() / threadMax.toFloat()).coerceIn(0f, 1f)
-          SignalProgressRow(
-              label = "T${thread.tid} ${thread.name}",
-              value = "Δ${thread.cpuDeltaTicks}",
-              progress = progress,
-              tint = Color(0xFF3949AB),
-          )
-        }
-      }
-    }
-  }
-}
-
-@Composable
-private fun SignalProgressRow(
-    label: String,
-    value: String,
-    progress: Float,
-    tint: Color,
-) {
-  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-      Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-      Text(value, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = tint)
-    }
-    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = tint)
-  }
-}
-
-@Composable
-private fun AdvancedHookCapabilityCard(snapshot: EditorProcessApmSnapshot?) {
-  val stat = snapshot?.advancedHookStat
-  Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-    Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(stringResource(ResString.string.apm_hook_title), fontWeight = FontWeight.SemiBold)
-      HookStateRow("JVMTI", stat?.jvmtiReady == true)
-      HookStateRow("PLT Hook", stat?.pltHookReady == true)
-      HookStateRow("Inline Hook", stat?.inlineHookReady == true)
-      HookStateRow("malloc hook", stat?.mallocHookReady == true)
-      HookStateRow("libmemunreachable", stat?.memUnreachableReady == true)
-      stat?.notes?.take(3)?.forEach {
-        Text("• $it", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      }
-    }
-  }
-}
-
-@Composable
-private fun HookStateRow(name: String, ready: Boolean) {
-  val tint = if (ready) Color(0xFF2E7D32) else Color(0xFFF9A825)
-  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-    Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(if (ready) stringResource(ResString.string.apm_hook_ready) else stringResource(ResString.string.apm_hook_not_ready), color = tint, fontWeight = FontWeight.Bold)
-  }
-}
-
-@Composable
-private fun MetricPill(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
-  Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.16f))) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
-      Text(label, fontSize = 11.sp, color = color, fontWeight = FontWeight.SemiBold)
-      Text(value, fontSize = 12.sp, color = color, fontWeight = FontWeight.Bold, maxLines = 1)
-    }
-  }
-}
-
-private fun cpuLatencyColor(avgCpuMs: Double): Color =
-    when {
-      avgCpuMs < 16 -> Color(0xFF2E7D32)
-      avgCpuMs < 50 -> Color(0xFFF9A825)
-      else -> Color(0xFFC62828)
-    }
-
-private fun cpuSeverityColor(totalCpuMs: Double): Color =
-    when {
-      totalCpuMs < 500 -> Color(0xFF2E7D32)
-      totalCpuMs < 2000 -> Color(0xFFF9A825)
-      else -> Color(0xFFC62828)
-    }
-
-private fun callsSeverityColor(calls: Int): Color =
-    when {
-      calls < 10 -> Color(0xFF2E7D32)
-      calls < 50 -> Color(0xFFF9A825)
-      else -> Color(0xFFC62828)
-    }
-
-private fun memSeverityColor(memMb: Double): Color =
-    when {
-      memMb < 1.0 -> Color(0xFF2E7D32)
-      memMb < 8.0 -> Color(0xFFF9A825)
-      else -> Color(0xFFC62828)
-    }
-
 private fun format(value: Double?, suffix: String): String {
   if (value == null) return "--"
   return String.format(Locale.US, "%.2f %s", value, suffix)
@@ -731,4 +696,4 @@ private fun formatFloat(value: Double): String = String.format(Locale.US, "%.2f"
 
 private fun formatFloat(value: Float): String = String.format(Locale.US, "%.2f", value)
 
-private const val MAX_HISTORY_POINTS = 180
+private const val MAX_HISTORY_POINTS = 60
