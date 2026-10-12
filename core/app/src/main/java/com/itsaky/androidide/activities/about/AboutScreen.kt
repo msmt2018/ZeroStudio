@@ -201,7 +201,7 @@ fun AboutScreen(
                   .clip(RoundedCornerShape(12.dp))
                   .clickable {
                     clipboardManager.setText(AnnotatedString(BuildInfoUtils.getBuildInfoHeader()))
-                    context.flashSuccess(R.string.copied)
+                    flashSuccess(R.string.copied)
                   },
           ) {
             Text(

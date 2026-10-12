@@ -21,7 +21,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller.SessionCallback
 import android.os.Bundle
-import android.os.Process
 import android.view.MenuItem
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.viewModels
@@ -36,17 +35,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.core.view.MenuProvider
-import androidx.fragment.app.Fragment
 import com.blankj.utilcode.util.FileUtils
 import com.blankj.utilcode.util.ThreadUtils
 import com.itsaky.androidide.R
 import com.itsaky.androidide.R.string
 import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem
-import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_FILE_TABS
 import com.itsaky.androidide.actions.ActionsRegistry
-import com.itsaky.androidide.actions.FillMenuParams
-import com.itsaky.androidide.actions.SidebarActionItem
+import com.itsaky.androidide.actions.ComposeSidebarActionItem
 import com.itsaky.androidide.actions.internal.DefaultActionsRegistry
 import com.itsaky.androidide.actions.menu.EditorLineOperations
 import com.itsaky.androidide.activities.editor.ui.screen.EditorActivityContent
@@ -56,8 +52,6 @@ import com.itsaky.androidide.adapters.DiagnosticsAdapter
 import com.itsaky.androidide.adapters.SearchListAdapter
 import com.itsaky.androidide.app.IDEActivity
 import com.itsaky.androidide.events.InstallationResultEvent
-import com.itsaky.androidide.fragments.SearchResultFragment
-import com.itsaky.androidide.fragments.sidebar.FileTreeFragment
 import com.itsaky.androidide.handlers.EditorActivityLifecyclerObserver
 import com.itsaky.androidide.handlers.LspHandler.registerLanguageServers
 import com.itsaky.androidide.interfaces.DiagnosticClickListener
@@ -70,7 +64,6 @@ import com.itsaky.androidide.models.SearchResult
 import com.itsaky.androidide.preferences.internal.BuildPreferences
 import com.itsaky.androidide.projects.IProjectManager
 import com.itsaky.androidide.tasks.cancelIfActive
-import com.itsaky.androidide.tasks.runOnUiThread
 import com.itsaky.androidide.ui.CodeEditorView
 import com.itsaky.androidide.ui.ComposeEditorTabs
 import com.itsaky.androidide.ui.ComposeEditorTabs.Tab
@@ -78,7 +71,6 @@ import com.itsaky.androidide.ui.SymbolInputVisibilityManager
 import com.itsaky.androidide.utils.ApkInstallationSessionCallback
 import com.itsaky.androidide.utils.InstallationResultHandler.onResult
 import com.itsaky.androidide.utils.IntentUtils
-// import com.itsaky.androidide.utils.MemoryUsageWatcher
 import com.itsaky.androidide.utils.flashInfo
 import com.itsaky.androidide.viewmodel.EditorViewModel
 import com.itsaky.androidide.xml.resources.ResourceTableRegistry
@@ -95,7 +87,13 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 /**
- * 编辑器核心基础 Activity：全面迁移纯粹的 Jetpack Compose、高性能状态分发与现代 Android 规范。
+ * 编辑器主界面的基础 Activity。
+ *
+ * 本类完全遵循 Jetpack Compose 与单向数据流（UDF）现代化规范开发：
+ * 1. 彻底移除旧有 Fragment 与 supportFragmentManager 依赖；
+ * 2. 侧滑栏与底层页面容器完全由纯粹的 Compose [EditorPage.ScreenPage] 承载；
+ * 3. 暴露现代化选项卡操作函数，完全打通 ComposeEditorTabs 的关闭和选择调度；
+ * 4. 彻底移除旧式 View Adapter 对 Compose 底栏状态的无效穿透调用。
  *
  * @author android_zero
  */
@@ -106,7 +104,6 @@ abstract class BaseEditorActivity :
     DiagnosticClickListener {
 
   protected val mLifecycleObserver = EditorActivityLifecyclerObserver()
-  // protected val memoryUsageWatcher = MemoryUsageWatcher()
   private val bottomSheetHeaderHideReasons = mutableSetOf<String>()
   protected val editorActivityScope = CoroutineScope(Dispatchers.Default)
 
@@ -118,7 +115,7 @@ abstract class BaseEditorActivity :
   val editorViewModel by viewModels<EditorViewModel>()
   internal var _editorUi: EditorUiState? = null
   val content: EditorUiState
-    get() = checkNotNull(_editorUi)
+    get() = checkNotNull(_editorUi) { "EditorUiState accessed before onCreate or after destroy" }
 
   override val subscribeToEvents: Boolean
     get() = true
@@ -136,10 +133,14 @@ abstract class BaseEditorActivity :
     @JvmStatic protected val PROC_GRADLE_DAEMON = "Gradle Daemon"
     @JvmStatic protected val log: Logger = LoggerFactory.getLogger(BaseEditorActivity::class.java)
     protected const val EDITOR_CONTAINER_INDEX = 0
-    protected const val FRAGMENT_CONTAINER_INDEX = 1
+    protected const val SCREEN_CONTAINER_INDEX = 1
     protected const val NO_EDITOR_CONTAINER_INDEX = 2
     const val KEY_PROJECT_PATH = "saved_projectPath"
   }
+
+  // ============================================================================================
+  // 子类实现协议
+  // ============================================================================================
 
   protected abstract fun provideCurrentEditor(): CodeEditorView?
   protected abstract fun provideEditorAt(index: Int): CodeEditorView?
@@ -148,18 +149,41 @@ abstract class BaseEditorActivity :
   protected abstract fun getOpenedFiles(): List<OpenedFile>
   internal abstract fun doConfirmProjectClose()
 
+  // ============================================================================================
+  // 选项卡（Tab）调度 API —— 供 ComposeEditorTabs 回调触发，由子类 EditorHandlerActivity 实现
+  // ============================================================================================
+
+  /** 关闭指定索引位置的选项卡 */
+  open fun closeTabAt(tabIndex: Int, runAfter: () -> Unit = {}) {}
+
+  /** 保留指定索引的选项卡，关闭其余所有选项卡 */
+  open fun closeOtherTabs(keepTabIndex: Int) {}
+
+  /** 关闭所有打开的选项卡 */
+  open fun closeAll(runAfter: () -> Unit = {}) {}
+
   open fun getCurrentEditor(): CodeEditorView? = provideCurrentEditor()
+
   open fun openFileAndSelect(file: File, selection: Range?) {
     doOpenFile(file, selection)
   }
+
   open fun showFlashInfo(msg: String?) {
     flashInfo(msg)
   }
+
+  // ============================================================================================
+  // Compose 根内容注入
+  // ============================================================================================
 
   @Composable
   final override fun ComposeContent() {
     _editorUi?.let { EditorActivityContent(this, it) }
   }
+
+  // ============================================================================================
+  // 生命周期回调
+  // ============================================================================================
 
   override fun onCreate(savedInstanceState: Bundle?) {
     _editorUi = EditorUiState(this)
@@ -172,7 +196,7 @@ abstract class BaseEditorActivity :
 
     lifecycle.addObserver(mLifecycleObserver)
 
-    // 绑定 ComposeEditorTabs 监听与关闭链条
+    // 绑定 Compose 选项卡管理事件
     content.tabs.addOnTabSelectedListener(this)
     content.tabs.onCloseTab = { tab ->
       val resolvedIndex = resolveEditorIndexForTab(tab)
@@ -212,7 +236,7 @@ abstract class BaseEditorActivity :
     savedInstanceState?.getString("editor.sidebar.page")?.let(content.sidebar::select)
     savedInstanceState?.getString("editor.bottom.page")?.let(content.bottomSheet.pages::select)
 
-    // 默认兜底选第一项（如文件树）
+    // 默认展示并选中文件树侧滑栏页面
     if (content.sidebar.selectedId == null) {
       content.sidebar.select(com.itsaky.androidide.actions.sidebar.FileTreeSidebarAction.ID)
     }
@@ -235,10 +259,6 @@ abstract class BaseEditorActivity :
       invalidateOptionsMenu()
     }
 
-    //考虑编辑器性能，所以彻底迁移memoryUsage到EditorProcessApmFragment
-    // memoryUsageWatcher.listener = memoryUsageListener
-    // memoryUsageWatcher.watchProcess(Process.myPid(), PROC_IDE)
-    // resetMemUsageChart()
     invalidateOptionsMenu()
   }
 
@@ -252,33 +272,45 @@ abstract class BaseEditorActivity :
   fun registerIdePage(page: EditorPage) = content.bottomSheet.pages.register(page)
   fun unregisterIdePage(id: String) = content.bottomSheet.pages.unregister(id)
 
+  /**
+   * 纯 Compose 侧滑栏抽屉页面装配中心。
+   *
+   * 彻底摒弃任何 Fragment 容器，优先注册纯 Compose 界面 [ComposeSidebarActionItem]，
+   * 对于普通功能型动作则注册为点击后直接执行逻辑的 [EditorPage.ActionPage]。
+   */
   private fun setupSidebarPages() {
     ActionsRegistry.getInstance()
         .getActions(ActionItem.Location.EDITOR_SIDEBAR)
         .values
         .sortedBy { it.order }
         .forEach { action ->
-          val sidebarAction = action as? SidebarActionItem ?: return@forEach
-          val type = sidebarAction.fragmentClass
-          if (type != null) {
-            content.sidebar.register(
-                EditorPage.FragmentPage(
-                    action.id,
-                    action.label.ifBlank { action.id.substringAfterLast('.') },
-                    type.java,
-                )
-            )
-          } else {
-            content.sidebar.register(
-                EditorPage.ActionPage(action.id, action.label) {
-                  val data = ActionData().apply { put(Context::class.java, this@BaseEditorActivity) }
-                  action.prepare(data)
-                  if (action.enabled && action.visible) {
-                    content.drawerOpen = false
-                    (ActionsRegistry.getInstance() as DefaultActionsRegistry).executeAction(action, data)
+          when (action) {
+            // 现代 Compose 界面：直接注册为 ScreenPage，直通 Compose 渲染树
+            is ComposeSidebarActionItem -> {
+              content.sidebar.register(
+                  EditorPage.ScreenPage(
+                      id = action.id,
+                      title = action.label.ifBlank { action.id.substringAfterLast('.') },
+                      content = { action.Content(modifier = Modifier) },
+                  )
+              )
+            }
+            // 纯功能型点击动作：执行后自动关闭抽屉
+            else -> {
+              content.sidebar.register(
+                  EditorPage.ActionPage(
+                      id = action.id,
+                      title = action.label.ifBlank { action.id.substringAfterLast('.') },
+                  ) {
+                    val data = ActionData().apply { put(Context::class.java, this@BaseEditorActivity) }
+                    action.prepare(data)
+                    if (action.enabled && action.visible) {
+                      content.drawerOpen = false
+                      (ActionsRegistry.getInstance() as DefaultActionsRegistry).executeAction(action, data)
+                    }
                   }
-                }
-            )
+              )
+            }
           }
         }
   }
@@ -288,33 +320,14 @@ abstract class BaseEditorActivity :
     invalidateOptionsMenu()
   }
 
-  // private val memoryUsageListener =
-      // MemoryUsageWatcher.MemoryUsageListener { usages ->
-        // val samples = mutableListOf<Pair<String, List<Float>>>()
-        // usages.forEachValue { proc ->
-          // samples.add(proc.pname to proc.usageHistory.map { it / (1024f * 1024f) })
-        // }
-        // runOnUiThread { _editorUi?.memories = samples }
-      // }
-
-  // protected fun resetMemUsageChart() {
-    // _editorUi?.memories = emptyList()
-  // }
-
   override fun onPause() {
     super.onPause()
-    // memoryUsageWatcher.listener = null
-    // memoryUsageWatcher.stopWatching(false)
     isDestroying = isFinishing
-    getFileTreeFragment()?.saveTreeState()
   }
 
   override fun onResume() {
     super.onResume()
-    // memoryUsageWatcher.listener = memoryUsageListener
-    // memoryUsageWatcher.startWatching()
     invalidateOptionsMenu()
-    runCatching { getFileTreeFragment()?.listProjectFiles() }
   }
 
   override fun onSaveInstanceState(outState: Bundle) {
@@ -341,8 +354,6 @@ abstract class BaseEditorActivity :
     installationCallback?.destroy()
     installationCallback = null
     SymbolInputVisibilityManager.unregister()
-    // memoryUsageWatcher.stopWatching(true)
-    // memoryUsageWatcher.listener = null
     editorActivityScope.cancelIfActive("Activity is being destroyed")
     _editorUi?.bottomSheet?.close()
     _editorUi = null
@@ -394,14 +405,7 @@ abstract class BaseEditorActivity :
   protected open fun resolveEditorIndexForTab(tab: Tab): Int = tab.position
   protected open fun hasNonEditorTabs(): Boolean = false
   override fun onTabUnselected(tab: Tab) = Unit
-
-  /**
-   * 标签长按或重选操作：已由 ComposeEditorTabs 中的 DropdownMenu 替代，无需全屏模态弹窗
-   */
-  override fun onTabReselected(tab: Tab) {
-    if (isDestroying) return
-    // 保留挂钩，UI 层通过 ComposeEditorTabs 自身的吸附式 DropdownMenu 执行
-  }
+  override fun onTabReselected(tab: Tab) = Unit
 
   fun refreshSymbolInput() {
     provideCurrentEditor()?.let(::refreshSymbolInput)
@@ -430,37 +434,17 @@ abstract class BaseEditorActivity :
   }
 
   open fun showSearchResults() {
-    content.bottomSheet.selectTabByFragmentClass(SearchResultFragment::class.java)
     content.bottomSheet.tryExpandSheetFromControl()
   }
 
-  open fun openDebuggerTab(fragmentClass: Class<out Fragment>) {
-    content.bottomSheet.selectTabByFragmentClass(fragmentClass)
-    content.bottomSheet.tryExpandSheetFromControl()
-  }
+  // ============================================================================================
+  // LSP 客户端与诊断调用兼容桩（No-op Stub，解除旧 Adapter 对 Compose BottomPanel 的直接依赖）
+  // ============================================================================================
 
-  open fun setSearchResultAdapter(adapter: SearchListAdapter) {
-    content.bottomSheet.setSearchResultAdapter(adapter)
-  }
-
-  open fun setDiagnosticsAdapter(adapter: DiagnosticsAdapter) {
-    content.bottomSheet.setDiagnosticsAdapter(adapter)
-  }
-
-  open fun handleDiagnosticsResultVisibility(errorVisible: Boolean) {
-    content.bottomSheet.handleDiagnosticsResultVisibility(errorVisible)
-  }
-
-  open fun handleSearchResultVisibility(errorVisible: Boolean) {
-    content.bottomSheet.handleSearchResultVisibility(errorVisible)
-  }
-
-  open fun getFileTreeFragment(): FileTreeFragment? {
-    if (isDestroying) return null
-    return supportFragmentManager.fragments
-        .filterIsInstance<FileTreeFragment>()
-        .firstOrNull { it.isAdded && it.view != null }
-  }
+  open fun setSearchResultAdapter(adapter: SearchListAdapter) {}
+  open fun setDiagnosticsAdapter(adapter: DiagnosticsAdapter) {}
+  open fun handleDiagnosticsResultVisibility(errorVisible: Boolean) {}
+  open fun handleSearchResultVisibility(errorVisible: Boolean) {}
 
   fun doSetStatus(text: CharSequence, @GravityInt gravity: Int) {
     editorViewModel.statusText = text
@@ -470,6 +454,10 @@ abstract class BaseEditorActivity :
   open fun showFirstBuildNotice() {
     showEditorMessage(getString(string.title_first_build), getString(string.msg_first_build))
   }
+
+  // ============================================================================================
+  // 现代化 Compose 提示对话框实现
+  // ============================================================================================
 
   fun showEditorMessage(title: String, message: String, confirm: () -> Unit = {}) {
     content.dialog = {
@@ -548,19 +536,6 @@ abstract class BaseEditorActivity :
 
   open fun handleSearchResults(map: Map<File, List<SearchResult>>?) {
     if (isDestroying || _editorUi == null) return
-    val results = map ?: emptyMap()
-    setSearchResultAdapter(
-        SearchListAdapter(
-            results,
-            { file ->
-              doOpenFile(file, null)
-              hideBottomSheet()
-            },
-        ) { match ->
-          doOpenFile(match.file, match)
-          hideBottomSheet()
-        }
-    )
     showSearchResults()
     doDismissSearchProgress()
   }

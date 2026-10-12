@@ -79,23 +79,32 @@ fun EditorActivityContent(activity: BaseEditorActivity, state: EditorUiState) {
             bottomPages = state.bottomSheet.pages,
             openDrawerDescription = stringResource(R.string.msg_file_tree),
             closeDescription = stringResource(R.string.btn_close),
-            fragmentPage = { page -> EditorFragmentPage(page) },
             sidebarIcon = { page ->
                 val action = ActionsRegistry.getInstance().getActions(ActionItem.Location.EDITOR_SIDEBAR)[page.id]
                 val isSelected = state.sidebar.selectedId == page.id
-                val tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                val defaultTint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                
                 Box(Modifier.padding(4.dp)) {
-                    action?.icon?.let { ActionIcon(it, page.title, tint = tint) }
-                        ?: Icon(Icons.Default.Folder, page.title, tint = tint)
+                    if (action is com.itsaky.androidide.actions.ComposeSidebarActionItem && action.visuals.imageVector != null) {
+                        val finalTint = if (isSelected) (action.visuals.iconTint ?: MaterialTheme.colorScheme.primary) else defaultTint
+                        Icon(
+                            imageVector = action.visuals.imageVector!!,
+                            contentDescription = page.title,
+                            tint = finalTint,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    } else {
+                        action?.icon?.let { ActionIcon(it, page.title, tint = defaultTint) }
+                            ?: Icon(Icons.Default.Folder, page.title, tint = defaultTint)
+                    }
                 }
             },
             toolbarActions = {
-                state.toolbarVersion // 监听版本变更以触发重绘
+                state.toolbarVersion // 触发重组
                 val items = (0 until activity.toolbarMenu.size())
                     .map(activity.toolbarMenu::getItem)
                     .filter { it.isVisible }
 
-                // 各个 Action 图标按钮：支持动态着色与子菜单吸附弹出
                 items.filter { it.icon != null }.forEach { item ->
                     ActionToolbarItem(item = item, menu = activity.toolbarMenu)
                 }
@@ -108,7 +117,6 @@ fun EditorActivityContent(activity: BaseEditorActivity, state: EditorUiState) {
                     )
                 }
 
-                // 2. 核心：Overflow 菜单彻底重做为贴附在按钮下方的 Compose DropdownMenu
                 var overflowExpanded by remember { mutableStateOf(false) }
                 Box {
                     IconButton(onClick = { overflowExpanded = true }) {
@@ -161,7 +169,7 @@ fun EditorActivityContent(activity: BaseEditorActivity, state: EditorUiState) {
                 }
                 when (state.surface) {
                     0 -> Unit
-                    1 -> RegisteredEditorPage(state.documents, { EditorFragmentPage(it) }, Modifier.fillMaxSize(), documentStates)
+                    1 -> RegisteredEditorPage(state.documents, Modifier.fillMaxSize(), documentStates)
                     else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                         TextButton(onClick = { state.drawerOpen = true }) { Text(stringResource(R.string.msg_file_tree)) }
                         TextButton(onClick = { state.bottomSheet.visible = true }) { Text(stringResource(R.string.build_output)) }
@@ -229,80 +237,79 @@ fun EditorActivityContent(activity: BaseEditorActivity, state: EditorUiState) {
         state.dialog?.invoke()
     }
 }
+// /**
+ // * 工具栏单项与下沉吸附式 SubMenu
+ // */
+// @Composable
+// private fun ActionToolbarItem(
+    // item: MenuItem,
+    // menu: MenuBuilder,
+// ) {
+    // var subMenuExpanded by remember { mutableStateOf(false) }
 
-/**
- * 工具栏单项与下沉吸附式 SubMenu
- */
-@Composable
-private fun ActionToolbarItem(
-    item: MenuItem,
-    menu: MenuBuilder,
-) {
-    var subMenuExpanded by remember { mutableStateOf(false) }
+    // Box {
+        // IconButton(
+            // enabled = item.isEnabled,
+            // onClick = {
+                // if (item.hasSubMenu()) {
+                    // subMenuExpanded = true
+                // } else {
+                    // menu.performIdentifierAction(item.itemId, 0)
+                // }
+            // },
+            // modifier = Modifier.size(36.dp),
+        // ) {
+            // val tint = if (item.isEnabled) {
+                // MaterialTheme.colorScheme.onSurface
+            // } else {
+                // MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) // 规范的禁用暗色/灰色
+            // }
+            // ActionIcon(drawable = item.icon!!, description = item.title?.toString(), tint = tint)
+        // }
 
-    Box {
-        IconButton(
-            enabled = item.isEnabled,
-            onClick = {
-                if (item.hasSubMenu()) {
-                    subMenuExpanded = true
-                } else {
-                    menu.performIdentifierAction(item.itemId, 0)
-                }
-            },
-            modifier = Modifier.size(36.dp),
-        ) {
-            val tint = if (item.isEnabled) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) // 规范的禁用暗色/灰色
-            }
-            ActionIcon(drawable = item.icon!!, description = item.title?.toString(), tint = tint)
-        }
+        // // 子菜单吸附弹出
+        // if (item.hasSubMenu()) {
+            // DropdownMenu(
+                // expanded = subMenuExpanded,
+                // onDismissRequest = { subMenuExpanded = false },
+                // offset = DpOffset(0.dp, 4.dp),
+            // ) {
+                // val subMenu = item.subMenu!!
+                // (0 until subMenu.size()).map(subMenu::getItem).filter { it.isVisible }.forEach { subItem ->
+                    // DropdownMenuItem(
+                        // text = {
+                            // Text(
+                                // text = subItem.title?.toString().orEmpty(),
+                                // fontSize = 13.sp,
+                                // color = if (subItem.isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                            // )
+                        // },
+                        // enabled = subItem.isEnabled,
+                        // onClick = {
+                            // subMenuExpanded = false
+                            // subMenu.performIdentifierAction(subItem.itemId, 0)
+                        // },
+                    // )
+                // }
+            // }
+        // }
+    // }
+// }
 
-        // 子菜单吸附弹出
-        if (item.hasSubMenu()) {
-            DropdownMenu(
-                expanded = subMenuExpanded,
-                onDismissRequest = { subMenuExpanded = false },
-                offset = DpOffset(0.dp, 4.dp),
-            ) {
-                val subMenu = item.subMenu!!
-                (0 until subMenu.size()).map(subMenu::getItem).filter { it.isVisible }.forEach { subItem ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = subItem.title?.toString().orEmpty(),
-                                fontSize = 13.sp,
-                                color = if (subItem.isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                            )
-                        },
-                        enabled = subItem.isEnabled,
-                        onClick = {
-                            subMenuExpanded = false
-                            subMenu.performIdentifierAction(subItem.itemId, 0)
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ActionIcon(
-    drawable: Drawable,
-    description: String?,
-    tint: Color,
-    modifier: Modifier = Modifier,
-) {
-    val bitmap = remember(drawable) {
-        drawable.toBitmap(24, 24).asImageBitmap()
-    }
-    Icon(
-        bitmap = bitmap,
-        contentDescription = description,
-        modifier = modifier.size(20.dp),
-        tint = tint,
-    )
-}
+// @Composable
+// private fun ActionIcon(
+    // drawable: Drawable,
+    // description: String?,
+    // tint: Color,
+    // modifier: Modifier = Modifier,
+// ) {
+    // val bitmap = remember(drawable) {
+        // drawable.toBitmap(24, 24).asImageBitmap()
+    // }
+    // Icon(
+        // bitmap = bitmap,
+        // contentDescription = description,
+        // modifier = modifier.size(20.dp),
+        // tint = tint,
+    // )
+// }

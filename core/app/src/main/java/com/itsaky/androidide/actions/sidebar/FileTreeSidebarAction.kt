@@ -1,55 +1,55 @@
-/*
- *  This file is part of AndroidIDE.
- *
- *  AndroidIDE is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  AndroidIDE is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.itsaky.androidide.actions.sidebar
 
 import android.content.Context
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.Fragment
 import com.itsaky.androidide.R
-import com.itsaky.androidide.fragments.git.GitProjectsFragment
-import kotlin.reflect.KClass
+import com.itsaky.androidide.actions.AbstractComposeSidebarAction
+import com.itsaky.androidide.actions.ComposeActionVisuals
+import com.itsaky.androidide.activities.editor.EditorHandlerActivity
+import com.itsaky.androidide.fragments.git.GitProjectsScreen
 
 /**
- * Sidebar action for showing the file tree (项目文件树).
+ * 现代文件树侧边栏 Action。
  *
- * 注: fragmentClass 指向 [GitProjectsFragment] — IDE 文件树核心 fragment,
- * 位于 `fragments/git/`, 顶部自带 git 操作 toolbar (branch switcher / refresh /
- * locate / collapse / expand / undo / redo) + 文件树操作 + 长按文件菜单触发 git 操作。
- * 这是真正在用的文件树实现; [com.itsaky.androidide.fragments.sidebar.FileTreeFragment]
- * 已淘汰, 仅作为备用方案保留。
+ * 彻底消除对任何 Fragment 的依赖，直接绑定高性能满屏 [GitProjectsScreen]，
+ * 消除布局边界压缩，给文件树提供 100% 的水平操作空间。
  *
- * 完整 git UI (变更/历史/分支/远程 4 个 tab) 走单独的 [GitSidebarAction] 入口,
- * 与文件树页面相互独立。
- *
- * @author Akash Yadav
+ * @author android_zero
  */
-class FileTreeSidebarAction(context: Context, override val order: Int) : AbstractSidebarAction() {
+class FileTreeSidebarAction(
+    context: Context,
+    override val order: Int,
+) : AbstractComposeSidebarAction() {
 
   companion object {
     const val ID = "ide.editor.sidebar.fileTree"
   }
 
   override val id: String = ID
-  override val fragmentClass: KClass<out Fragment> = GitProjectsFragment::class
+
+  override val visuals: ComposeActionVisuals = ComposeActionVisuals(
+      imageVector = Icons.Default.Folder,
+      enablePressHaptic = true,
+      enableScaleAnimation = true,
+  )
 
   init {
-    icon = null
     label = context.getString(R.string.msg_file_tree)
     icon = ContextCompat.getDrawable(context, R.drawable.ic_folder)
+  }
+
+  @Composable
+  override fun Content(modifier: Modifier) {
+    val activity = LocalContext.current as? EditorHandlerActivity
+    if (activity != null) {
+      // 100% 满屏展示，不受旧容器 padding 束缚
+      GitProjectsScreen(activity = activity)
+    }
   }
 }

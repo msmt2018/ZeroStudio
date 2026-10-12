@@ -1,88 +1,70 @@
-/*
- *  This file is part of AndroidIDE.
- *
- *  AndroidIDE is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  AndroidIDE is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.itsaky.androidide.activities.editor.ui.screen
 
+import android.content.Intent
+import android.graphics.drawable.Drawable
+import android.view.MenuItem
+import android.zero.studio.widget.editor.symbolinput.SymbolInputPanel
+import android.zero.studio.widget.editor.symbolinput.SymbolManagerActivity
 import androidx.activity.compose.BackHandler
+import androidx.appcompat.view.menu.MenuBuilder
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.DrawerState
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.SheetState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.key
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.drawable.toBitmap
+import com.itsaky.androidide.R
+import com.itsaky.androidide.actions.ActionItem
+import com.itsaky.androidide.actions.ActionsRegistry
+import com.itsaky.androidide.activities.editor.BaseEditorActivity
 import com.itsaky.androidide.activities.editor.ui.state.EditorPage
 import com.itsaky.androidide.activities.editor.ui.state.EditorPageRegistry
+import com.itsaky.androidide.activities.editor.ui.state.EditorUiState
+import com.itsaky.androidide.onboarding.OnboardingTarget
+import com.itsaky.androidide.onboarding.onboardingBind
+import com.itsaky.androidide.ui.SymbolInputVisibilityManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 编辑器核心工作区框架。
- *
- * 核心升级点：
- * 1. 抽屉彻底改为 **100% 满屏自适应覆盖层**，杜绝传统抽屉在右侧留出的无用半透明白边，给文件树/Git 提供最大宽度。
- * 2. 抽屉内左侧 Rail 栏压缩 50% 宽度至 40.dp，顶部 Header 压缩 50% 高度至 32.dp。
- * 3. 抽屉关闭时不销毁状态，打开时全速平移并带 60fps 缓动动画。
+ * 抽屉 100% 满屏无挤压展示，子页面不再限制宽度。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,29 +78,25 @@ fun EditorWorkspaceScreen(
     bottomPages: EditorPageRegistry,
     openDrawerDescription: String,
     closeDescription: String,
-    fragmentPage: @Composable (EditorPage.FragmentPage) -> Unit,
     editorContent: @Composable () -> Unit,
     editorTabs: @Composable () -> Unit,
     bottomBar: @Composable () -> Unit,
     toolbarActions: @Composable RowScope.() -> Unit = {},
     sidebarIcon: @Composable (EditorPage) -> Unit = {},
     bottomActions: @Composable RowScope.() -> Unit = {},
-    bottomFragmentPage: @Composable (EditorPage.FragmentPage) -> Unit = fragmentPage,
     modifier: Modifier = Modifier,
 ) {
   val scope = rememberCoroutineScope()
+  val haptic = LocalHapticFeedback.current
 
-  // 拦截系统返回键：如果抽屉打开，则优先关闭抽屉
   BackHandler(enabled = drawerState.isOpen) {
     scope.launch { drawerState.close() }
   }
 
   Box(modifier = modifier.fillMaxSize()) {
-    // 主页面层：包含编辑器本体与各类状态栏
     Scaffold(
         modifier = Modifier.fillMaxSize().imePadding(),
         topBar = {
-          // 紧凑型顶部操作栏：去除占用空间的中间标题，让 Action 按钮紧贴汉堡菜单
           Surface(
               modifier = Modifier.fillMaxWidth().height(42.dp),
               color = MaterialTheme.colorScheme.surface,
@@ -140,7 +118,6 @@ fun EditorWorkspaceScreen(
                 )
               }
               Spacer(Modifier.width(4.dp))
-              // Actions 紧随其后靠左排列，横向填满
               Row(
                   modifier = Modifier.weight(1f),
                   verticalAlignment = Alignment.CenterVertically,
@@ -153,9 +130,7 @@ fun EditorWorkspaceScreen(
         },
         bottomBar = bottomBar,
     ) { insets ->
-      Column(
-          modifier = Modifier.fillMaxSize().padding(insets),
-      ) {
+      Column(modifier = Modifier.fillMaxSize().padding(insets)) {
         editorTabs()
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
           editorContent()
@@ -163,7 +138,7 @@ fun EditorWorkspaceScreen(
       }
     }
 
-    // 自定义 100% 满屏全覆盖侧滑抽屉（彻底代替限制宽度的 ModalDrawerSheet）
+    // 100% 满屏覆盖侧滑抽屉
     AnimatedVisibility(
         visible = drawerState.isOpen,
         enter = slideInHorizontally(
@@ -181,13 +156,13 @@ fun EditorWorkspaceScreen(
           color = MaterialTheme.colorScheme.surface,
       ) {
         Column(modifier = Modifier.fillMaxSize()) {
-          // 顶部栏高度压缩 50%（32.dp）
+          // 极简紧凑 Header
           Surface(
-              modifier = Modifier.fillMaxWidth().height(32.dp),
+              modifier = Modifier.fillMaxWidth().height(34.dp),
               color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
           ) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
               IconButton(
@@ -216,9 +191,8 @@ fun EditorWorkspaceScreen(
             }
           }
 
-          // 下方区域：左侧 Rail 栏（宽度减少 50% 至 40.dp） + 右侧 100% 满屏页面容器
+          // Rail 栏 (40dp) + 100% 满屏页面内容容器
           Row(modifier = Modifier.fillMaxSize()) {
-            // 左侧极简 Rail 栏
             Surface(
                 modifier = Modifier.width(40.dp).fillMaxHeight(),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -231,21 +205,32 @@ fun EditorWorkspaceScreen(
                 sidebar.pages.forEach { page ->
                   key(page.id) {
                     val isSelected = sidebar.selectedId == page.id
-                    val bgColor = if (isSelected) {
-                      MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                      Color.Transparent
-                    }
+                    val action = ActionsRegistry.getInstance().getActions(ActionItem.Location.EDITOR_SIDEBAR)[page.id]
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val isPressed by interactionSource.collectIsPressedAsState()
+
+                    // 微交互动效：按压弹性回弹动画
+                    val scale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.88f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                        label = "sidebar_tab_scale",
+                    )
+
+                    val bgColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
 
                     Box(
                         modifier = Modifier
                             .size(36.dp)
+                            .scale(scale)
                             .padding(2.dp)
                             .background(bgColor, RoundedCornerShape(8.dp))
                             .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = interactionSource,
                                 indication = null,
                             ) {
+                              if (action is com.itsaky.androidide.actions.ComposeSidebarActionItem && action.visuals.enablePressHaptic) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                              }
                               sidebar.select(page.id)
                             },
                         contentAlignment = Alignment.Center,
@@ -258,13 +243,10 @@ fun EditorWorkspaceScreen(
               }
             }
 
-            // 右侧内容容器：占满剩余所有宽度（不再挤压），提供极致的操作空间
-            Box(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-            ) {
+            // 满屏无挤压内容区
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
               RegisteredEditorPage(
                   registry = sidebar,
-                  fragmentPage = fragmentPage,
                   modifier = Modifier.fillMaxSize(),
               )
             }
@@ -273,7 +255,6 @@ fun EditorWorkspaceScreen(
       }
     }
 
-    // 底部调试与控制台 Sheet 弹窗
     if (bottomSheetVisible) {
       ModalBottomSheet(
           sheetState = bottomSheetState,
@@ -295,8 +276,7 @@ fun EditorWorkspaceScreen(
           if (pages.isNotEmpty()) {
             key(pages.map { it.id }) {
               ScrollableTabRow(
-                  selectedTabIndex = pages.indexOfFirst { it.id == bottomPages.selectedId }
-                      .coerceAtLeast(0),
+                  selectedTabIndex = pages.indexOfFirst { it.id == bottomPages.selectedId }.coerceAtLeast(0),
               ) {
                 pages.forEach { page ->
                   key(page.id) {
@@ -312,7 +292,6 @@ fun EditorWorkspaceScreen(
           }
           RegisteredEditorPage(
               registry = bottomPages,
-              fragmentPage = bottomFragmentPage,
               modifier = Modifier.fillMaxWidth().weight(1f),
           )
         }
@@ -321,14 +300,11 @@ fun EditorWorkspaceScreen(
   }
 }
 
-/**
- * 多态页面宿主容器。
- */
 @Composable
 fun RegisteredEditorPage(
     registry: EditorPageRegistry,
     modifier: Modifier = Modifier,
-    states: SaveableStateHolder = rememberEditorPageStates(registry),
+    states: androidx.compose.runtime.saveable.SaveableStateHolder = rememberEditorPageStates(registry),
 ) {
   Box(modifier) {
     registry.selectedPage?.let { page ->
@@ -342,4 +318,73 @@ fun RegisteredEditorPage(
       }
     }
   }
+}
+
+@Composable
+private fun ActionToolbarItem(
+    item: MenuItem,
+    menu: MenuBuilder,
+) {
+    var subMenuExpanded by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(
+            enabled = item.isEnabled,
+            onClick = {
+                if (item.hasSubMenu()) {
+                    subMenuExpanded = true
+                } else {
+                    menu.performIdentifierAction(item.itemId, 0)
+                }
+            },
+            modifier = Modifier.size(36.dp),
+        ) {
+            val tint = if (item.isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            ActionIcon(drawable = item.icon!!, description = item.title?.toString(), tint = tint)
+        }
+
+        if (item.hasSubMenu()) {
+            DropdownMenu(
+                expanded = subMenuExpanded,
+                onDismissRequest = { subMenuExpanded = false },
+                offset = DpOffset(0.dp, 4.dp),
+            ) {
+                val subMenu = item.subMenu!!
+                (0 until subMenu.size()).map(subMenu::getItem).filter { it.isVisible }.forEach { subItem ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = subItem.title?.toString().orEmpty(),
+                                fontSize = 13.sp,
+                                color = if (subItem.isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                            )
+                        },
+                        enabled = subItem.isEnabled,
+                        onClick = {
+                            subMenuExpanded = false
+                            subMenu.performIdentifierAction(subItem.itemId, 0)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActionIcon(
+    drawable: Drawable,
+    description: String?,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    val bitmap = remember(drawable) {
+        drawable.toBitmap(24, 24).asImageBitmap()
+    }
+    Icon(
+        bitmap = bitmap,
+        contentDescription = description,
+        modifier = modifier.size(20.dp),
+        tint = tint,
+    )
 }
