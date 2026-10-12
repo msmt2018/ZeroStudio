@@ -7,6 +7,3 @@ data class VersionToChangelogs(
     val resId: Int
 )
 
-val versionToChangelogsMap = listOf(
-    
-)
