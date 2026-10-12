@@ -10,6 +10,7 @@ class GetAllChangelogsUseCase(
     private val context: Context,
 ) {
     operator fun invoke(): List<ChangelogItem> {
-        return null
-    }
+    return emptyList()
+}
+
 }
