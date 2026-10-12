@@ -27,7 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.androidide.theme.AndroidIDETheme
+import com.itsaky.androidide.ui.themes.AndroidIDETheme
 import com.itsaky.androidide.eventbus.events.preferences.PreferenceChangeEvent
 import com.itsaky.androidide.tasks.cancelIfActive
 import kotlinx.coroutines.CoroutineScope

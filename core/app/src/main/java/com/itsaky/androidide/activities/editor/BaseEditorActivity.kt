@@ -95,7 +95,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 /**
- * 编辑器核心基础 Activity：全面支持纯粹的 Jetpack Compose、高性能状态分发与现代 Android 规范。
+ * 编辑器核心基础 Activity：全面迁移纯粹的 Jetpack Compose、高性能状态分发与现代 Android 规范。
  *
  * @author android_zero
  */
