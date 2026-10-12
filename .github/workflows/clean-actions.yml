@@ -1,0 +1,18 @@
+name: 🛠️ One-click manual cleanup of historical Actions records
+
+on:
+  workflow_dispatch: # 仅保留手动触发按钮
+
+jobs:
+  clean-runs:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # 赋予脚本删除 Actions 的权限
+    steps:
+      - name: 批量删除所有工作流的历史记录
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 0 # 保留 0 天前的记录（即清理所有历史）
+          keep_minimum_runs: 1 # 每个 yml 工作流至少保留最新 1 次记录（GitHub 限制：不能彻底删到 0，必须留 1 个最新的，否则该工作流会在列表里消失）
