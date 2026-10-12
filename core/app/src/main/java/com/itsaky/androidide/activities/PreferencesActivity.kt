@@ -14,90 +14,35 @@
  *  You should have received a copy of the GNU General Public License
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 package com.itsaky.androidide.activities
 
 import android.os.Bundle
-import android.view.View
-import androidx.core.graphics.Insets
-import androidx.fragment.app.Fragment
-import com.itsaky.androidide.R
+import androidx.compose.runtime.Composable
+import com.itsaky.androidide.activities.preferences.PreferencesScreen
 import com.itsaky.androidide.app.IDEActivity
-import com.itsaky.androidide.databinding.ActivityPreferencesBinding
-import com.itsaky.androidide.fragments.IDEPreferencesFragment
 import com.itsaky.androidide.preferences.IDEPreferences as prefs
 import com.itsaky.androidide.preferences.addRootPreferences
 
+/**
+ * 纯 Compose 版 PreferencesActivity。
+ *
+ * @author android_zero
+ */
 class PreferencesActivity : IDEActivity() {
-
-  private var _binding: ActivityPreferencesBinding? = null
-  private val binding: ActivityPreferencesBinding
-    get() = checkNotNull(_binding) { "Activity has been destroyed" }
-
-  private var rootFragment: IDEPreferencesFragment? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-
-    setSupportActionBar(binding.toolbar)
-    supportActionBar!!.setTitle(R.string.ide_preferences)
-    supportActionBar!!.setDisplayHomeAsUpEnabled(true)
-
-    binding.toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
-
-    if (savedInstanceState != null) {
-      return
-    }
-
-    (prefs.children as MutableList?)?.clear()
-
+    // 初始化首选项树结构
+    (prefs.children as? MutableList)?.clear()
     prefs.addRootPreferences()
-
-    val args = Bundle()
-    args.putParcelableArrayList(IDEPreferencesFragment.EXTRA_CHILDREN, ArrayList(prefs.children))
-
-    val fragment =
-        IDEPreferencesFragment().also { createdFragment ->
-          createdFragment.arguments = args
-          rootFragment = createdFragment
-        }
-    loadFragment(fragment)
   }
 
-  override fun onApplySystemBarInsets(insets: Insets) {
-
-    // System bar insets might be dispatched before onCreate/bindLayout completes.
-    if (_binding == null) return
-
-    val toolbar: View = binding.toolbar
-    toolbar.setPadding(
-        toolbar.paddingLeft + insets.left,
-        toolbar.paddingTop,
-        toolbar.paddingRight + insets.right,
-        toolbar.paddingBottom,
+  @Composable
+  override fun ComposeContent() {
+    PreferencesScreen(
+        rootChildren = prefs.children,
+        onBack = { finish() },
     )
-
-    val fragmentContainer: View = binding.fragmentContainerParent
-    fragmentContainer.setPadding(
-        fragmentContainer.paddingLeft + insets.left,
-        fragmentContainer.paddingTop,
-        fragmentContainer.paddingRight + insets.right,
-        fragmentContainer.paddingBottom,
-    )
-  }
-
-  override fun bindLayout(): View {
-    _binding = ActivityPreferencesBinding.inflate(layoutInflater)
-    return binding.root
-  }
-
-  private fun loadFragment(fragment: Fragment) {
-    super.loadFragment(fragment, binding.fragmentContainer.id)
-  }
-
-  override fun onDestroy() {
-    _binding?.toolbar?.setNavigationOnClickListener(null)
-    rootFragment = null
-    _binding = null
-    super.onDestroy()
   }
 }

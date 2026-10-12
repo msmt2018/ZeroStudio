@@ -327,16 +327,17 @@ fun EditorWorkspaceScreen(
 @Composable
 fun RegisteredEditorPage(
     registry: EditorPageRegistry,
-    fragmentPage: @Composable (EditorPage.FragmentPage) -> Unit,
     modifier: Modifier = Modifier,
+    states: SaveableStateHolder = rememberEditorPageStates(registry),
 ) {
-  Box(modifier = modifier) {
+  Box(modifier) {
     registry.selectedPage?.let { page ->
       key(page.id) {
-        when (page) {
-          is EditorPage.ActionPage -> Unit
-          is EditorPage.ScreenPage -> page.content()
-          is EditorPage.FragmentPage -> fragmentPage(page)
+        states.SaveableStateProvider(page.id) {
+          when (page) {
+            is EditorPage.ActionPage -> Unit
+            is EditorPage.ScreenPage -> page.content()
+          }
         }
       }
     }
