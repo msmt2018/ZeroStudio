@@ -3,7 +3,6 @@ package android.zero.studio.settings.domain.usecase
 import android.content.Context
 import android.zero.studio.R
 import android.zero.studio.settings.data.source.VersionToChangelogs
-import android.zero.studio.settings.data.source.versionToChangelogsMap
 import android.zero.studio.settings.domain.model.ChangelogItem
 
 class GetAllChangelogsUseCase(
