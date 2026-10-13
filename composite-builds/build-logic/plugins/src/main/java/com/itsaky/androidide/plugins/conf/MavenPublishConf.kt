@@ -129,7 +129,7 @@ private fun Project.configureMavenLocal() {
     }
   }
 
-  project.tasks.register<Delete>("deleteBuildMavenLocal") { delete(mavenLocalPath) }
+  project.tasks.create<Delete>("deleteBuildMavenLocal") { delete(mavenLocalPath) }
 
   if (project.path in projectsRequiringMavenLocalForTests) {
     tasks.withType<Test> {
