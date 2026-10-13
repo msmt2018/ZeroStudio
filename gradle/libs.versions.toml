@@ -14,8 +14,8 @@ jetbrainsAnnotations = "24.1.0"
 protobufVersion = "4.33.0"
 
 # Kotlin相关
-kotlin = "2.2.20"
-ksp = "2.3.4"
+kotlin = "2.3.20"
+ksp = "2.3.12"
 kotlin-coroutines = "1.11.0"
 kotlinxSerializationJson = "1.8.1"
 kotlinx-datetime = "0.8.0"
@@ -633,6 +633,9 @@ io-ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "io-kto
 # Shizuku 系统级 API 桥接 (Local ADB 通道)
 shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
 shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
+
+#注解/序列化，ksp等
+zacsweers-auto-service-ksp = { group = "dev.zacsweers.autoservice", name = "auto-service-ksp", version = "1.2.0" }
 
 
 [bundles]

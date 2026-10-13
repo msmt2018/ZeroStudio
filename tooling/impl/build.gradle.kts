@@ -21,7 +21,7 @@ import com.itsaky.androidide.build.config.BuildConfig
 plugins {
   id("com.github.johnrengelman.shadow") version "8.1.1"
   id("java-library")
-  id("kotlin-kapt")
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
   id("org.jetbrains.kotlin.jvm")
 }
 
@@ -51,12 +51,16 @@ project.tasks.getByName("jar") {
   finalizedBy("shadowJar")
 }
 
-project.tasks.getByName("shadowJar") { finalizedBy("copyJar") }
+// project.tasks.getByName("shadowJar") { finalizedBy("copyJar") }
+tasks.named<com.github.jengelman.shadow.tasks.ShadowJar>("shadowJar") {
+  from(project.layout.buildDirectory.dir("generated/ksp/main/resources"))
+  finalizedBy("copyJar")
+}
 
 dependencies {
   implementation("io.hotmoka:toml4j:0.7.3")
 
-  kapt(libs.google.auto.service)
+  ksp(libs.zacsweers.auto.service.ksp)
 
   api(projects.tooling.api)
   api(projects.tooling.builderModelImpl)

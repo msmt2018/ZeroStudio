@@ -20,15 +20,20 @@ import com.itsaky.androidide.build.config.BuildConfig
 plugins {
   id("com.android.library")
   id("kotlin-android")
-  id("kotlin-kapt")
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+
 }
 
 android { namespace = "${BuildConfig.packageName}.xml.lsp" }
 
-kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.LspXmlEventsIndex") } }
+ksp {
+  arguments { 
+    arg("eventBusIndex", "${BuildConfig.packageName}.events.LspXmlEventsIndex") 
+  }
+}
 
 dependencies {
-  kapt(projects.annotation.processors)
+  ksp(projects.annotation.processors)
 
   implementation(libs.common.editor)
   implementation(libs.common.utilcode)

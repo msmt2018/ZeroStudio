@@ -18,10 +18,11 @@
 import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
-  id("com.android.library")
-  id("kotlin-android")
-  id("kotlin-kapt")
-  id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.com.google.devtools.ksp)
+    alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+
 }
 
 android {
@@ -35,12 +36,15 @@ android {
   buildFeatures { compose = true }
 }
 
-kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.LspJavaEventsIndex") } 
-correctErrorTypes = true }
+ksp {
+  arguments { 
+    arg("eventBusIndex", "${BuildConfig.packageName}.events.LspJavaEventsIndex") 
+  }
+}
 
 dependencies {
-  kapt(projects.annotation.processors)
-  kapt(libs.google.auto.service)
+  ksp(projects.annotation.processors)
+  ksp(libs.zacsweers.auto.service.ksp)
   
   implementation(libs.common.org.eclipse.lsp4j)
   implementation(libs.common.lsp4j.jsonrpc)

@@ -18,18 +18,34 @@
 import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
-  id("com.android.library")
-  id("kotlin-android")
-  id("kotlin-kapt")
+    alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.com.google.devtools.ksp)
+
 }
 
-android { namespace = "${BuildConfig.packageName}.actions" }
+android { 
+    namespace = "${BuildConfig.packageName}.actions" 
+
+    sourceSets {
+        getByName("main") {
+            // 让打包工具能够看到 KSP 生成的 META-INF 服务清单文件
+            resources.srcDir("build/generated/ksp/main/resources")
+        }
+    }
+  buildFeatures { compose = true }
+}
 
 dependencies {
-  kapt(libs.google.auto.service)
+  
+  ksp(libs.zacsweers.auto-service-ksp) 
 
   api(libs.androidx.nav.fragment)
   api(libs.androidx.nav.ui)
+  
+  implementation(androidx-compose-ui)
+  implementation(androidx-compose-runtime)
 
   implementation(projects.core.common)
   implementation(projects.core.resources)

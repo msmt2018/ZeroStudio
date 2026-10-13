@@ -21,7 +21,7 @@ plugins {
   id("com.android.library")
   id("kotlin-android")
   id("kotlin-kapt")
-  id("realm-android")
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 
 android {

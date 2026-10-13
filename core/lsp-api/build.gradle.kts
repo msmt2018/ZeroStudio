@@ -18,17 +18,21 @@
 import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
-  id("com.android.library")
-  id("kotlin-android")
-  id("kotlin-kapt")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.com.google.devtools.ksp)
 }
 
 android { namespace = "${BuildConfig.packageName}.lsp.api" }
 
-kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.LspApiEventsIndex") } }
-
+// kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.LspApiEventsIndex") } }
+ksp { 
+  arguments { 
+    arg("eventBusIndex", "${BuildConfig.packageName}.events.LspApiEventsIndex") 
+  } 
+}
 dependencies {
-  kapt(projects.annotation.processors)
+  ksp(projects.annotation.processors)
 
   implementation(libs.composite.fuzzysearch)
 

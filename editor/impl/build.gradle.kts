@@ -18,19 +18,22 @@
 import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
-  id("com.android.library")
-  id("kotlin-android")
-  id("kotlin-kapt")
-  id("com.google.devtools.ksp") version libs.versions.ksp
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.com.google.devtools.ksp)
 }
 
 android { namespace = "${BuildConfig.packageName}.editor" }
 
-kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.EditorEventsIndex") } }
+ksp {
+  arguments { 
+    arg("eventBusIndex", "${BuildConfig.packageName}.events.EditorEventsIndex") 
+  }
+}
 
 dependencies {
   ksp(projects.annotation.processorsKsp)
-  kapt(projects.annotation.processors)
+  ksp(projects.annotation.processors)
 
   api(projects.editor.treeSitterNdk.androidTreeSitter)
   api(libs.androidide.ts.java)

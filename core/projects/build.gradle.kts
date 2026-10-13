@@ -18,10 +18,10 @@
 import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
-  id("com.android.library")
-  id("kotlin-android")
-  id("kotlin-parcelize")
-  id("kotlin-kapt")
+    id("kotlin-parcelize")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.com.google.devtools.ksp)
 }
 
 android {
@@ -38,16 +38,18 @@ android {
   }
 }
 
-kapt {
-  arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.ProjectsApiEventsIndex") }
+ksp {
+  arguments { 
+    arg("eventBusIndex", "${BuildConfig.packageName}.events.ProjectsApiEventsIndex") 
+  }
 }
 
 dependencies {
   implementation(libs.grpc.android)
 
-  kapt(projects.annotation.processors)
-  kapt(libs.google.auto.service)
-
+  ksp(projects.annotation.processors)
+  ksp(libs.zacsweers.auto.service.ksp)
+  
   api(projects.event.eventbus)
   api(projects.event.eventbusEvents)
   api(projects.tooling.api)

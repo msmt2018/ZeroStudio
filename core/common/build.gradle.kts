@@ -24,7 +24,7 @@ plugins {
 }
 
 android {
-  namespace = "${BuildConfig.packageName}.common"
+  namespace = "\${BuildConfig.packageName}.common"
 
   buildFeatures { compose = true }
 }
@@ -69,16 +69,10 @@ dependencies {
   api(projects.utilities.flashbar)
   api(projects.utilities.shared)
 
-  val composeBom = platform("androidx.compose:compose-bom:2025.11.00")
-
-  implementation("androidx.core:core-ktx:1.16.0")
-  implementation("androidx.activity:activity-compose:1.10.1")
-  implementation(composeBom)
-  implementation("androidx.compose.ui:ui")
-  implementation("androidx.compose.ui:ui-graphics")
-  implementation("androidx.compose.ui:ui-tooling-preview")
-  implementation("androidx.compose.material3:material3")
-  implementation("androidx.compose.material:material-icons-extended")
+  implementation(libs.androidx.core.ktx)
+  
+  implementation(platform(libs.androidx.compose.bom))  // 自动对齐 toml 中绑定的 2026.05.00 内核
+  implementation(libs.bundles.compose)                // 一键引入 ui, ui-graphics, preview, material3, activity-compose 等常用全家桶
 
   testImplementation(libs.tests.junit)
   testImplementation(libs.tests.google.truth)

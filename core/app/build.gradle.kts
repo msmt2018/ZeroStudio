@@ -9,12 +9,13 @@ plugins {
   id("com.itsaky.androidide.core-app")
   id("com.android.application")
   id("kotlin-android")
-  id("kotlin-kapt")
+  // id("com.google.devtools.ksp")
+  alias(libs.plugins.com.google.devtools.ksp)
   id("kotlin-parcelize")
   id("androidx.navigation.safeargs.kotlin")
   alias(libs.plugins.google.services)
   alias(libs.plugins.firebase.crashlytics)
-  id("org.jetbrains.kotlin.plugin.compose")
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
   alias(libs.plugins.hilt)
   alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
 }
@@ -116,7 +117,22 @@ android {
   }
 }
 
-kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.AppEventsIndex") } }
+/**
+  kapt { 
+    arguments { 
+       arg("eventBusIndex", "${BuildConfig.packageName}.events.AppEventsIndex") 
+    } 
+}
+*/
+ksp {
+  // 延续你原有的 EventBus 索引配置
+  arg("eventBusIndex", "${BuildConfig.packageName}.events.AppEventsIndex")
+  
+  //解决 Hilt 在 KSP 模式下多模块合并时可能发生的类加载器与依赖隔离冲突
+  arg("dagger.fastInit", "enabled")
+  arg("dagger.hilt.disableModulesHaveInstallInCheck", "true")
+}
+
 
 configurations.all {
   // resolutionStrategy {
@@ -143,10 +159,13 @@ dependencies {
   implementation(libs.common.com.airbnb.android.lottie)
 
   // Annotation processors
-  kapt(libs.common.glide.ap)
-  kapt(libs.google.auto.service)
-  kapt(projects.annotation.processors)
-
+  ksp(libs.common.glide.ap)
+  ksp(libs.zacsweers.auto-service-ksp) 
+  ksp(projects.annotation.processors)
+  ksp(libs.hilt.android.compiler)
+  ksp(libs.hilt.compiler)
+  ksp(libs.androidx.room.compiler)
+  
   implementation(libs.common.editor)
   implementation(libs.common.utilcode)
   implementation(libs.common.glide)
@@ -316,26 +335,11 @@ dependencies {
   implementation(projects.modules.webPreview)
   implementation(libs.common.soraLanguageTextmate)
 
-  // Shizuku 客户端 API (子项目 3 断点调试连接层用)
-  // 不依赖 Shizuku server / manager, 只用 rikka.shizuku.Shizuku 静态 API
   implementation(projects.modules.shizuku.api)
-  // ShizukuProvider: ContentProvider 接收 Shizuku server 下发的 binder,
-  //   没有它 Shizuku.pingBinder() 永远返回 false (设备连接管理 BottomSheet 用)
   implementation(projects.modules.shizuku.provider)
 
-  // libsu: Root 通道探测/执行用, 跟 debugger/android-adb-shell 参考工程一致。
-  // - Shell.getShell().isRoot 检测 root 可用性
-  // - Shell.cmd(...).exec() / .submit() 执行 root 命令
-  // - Shell.Builder.setCommands() 支持自定义 su 路径 (DebugConnectionPreferences.rootSuBin)
   implementation(libs.libsu.core)
 
-  // ADB 连接管理模块 (复刻自 debugger/android-adb-shell 参考工程)
-  // - adblib: Cameron Gutman 的 ADB 协议 Java 实现 (OTG/USB ADB 用)
-  // - libadb: Muntashirakon 的 ADB 库 (WiFi/TLS ADB 用, 含 mDNS + SPAKE2 配对)
-  // - fastbootlib: Fastboot 协议 Kotlin 实现
-  // - connection: 完整复刻 app/shell+core 源码, 提供 AdbConnectionManager/Repositories
-  //   /ViewModels/Services 等真正实现 (Clean Architecture + Hilt + Room)
-  // 设备连接管理 BottomSheet 通过这些模块实现 Local+WiFi+OTG+Fastboot 四种连接方式
   implementation(projects.debugger.adbConnection.adblib)
   implementation(projects.debugger.adbConnection.libadb)
   implementation(projects.debugger.adbConnection.fastbootlib)
@@ -344,19 +348,11 @@ dependencies {
   // JmDNS —— WiFi ADB mDNS 服务发现 (_adb-tls-connect._tcp / _adb-tls-pairing._tcp)
   implementation(libs.jmdns)
 
-  // Hilt 依赖注入 (设备连接管理 connection 模块需要 @HiltAndroidApp + @HiltViewModel)
-  // 使用 kapt 而非 ksp 处理 Hilt 注解, 规避 Dagger #3965 类加载器冲突
-  // (Hilt 插件与 KSP 插件在不同作用域声明导致 classloader 不一致)
   implementation(libs.hilt.android)
-  add("kapt", libs.hilt.android.compiler)
   implementation(libs.hilt.navigation.compose)
   implementation(libs.hilt.work)
-  add("kapt", libs.hilt.compiler)
 
-  // Room (connection 模块的 WifiAdbDeviceDao/BookmarkDao 在 app 进程内运行)
-  // 使用 kapt 而非 ksp, 因为本模块未应用 KSP 插件 (规避 Hilt + KSP classloader 冲突)
   implementation(libs.androidx.room.ktx)
-  add("kapt", libs.androidx.room.compiler)
 
   // QR 码生成 (WiFi ADB Pairing 二维码 UI)
   implementation(libs.nayuki.qrcode)

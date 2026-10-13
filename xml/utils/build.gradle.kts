@@ -20,13 +20,14 @@ import com.itsaky.androidide.build.config.BuildConfig
 plugins {
   id("com.android.library")
   id("kotlin-android")
-  id("kotlin-kapt")
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+
 }
 
 android { namespace = "${BuildConfig.packageName}.xml.utils" }
 
 dependencies {
-  kapt(libs.google.auto.service)
+  ksp(libs.zacsweers.auto.service.ksp)
 
   api(projects.utilities.lookup)
   api(projects.xml.resourcesApi)

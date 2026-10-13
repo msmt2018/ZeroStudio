@@ -17,12 +17,12 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.android.library)
-    id("kotlin-android")
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
     alias(libs.plugins.aboutlibraries)
-    id("kotlin-kapt")
+    alias(libs.plugins.com.google.devtools.ksp)
 }
 
 android {
@@ -98,6 +98,10 @@ tasks.withType<KotlinCompile>().configureEach {
     }
 }
 
+ksp {
+    arg("dagger.fastInit", "enabled")
+    arg("dagger.hilt.disableModulesHaveInstallInCheck", "true")
+}
 
 dependencies {
     constraints {
@@ -153,20 +157,15 @@ dependencies {
     // Material Design (View 体系, 部分 Compose 组件回退用)
     implementation(libs.google.material)
 
-    // Room 数据库 (使用 kapt 而非 ksp, 规避 Hilt + KSP classloader 冲突)
-    // 注意: 使用 add("kapt", ...) 而非 kapt(...), 因为 Hilt 插件环境下
-    // kapt() 函数会被解析为 Action<KaptExtension> 而非依赖声明函数
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.paging)
-    add("kapt", libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)
 
-    // Hilt 依赖注入 (使用 kapt 而非 ksp, 规避 Dagger #3965 类加载器冲突)
-    // 同样使用 add("kapt", ...) 避免 kapt() 函数解析歧义
     implementation(libs.hilt.android)
-    add("kapt", libs.hilt.android.compiler)
+    ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
-    add("kapt", libs.hilt.compiler)
+    ksp(libs.hilt.compiler)
 
     // 序列化
     implementation(libs.kotlinx.serialization.json)
