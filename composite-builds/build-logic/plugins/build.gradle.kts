@@ -18,10 +18,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-plugins {
-id("org.gradle.kotlin.kotlin-dsl")
-}
-
+plugins { `kotlin-dsl` }
 
 repositories {
   google()
