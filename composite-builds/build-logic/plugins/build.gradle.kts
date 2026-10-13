@@ -18,7 +18,10 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-plugins { `kotlin-dsl` }
+plugins {
+id("org.gradle.kotlin.kotlin-dsl")
+}
+
 
 repositories {
   google()
@@ -26,7 +29,16 @@ repositories {
   mavenCentral()
 }
 
-tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
+tasks.withType<KotlinCompile>().configureEach { 
+  compilerOptions {
+    jvmTarget.set(JvmTarget.JVM_17)
+    
+    // 💡由于项目全局环境强制使用了较新的 2.3.20 编译器，
+    // 这里必须显式将语言和 API 级别强拉到 2.0 或 2.1 以上，彻底越过过时的 1.8 语言后端限制
+    apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+    languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+  } 
+}
 
 dependencies {
   implementation(projects.buildLogic.common)
