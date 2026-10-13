@@ -192,16 +192,16 @@ Thanks to all the developers who have contributed to this project.
 > This project is 100% open-source and transparent. The code is available for public audit to prove it contains no built-in malice. Users are responsible for their own creations.
 > 本项目保持 100% 开源透明，代码接受公众审计以证明不包含内置恶意功能。用户需对其创造的内容全权负责。
 
+
 </details>
 
 ## License
-
-```
-## 📜 License & Legal Terms (许可与法律条款)
-
 ![License](https://img.shields.io/badge/License-ZeroStudio_Community_License-red.svg?style=flat-square)
 ![Commercial](https://img.shields.io/badge/Commercial_Use-STRICTLY_PROHIBITED-critical.svg?style=flat-square)
 ![Open Source](https://img.shields.io/badge/Source_Code-100%25_Open_Source-success.svg?style=flat-square)
+
+```
+## 📜 License & Legal Terms (许可与法律条款)
 
 **ZeroStudio** is released under the **ZeroStudio Community License v1.0 (ZSCL)**.
 This is a **Source-Available** license based on GNU GPLv3 but with **strict Mandatory Additional Terms** that take precedence.
@@ -215,10 +215,10 @@ This is a **Source-Available** license based on GNU GPLv3 but with **strict Mand
 ### 🚫 Prohibited Actions (绝对禁止行为) 
 ：：PS：Prohibited behavior: As the name suggests, it refers to behavior that is not advocated, unusable, harmful to the interests of others, and has a significant impact.Regardless of the protocol/open source protocol of this project, as long as this project is not deleted, it has the root retention, branching, or change. Any malicious, prohibited, or illegal behavior caused by individuals shall be borne by themselves.
 2.法律安全范围内危险/违规行为，除了违法/违规等红线行为：必须获得开发者认可或者授权，在github问题反馈或者讨论区创建你的申请需求书。
-3.在ZeroStudio增加收费：除了github和其它捐赠平台等捐助外，如果是需要在ZeroStudio内增加收费功能，需获得开发者认可或者授权，不得私自增加收费功能到ZeroStudio的apk内，需获得认可授权。
+3.在ZeroStudio增加收费：除了github和其它捐赠平台等捐助外，如果是需要在ZeroStudio内增加收费功能，需获得开发者认可或者授权，不得私自增加收费功能到ZeroStudio的apk及项目源码，需获得认可授权。
 en：
 2. Dangerous/illegal activities within the bounds of legality, excluding illegal/violation-of-law-regulation behaviors: Developer approval or authorization is required. Create your application request in the GitHub issue feedback or discussion forum.
-3. Adding paid features to ZeroStudio: Besides donations through GitHub and other donation platforms, adding paid features to ZeroStudio requires developer approval or authorization. Adding paid features to the ZeroStudio APK without authorization is prohibited.
+3. Adding paid features to ZeroStudio: Besides donations through GitHub and other donation platforms, adding paid features to ZeroStudio requires developer approval or authorization. Adding paid features to the ZeroStudio APK/project Source without authorization is prohibited.
 
 Under this license, the following actions are **STRICTLY PROHIBITED** and will result in immediate termination of rights and potential legal action:
 
@@ -230,6 +230,7 @@ Under this license, the following actions are **STRICTLY PROHIBITED** and will r
 
 *   **Free to Use:** You may use this software for personal, educational, or internal non-profit purposes freely.
 *   **Free to Modify:** You may modify the code, provided you keep it **100% Open Source**.
+*   **Distribution and release** Apart from the revenue from voluntary donations from users/consumers, you are free to distribute/release/publish 100% externally or internally, and to freely modify the source code
 ---
 
 <details open>
@@ -256,6 +257,10 @@ This project operates under the **ZeroStudio Community License (ZSCL)**.
 </details>
 
 ```
+## Contact the author of ZeroStudio:
+* Tencent, China QQ Email：2049219004@qq.com (Commonly used)
+* Tencent QQ account in China：2049219004
+* Tencent WeChat account in China：android_zero
 
 Any violations to the license can be reported either by opening an issue or writing a mail to us
 directly.

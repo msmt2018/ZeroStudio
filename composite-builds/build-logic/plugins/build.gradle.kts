@@ -26,16 +26,15 @@ repositories {
   mavenCentral()
 }
 
-tasks.withType<KotlinCompile>().configureEach { 
-  compilerOptions {
-    jvmTarget.set(JvmTarget.JVM_17)
-    
-    // 💡由于项目全局环境强制使用了较新的 2.3.20 编译器，
-    // 这里必须显式将语言和 API 级别强拉到 2.0 或 2.1 以上，彻底越过过时的 1.8 语言后端限制
-    apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
-    languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
-  } 
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        // 强行把约定插件模块的语言和 API 级别对齐到 2.1 以上，彻底越过 1.8 编译器断层
+        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+    }
 }
+
 
 dependencies {
   implementation(projects.buildLogic.common)
