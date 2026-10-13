@@ -32,7 +32,6 @@ import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.tasks.Delete
 import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.configure
-import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.withType
 
 private val projectsRequiringMavenLocalForTests = arrayOf(":tooling:plugin")
@@ -57,7 +56,7 @@ fun Project.configureMavenPublish() {
             dependsOn(
                 project(project)
                     .tasks
-                    .getByName("publishAllPublicationsToBuildMavenLocalRepository")
+                    .named("publishAllPublicationsToBuildMavenLocalRepository")
             )
           }
         }
@@ -129,11 +128,13 @@ private fun Project.configureMavenLocal() {
     }
   }
 
-  project.tasks.create<Delete>("deleteBuildMavenLocal") { delete(mavenLocalPath) }
+  val deleteBuildMavenLocalTask = project.tasks.register("deleteBuildMavenLocal", Delete::class.java) {
+    delete(mavenLocalPath)
+  }
 
   if (project.path in projectsRequiringMavenLocalForTests) {
     tasks.withType<Test> {
-      dependsOn(tasks.getByName("publishAllPublicationsToBuildMavenLocalRepository"))
+      dependsOn(tasks.named("publishAllPublicationsToBuildMavenLocalRepository"))
       doFirst {
         val file = mavenLocalPath.get().file("repos.txt").asFile
         file.writeText(mavenLocalRepos.values.joinToString(separator = File.pathSeparator))
@@ -142,8 +143,8 @@ private fun Project.configureMavenLocal() {
   }
 
   afterEvaluate {
-    tasks.getByName("publishAllPublicationsToBuildMavenLocalRepository") {
-      dependsOn(tasks.getByName("deleteBuildMavenLocal"))
+    tasks.named("publishAllPublicationsToBuildMavenLocalRepository") {
+      dependsOn(deleteBuildMavenLocalTask)
     }
   }
 }
