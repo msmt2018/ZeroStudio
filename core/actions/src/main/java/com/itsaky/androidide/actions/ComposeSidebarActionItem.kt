@@ -33,7 +33,7 @@ interface ComposeSidebarActionItem : ActionItem {
 
   /** 提供现代 Compose 视觉与排版样式 */
   val visuals: ComposeActionVisuals
-    get() = ComposeActionVisuals()
+    // get() = ComposeActionVisuals()
 
   /**
    * 侧边栏抽屉展开后渲染的满屏主界面。
