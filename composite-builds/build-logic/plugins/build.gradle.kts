@@ -29,7 +29,6 @@ repositories {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        // 强行把约定插件模块的语言和 API 级别对齐到 2.1 以上，彻底越过 1.8 编译器断层
         apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
         languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
     }
@@ -38,9 +37,9 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 dependencies {
   implementation(projects.buildLogic.common)
-  implementation(projects.buildLogic.desugaring)
   implementation(projects.buildLogic.propertiesParser)
-
+  coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
+  
   implementation("com.android.tools.build:gradle:${libs.versions.agp.asProvider().get()}")
   implementation(libs.maven.publish)
 

@@ -43,11 +43,7 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
   }
-  compileOptions {
-    // Flag to enable support for the new language APIs
-    // It's only needed if your app targets old Android APIs.
-    // isCoreLibraryDesugaringEnabled = true
-  }
+
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17

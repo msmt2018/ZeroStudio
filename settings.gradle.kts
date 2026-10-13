@@ -51,7 +51,6 @@ dependencyResolutionManagement {
                   // "kotlinc",
 
               ),
-          "build-deps-common" to arrayOf("desugaring-core"),
       )
 
     for ((build, modules) in dependencySubstitutions) {
@@ -229,7 +228,6 @@ include(
     ":testing:unitTest",
     
     ":tooling:api",
-    ":tooling:build-grpc",
     ":tooling:builder-model-impl",
     ":tooling:events",
     ":tooling:impl",

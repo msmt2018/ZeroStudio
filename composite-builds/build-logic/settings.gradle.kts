@@ -20,13 +20,6 @@
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 dependencyResolutionManagement {
-  includeBuild("../build-deps-common") {
-    dependencySubstitution {
-      substitute(module("com.itsaky.androidide.build:desugaring-core"))
-          .using(project(":desugaring-core"))
-    }
-  }
-
   repositories {
     google()
     mavenCentral()
@@ -35,6 +28,6 @@ dependencyResolutionManagement {
   versionCatalogs { create("libs") { from(files("../../gradle/libs.versions.toml")) } }
 }
 
-include(":common", ":desugaring", ":desugaring-core", ":plugins", ":properties-parser")
+include(":common", ":plugins", ":properties-parser")
 
 rootProject.name = "build-logic"
