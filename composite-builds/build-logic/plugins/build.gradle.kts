@@ -38,7 +38,6 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 dependencies {
   implementation(projects.buildLogic.common)
   implementation(projects.buildLogic.propertiesParser)
-  coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   
   implementation("com.android.tools.build:gradle:${libs.versions.agp.asProvider().get()}")
   implementation(libs.maven.publish)

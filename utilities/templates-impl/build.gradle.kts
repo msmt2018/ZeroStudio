@@ -21,6 +21,7 @@ plugins {
   id("com.android.library")
   id("org.jetbrains.kotlin.android")
   alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+  alias(libs.plugins.com.google.devtools.ksp)
 }
 
 android { namespace = "${BuildConfig.packageName}.templates.impl" }

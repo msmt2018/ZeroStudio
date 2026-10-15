@@ -23,6 +23,8 @@ plugins {
   id("java-library")
   alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
   id("org.jetbrains.kotlin.jvm")
+  alias(libs.plugins.com.google.devtools.ksp)
+
 }
 
 tasks.withType<Jar> {
@@ -52,8 +54,9 @@ project.tasks.getByName("jar") {
 }
 
 // project.tasks.getByName("shadowJar") { finalizedBy("copyJar") }
-tasks.named<com.github.jengelman.shadow.tasks.ShadowJar>("shadowJar") {
-  from(project.layout.buildDirectory.dir("generated/ksp/main/resources"))
+tasks.named("shadowJar") {
+  val shadowTask = this as? org.gradle.api.tasks.bundling.AbstractArchiveTask
+  shadowTask?.from(project.layout.buildDirectory.dir("generated/ksp/main/resources"))
   finalizedBy("copyJar")
 }
 

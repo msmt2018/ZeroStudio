@@ -37,9 +37,7 @@ android {
 }
 
 ksp {
-  arguments { 
     arg("eventBusIndex", "${BuildConfig.packageName}.events.LspJavaEventsIndex") 
-  }
 }
 
 dependencies {

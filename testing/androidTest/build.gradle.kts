@@ -27,7 +27,6 @@ plugins {
 android {
   namespace = "${BuildConfig.packageName}.testing.android"
 
-  realm { isSyncEnabled = true }
 }
 
 configurations.api {

@@ -12,10 +12,11 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
   }
 
-  kotlinOptions {
-    jvmTarget = "17"
-    freeCompilerArgs += "-Xannotation-default-target=param-property"
-  }
+  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach {
+    this.compilerOptions {
+        this.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
 }
 
 kotlin { jvmToolchain(17) }

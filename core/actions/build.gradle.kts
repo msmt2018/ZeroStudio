@@ -39,13 +39,13 @@ android {
 
 dependencies {
   
-  ksp(libs.zacsweers.auto-service-ksp) 
+  ksp(libs.zacsweers.auto.service.ksp) 
 
   api(libs.androidx.nav.fragment)
   api(libs.androidx.nav.ui)
   
-  implementation(androidx-compose-ui)
-  implementation(androidx-compose-runtime)
+  implementation(libs.androidx.compose.ui)
+  implementation(libs.androidx.compose.runtime)
 
   implementation(projects.core.common)
   implementation(projects.core.resources)

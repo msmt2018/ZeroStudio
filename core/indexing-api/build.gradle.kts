@@ -26,7 +26,7 @@ plugins {
 android { namespace = "${BuildConfig.packageName}.indexing.api" }
 
 dependencies {
-  ksp(libs.zacsweers.auto-service-ksp) 
+  ksp(libs.zacsweers.auto.service.ksp) 
   implementation(libs.google.auto.service.annotations)
 
   api(projects.core.common)

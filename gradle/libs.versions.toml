@@ -612,6 +612,7 @@ sun-security-android = { module = "com.github.MuntashirAkon:sun-security-android
 # Hilt: 依赖注入框架
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+google-dagger-hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltExt" }
 hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hiltExt" }
 hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltExt" }

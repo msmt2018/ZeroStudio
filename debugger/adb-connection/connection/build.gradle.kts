@@ -101,7 +101,9 @@ tasks.withType<KotlinCompile>().configureEach {
 ksp {
     arg("dagger.fastInit", "enabled")
     arg("dagger.hilt.disableModulesHaveInstallInCheck", "true")
+    arg("dagger.hilt.android.internal.disableAndroidSuperclassValidation", "true")
 }
+
 
 dependencies {
     constraints {
@@ -163,10 +165,11 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    ksp(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
-    ksp(libs.hilt.compiler)
-
+    ksp(libs.google.dagger.hilt.compiler)
+    
     // 序列化
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.google.gson)

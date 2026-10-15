@@ -18,10 +18,10 @@
 import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
-    id("kotlin-parcelize")
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.com.google.devtools.ksp)
+    id("kotlin-parcelize")
 }
 
 android {
@@ -39,9 +39,7 @@ android {
 }
 
 ksp {
-  arguments { 
     arg("eventBusIndex", "${BuildConfig.packageName}.events.ProjectsApiEventsIndex") 
-  }
 }
 
 dependencies {

@@ -26,9 +26,7 @@ plugins {
 android { namespace = "${BuildConfig.packageName}.editor" }
 
 ksp {
-  arguments { 
     arg("eventBusIndex", "${BuildConfig.packageName}.events.EditorEventsIndex") 
-  }
 }
 
 dependencies {

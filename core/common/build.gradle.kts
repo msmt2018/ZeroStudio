@@ -24,7 +24,7 @@ plugins {
 }
 
 android {
-  namespace = "\${BuildConfig.packageName}.common"
+  namespace = "${BuildConfig.packageName}.common"
 
   buildFeatures { compose = true }
 }

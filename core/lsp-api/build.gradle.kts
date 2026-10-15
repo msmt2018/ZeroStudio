@@ -27,10 +27,9 @@ android { namespace = "${BuildConfig.packageName}.lsp.api" }
 
 // kapt { arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.LspApiEventsIndex") } }
 ksp { 
-  arguments { 
-    arg("eventBusIndex", "${BuildConfig.packageName}.events.LspApiEventsIndex") 
-  } 
+  arg("eventBusIndex", "${BuildConfig.packageName}.events.LspApiEventsIndex") 
 }
+
 dependencies {
   ksp(projects.annotation.processors)
 

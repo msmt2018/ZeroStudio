@@ -160,7 +160,7 @@ dependencies {
 
   // Annotation processors
   ksp(libs.common.glide.ap)
-  ksp(libs.zacsweers.auto-service-ksp) 
+  ksp(libs.zacsweers.auto.service.ksp) 
   ksp(projects.annotation.processors)
   ksp(libs.hilt.android.compiler)
   ksp(libs.hilt.compiler)

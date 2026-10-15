@@ -20,6 +20,7 @@ plugins {
   id("java-library")
   id("org.jetbrains.kotlin.jvm")
   alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+  alias(libs.plugins.com.google.devtools.ksp)
 }
 
 dependencies {
