@@ -17,7 +17,8 @@
 
 package com.itsaky.androidide.plugins
 
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.dsl.CommonExtension
 import com.itsaky.androidide.build.config.KEY_ALIAS
 import com.itsaky.androidide.build.config.KEY_PASS
 import com.itsaky.androidide.build.config.KEY_STORE_PASS
@@ -50,29 +51,28 @@ class SigningConfigPlugin : Plugin<Project> {
         return
       }
 
-      // Create and apply the signing config
-      extensions.getByType(BaseExtension::class.java).let { extension ->
-        // Keystore credentials
-        val alias = getEnvOrProp(KEY_ALIAS)
-        val storePass = getEnvOrProp(KEY_STORE_PASS)
-        val keyPass = getEnvOrProp(KEY_PASS)
+      val extension = extensions.findByType(ApplicationExtension::class.java) ?: return
 
-        if (alias != null && storePass != null && keyPass != null && signingKey.exists()) {
-          val config =
-              extension.signingConfigs.create("common") {
-                storeFile = signingKey
-                keyAlias = alias
-                storePassword = storePass
-                keyPassword = keyPass
-              }
+      val alias = getEnvOrProp(KEY_ALIAS)
+      val storePass = getEnvOrProp(KEY_STORE_PASS)
+      val keyPass = getEnvOrProp(KEY_PASS)
 
-          extension.buildTypes.forEach { buildType -> buildType.signingConfig = config }
-        } else {
-          logger.warn(
-              "Signing info not configured. keystoreFile=$signingKey[exists=${signingKey.exists()}]"
-          )
-          null
+      if (alias != null && storePass != null && keyPass != null && signingKey.exists()) {
+        val config =
+            extension.signingConfigs.create("common") {
+              storeFile = signingKey
+              keyAlias = alias
+              storePassword = storePass
+              keyPassword = keyPass
+            }
+
+        extension.buildTypes.forEach { buildType -> 
+            buildType.signingConfig = config 
         }
+      } else {
+        logger.warn(
+            "Signing info not configured. keystoreFile=${signingKey}[exists=${signingKey.exists()}]"
+        )
       }
     }
   }

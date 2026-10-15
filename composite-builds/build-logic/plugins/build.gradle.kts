@@ -29,8 +29,8 @@ repositories {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
-        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_1)
+        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_3)
+        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_3)
     }
 }
 
@@ -42,7 +42,7 @@ dependencies {
   implementation("com.android.tools.build:gradle:${libs.versions.agp.asProvider().get()}")
   implementation(libs.maven.publish)
 
-  implementation(kotlin("gradle-plugin"))
+  implementation(libs.kotlin.gradle.plugin) 
 
   implementation(libs.common.jkotlin)
   implementation(libs.common.antlr4)

@@ -28,7 +28,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-  // 全局变量环境
   id("build-logic.root-project")
 
   // Android/Google
@@ -37,8 +36,6 @@ plugins {
   alias(libs.plugins.android.test) apply false
   alias(libs.plugins.protobuf) apply false
   alias(libs.plugins.com.google.devtools.ksp) apply false
-  // Hilt 插件必须在根项目与 KSP 同一作用域声明 (apply false),
-  // 否则 Hilt 插件检测 KSP 时会因 classloader 不一致报错 (Dagger #3965)
   alias(libs.plugins.hilt) apply false
   alias(libs.plugins.google.services) apply false
   alias(libs.plugins.firebase.crashlytics) apply false

@@ -1,20 +1,3 @@
-/*
- *  This file is part of AndroidIDE.
- *
- *  AndroidIDE is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  AndroidIDE is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.itsaky.androidide.plugins.conf
 
 import com.android.build.api.dsl.CommonExtension
@@ -64,36 +47,36 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
-  extensions.getByType(CommonExtension::class.java).run {
-    lint { checkDependencies = true }
+  // (extensions.getByType(CommonExtension::class.java) as CommonExtension<*, *, *, *, *, *>).run {
+  // lint { checkDependencies = true }
 
-    packaging {
-      resources {
-        excludes.addAll(
-            arrayOf(
-                "META-INF/CHANGES",
-                "META-INF/README.md",
-            )
-        )
-        pickFirsts.addAll(
-            arrayOf(
-                "META-INF/eclipse.inf",
-                "META-INF/LICENSE.md",
-                "META-INF/AL2.0",
-                "META-INF/LGPL2.1",
-                "META-INF/INDEX.LIST",
-                "about_files/LICENSE-2.0.txt",
-                "plugin.xml",
-                "plugin.properties",
-                "about.mappings",
-                "about.properties",
-                "about.ini",
-                "modeling32.png",
-            )
-        )
-      }
-    }
-  }
+    // packaging {
+      // resources {
+        // excludes.addAll(
+            // arrayOf(
+                // "META-INF/CHANGES",
+                // "META-INF/README.md",
+            // )
+        // )
+        // pickFirsts.addAll(
+            // arrayOf(
+                // "META-INF/eclipse.inf",
+                // "META-INF/LICENSE.md",
+                // "META-INF/AL2.0",
+                // "META-INF/LGPL2.1",
+                // "META-INF/INDEX.LIST",
+                // "about_files/LICENSE-2.0.txt",
+                // "plugin.xml",
+                // "plugin.properties",
+                // "about.mappings",
+                // "about.properties",
+                // "about.ini",
+                // "modeling32.png",
+            // )
+        // )
+      // }
+    // }
+  // }
 
   extensions.getByType(BaseExtension::class.java).run {
     compileSdkVersion(BuildConfig.compileSdk)
@@ -119,6 +102,37 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     }
 
     configureCoreLibDesugaring(coreLibDesugDep)
+
+    lintOptions {
+      isCheckDependencies = true
+    }
+
+    packagingOptions {
+      resources {
+        excludes.addAll(
+            arrayOf(
+                "META-INF/CHANGES",
+                "META-INF/README.md",
+            )
+        )
+        pickFirsts.addAll(
+            arrayOf(
+                "META-INF/eclipse.inf",
+                "META-INF/LICENSE.md",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1",
+                "META-INF/INDEX.LIST",
+                "about_files/LICENSE-2.0.txt",
+                "plugin.xml",
+                "plugin.properties",
+                "about.mappings",
+                "about.properties",
+                "about.ini",
+                "modeling32.png",
+            )
+        )
+      }
+    }
 
     if (project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
       packagingOptions { jniLibs { useLegacyPackaging = true } }

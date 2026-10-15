@@ -1,12 +1,12 @@
 [versions]
-agp = "8.13.2"
+agp = "9.4.1"
 
 #构建系统  >  可以从此获得com.android.tools.build版本信息和source.jar 和javadoc.jar :https://maven.google.com/web/m_index.html?q=aapt#com.android.tools.build
-agp-tooling = "9.3.0-alpha06"
+agp-tooling = "9.4.1-15978811"
 gradle-tooling = "9.5.1"  #从这里获得最新版本资讯：https://repo.gradle.org/ui/native/libs-releases/org/gradle/gradle-tooling-api/
 # aapt2
-aapt2-proto = "8.3.0-10880808"
-aaptCompiler = "8.13.0"
+aapt2-proto = "9.4.1-15978811"
+aaptCompiler = "9.4.1"
 androidToolsCommon = "31.4.1"
 androidToolsCommonB = "31.2.2"
 jetbrainsAnnotations = "24.1.0"
@@ -14,7 +14,7 @@ jetbrainsAnnotations = "24.1.0"
 protobufVersion = "4.33.0"
 
 # Kotlin相关
-kotlin = "2.3.20"
+kotlin = "2.4.0"
 ksp = "2.3.12"
 kotlin-coroutines = "1.11.0"
 kotlinxSerializationJson = "1.8.1"
