@@ -219,7 +219,7 @@ dependencies {
   implementation(libs.androidx.animated.vectors)
   implementation(libs.androidx.work)
   implementation(libs.androidx.work.ktx)
-  implementation(libs.androidx.multidex)
+  // implementation(libs.androidx.multidex)
   implementation(libs.google.material)
   implementation(libs.google.flexbox)
   implementation(platform(libs.firebase.bom))
