@@ -2,7 +2,6 @@ import java.io.ByteArrayOutputStream
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 

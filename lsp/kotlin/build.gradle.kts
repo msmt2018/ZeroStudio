@@ -18,10 +18,9 @@
 import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
-  id("com.android.library")
-  id("kotlin-android")
-  id("kotlin-kapt")
+    alias(libs.plugins.android.library)
   id("org.jetbrains.kotlin.plugin.compose")
+  alias(libs.plugins.com.google.devtools.ksp)
 }
 
 android {
@@ -35,10 +34,9 @@ android {
   buildFeatures { compose = true }
 }
 
-kapt {
-  arguments { arg("eventBusIndex", "${BuildConfig.packageName}.events.LspKotlinEventsIndex") }
+ksp {
+    arg("eventBusIndex", "${BuildConfig.packageName}.events.LspKotlinEventsIndex") 
 }
-
 dependencies {
   kapt(projects.annotation.processors)
   kapt(libs.google.auto.service)

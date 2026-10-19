@@ -17,7 +17,6 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
