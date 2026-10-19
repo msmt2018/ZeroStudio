@@ -24,8 +24,9 @@ import com.vanniktech.maven.publish.GradlePlugin
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
-import com.vanniktech.maven.publish.SonatypeHost.Companion.S01
+import com.vanniktech.maven.publish.SonatypeHost
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.publish.PublishingExtension
@@ -34,8 +35,9 @@ import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.withType
 
-private val projectsRequiringMavenLocalForTests = arrayOf(":tooling:plugin")
-private val mavenLocalRepos = hashMapOf<String, String>()
+private val projectsRequiringMavenLocalForTests = setOf(":tooling:plugin")
+private val mavenLocalRepos = ConcurrentHashMap<String, String>()
+private var isProjectsEvaluatedHookRegistered = false
 
 @Suppress("UnstableApiUsage")
 fun Project.configureMavenPublish() {
@@ -43,26 +45,8 @@ fun Project.configureMavenPublish() {
     "${javaClass.simpleName} can only be applied to maven publish projects."
   }
 
-  gradle.projectsEvaluated {
-    for (path in projectsRequiringMavenLocalForTests) {
-      checkNotNull(rootProject.findProject(path)) {
-        "Unable to configure maven local for project '$path' (project cannot be found)."
-      }
-    }
-    rootProject.subprojects {
-      if (project.path in projectsRequiringMavenLocalForTests) {
-        tasks.withType<Test> {
-          for ((project, _) in mavenLocalRepos) {
-            dependsOn(
-                project(project)
-                    .tasks
-                    .named("publishAllPublicationsToBuildMavenLocalRepository")
-            )
-          }
-        }
-      }
-    }
-  }
+  // 确保全局仅注册一次跨模块测试依赖关系，避免多个发布模块重复触发挂接
+  registerCrossProjectTestDependenciesOnce(rootProject)
 
   afterEvaluate {
     if (project.description.isNullOrBlank()) {
@@ -75,7 +59,7 @@ fun Project.configureMavenPublish() {
 
     pom {
       name.set(project.name)
-      description.set(project.description)
+      description.set(project.provider { project.description ?: "" })
       inceptionYear.set("2021")
       url.set(ProjectConfig.REPO_URL)
       licenses {
@@ -102,15 +86,21 @@ fun Project.configureMavenPublish() {
     }
 
     coordinates(project.group.toString(), project.name, project.publishingVersion)
-    publishToMavenCentral(host = S01)
+    publishToMavenCentral(SonatypeHost.S01)
     signAllPublications()
 
-    if (plugins.hasPlugin("com.android.library")) {
+    // 采用 plugins.withId 响应式监听，消除外部 build.gradle 中插件应用顺序的影响
+    project.plugins.withId("com.android.library") {
       configure(AndroidMultiVariantLibrary())
-    } else if (plugins.hasPlugin("java-gradle-plugin")) {
+    }
+    project.plugins.withId("java-gradle-plugin") {
       configure(GradlePlugin(javadocJar = JavadocJar.Javadoc()))
-    } else if (plugins.hasPlugin("java-library")) {
-      configure(JavaLibrary(javadocJar = JavadocJar.Javadoc()))
+    }
+    project.plugins.withId("java-library") {
+      // 避免 java-gradle-plugin 与 android.library 也同时携带 java-library 时被重复/错误覆盖
+      if (!project.plugins.hasPlugin("java-gradle-plugin") && !project.plugins.hasPlugin("com.android.library")) {
+        configure(JavaLibrary(javadocJar = JavadocJar.Javadoc()))
+      }
     }
   }
 }
@@ -119,7 +109,7 @@ private fun Project.configureMavenLocal() {
   val mavenLocalPath = layout.buildDirectory.dir("maven-local")
   mavenLocalRepos[project.path] = mavenLocalPath.get().asFile.absolutePath
 
-  extensions.findByType(PublishingExtension::class.java)?.run {
+  extensions.findByType(PublishingExtension::class.java)?.apply {
     repositories {
       maven {
         name = "buildMavenLocal"
@@ -132,19 +122,40 @@ private fun Project.configureMavenLocal() {
     delete(mavenLocalPath)
   }
 
+  // 针对被依赖测试的模块，配置运行测试前先写入 repos.txt
   if (project.path in projectsRequiringMavenLocalForTests) {
-    tasks.withType<Test> {
-      dependsOn(tasks.named("publishAllPublicationsToBuildMavenLocalRepository"))
+    tasks.withType<Test>().configureEach {
+      dependsOn(tasks.matching { it.name == "publishAllPublicationsToBuildMavenLocalRepository" })
       doFirst {
         val file = mavenLocalPath.get().file("repos.txt").asFile
+        file.parentFile.mkdirs()
         file.writeText(mavenLocalRepos.values.joinToString(separator = File.pathSeparator))
       }
     }
   }
 
-  afterEvaluate {
-    tasks.named("publishAllPublicationsToBuildMavenLocalRepository") {
-      dependsOn(deleteBuildMavenLocalTask)
+  // 惰性挂载任务依赖，替代脆弱的 afterEvaluate { tasks.named(...) }
+  tasks.matching { it.name == "publishAllPublicationsToBuildMavenLocalRepository" }.configureEach {
+    dependsOn(deleteBuildMavenLocalTask)
+  }
+}
+
+private fun Project.registerCrossProjectTestDependenciesOnce(rootProject: Project) {
+  if (isProjectsEvaluatedHookRegistered) return
+  isProjectsEvaluatedHookRegistered = true
+
+  gradle.projectsEvaluated {
+    for (path in projectsRequiringMavenLocalForTests) {
+      val testProject = rootProject.findProject(path) ?: continue
+      testProject.tasks.withType<Test>().configureEach {
+        for (repoProjectPath in mavenLocalRepos.keys) {
+          val repoProject = rootProject.findProject(repoProjectPath) ?: continue
+          val publishTask = repoProject.tasks.matching {
+            it.name == "publishAllPublicationsToBuildMavenLocalRepository"
+          }
+          dependsOn(publishTask)
+        }
+      }
     }
   }
 }
