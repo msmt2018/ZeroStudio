@@ -1,8 +1,9 @@
 package com.itsaky.androidide.plugins.conf
 
+import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.CommonExtension
+import com.android.build.api.dsl.LibraryExtension
 import com.android.build.api.variant.AndroidComponentsExtension
-import com.android.build.gradle.BaseExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import com.itsaky.androidide.build.config.FDroidConfig
 import com.itsaky.androidide.build.config.isFDroidBuild
@@ -26,7 +27,8 @@ internal val flavorsAbis = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" 
 
 fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModuleDependency>) {
   val isAppModule = plugins.hasPlugin("com.android.application")
-  assert(isAppModule || plugins.hasPlugin("com.android.library")) {
+  val isLibModule = plugins.hasPlugin("com.android.library")
+  assert(isAppModule || isLibModule) {
     "${javaClass.simpleName} can only be applied to Android projects"
   }
 
@@ -47,76 +49,40 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
-  // (extensions.getByType(CommonExtension::class.java) as CommonExtension<*, *, *, *, *, *>).run {
-  // lint { checkDependencies = true }
+  // 配置 App 与 Library 通用 DSL
+  @Suppress("UNCHECKED_CAST")
+  val commonExtension =
+      extensions.getByType(CommonExtension::class.java)
+          as CommonExtension<*, *, *, *, *, *>
 
-    // packaging {
-      // resources {
-        // excludes.addAll(
-            // arrayOf(
-                // "META-INF/CHANGES",
-                // "META-INF/README.md",
-            // )
-        // )
-        // pickFirsts.addAll(
-            // arrayOf(
-                // "META-INF/eclipse.inf",
-                // "META-INF/LICENSE.md",
-                // "META-INF/AL2.0",
-                // "META-INF/LGPL2.1",
-                // "META-INF/INDEX.LIST",
-                // "about_files/LICENSE-2.0.txt",
-                // "plugin.xml",
-                // "plugin.properties",
-                // "about.mappings",
-                // "about.properties",
-                // "about.ini",
-                // "modeling32.png",
-            // )
-        // )
-      // }
-    // }
-  // }
-
-  extensions.getByType(BaseExtension::class.java).run {
-    compileSdkVersion(BuildConfig.compileSdk)
+  commonExtension.run {
+    compileSdk = BuildConfig.compileSdk
 
     defaultConfig {
       minSdk = BuildConfig.minSdk
-      targetSdk = BuildConfig.targetSdk
-      // versionCode = YYYYMMDDC (C 为当天打包递增计数器, 不补 0; 例 202606131)
-      // versionName = vYYYYMMDD-NN-sha7 (NN 为 2 位 0 填充的当天打包递增计数器)
-      // 两者均来自 ProjectConfig, 由 -Pide.build.dailyCounter / -Pide.build.gitShortSha 注入.
-      versionCode = projectVersionCode
-      versionName = simpleVersionName
-
-      // required
-      multiDexEnabled = true
-
       testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
       sourceCompatibility = BuildConfig.javaVersion17
       targetCompatibility = BuildConfig.javaVersion17
+      isCoreLibraryDesugaringEnabled = !plugins.hasPlugin(NoDesugarPlugin::class.java)
     }
 
-    configureCoreLibDesugaring(coreLibDesugDep)
-
-    lintOptions {
-      isCheckDependencies = true
+    lint {
+      checkDependencies = true
     }
 
-    packagingOptions {
+    packaging {
       resources {
         excludes.addAll(
-            arrayOf(
+            listOf(
                 "META-INF/CHANGES",
                 "META-INF/README.md",
             )
         )
         pickFirsts.addAll(
-            arrayOf(
+            listOf(
                 "META-INF/eclipse.inf",
                 "META-INF/LICENSE.md",
                 "META-INF/AL2.0",
@@ -134,8 +100,44 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
       }
     }
 
+    testOptions {
+      unitTests.isIncludeAndroidResources = true
+    }
+
+    buildFeatures {
+      viewBinding = true
+      buildConfig = true
+    }
+  }
+
+  // 配置 Application 模块专有 DSL
+  extensions.findByType(ApplicationExtension::class.java)?.run {
+    defaultConfig {
+      targetSdk = BuildConfig.targetSdk
+      versionCode = projectVersionCode
+      versionName = simpleVersionName
+      multiDexEnabled = true
+    }
+
+    buildTypes {
+      getByName("debug") {
+        isMinifyEnabled = false
+      }
+      getByName("release") {
+        isMinifyEnabled = true
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro",
+        )
+      }
+    }
+
     if (project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
-      packagingOptions { jniLibs { useLegacyPackaging = true } }
+      packaging {
+        jniLibs {
+          useLegacyPackaging = true
+        }
+      }
 
       splits {
         abi {
@@ -149,43 +151,36 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
           }
         }
       }
-      // 注: 所有 ABI 共享同一 versionCode (YYYYMMDDC), 不做 per-ABI 偏移;
-      // 各 ABI 通过 APK 文件名区分, 避免在 10 位 versionCode (上限 2,100,000,000)
-      // 下做 100*N + ABI 编码导致溢出.
-    } else {
-      defaultConfig {
-        ndk {
-          abiFilters.clear()
-          abiFilters += flavorsAbis.keys
-        }
+    }
+  }
+
+  // 配置 Library 模块专有 DSL
+  extensions.findByType(LibraryExtension::class.java)?.run {
+    defaultConfig {
+      multiDexEnabled = true
+      ndk {
+        abiFilters.clear()
+        abiFilters += flavorsAbis.keys
       }
     }
 
-    buildTypes.getByName("debug") { isMinifyEnabled = false }
-    buildTypes.getByName("release") {
-
-      // from AGP 8.4.0 onwards, there are some behavioral changes in R8
-      // enabling R8 on library projects results in missing class errors
-      // see https://issuetracker.google.com/issues/338411137#comment11
-      isMinifyEnabled = isAppModule
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+    buildTypes {
+      getByName("debug") {
+        isMinifyEnabled = false
+      }
+      getByName("release") {
+        // from AGP 8.4.0 onwards, enabling R8 on library projects results in missing class errors
+        isMinifyEnabled = false
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro",
+        )
+      }
     }
-
-    // development build type
-    // similar to 'release', but disables proguard/r8
-    // this build type can be used to gain release-like performance at runtime
-    // the build are faster for this build type as compared to 'release'
-    // buildTypes.register("dev") {
-    // initWith(buildTypes.getByName("release"))
-    // isMinifyEnabled = false
-    // }
-
-    testOptions { unitTests.isIncludeAndroidResources = true }
-
-    buildFeatures.viewBinding = true
-    buildFeatures.buildConfig = true
-    // buildFeatures.compose = true
   }
+
+  // 配置 coreLibraryDesugaring 依赖
+  configureCoreLibDesugaring(coreLibDesugDep)
 }
 
 private fun Project.configureCoreLibDesugaring(
@@ -195,16 +190,3 @@ private fun Project.configureCoreLibDesugaring(
     dependencies.add("coreLibraryDesugaring", coreLibDesugDep)
   }
 }
-
-// private fun Project.configureCoreLibDesugaring(
-  // baseExtension: BaseExtension,
-  // coreLibDesugDep: Provider<MinimalExternalModuleDependency>
-// ) {
-  // val coreLibDesugaringEnabled = !project.plugins.hasPlugin(NoDesugarPlugin::class.java)
-
-  // // baseExtension.compileOptions.isCoreLibraryDesugaringEnabled = coreLibDesugaringEnabled
-
-  // if (coreLibDesugaringEnabled) {
-    // project.dependencies.add("coreLibraryDesugaring", coreLibDesugDep)
-  // }
-// }
