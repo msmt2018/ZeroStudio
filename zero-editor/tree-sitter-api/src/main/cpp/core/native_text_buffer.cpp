@@ -5,14 +5,6 @@
  * 1. 采用 STL 连续存储优化小规模增量插入开销。
  * 2. 行索引采用二分查找（std::upper_bound），使得根据字节换算行号的时间复杂度保持在 O(log N)。
  * 3. 严格边界安全保护，输入越界自动做饱和裁剪，杜绝越界访问崩溃。
- *
- * 工作流程线路图：
- * setText / applyEdit ──> std::string 修改 ──> rebuildLineOffsets() 扫描换行符
- *                                    │
- *                              TSInput.read 请求
- *                                    │
- *                                    ▼
- *                           tsReadCallback() 计算剩余块长度并切片借出指针
  */
 
 #include "native_text_buffer.hpp"
@@ -43,7 +35,6 @@ void NativeTextBuffer::applyEdit(
     const char *new_text,
     uint32_t new_text_len
 ) {
-    // 边界裁剪安全检查
     size_t cur_len = m_buffer.size();
     if (start_byte > cur_len) {
         start_byte = static_cast<uint32_t>(cur_len);
@@ -57,20 +48,18 @@ void NativeTextBuffer::applyEdit(
 
     size_t delete_count = old_end_byte - start_byte;
     
-    // 原地替换缓冲区中的字符
     if (new_text && new_text_len > 0) {
         m_buffer.replace(start_byte, delete_count, new_text, new_text_len);
     } else {
         m_buffer.erase(start_byte, delete_count);
     }
 
-    // 重新计算换行符行偏移
     rebuildLineOffsets();
 }
 
 void NativeTextBuffer::rebuildLineOffsets() {
     m_line_offsets.clear();
-    m_line_offsets.push_back(0); // 第 0 行起始于字节 0
+    m_line_offsets.push_back(0);
 
     const char *data = m_buffer.data();
     size_t size = m_buffer.size();
@@ -90,7 +79,6 @@ TSPoint NativeTextBuffer::pointForByte(uint32_t byte_offset) const {
         byte_offset = static_cast<uint32_t>(m_buffer.size());
     }
 
-    // 使用二分查找寻找小于等于当前 byte_offset 的行起始索引
     auto it = std::upper_bound(m_line_offsets.begin(), m_line_offsets.end(), byte_offset);
     uint32_t row = static_cast<uint32_t>(std::distance(m_line_offsets.begin(), it) - 1);
     uint32_t col = byte_offset - m_line_offsets[row];
@@ -112,7 +100,6 @@ const char *NativeTextBuffer::tsReadCallback(
         return "";
     }
 
-    // 单次将剩余区间作为一个连续块借出给 Tree-sitter 解析核心
     *bytes_read = static_cast<uint32_t>(self->m_buffer.size() - byte_index);
     return self->m_buffer.data() + byte_index;
 }

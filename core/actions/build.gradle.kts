@@ -20,7 +20,7 @@ import com.itsaky.androidide.build.config.BuildConfig
 plugins {
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    // alias(libs.plugins.kotlin.android)
     alias(libs.plugins.com.google.devtools.ksp)
 
 }

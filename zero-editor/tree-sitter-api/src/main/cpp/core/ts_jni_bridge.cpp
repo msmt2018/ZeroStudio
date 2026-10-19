@@ -1,14 +1,9 @@
 /**
  * @author android_zero
  *
- * 变更说明与设计架构：
- * 1. 粗粒度 JNI 桥接层，避免细粒度穿透。
- * 2. 对应 Kotlin 包路径 `com.zerostudio.ide.treesitter.NativeHighlightEngine`。
- * 3. 通过原生数组批量传输数据，杜绝局部对象引用爆炸和 JVM GC 压力。
- *
- * 方法流程脑图：
- * Java nativeApplyEdit() ────────────────> TSHighlighterEngine::applyIncrementalEdit()
- * Java nativeComputeViewportHighlight() ─> TSHighlighterEngine::computeViewportHighlight() ──> JNI SetIntArrayRegion
+ * 变更说明：
+ * 1. 对应 Kotlin 包路径 `com.zerostudio.ide.treesitter.NativeHighlightEngine`。
+ * 2. 导出 nativeSetQuery 与 nativeSetCaptureStyleTable，直接接收 TSH 编译结果或原生 SCM。
  */
 
 #include <jni.h>
@@ -27,7 +22,7 @@ extern "C" {
 
 JNIEXPORT jstring JNICALL
 Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeGetEngineVersion(JNIEnv *env, jclass) {
-    return env->NewStringUTF("0.25.3-zerostudio-native-highperf");
+    return env->NewStringUTF("0.25.3-zerostudio-full-tsh");
 }
 
 JNIEXPORT jlong JNICALL
@@ -76,7 +71,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetLanguageFromSh
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetHighlightQuery(
+Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetQuery(
     JNIEnv *env, jclass, jlong engine_ptr, jstring query_str, jintArray out_error) {
     auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
     if (!engine || !query_str) return JNI_FALSE;
@@ -86,7 +81,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetHighlightQuery
 
     uint32_t err_offset = 0;
     uint32_t err_type = 0;
-    bool success = engine->setHighlightQuery(src, len, &err_offset, &err_type);
+    bool success = engine->setQuery(src, len, &err_offset, &err_type);
 
     env->ReleaseStringUTFChars(query_str, src);
 
@@ -96,6 +91,17 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetHighlightQuery
     }
 
     return success ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetCaptureStyleTable(
+    JNIEnv *env, jclass, jlong engine_ptr, jintArray style_table, jint entry_count) {
+    auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
+    if (!engine || !style_table) return;
+
+    jint *raw_table = env->GetIntArrayElements(style_table, nullptr);
+    engine->setCaptureStyleTable(raw_table, static_cast<size_t>(entry_count));
+    env->ReleaseIntArrayElements(style_table, raw_table, JNI_ABORT);
 }
 
 JNIEXPORT void JNICALL

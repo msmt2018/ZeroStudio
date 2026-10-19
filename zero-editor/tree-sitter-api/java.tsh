@@ -1,0 +1,94 @@
+metadata {
+    name: "Java"
+    extensions: [".java", ".jav", ".jsp"]
+    scope: "source.java"
+    version: "2.0.0"
+}
+
+behaviors {
+    comments {
+        line: "//"
+        block: ["/*", "*/"]
+    }
+    brackets {
+        pair: ["(", ")"]
+        pair: ["[", "]"]
+        pair: ["{", "}"]
+    }
+    auto_close {
+        pair: ["\"", "\""]
+        pair: ["'", "'"]
+    }
+}
+
+// =============================================================================
+// 高亮规则区：
+// 既支持 SCM 原始的书写方式（原生断言与锚点），又支持简洁的单标签与多标签样式绑定
+// =============================================================================
+highlights {
+
+    // 1. 基础多分支关键字
+    [
+        "class" "interface" "enum" "record"
+        "public" "protected" "private"
+        "static" "final" "abstract" "synchronized"
+        "if" "else" "switch" "case" "default"
+        "for" "while" "do" "break" "continue" "return"
+        "try" "catch" "finally" "throw" "throws"
+        "new" "this" "super" "instanceof"
+        "package" "import"
+    ] @keyword -> {
+        color: "#FF79C6"
+        style: bold
+        priority: 100
+    }
+
+    // 2. 带相邻锚点（.）的精确兄弟节点匹配
+    (method_declaration
+        .
+        (modifiers)? @method.modifier
+        .
+        type: (_) @method.return_type
+        .
+        name: (identifier) @method.name) -> {
+        @method.modifier: { color: "#FF79C6", style: italic }
+        @method.return_type: { color: "#8BE9FD" }
+        @method.name: { color: "#50FA7B", style: bold, action: "ide.goto_definition" }
+    }
+
+    // 3. 否定字段（!）断言：匹配无泛型参数的普通方法调用
+    (method_invocation
+        !type_arguments
+        name: (identifier) @method.call) -> {
+        color: "#50FA7B"
+    }
+
+    // 4. 原生 SCM 谓词透传：#any-of? 多值判断
+    ((identifier) @variable.builtin
+        (#any-of? @variable.builtin "System" "Runtime" "Math")) -> {
+        color: "#BD93F9"
+        style: bold
+    }
+
+    // 5. TSH 正则语法糖（自动翻译为底层 C 引擎的 #match? 谓词）
+    (identifier) @constant {
+        match: "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$"
+    } -> {
+        color: "#BD93F9"
+        style: bold
+        priority: 110
+    }
+
+    // 6. 注释与字符串
+    [
+        (line_comment)
+        (block_comment)
+    ] @comment -> {
+        color: "#6272A4"
+        style: italic
+    }
+
+    (string_literal) @string -> {
+        color: "#F1FA8C"
+    }
+}

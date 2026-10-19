@@ -8,8 +8,7 @@ import java.util.Properties
 plugins {
   id("com.itsaky.androidide.core-app")
   id("com.android.application")
-  id("kotlin-android")
-  // id("com.google.devtools.ksp")
+  // id("kotlin-android")
   alias(libs.plugins.com.google.devtools.ksp)
   id("kotlin-parcelize")
   id("androidx.navigation.safeargs.kotlin")
