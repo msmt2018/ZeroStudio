@@ -1,7 +1,6 @@
 package com.itsaky.androidide.plugins.conf
 
 import com.android.build.api.dsl.ApplicationExtension
-import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.LibraryExtension
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.itsaky.androidide.build.config.BuildConfig
@@ -49,137 +48,174 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
-  // 配置 App 与 Library 通用 DSL
-  @Suppress("UNCHECKED_CAST")
-  val commonExtension =
-      extensions.getByType(CommonExtension::class.java)
-          as CommonExtension<*, *, *, *, *, *>
+  if (isAppModule) {
+    extensions.configure(ApplicationExtension::class.java) {
+      compileSdk = BuildConfig.compileSdk
 
-  commonExtension.run {
-    compileSdk = BuildConfig.compileSdk
-
-    defaultConfig {
-      minSdk = BuildConfig.minSdk
-      testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    compileOptions {
-      sourceCompatibility = BuildConfig.javaVersion17
-      targetCompatibility = BuildConfig.javaVersion17
-      isCoreLibraryDesugaringEnabled = !plugins.hasPlugin(NoDesugarPlugin::class.java)
-    }
-
-    lint {
-      checkDependencies = true
-    }
-
-    packaging {
-      resources {
-        excludes.addAll(
-            listOf(
-                "META-INF/CHANGES",
-                "META-INF/README.md",
-            )
-        )
-        pickFirsts.addAll(
-            listOf(
-                "META-INF/eclipse.inf",
-                "META-INF/LICENSE.md",
-                "META-INF/AL2.0",
-                "META-INF/LGPL2.1",
-                "META-INF/INDEX.LIST",
-                "about_files/LICENSE-2.0.txt",
-                "plugin.xml",
-                "plugin.properties",
-                "about.mappings",
-                "about.properties",
-                "about.ini",
-                "modeling32.png",
-            )
-        )
+      defaultConfig {
+        minSdk = BuildConfig.minSdk
+        targetSdk = BuildConfig.targetSdk
+        versionCode = projectVersionCode
+        versionName = simpleVersionName
+        multiDexEnabled = true
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
       }
-    }
 
-    testOptions {
-      unitTests.isIncludeAndroidResources = true
-    }
-
-    buildFeatures {
-      viewBinding = true
-      buildConfig = true
-    }
-  }
-
-  // 配置 Application 模块专有 DSL
-  extensions.findByType(ApplicationExtension::class.java)?.run {
-    defaultConfig {
-      targetSdk = BuildConfig.targetSdk
-      versionCode = projectVersionCode
-      versionName = simpleVersionName
-      multiDexEnabled = true
-    }
-
-    buildTypes {
-      getByName("debug") {
-        isMinifyEnabled = false
+      compileOptions {
+        sourceCompatibility = BuildConfig.javaVersion17
+        targetCompatibility = BuildConfig.javaVersion17
+        isCoreLibraryDesugaringEnabled = !plugins.hasPlugin(NoDesugarPlugin::class.java)
       }
-      getByName("release") {
-        isMinifyEnabled = true
-        proguardFiles(
-            getDefaultProguardFile("proguard-android-optimize.txt"),
-            "proguard-rules.pro",
-        )
-      }
-    }
 
-    if (project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
+      lint {
+        checkDependencies = true
+      }
+
       packaging {
-        jniLibs {
-          useLegacyPackaging = true
+        resources {
+          excludes.addAll(
+              listOf(
+                  "META-INF/CHANGES",
+                  "META-INF/README.md",
+              )
+          )
+          pickFirsts.addAll(
+              listOf(
+                  "META-INF/eclipse.inf",
+                  "META-INF/LICENSE.md",
+                  "META-INF/AL2.0",
+                  "META-INF/LGPL2.1",
+                  "META-INF/INDEX.LIST",
+                  "about_files/LICENSE-2.0.txt",
+                  "plugin.xml",
+                  "plugin.properties",
+                  "about.mappings",
+                  "about.properties",
+                  "about.ini",
+                  "modeling32.png",
+              )
+          )
         }
       }
 
-      splits {
-        abi {
-          reset()
-          isEnable = true
-          isUniversalApk = false
-          if (isFDroidBuild) {
-            include(FDroidConfig.fDroidBuildArch!!)
-          } else {
-            include(*flavorsAbis.keys.toTypedArray())
+      testOptions {
+        unitTests.isIncludeAndroidResources = true
+      }
+
+      buildFeatures {
+        viewBinding = true
+        buildConfig = true
+      }
+
+      buildTypes {
+        getByName("debug") {
+          isMinifyEnabled = false
+        }
+        getByName("release") {
+          isMinifyEnabled = true
+          proguardFiles(
+              getDefaultProguardFile("proguard-android-optimize.txt"),
+              "proguard-rules.pro",
+          )
+        }
+      }
+
+      if (project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
+        packaging {
+          jniLibs {
+            useLegacyPackaging = true
+          }
+        }
+
+        splits {
+          abi {
+            reset()
+            isEnable = true
+            isUniversalApk = false
+            if (isFDroidBuild) {
+              include(FDroidConfig.fDroidBuildArch!!)
+            } else {
+              include(*flavorsAbis.keys.toTypedArray())
+            }
           }
         }
       }
     }
-  }
+  } else if (isLibModule) {
+    extensions.configure(LibraryExtension::class.java) {
+      compileSdk = BuildConfig.compileSdk
 
-  // 配置 Library 模块专有 DSL
-  extensions.findByType(LibraryExtension::class.java)?.run {
-    defaultConfig {
-      multiDexEnabled = true
-      ndk {
-        abiFilters.clear()
-        abiFilters += flavorsAbis.keys
+      defaultConfig {
+        minSdk = BuildConfig.minSdk
+        multiDexEnabled = true
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+          abiFilters.clear()
+          abiFilters += flavorsAbis.keys
+        }
+      }
+
+      compileOptions {
+        sourceCompatibility = BuildConfig.javaVersion17
+        targetCompatibility = BuildConfig.javaVersion17
+        isCoreLibraryDesugaringEnabled = !plugins.hasPlugin(NoDesugarPlugin::class.java)
+      }
+
+      lint {
+        checkDependencies = true
+      }
+
+      packaging {
+        resources {
+          excludes.addAll(
+              listOf(
+                  "META-INF/CHANGES",
+                  "META-INF/README.md",
+              )
+          )
+          pickFirsts.addAll(
+              listOf(
+                  "META-INF/eclipse.inf",
+                  "META-INF/LICENSE.md",
+                  "META-INF/AL2.0",
+                  "META-INF/LGPL2.1",
+                  "META-INF/INDEX.LIST",
+                  "about_files/LICENSE-2.0.txt",
+                  "plugin.xml",
+                  "plugin.properties",
+                  "about.mappings",
+                  "about.properties",
+                  "about.ini",
+                  "modeling32.png",
+              )
+          )
+        }
+      }
+
+      testOptions {
+        unitTests.isIncludeAndroidResources = true
+      }
+
+      buildFeatures {
+        viewBinding = true
+        buildConfig = true
+      }
+
+      buildTypes {
+        getByName("debug") {
+          isMinifyEnabled = false
+        }
+        getByName("release") {
+          isMinifyEnabled = false
+          proguardFiles(
+              getDefaultProguardFile("proguard-android-optimize.txt"),
+              "proguard-rules.pro",
+          )
+        }
       }
     }
-
-    buildTypes {
-      getByName("debug") {
-        isMinifyEnabled = false
-      }
-      getByName("release") {
-        // from AGP 8.4.0 onwards, enabling R8 on library projects results in missing class errors
-        isMinifyEnabled = false
-        proguardFiles(
-            getDefaultProguardFile("proguard-android-optimize.txt"),
-            "proguard-rules.pro",
-        )
-      }
-    }
   }
 
-  // 配置 coreLibraryDesugaring 依赖
   configureCoreLibDesugaring(coreLibDesugDep)
 }
 
