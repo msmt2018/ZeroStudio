@@ -21,6 +21,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.com.google.devtools.ksp)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+    alias(libs.plugins.kotlin.compose)
 
 }
 
@@ -30,7 +31,6 @@ android {
   sourceSets {
     getByName("androidTest") { assets.srcDirs(rootProject.file("utilities/framework-stubs/libs")) }
   }
-  composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
 
   buildFeatures { compose = true }
 }

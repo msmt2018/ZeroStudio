@@ -25,10 +25,15 @@ android {
         viewBinding = true
         compose = true
     }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
-    }
+    
+// composeCompiler {
+    // // 启用强跳过模式（Kotlin 2.0.20 开始已默认开启，低版本可手动开启）
+    // enableStrongSkippingMode = true
+    
+    // // 如果需要输出稳定性报告（用于性能调优），可以配置输出目录
+    // // metricsDestination = layout.buildDirectory.dir("compose_compiler/metrics")
+    // // reportsDestination = layout.buildDirectory.dir("compose_compiler/reports")
+// }
 
 
 }

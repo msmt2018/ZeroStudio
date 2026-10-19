@@ -5,22 +5,16 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
   alias(libs.plugins.android.library)
   id("kotlin-parcelize")
-  id("com.google.devtools.ksp")
+  alias(libs.plugins.com.google.devtools.ksp)
   id("androidx.room")
-  id("org.jetbrains.kotlin.plugin.serialization")
-  id("org.jetbrains.kotlin.plugin.compose")
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 
 val dbSchemaLocation = "$projectDir/schemas"
 
 room { schemaDirectory(dbSchemaLocation) }
 
-// 这个模块通过 CMake IMPORTED 链接 prebuilt 的 libgit2/libcrypto/libssh2/libssl。
-// 仓库里只放 .gitkeep,真正的 .so 不在 VCS 里。一旦缺失,ninja 在 buildCMake 时
-// 会直接 FAILED 报 "missing and no known rule to make it"。
-// 当任意 ABI 的 prebuilt 不存在时,跳过 externalNativeBuild,
-// 让 Kotlin/Java 能编译;代价是运行时 JNI (puppygit/git2j) 加载失败,
-// 调用相关 API 会抛 UnsatisfiedLinkError,见 LibLoader 的注释。
 val anyAbi = "arm64-v8a"
 val prebuiltNativeLibsAvailable =
     file("src/main/jniLibs/$anyAbi/libgit2.so").exists()
@@ -88,7 +82,7 @@ android {
     compose = true
     buildConfig = true
   }
-  composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
+
   packaging {
     resources {
       excludes.add("/META-INF/{AL2.0,LGPL2.1}")

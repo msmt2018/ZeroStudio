@@ -6,8 +6,8 @@ import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
+  alias(libs.plugins.android.application)
   id("com.itsaky.androidide.core-app")
-  id("com.android.application")
   alias(libs.plugins.com.google.devtools.ksp)
   id("kotlin-parcelize")
   id("androidx.navigation.safeargs.kotlin")
@@ -16,6 +16,7 @@ plugins {
   alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
   alias(libs.plugins.hilt)
   alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
+
 }
 
 apply { plugin(AndroidIDEAssetsPlugin::class.java) }
@@ -74,8 +75,12 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
     isCoreLibraryDesugaringEnabled = true
   }
-  composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
-  buildFeatures { compose = true }
+
+  buildFeatures { 
+     compose = true
+  }
+  
+  
   packaging.resources.excludes +=
       listOf(
           "**/*.kotlin_builtins",
@@ -115,17 +120,10 @@ android {
   }
 }
 
-/**
-  kapt { 
-    arguments { 
-       arg("eventBusIndex", "${BuildConfig.packageName}.events.AppEventsIndex") 
-    } 
-}
-*/
+
 ksp {
   // 延续你原有的 EventBus 索引配置
   arg("eventBusIndex", "${BuildConfig.packageName}.events.AppEventsIndex")
-  
   //解决 Hilt 在 KSP 模式下多模块合并时可能发生的类加载器与依赖隔离冲突
   arg("dagger.fastInit", "enabled")
   arg("dagger.hilt.disableModulesHaveInstallInCheck", "true")

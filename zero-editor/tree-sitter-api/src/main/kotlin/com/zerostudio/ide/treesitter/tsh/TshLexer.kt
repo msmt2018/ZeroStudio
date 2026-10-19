@@ -4,7 +4,7 @@ package com.zerostudio.ide.treesitter.tsh
  * @author android_zero
  *
  * 变更说明：
- * 完整支持 Tree-sitter SCM 的括号、锚点、否定字段和谓词，支持多行嵌套词法扫描。
+ * 精准处理复杂 SCM 嵌套，识别 Tree-sitter 特色语法：锚点(.)、否定字段(!)、多重引号、谓词(#)。
  */
 class TshLexer(private val source: String) {
     private var index = 0

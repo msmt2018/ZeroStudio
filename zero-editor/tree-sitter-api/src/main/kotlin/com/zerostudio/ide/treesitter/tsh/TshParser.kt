@@ -4,7 +4,8 @@ package com.zerostudio.ide.treesitter.tsh
  * @author android_zero
  *
  * 变更说明：
- * 支持多 Capture 独立样式与 Tree-sitter SCM 规则的一体化解析。
+ * 1. 负责提取全部 AST Pattern，彻底分离样式块 `-> { ... }`。
+ * 2. 糖化还原：将内嵌的 `{ match: "regex" }` 智能还原为 Tree-Sitter 核心标准的 `(#match? ...)` 谓词。
  */
 class TshParser(private val tokens: List<TshToken>) {
     private var current = 0
@@ -129,6 +130,7 @@ class TshParser(private val tokens: List<TshToken>) {
             mainCaptureTag = consume(TshTokenType.TAG).value
         }
 
+        // 识别扩展糖化块 { match: "..." }
         if (check(TshTokenType.LBRACE)) {
             consume(TshTokenType.LBRACE)
             while (!check(TshTokenType.RBRACE) && !isAtEnd()) {
@@ -136,6 +138,7 @@ class TshParser(private val tokens: List<TshToken>) {
                 consume(TshTokenType.COLON)
                 val filterVal = consume(TshTokenType.STRING).value
                 if (filterKey == "match" && mainCaptureTag != null) {
+                    // 语法糖降级转译为原生谓词
                     scmText = "($scmText @$mainCaptureTag\n  (#match? @$mainCaptureTag \"$filterVal\"))"
                     mainCaptureTag = null
                 }
@@ -172,10 +175,10 @@ class TshParser(private val tokens: List<TshToken>) {
 
     private fun parseSingleStyleProperties(): SingleCaptureStyle {
         var color: String? = null
-        var bgColor: String? = null
         var bold = false
         var italic = false
         var underline = false
+        var strikethrough = false
         var priority = 100
         var action: String? = null
         var tooltip: String? = null
@@ -185,7 +188,6 @@ class TshParser(private val tokens: List<TshToken>) {
             consume(TshTokenType.COLON)
             when (key) {
                 "color" -> color = consume(TshTokenType.STRING).value
-                "bg_color" -> bgColor = consume(TshTokenType.STRING).value
                 "action" -> action = consume(TshTokenType.STRING).value
                 "tooltip" -> tooltip = consume(TshTokenType.STRING).value
                 "priority" -> {
@@ -196,22 +198,26 @@ class TshParser(private val tokens: List<TshToken>) {
                     if (check(TshTokenType.LBRACKET)) {
                         advance()
                         while (!check(TshTokenType.RBRACKET) && !isAtEnd()) {
-                            val s = consume(TshTokenType.IDENTIFIER).value
-                            if (s == "bold") bold = true
-                            if (s == "italic") italic = true
-                            if (s == "underline") underline = true
+                            when (consume(TshTokenType.IDENTIFIER).value) {
+                                "bold" -> bold = true
+                                "italic" -> italic = true
+                                "underline" -> underline = true
+                                "strikethrough" -> strikethrough = true
+                            }
                         }
                         consume(TshTokenType.RBRACKET)
                     } else {
-                        val s = consume(TshTokenType.IDENTIFIER).value
-                        if (s == "bold") bold = true
-                        if (s == "italic") italic = true
-                        if (s == "underline") underline = true
+                        when (consume(TshTokenType.IDENTIFIER).value) {
+                            "bold" -> bold = true
+                            "italic" -> italic = true
+                            "underline" -> underline = true
+                            "strikethrough" -> strikethrough = true
+                        }
                     }
                 }
             }
         }
-        return SingleCaptureStyle(color, bgColor, bold, italic, underline, priority, action, tooltip)
+        return SingleCaptureStyle(color, bold, italic, underline, strikethrough, priority, action, tooltip)
     }
 
     private fun match(type: TshTokenType): Boolean = if (check(type)) { advance(); true } else false

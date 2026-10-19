@@ -2,8 +2,7 @@
  * @author android_zero
  *
  * 变更说明：
- * 1. 对应 Kotlin 包路径 `com.zerostudio.ide.treesitter.NativeHighlightEngine`。
- * 2. 导出 nativeSetQuery 与 nativeSetCaptureStyleTable，直接接收 TSH 编译结果或原生 SCM。
+ * 提供极简高效的单次穿透接口：设置纯净 SCM 查询与直出 RGBA 高亮流。
  */
 
 #include <jni.h>
@@ -100,7 +99,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetCaptureStyleTa
     if (!engine || !style_table) return;
 
     jint *raw_table = env->GetIntArrayElements(style_table, nullptr);
-    engine->setCaptureStyleTable(raw_table, static_cast<size_t>(entry_count));
+    engine->setCompiledStyles(raw_table, static_cast<size_t>(entry_count));
     env->ReleaseIntArrayElements(style_table, raw_table, JNI_ABORT);
 }
 
@@ -170,17 +169,6 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeComputeViewportHi
         env->SetIntArrayRegion(result, 0, size, spans.data());
     }
     return result;
-}
-
-JNIEXPORT jstring JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeGetCaptureName(
-    JNIEnv *env, jclass, jlong engine_ptr, jint capture_id) {
-    auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
-    if (!engine) return nullptr;
-
-    uint32_t length = 0;
-    const char *name = engine->getCaptureName(static_cast<uint32_t>(capture_id), &length);
-    return name ? env->NewStringUTF(name) : nullptr;
 }
 
 JNIEXPORT jboolean JNICALL

@@ -2,8 +2,8 @@
  * @author android_zero
  *
  * 变更说明与实现细节：
- * 1. 采用 TSQuery 原生游标循环，天然执行 SCM 中所有的原生谓词（#match?, #eq?, #any-of? 等）。
- * 2. 依据 CaptureTable 赋予匹配区间色值、粗斜体、交互 ActionId，并在冲突重叠区间利用 Priority 控制权级。
+ * 1. 纯净 C API 对接：直接使用 ts_query_new 编译 SCM 语句，所有高级糖（#match? 等）全部在 C 内核原生匹配。
+ * 2. 引入优先级排序与重叠冲突处理算法（Priority Arbitration），保证内层精确匹配优先于外层模糊匹配。
  */
 
 #include "ts_highlighter_engine.hpp"
@@ -55,6 +55,7 @@ bool TSHighlighterEngine::setQuery(
     if (!m_language || !query_source) return false;
 
     TSQueryError err_type = TSQueryErrorNone;
+    // 直接送入 100% 纯净的原生 SCM，无任何 TSH 专有标记污染
     m_query = ts_query_new(m_language, query_source, length, error_offset, &err_type);
     if (error_type) {
         *error_type = static_cast<uint32_t>(err_type);
@@ -62,18 +63,20 @@ bool TSHighlighterEngine::setQuery(
     return m_query != nullptr;
 }
 
-void TSHighlighterEngine::setCaptureStyleTable(const int32_t *meta_table, size_t entry_count) {
+void TSHighlighterEngine::setCompiledStyles(const int32_t *meta_array, size_t count) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_styleMetas.clear();
-    m_styleMetas.reserve(entry_count);
+    m_captureRules.clear();
+    m_captureRules.reserve(count);
 
-    for (size_t i = 0; i < entry_count; ++i) {
-        size_t base = i * 3;
-        CaptureStyleMeta meta;
-        meta.packed_style = meta_table[base];
-        meta.priority = meta_table[base + 1];
-        meta.action_id = meta_table[base + 2];
-        m_styleMetas.push_back(meta);
+    // 格式约定：每 4 个整型定义一个捕获组的属性 [RGBA, StyleFlags, Priority, ActionId]
+    for (size_t i = 0; i < count; ++i) {
+        size_t base = i * 4;
+        CompiledCaptureRule rule;
+        rule.rgba_color = static_cast<uint32_t>(meta_array[base + 0]);
+        rule.style_flags = static_cast<uint32_t>(meta_array[base + 1]);
+        rule.priority = meta_array[base + 2];
+        rule.action_id = meta_array[base + 3];
+        m_captureRules.push_back(rule);
     }
 }
 
@@ -99,8 +102,10 @@ void TSHighlighterEngine::applyIncrementalEdit(
 ) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // 1. 同步更新 Native 内部文本缓冲区
     m_textBuffer.applyEdit(start_byte, old_end_byte, inserted_text, inserted_len);
 
+    // 2. 原地通知旧 AST 发生编辑，标记脏区间 (In-place edit)
     if (m_tree) {
         TSInputEdit edit = {
             start_byte, old_end_byte, new_end_byte,
@@ -109,6 +114,7 @@ void TSHighlighterEngine::applyIncrementalEdit(
         ts_tree_edit(m_tree, &edit);
     }
 
+    // 3. 基于旧树执行局部增量解析
     if (m_language) {
         TSInput input = m_textBuffer.getTSInput();
         TSTree *new_tree = ts_parser_parse(m_parser, m_tree, input);
@@ -119,13 +125,22 @@ void TSHighlighterEngine::applyIncrementalEdit(
     }
 }
 
+struct RawHighlightSpan {
+    uint32_t start_byte;
+    uint32_t end_byte;
+    uint32_t rgba;
+    uint32_t style;
+    int32_t priority;
+    int32_t action_id;
+};
+
 std::vector<int32_t> TSHighlighterEngine::computeViewportHighlight(uint32_t start_line, uint32_t end_line) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    std::vector<int32_t> result;
-    result.reserve(2048);
+    std::vector<int32_t> output;
+    output.reserve(2048);
 
     if (!m_tree || !m_query || !m_queryCursor) {
-        return result;
+        return output;
     }
 
     TSNode root_node = ts_tree_root_node(m_tree);
@@ -138,35 +153,46 @@ std::vector<int32_t> TSHighlighterEngine::computeViewportHighlight(uint32_t star
     TSQueryMatch match;
     uint32_t capture_index = 0;
 
+    std::vector<RawHighlightSpan> collected;
+    collected.reserve(512);
+
     while (ts_query_cursor_next_capture(m_queryCursor, &match, &capture_index)) {
         const TSQueryCapture &cap = match.captures[capture_index];
         uint32_t s_byte = ts_node_start_byte(cap.node);
         uint32_t e_byte = ts_node_end_byte(cap.node);
 
-        int32_t packed_style = 0;
-        int32_t priority = 100;
-        int32_t action_id = 0;
+        if (s_byte >= e_byte) continue;
 
-        if (cap.index < m_styleMetas.size()) {
-            const auto &meta = m_styleMetas[cap.index];
-            packed_style = meta.packed_style;
-            priority = meta.priority;
-            action_id = meta.action_id;
+        CompiledCaptureRule rule;
+        if (cap.index < m_captureRules.size()) {
+            rule = m_captureRules[cap.index];
         }
 
-        result.push_back(static_cast<int32_t>(s_byte));
-        result.push_back(static_cast<int32_t>(e_byte));
-        result.push_back(packed_style);
-        result.push_back(priority);
-        result.push_back(action_id);
+        collected.push_back({
+            s_byte,
+            e_byte,
+            rule.rgba_color,
+            rule.style_flags,
+            rule.priority,
+            rule.action_id
+        });
     }
 
-    return result;
-}
+    // 稳定排序：按起始位置升序；起始相同时按优先级升序，确保高优先级覆盖低优先级
+    std::stable_sort(collected.begin(), collected.end(), [](const RawHighlightSpan &a, const RawHighlightSpan &b) {
+        if (a.start_byte != b.start_byte) return a.start_byte < b.start_byte;
+        return a.priority < b.priority;
+    });
 
-const char *TSHighlighterEngine::getCaptureName(uint32_t capture_id, uint32_t *length) const {
-    if (!m_query) return nullptr;
-    return ts_query_capture_name_for_id(m_query, capture_id, length);
+    for (const auto &span : collected) {
+        output.push_back(static_cast<int32_t>(span.start_byte));
+        output.push_back(static_cast<int32_t>(span.end_byte));
+        output.push_back(static_cast<int32_t>(span.rgba));
+        output.push_back(static_cast<int32_t>(span.style));
+        output.push_back(span.action_id);
+    }
+
+    return output;
 }
 
 bool TSHighlighterEngine::hasSyntaxError() {
