@@ -4,5 +4,5 @@
         
 [submodule "core/rikkahub"]
 	path = core/rikkahub
-	url = https://github.com/rikkahub/rikkahub
+	url = https://github.com/msmt2018/rikkahub
 
