@@ -23,7 +23,7 @@
  ******************************************************************************/
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.publish)
+    alias(libs.plugins.maven.publish)
 }
 
 android {
@@ -44,10 +44,10 @@ android {
 dependencies {
   compileOnly(libs.common.editor)
   implementation(libs.common.org.eclipse.lsp4j)
-    implementation(libs.kotlinx.coroutines)
-    testImplementation(libs.junit)
+    implementation(libs.common.kotlin-coroutines-android)
+    testImplementation(libs.tests.junit)
     testImplementation(libs.tests.google.truth)
     testImplementation(libs.tests.robolectric)
-    androidTestImplementation(libs.androidx.test.junit)
-    androidTestImplementation(libs.androidx.test.espresso)
+    androidTestImplementation(libs.tests.androidx.test.junit)
+    androidTestImplementation(libs.tests.androidx.test.espresso)
 }
