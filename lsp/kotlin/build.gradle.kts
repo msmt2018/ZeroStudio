@@ -38,8 +38,8 @@ ksp {
     arg("eventBusIndex", "${BuildConfig.packageName}.events.LspKotlinEventsIndex") 
 }
 dependencies {
-  kapt(projects.annotation.processors)
-  kapt(libs.google.auto.service)
+  ksp(projects.annotation.processors)
+  ksp(libs.google.auto.service)
 
   implementation(projects.editor.treeSitterNdk.androidTreeSitter)
   implementation(libs.androidide.ts.java)
