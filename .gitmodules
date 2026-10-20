@@ -2,6 +2,7 @@
         path = composite-builds/external/logback-android
         url = https://github.com/AndroidIDEOfficial/logback-android
         
-[submodule "ai/src/main/cpp/mnn"]
-	path = ai/src/main/cpp/mnn
-	url = git@github.com:alibaba/MNN.git
+[submodule "core/rikkahub"]
+	path = core/rikkahub
+	url = https://github.com/rikkahub/rikkahub
+
