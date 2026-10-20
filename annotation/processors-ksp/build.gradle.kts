@@ -20,7 +20,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
   kotlin("jvm")
-  kotlin("kapt")
+    alias(libs.plugins.com.google.devtools.ksp)
 }
 
 kotlin { jvmToolchain(17) }
@@ -28,7 +28,7 @@ kotlin { jvmToolchain(17) }
 tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
 
 dependencies {
-  kapt(libs.google.auto.service)
+  ksp(libs.google.auto.service)
   implementation(libs.google.auto.service.annotations)
 
   implementation(kotlin("stdlib"))

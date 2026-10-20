@@ -18,12 +18,12 @@
 @Suppress("JavaPluginLanguageLevel")
 plugins {
   id("java-library")
-  id("kotlin-kapt")
+    alias(libs.plugins.com.google.devtools.ksp)
   id("org.jetbrains.kotlin.jvm")
 }
 
 dependencies {
-  kapt(libs.google.auto.service)
+  ksp(libs.google.auto.service)
   api(libs.google.auto.service.annotations)
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")
   api(libs.tests.junit)
