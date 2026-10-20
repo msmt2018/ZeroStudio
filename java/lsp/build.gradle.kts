@@ -28,14 +28,17 @@ android {
   namespace = "${BuildConfig.packageName}.lsp.java"
 
   sourceSets {
-    getByName("androidTest") { assets.srcDirs(rootProject.file("utilities/framework-stubs/libs")) }
+    getByName("androidTest") {
+      // 使用 directories.add 替换废弃的 srcDirs
+      assets.directories.add(rootProject.file("utilities/framework-stubs/libs").path)
+    }
   }
 
   buildFeatures { compose = true }
 }
 
 ksp {
-    arg("eventBusIndex", "${BuildConfig.packageName}.events.LspJavaEventsIndex") 
+  arg("eventBusIndex", "${BuildConfig.packageName}.events.LspKotlinEventsIndex") 
 }
 
 dependencies {
