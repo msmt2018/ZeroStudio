@@ -109,13 +109,18 @@ import io.github.rosemoe.sora.graphics.inlayHint.InlayHintRendererProvider;
 import io.github.rosemoe.sora.lang.EmptyLanguage;
 import io.github.rosemoe.sora.lang.Language;
 import io.github.rosemoe.sora.lang.analysis.StyleUpdateRange;
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticProvider;
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer;
 import io.github.rosemoe.sora.lang.format.Formatter;
+import io.github.rosemoe.sora.lang.format.FormatterProvider;
 import io.github.rosemoe.sora.lang.styling.CodeBlock;
+import io.github.rosemoe.sora.lang.styling.ExtraStylesProvider;
 import io.github.rosemoe.sora.lang.styling.HighlightTextContainer;
+import io.github.rosemoe.sora.lang.styling.HighlightTextProvider;
 import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.lang.styling.SpanFactory;
 import io.github.rosemoe.sora.lang.styling.Styles;
+import io.github.rosemoe.sora.lang.styling.inlayHint.InlayHintProvider;
 import io.github.rosemoe.sora.lang.styling.inlayHint.InlayHintsContainer;
 import io.github.rosemoe.sora.lang.styling.inlayHint.IntSetUpdateRange;
 import io.github.rosemoe.sora.text.CharPosition;
@@ -128,7 +133,6 @@ import io.github.rosemoe.sora.text.LineSeparator;
 import io.github.rosemoe.sora.text.TextLayoutHelper;
 import io.github.rosemoe.sora.text.TextRange;
 import io.github.rosemoe.sora.text.TextUtils;
-import io.github.rosemoe.sora.text.TextUtilsP;
 import io.github.rosemoe.sora.text.method.KeyMetaStates;
 import io.github.rosemoe.sora.util.Chars;
 import io.github.rosemoe.sora.util.ClipDataUtils;
@@ -148,6 +152,7 @@ import io.github.rosemoe.sora.widget.component.EditorContextMenuCreator;
 import io.github.rosemoe.sora.widget.component.EditorDiagnosticTooltipWindow;
 import io.github.rosemoe.sora.widget.component.EditorTextActionWindow;
 import io.github.rosemoe.sora.widget.component.Magnifier;
+import io.github.rosemoe.sora.widget.internal.util.SpansUtils;
 import io.github.rosemoe.sora.widget.layout.Layout;
 import io.github.rosemoe.sora.widget.layout.LineBreakLayout;
 import io.github.rosemoe.sora.widget.layout.ViewMeasureHelper;
@@ -265,8 +270,11 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     protected EditorTextActionWindow textActionWindow;
     protected EditorDiagnosticTooltipWindow diagnosticTooltip;
     protected EditorContextMenuCreator contextMenuCreator;
-    protected List<Span> defaultSpans = new ArrayList<>(2);
     protected EditorStyleDelegate styleDelegate;
+    private final List<ExtraStylesProvider> extraStylesProviders = new ArrayList<>();
+    private final List<InlayHintProvider> inlayHintProviders = new ArrayList<>();
+    private final List<DiagnosticProvider> diagnosticProviders = new ArrayList<>();
+    private final List<HighlightTextProvider> highlightTextProviders = new ArrayList<>();
     int startedActionMode;
     protected CharPosition selectionAnchor;
     EditorInputConnection inputConnection;
@@ -339,6 +347,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     private LineNumberTipTextProvider lineNumberTipTextProvider;
     private String formatTip;
     private Language editorLanguage;
+    private FormatterProvider formatterProvider;
     private DiagnosticIndicatorStyle diagnosticStyle = DiagnosticIndicatorStyle.WAVY_LINE;
     private long lastMakeVisible = 0;
     private EditorAutoCompletion completionWindow;
@@ -662,6 +671,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         // Config scale detector
         scaleDetector.setQuickScaleEnabled(false);
         snippetController = new SnippetController(this);
+
+        registerInlayHintProvider(styleDelegate);
+        registerDiagnosticProvider(styleDelegate);
+        registerHighlightTextProvider(styleDelegate);
     }
 
     /**
@@ -707,6 +720,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         array.recycle();
     }
 
+    @NonNull
     public SnippetController getSnippetController() {
         return snippetController;
     }
@@ -714,8 +728,9 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     /**
      * Get {@code DirectAccessProps} object of the editor.
      * <p>
-     * You can update some features in editor with the instance without disturb to call methods.
+     * You can adjust some settings of the editor by modifying the fields in the object direcly.
      */
+    @NonNull
     public DirectAccessProps getProps() {
         return props;
     }
@@ -957,7 +972,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         // Destroy old one
         var old = editorLanguage;
         if (old != null) {
-            var formatter = old.getFormatter();
+            var formatter = getFormatter();
             formatter.setReceiver(null);
             formatter.destroy();
             old.getAnalyzeManager().setReceiver(null);
@@ -1001,10 +1016,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
 
         // reset inlay hints (partially re-layout required)
         if (this.inlayHints != null) {
-            setInlayHints(null);
+            internalSetInlayHints(null);
         }
         if (this.highlightTextContainer != null) {
-            setHighlightTexts(null);
+            internalSetHighlightTexts(null);
         }
     }
 
@@ -1040,7 +1055,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                     || keyCode == KeyEvent.KEYCODE_X || keyCode == KeyEvent.KEYCODE_V
                     || keyCode == KeyEvent.KEYCODE_U || keyCode == KeyEvent.KEYCODE_R
                     || keyCode == KeyEvent.KEYCODE_D || keyCode == KeyEvent.KEYCODE_W
-                    || keyCode == KeyEvent.KEYCODE_ENTER;
+                    || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_SPACE;
         }
 
 
@@ -1440,16 +1455,15 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * @param line The line to search
      */
     protected long findLeadingAndTrailingWhitespacePos(ContentLine line) {
-        var buffer = line.getBackingCharArray();
         int column = line.length();
         int leading = 0;
         int trailing = column;
-        while (leading < column && isWhitespace(buffer[leading])) {
+        while (leading < column && isWhitespace(line.charAt(leading))) {
             leading++;
         }
         // Only when this action is needed
         if (leading != column && (nonPrintableOptions & (FLAG_DRAW_WHITESPACE_INNER | FLAG_DRAW_WHITESPACE_TRAILING)) != 0) {
-            while (trailing > 0 && isWhitespace(buffer[trailing - 1])) {
+            while (trailing > 0 && isWhitespace(line.charAt(trailing - 1))) {
                 trailing--;
             }
         }
@@ -1665,17 +1679,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     @NonNull
     public List<Span> getSpansForLine(int line) {
         var spanMap = textStyles == null ? null : textStyles.spans;
-        if (defaultSpans.isEmpty()) {
-            defaultSpans.add(SpanFactory.obtainNoExt(0, EditorColorScheme.TEXT_NORMAL));
-        }
-        try {
-            if (spanMap != null) {
-                return spanMap.read().getSpansOnLine(line);
-            } else {
-                return defaultSpans;
-            }
-        } catch (Exception e) {
-            return defaultSpans;
+        if (spanMap != null) {
+            return SpansUtils.getSpansOnLine(spanMap.read(), line);
+        } else {
+            return SpansUtils.getDefaultLineSpans();
         }
     }
 
@@ -1906,12 +1913,17 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         int l = cursor.getRightLine();
         int column = cursor.getRightColumn();
         boolean visible = true;
-        float x = measureTextRegionOffset();
-        x = x + layout.getCharLayoutOffset(l, column)[1];
-        x = x - getOffsetX();
+        float[] offsets = layout.getCharLayoutOffset(l, column);
+        float x = measureTextRegionOffset() + offsets[1] - getOffsetX();
+        float charBottom = offsets[0] - getOffsetY();
+        float charTop = charBottom - getRowHeight();
+        float charBaseline = getRowBaseline(Math.round(charTop / (float) getRowHeight()));
         if (x < 0) {
             visible = false;
             x = 0;
+        } else if (x > getWidth()) {
+            visible = false;
+            x = getWidth();
         }
         var composingText = inputConnection.composingText;
         if (composingText.preSetComposing) {
@@ -1930,7 +1942,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             if (composingText.isComposing()) {
                 builder.setComposingText(composingText.startIndex, text.substring(composingText.startIndex, composingText.endIndex));
             }
-            builder.setInsertionMarkerLocation(x, getRowTop(l) - getOffsetY(), getRowBaseline(l) - getOffsetY(), getRowBottom(l) - getOffsetY(), visible ? CursorAnchorInfo.FLAG_HAS_VISIBLE_REGION : CursorAnchorInfo.FLAG_HAS_INVISIBLE_REGION);
+            builder.setInsertionMarkerLocation(x, charTop, charBaseline, charBottom, visible ? CursorAnchorInfo.FLAG_HAS_VISIBLE_REGION : CursorAnchorInfo.FLAG_HAS_INVISIBLE_REGION);
             inputMethodManager.updateCursorAnchorInfo(this, builder.build());
         }
         return x;
@@ -1948,10 +1960,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             int line = cur.getLeftLine();
             if (props.deleteEmptyLineFast || (props.deleteMultiSpaces != 1 && col > 0 && text.charAt(line, col - 1) == ' ')) {
                 // Check whether selection is in leading spaces
-                var text = this.text.getLine(cur.getLeftLine()).getBackingCharArray();
+                var text = this.text.getLine(cur.getLeftLine());
                 var inLeading = true;
                 for (int i = col - 1; i >= 0; i--) {
-                    char ch = text[i];
+                    char ch = text.charAt(i);
                     if (ch != ' ' && ch != '\t') {
                         inLeading = false;
                         break;
@@ -1963,7 +1975,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                     var emptyLine = true;
                     var max = this.text.getColumnCount(line);
                     for (int i = col; i < max; i++) {
-                        char ch = text[i];
+                        char ch = text.charAt(i);
                         if (ch != ' ' && ch != '\t') {
                             emptyLine = false;
                             break;
@@ -1987,9 +1999,10 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             }
             // Do not put cursor inside combined characters
             int begin;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                begin = TextUtilsP.getOffsetForBackspaceKey(text.getLine(cur.getLeftLine()), col);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                begin = TextUtils.getOffsetForBackspaceKey(text.getLine(cur.getLeftLine()), col);
             } else {
+                // Devices under API 23 does not use the strategy above
                 begin = TextLayoutHelper.get().getCurPosLeft(col, text.getLine(cur.getLeftLine()));
             }
             int end = cur.getLeftColumn();
@@ -2258,10 +2271,9 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             // top may be invisible
             targetY = yOffset - getRowHeight() * topLines;
         }
-        float visibleHeight = Math.max(getRowHeight() * 2f, getHeight() - getPaddingBottom());
-        if (yOffset > visibleHeight + currFinalY) {
+        if (yOffset > getHeight() + currFinalY) {
             // bottom invisible
-            targetY = yOffset - visibleHeight + getRowHeight() * 1f;
+            targetY = yOffset - getHeight() + getRowHeight() * 1f;
         }
         float charWidth = column == 0 ? 0 : getTextPaint().measureText("a");
         if (xOffset < currFinalX + (pinLineNumber ? measureTextRegionOffset() : 0)) {
@@ -2485,7 +2497,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         if (isFormatting()) {
             return false;
         }
-        var formatter = editorLanguage.getFormatter();
+        var formatter = getFormatter();
         formatter.setReceiver(this);
         var formatContent = text.copyText(false);
         formatContent.setUndoEnabled(false);
@@ -2511,13 +2523,25 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         if (isFormatting()) {
             return false;
         }
-        var formatter = editorLanguage.getFormatter();
+        var formatter = getFormatter();
         formatter.setReceiver(this);
         var formatContent = text.copyText(false);
         formatContent.setUndoEnabled(false);
         formatter.formatRegion(formatContent, new TextRange(start, end), getCursorRange());
         postInvalidate();
         return true;
+    }
+
+    @NonNull
+    private Formatter getFormatter() {
+        Formatter formatter = null;
+        if (formatterProvider != null) {
+            formatter = formatterProvider.getFormatter(this);
+        }
+        if (formatter == null) {
+            formatter = editorLanguage.getFormatter();
+        }
+        return formatter;
     }
 
     /**
@@ -3681,6 +3705,33 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         onSelectionChanged(cause);
     }
 
+    public void setFormatterProvider(@Nullable FormatterProvider provider) {
+        this.formatterProvider = provider;
+    }
+
+    @Nullable
+    public FormatterProvider getFormatterProvider() {
+        return formatterProvider;
+    }
+
+    public void registerExtraStylesProvider(@NonNull ExtraStylesProvider provider) {
+        if (!extraStylesProviders.contains(provider)) {
+            extraStylesProviders.add(provider);
+            invalidate();
+        }
+    }
+
+    public void unregisterExtraStylesProvider(@NonNull ExtraStylesProvider provider) {
+        if (extraStylesProviders.remove(provider)) {
+            invalidate();
+        }
+    }
+
+    @NonNull
+    public List<ExtraStylesProvider> getExtraStylesProviders() {
+        return extraStylesProviders;
+    }
+
     /**
      * Get system clipboard manager used by editor
      */
@@ -4106,7 +4157,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
      * @return whether the editor is currently formatting
      */
     public boolean isFormatting() {
-        return editorLanguage.getFormatter().isRunning();
+        return getFormatter().isRunning();
     }
 
     /**
@@ -4276,8 +4327,35 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         return diagnostics;
     }
 
-    @UiThread
-    public void setDiagnostics(@Nullable DiagnosticsContainer diagnostics) {
+
+    public void registerDiagnosticProvider(@NonNull DiagnosticProvider provider) {
+        synchronized (diagnosticProviders) {
+            if (!diagnosticProviders.contains(provider)) {
+                diagnosticProviders.add(provider);
+                invalidateDiagnostics();
+            }
+        }
+    }
+
+    public void unregisterDiagnosticProvider(@NonNull DiagnosticProvider provider) {
+        synchronized (diagnosticProviders) {
+            if (diagnosticProviders.remove(provider)) {
+                invalidateDiagnostics();
+            }
+        }
+    }
+
+    public void invalidateDiagnostics() {
+        synchronized (diagnosticProviders) {
+            var merged = new DiagnosticsContainer(false);
+            for (var provider : diagnosticProviders) {
+                provider.provideDiagnostics(merged);
+            }
+            internalSetDiagnostics(merged.getRegions().isEmpty() ? null : merged);
+        }
+    }
+
+    private void internalSetDiagnostics(@Nullable DiagnosticsContainer diagnostics) {
         if (this.diagnostics != null) {
             this.diagnostics.detachEditor();
         }
@@ -4290,7 +4368,39 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         invalidate();
     }
 
-    public void setInlayHints(@Nullable InlayHintsContainer inlayHints) {
+    @Nullable
+    public InlayHintsContainer getInlayHints() {
+        return inlayHints;
+    }
+
+    public void registerInlayHintProvider(@NonNull InlayHintProvider provider) {
+        synchronized (inlayHintProviders) {
+            if (!inlayHintProviders.contains(provider)) {
+                inlayHintProviders.add(provider);
+                invalidateInlayHints();
+            }
+        }
+    }
+
+    public void unregisterInlayHintProvider(@NonNull InlayHintProvider provider) {
+        synchronized (inlayHintProviders) {
+            if (inlayHintProviders.remove(provider)) {
+                invalidateInlayHints();
+            }
+        }
+    }
+
+    public void invalidateInlayHints() {
+        synchronized (inlayHintProviders) {
+            var merged = new InlayHintsContainer();
+            for (var provider : inlayHintProviders) {
+                provider.provideInlayHints(merged);
+            }
+            internalSetInlayHints(merged.isEmpty() ? null : merged);
+        }
+    }
+
+    private void internalSetInlayHints(@Nullable InlayHintsContainer inlayHints) {
         var affectedLines = new MutableIntSet();
         var oldInlayHints = this.inlayHints;
         if (oldInlayHints != null) {
@@ -4310,12 +4420,38 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     }
 
     @Nullable
-    public InlayHintsContainer getInlayHints() {
-        return inlayHints;
+    public HighlightTextContainer getHighlightTexts() {
+        return highlightTextContainer;
     }
 
-    @UiThread
-    public void setHighlightTexts(@Nullable HighlightTextContainer highlightTexts) {
+    public void registerHighlightTextProvider(@NonNull HighlightTextProvider provider) {
+        synchronized (highlightTextProviders) {
+            if (!highlightTextProviders.contains(provider)) {
+                highlightTextProviders.add(provider);
+                invalidateHighlightTexts();
+            }
+        }
+    }
+
+    public void unregisterHighlightTextProvider(@NonNull HighlightTextProvider provider) {
+        synchronized (highlightTextProviders) {
+            if (highlightTextProviders.remove(provider)) {
+                invalidateHighlightTexts();
+            }
+        }
+    }
+
+    public void invalidateHighlightTexts() {
+        synchronized (highlightTextProviders) {
+            var merged = new HighlightTextContainer();
+            for (var provider : highlightTextProviders) {
+                provider.provideHighlightTexts(merged);
+            }
+            internalSetHighlightTexts(merged.isEmpty() ? null : merged);
+        }
+    }
+
+    private void internalSetHighlightTexts(@Nullable HighlightTextContainer highlightTexts) {
         var affectedLines = new MutableIntSet();
         var oldHighlights = this.highlightTextContainer;
         if (oldHighlights != null) {
@@ -4331,13 +4467,6 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
                 affectedLines.add(line);
             }
         }
-        if (affectedLines._size == 0) {
-            return;
-        }
-        if (layout == null || renderContext == null) {
-            invalidate();
-            return;
-        }
         var range = new IntSetUpdateRange(affectedLines);
         if (!layoutBusy) {
             layout.invalidateLines(range);
@@ -4345,13 +4474,8 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
             createLayout();
         }
         renderContext.invalidateRenderNodes();
-        invalidate();
     }
 
-    @Nullable
-    public HighlightTextContainer getHighlightTexts() {
-        return highlightTextContainer;
-    }
 
     /**
      * Hide auto complete window if shown
@@ -4597,7 +4721,7 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
         released = true;
         if (editorLanguage != null) {
             editorLanguage.getAnalyzeManager().destroy();
-            var formatter = editorLanguage.getFormatter();
+            var formatter = getFormatter();
             formatter.setReceiver(null);
             formatter.destroy();
             editorLanguage.destroy();
@@ -4721,16 +4845,20 @@ public class CodeEditor extends View implements ContentListener, Formatter.Forma
     public AccessibilityNodeInfo createAccessibilityNodeInfo() {
         var info = super.createAccessibilityNodeInfo();
         if (isEnabled()) {
-            info.setEditable(isEditable());
-            info.setTextSelection(cursor.getLeft(), cursor.getRight());
-            info.setInputType(InputType.TYPE_CLASS_TEXT);
-            info.setMultiLine(true);
-            info.setText(getText().toStringBuilder());
+            var maxTextLength = props.maxAccessibilityTextLength;
+            if (maxTextLength > 0) {
+                info.setEditable(isEditable());
+                info.setTextSelection(cursor.getLeft(), cursor.getRight());
+                info.setInputType(InputType.TYPE_CLASS_TEXT);
+                info.setMultiLine(true);
+                info.setText(TextUtils.trimToSize(getText(), maxTextLength).toString());
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_COPY);
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CUT);
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_PASTE);
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT);
+            }
+
             info.setLongClickable(true);
-            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_COPY);
-            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CUT);
-            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_PASTE);
-            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT);
             final int scrollRange = getScrollMaxY();
             if (scrollRange > 0) {
                 info.setScrollable(true);

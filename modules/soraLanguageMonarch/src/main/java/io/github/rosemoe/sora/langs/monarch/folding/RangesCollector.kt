@@ -27,44 +27,42 @@ import android.util.SparseIntArray
 import io.github.rosemoe.sora.text.Content
 
 class RangesCollector {
-  // this.tabSize = tabSize;
-  private val _startIndexes = SparseIntArray()
-  private val _endIndexes = SparseIntArray()
+    //this.tabSize = tabSize;
+    private val _startIndexes = SparseIntArray()
+    private val _endIndexes = SparseIntArray()
 
-  // private final SparseIntArray _indentOccurrences;
-  private var _length = 0
+    //private final SparseIntArray _indentOccurrences;
+    private var _length = 0
 
-  // private final int tabSize;
-  init {
-    // this._indentOccurrences = new SparseIntArray();
-  }
-
-  fun insertFirst(startLineNumber: Int, endLineNumber: Int, indent: Int) {
-    if (
-        startLineNumber > IndentRange.MAX_LINE_NUMBER || endLineNumber > IndentRange.MAX_LINE_NUMBER
-    ) {
-      return
+    //private final int tabSize;
+    init {
+        //this._indentOccurrences = new SparseIntArray();
     }
-    val index = this._length
-    _startIndexes.put(index, startLineNumber)
-    _endIndexes.put(index, endLineNumber)
-    _length++
-    /*if (indent < 1000) {
-        this._indentOccurrences.put(indent, (this._indentOccurrences.get(indent)) + 1);
-    }*/
-  }
 
-  @Throws(Exception::class)
-  fun toIndentRanges(model: Content): FoldingRegions {
-    return FoldingRegions(_startIndexes, _endIndexes)
-    /*
-    // reverse and create arrays of the exact length
-    SparseIntArray startIndexes = new SparseIntArray(this._length);
-    SparseIntArray endIndexes = new SparseIntArray(this._length);
-    for (int i = this._length - 1, k = 0; i >= 0; i--, k++) {
-        startIndexes.put(k, this._startIndexes.get(i));
-        endIndexes.put(k, this._endIndexes.get(i));
+    fun insertFirst(startLineNumber: Int, endLineNumber: Int, indent: Int) {
+        if (startLineNumber > IndentRange.MAX_LINE_NUMBER || endLineNumber > IndentRange.MAX_LINE_NUMBER) {
+            return
+        }
+        val index = this._length
+        _startIndexes.put(index, startLineNumber)
+        _endIndexes.put(index, endLineNumber)
+        _length++
+        /*if (indent < 1000) {
+            this._indentOccurrences.put(indent, (this._indentOccurrences.get(indent)) + 1);
+        }*/
     }
-    return new FoldingRegions(startIndexes, endIndexes);*/
-  }
+
+    @Throws(Exception::class)
+    fun toIndentRanges(model: Content): FoldingRegions {
+        return FoldingRegions(_startIndexes, _endIndexes)
+        /*
+        // reverse and create arrays of the exact length
+        SparseIntArray startIndexes = new SparseIntArray(this._length);
+        SparseIntArray endIndexes = new SparseIntArray(this._length);
+        for (int i = this._length - 1, k = 0; i >= 0; i--, k++) {
+            startIndexes.put(k, this._startIndexes.get(i));
+            endIndexes.put(k, this._endIndexes.get(i));
+        }
+        return new FoldingRegions(startIndexes, endIndexes);*/
+    }
 }

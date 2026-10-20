@@ -27,9 +27,9 @@ import io.github.rosemoe.sora.lang.completion.CompletionItem
 import io.github.rosemoe.sora.lsp.editor.LspEventManager
 
 fun interface CompletionItemProvider<T : CompletionItem> {
-  fun createCompletionItem(
-      completionItem: org.eclipse.lsp4j.CompletionItem,
-      eventManager: LspEventManager,
-      prefixLength: Int,
-  ): T
+    fun createCompletionItem(
+        completionItem: org.eclipse.lsp4j.CompletionItem,
+        eventManager: LspEventManager,
+        prefixLength: Int
+    ): T
 }

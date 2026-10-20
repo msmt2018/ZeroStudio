@@ -260,7 +260,6 @@ include(
     ":modules:kotlinc",
     ":modules:mt-data-files-provider",
     ":modules:soraLanguageMonarch",
-    ":modules:soraLanguageTreesitter",
     ":modules:soraOnigurumaNative",
     ":modules:thinkmap-treeview",
     ":modules:zero-Symbol-input-view",

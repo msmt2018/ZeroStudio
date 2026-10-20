@@ -1,24 +1,27 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2023 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2023  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lsp.editor.completion
 
 import io.github.rosemoe.sora.lang.completion.CompletionItemKind
@@ -45,172 +48,192 @@ import org.eclipse.lsp4j.TextEdit
 class LspCompletionItem(
     private val completionItem: CompletionItem,
     private val eventManager: LspEventManager,
-    prefixLength: Int,
-) :
-    io.github.rosemoe.sora.lang.completion.CompletionItem(
-        completionItem.label,
-        completionItem.detail,
-    ) {
-  init {
-    this.prefixLength = prefixLength
-    kind =
-        if (completionItem.kind == null) CompletionItemKind.Text
-        else CompletionItemKind.valueOf(completionItem.kind.name)
-    sortText = completionItem.sortText
-    filterText = completionItem.filterText
-    val labelDetails = completionItem.labelDetails
-    if (labelDetails != null) {
-      if (labelDetails.description?.isNotEmpty() == true) {
-        desc = labelDetails.description
-      }
-      detail = labelDetails.detail
-    }
-    val tags = completionItem.tags
-    if (tags != null) {
-      deprecated = tags.contains(CompletionItemTag.Deprecated)
-    }
-
-    val isFile = kind == CompletionItemKind.File
-    val isFolder = kind == CompletionItemKind.Folder
-    val fileIcon =
-        when {
-          isFile || isFolder -> {
-            label?.let { drawFileFolder(it.toString(), isFolder) }
-                ?: desc?.let { drawFileFolder(it.toString(), isFolder) }
-          }
-
-          else -> null
+    prefixLength: Int
+) : io.github.rosemoe.sora.lang.completion.CompletionItem(
+    completionItem.label,
+    completionItem.detail
+) {
+    init {
+        this.prefixLength = prefixLength
+        kind =
+            if (completionItem.kind == null) CompletionItemKind.Text else CompletionItemKind.valueOf(
+                completionItem.kind.name
+            )
+        sortText = completionItem.sortText
+        filterText = completionItem.filterText
+        val labelDetails = completionItem.labelDetails
+        if (labelDetails != null) {
+            if (labelDetails.description?.isNotEmpty() == true) {
+                desc = labelDetails.description
+            }
+            detail = labelDetails.detail
+        }
+        val tags = completionItem.tags
+        if (tags != null) {
+            deprecated = tags.contains(CompletionItemTag.Deprecated)
         }
 
-    icon =
-        fileIcon
-            ?: run {
-              val colorValue = extractColor()
-              if (kind == CompletionItemKind.Color && colorValue != null) {
-                drawColorSpan(colorValue)
-              } else {
-                draw(kind ?: CompletionItemKind.Text)
-              }
+        val isFile = kind == CompletionItemKind.File
+        val isFolder = kind == CompletionItemKind.Folder
+        val fileIcon = when {
+            isFile || isFolder -> {
+                label?.let { drawFileFolder(it.toString(), isFolder) }
+                    ?: desc?.let { drawFileFolder(it.toString(), isFolder) }
             }
-  }
 
-  fun extractColor(): Int? {
-    val labelColor = label?.let { ColorUtils.parseColor(it.toString()) }
-    val detailColor = desc?.let { ColorUtils.parseColor(it.toString()) }
+            else -> null
+        }
 
-    val documentation =
-        completionItem.documentation?.let { if (it.isLeft) it.left else it.right.value }
-    val documentationColor = documentation?.let { ColorUtils.parseColor(it) }
-
-    if (documentationColor != null && detailColor == null && labelColor == null && desc == null) {
-      desc = documentation
+        icon = fileIcon ?: run {
+            val colorValue = extractColor()
+            if (kind == CompletionItemKind.Color && colorValue != null) {
+                drawColorSpan(colorValue)
+            } else {
+                draw(kind ?: CompletionItemKind.Text)
+            }
+        }
     }
 
-    return labelColor ?: detailColor ?: documentationColor
-  }
+    fun extractColor(): Int? {
+        val labelColor = label?.let { ColorUtils.parseColor(it.toString()) }
+        val detailColor = desc?.let { ColorUtils.parseColor(it.toString()) }
 
-  override fun performCompletion(editor: CodeEditor, text: Content, position: CharPosition) {
-    var textEdit = TextEdit()
+        val documentation = completionItem.documentation?.let {
+            if (it.isLeft) it.left else it.right.value
+        }
+        val documentationColor = documentation?.let { ColorUtils.parseColor(it) }
 
-    textEdit.range =
-        createRange(
-            createPosition(position.line, position.column - prefixLength),
-            position.asLspPosition(),
-        )
+        if (documentationColor != null && detailColor == null && labelColor == null && desc == null) {
+            desc = documentation
+        }
 
-    if (completionItem.insertText != null) {
-      textEdit.newText = completionItem.insertText
+        return labelColor ?: detailColor ?: documentationColor
     }
 
-    if (completionItem.textEdit != null && completionItem.textEdit.isLeft) {
-      textEdit = completionItem.textEdit.left
-    } else if (completionItem.textEdit?.isRight == true) {
-      textEdit =
-          TextEdit(completionItem.textEdit.right.insert, completionItem.textEdit.right.newText)
-    }
+    override fun performCompletion(editor: CodeEditor, text: Content, position: CharPosition) {
+        val defaultRange = createRange(
+             createPosition(
+                 position.line,
+                 position.column - prefixLength
+             ),
+             position.asLspPosition()
+         )
 
-    if (textEdit.newText == null && completionItem.label != null) {
-      textEdit.newText = completionItem.label
-    }
+        val textEdit = when {
+            completionItem.textEdit?.isLeft == true -> {
+                completionItem.textEdit.left
+            }
 
-    run {
-      // workaround https://github.com/Microsoft/vscode/issues/17036
-      val start = textEdit.range.start
-      val end = textEdit.range.end
-      if (start.line > end.line || start.line == end.line && start.character > end.character) {
-        textEdit.range.end = start
-        textEdit.range.start = end
-      }
-    }
+            completionItem.textEdit?.isRight == true -> {
+                TextEdit(
+                    completionItem.textEdit.right.insert,
+                    completionItem.textEdit.right.newText
+                )
+            }
 
-    run {
-      // allow completion items to be wrong with a too wide range
-      val documentEnd =
-          createPosition(
-              text.lineCount - 1,
-              text.getColumnCount(0.coerceAtLeast(text.lineCount - 1)),
-          )
+            else -> {
+                TextEdit().apply {
+                    range = defaultRange
+                    newText = completionItem.insertText ?: completionItem.label
+                }.also {
+                    // Fix overlap issue, e.g.:
+                    // console.lo| <- cursor
+                    // If label or insertText is console.log it would otherwise result in console.console.log
+                    val lineText = text.getLine(it.range.start.line).toString()
+                    val startChar = it.range.start.character
 
-      val textEditEnd = textEdit.range.end
-      if (
-          documentEnd.line < textEditEnd.line ||
-              documentEnd.line == textEditEnd.line && documentEnd.character < textEditEnd.character
-      ) {
-        textEdit.range.end = documentEnd
-      }
-    }
+                    val textBefore = if (startChar in 0..lineText.length) {
+                        lineText.substring(0, startChar)
+                    } else {
+                        ""
+                    }
+                    val newText = it.newText
+                    var overlapLength = 0
+                    val maxOverlap = kotlin.math.min(textBefore.length, newText.length)
 
-    if (completionItem.insertTextFormat == InsertTextFormat.Snippet) {
-      val codeSnippet = CodeSnippetParser.parse(textEdit.newText)
-      var startIndex =
-          text.getCharIndex(
-              textEdit.range.start.line,
-              textEdit.range.start.character.coerceAtMost(
-                  text.getColumnCount(textEdit.range.start.line)
-              ),
-          )
+                    for (i in 1..maxOverlap) {
+                        val suffix = textBefore.substring(textBefore.length - i)
+                        if (newText.startsWith(suffix)) {
+                            overlapLength = i
+                        }
+                    }
+                    if (overlapLength > 0) {
+                        it.range.start.character = startChar - overlapLength
+                    }
+                }
+            }
+        }
 
-      var endIndex =
-          text.getCharIndex(
-              textEdit.range.end.line,
-              textEdit.range.end.character.coerceAtMost(
-                  text.getColumnCount(textEdit.range.end.line)
-              ),
-          )
+        run {
+            // workaround https://github.com/Microsoft/vscode/issues/17036
+            val start = textEdit.range.start
+            val end = textEdit.range.end
+            if (start.line > end.line || start.line == end.line && start.character > end.character) {
+                textEdit.range.end = start
+                textEdit.range.start = end
+            }
+        }
 
-      if (endIndex < startIndex) {
-        Logger.instance(this.javaClass.name)
-            .w(
-                "Invalid location information found applying edits from %s to %s",
-                textEdit.range.start,
-                textEdit.range.end,
+        run {
+            // allow completion items to be wrong with a too wide range
+            val documentEnd = createPosition(
+                text.lineCount - 1,
+                text.getColumnCount(0.coerceAtLeast(text.lineCount - 1))
             )
-        val diff = startIndex - endIndex
-        endIndex = startIndex
-        startIndex = endIndex - diff
-      }
 
-      val selectedText = text.subSequence(startIndex, endIndex).toString()
+            val textEditEnd = textEdit.range.end
+            if (documentEnd.line < textEditEnd.line || documentEnd.line == textEditEnd.line && documentEnd.character < textEditEnd.character
+            ) {
+                textEdit.range.end = documentEnd
+            }
+        }
 
-      text.delete(startIndex, endIndex)
+        if (completionItem.insertTextFormat == InsertTextFormat.Snippet) {
+            val codeSnippet = CodeSnippetParser.parse(textEdit.newText)
+            var startIndex = text.getCharIndex(
+                textEdit.range.start.line,
+                textEdit.range.start.character.coerceAtMost(text.getColumnCount(textEdit.range.start.line))
+            )
 
-      editor.snippetController.startSnippet(startIndex, codeSnippet, selectedText)
-    } else {
-      eventManager.emit(EventType.applyEdits) {
-        put("edits", listOf(textEdit))
-        put(text)
-      }
+            var endIndex = text.getCharIndex(
+                textEdit.range.end.line,
+                textEdit.range.end.character.coerceAtMost(text.getColumnCount(textEdit.range.end.line))
+            )
+
+            if (endIndex < startIndex) {
+                Logger.instance(this.javaClass.name)
+                    .w(
+                        "Invalid location information found applying edits from %s to %s",
+                        textEdit.range.start,
+                        textEdit.range.end
+                    )
+                val diff = startIndex - endIndex
+                endIndex = startIndex
+                startIndex = endIndex - diff
+            }
+
+            val selectedText = text.subSequence(startIndex, endIndex).toString()
+
+            text.delete(startIndex, endIndex)
+
+            editor.snippetController
+                .startSnippet(startIndex, codeSnippet, selectedText)
+        } else {
+            eventManager.emit(EventType.applyEdits) {
+                put("edits", listOf(textEdit))
+                put(text)
+            }
+        }
+
+        if (completionItem.additionalTextEdits != null) {
+            eventManager.emit(EventType.applyEdits) {
+                put("edits", completionItem.additionalTextEdits)
+                put(text)
+            }
+        }
     }
 
-    if (completionItem.additionalTextEdits != null) {
-      eventManager.emit(EventType.applyEdits) {
-        put("edits", completionItem.additionalTextEdits)
-        put(text)
-      }
+    override fun performCompletion(editor: CodeEditor, text: Content, line: Int, column: Int) {
+        // do nothing
     }
-  }
-
-  override fun performCompletion(editor: CodeEditor, text: Content, line: Int, column: Int) {
-    // do nothing
-  }
 }

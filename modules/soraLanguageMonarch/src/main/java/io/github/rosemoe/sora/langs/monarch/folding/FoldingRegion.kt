@@ -24,13 +24,13 @@
 package io.github.rosemoe.sora.langs.monarch.folding
 
 class FoldingRegion(private val ranges: FoldingRegions, private val regionIndex: Int) {
-  val startLineNumber: Int
-    get() = ranges.getStartLineNumber(this.regionIndex)
+    val startLineNumber: Int
+        get() = ranges.getStartLineNumber(this.regionIndex)
 
-  val endLineNumber: Int
-    get() = ranges.getEndLineNumber(this.regionIndex)
+    val endLineNumber: Int
+        get() = ranges.getEndLineNumber(this.regionIndex)
 
-  @get:Throws(Exception::class)
-  val parentIndex: Int
-    get() = ranges.getParentIndex(this.regionIndex)
+    @get:Throws(Exception::class)
+    val parentIndex: Int
+        get() = ranges.getParentIndex(this.regionIndex)
 }

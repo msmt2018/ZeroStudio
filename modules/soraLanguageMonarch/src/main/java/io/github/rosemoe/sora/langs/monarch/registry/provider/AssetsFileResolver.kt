@@ -27,12 +27,12 @@ import android.content.res.AssetManager
 import java.io.InputStream
 
 class AssetsFileResolver(private var assetManager: AssetManager?) : FileResolver {
-  override fun resolve(path: String): InputStream? {
-    return assetManager?.open(path)
-  }
+    override fun resolve(path: String): InputStream? {
+        return assetManager?.open(path)
+    }
 
-  override fun dispose() {
-    // assetManager?.close()
-    assetManager = null
-  }
+    override fun dispose() {
+        // assetManager?.close()
+        assetManager = null
+    }
 }

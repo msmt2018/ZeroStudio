@@ -236,13 +236,7 @@ public class EditorPopupWindow {
         left += locationBuffer[0];
         top += locationBuffer[1];
         if (window.isShowing()) {
-            try {
-                window.update(left, top, width, height);
-            } catch (IllegalArgumentException e) {
-                // PopupWindow can become detached from WindowManager during fast attach/detach
-                // transitions. Guard against framework crashes and clean up gracefully.
-                dismiss();
-            }
+            window.update(left, top, width, height);
         } else if (show) {
             window.setHeight(height);
             window.setWidth(width);

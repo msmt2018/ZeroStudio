@@ -21,9 +21,10 @@
  *     Please contact Rosemoe by email 2073412493@qq.com if you need
  *     additional information or have any questions
  */
-package io.github.rosemoe.sora.langs.monarch.registry.model
+package io.github.rosemoe.sora.langs.monarch.registry.model;
 
 import io.github.rosemoe.sora.langs.monarch.languageconfiguration.model.LanguageConfiguration
+
 
 data class GrammarDefinition<T>(
     val name: String,

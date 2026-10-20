@@ -1,24 +1,27 @@
-/**
- * ****************************************************************************
- * sora-editor - the awesome code editor for Android https://github.com/Rosemoe/sora-editor
- * Copyright (C) 2020-2023 Rosemoe
+/*******************************************************************************
+ *    sora-editor - the awesome code editor for Android
+ *    https://github.com/Rosemoe/sora-editor
+ *    Copyright (C) 2020-2023  Rosemoe
  *
- * This library is free software; you can redistribute it and/or modify it under the terms of the
- * GNU Lesser General Public License as published by the Free Software Foundation; either version
- * 2.1 of the License, or (at your option) any later version.
+ *     This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU Lesser General Public
+ *     License as published by the Free Software Foundation; either
+ *     version 2.1 of the License, or (at your option) any later version.
  *
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
- * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *     Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License along with this library;
- * if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ *     You should have received a copy of the GNU Lesser General Public
+ *     License along with this library; if not, write to the Free Software
+ *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
+ *     USA
  *
- * Please contact Rosemoe by email 2073412493@qq.com if you need additional information or have any
- * questions
- * ****************************************************************************
- */
+ *     Please contact Rosemoe by email 2073412493@qq.com if you need
+ *     additional information or have any questions
+ ******************************************************************************/
+
 package io.github.rosemoe.sora.lsp.events.completion
 
 import io.github.rosemoe.sora.lsp.editor.LspEditor
@@ -30,73 +33,65 @@ import io.github.rosemoe.sora.lsp.utils.asLspPosition
 import io.github.rosemoe.sora.lsp.utils.createCompletionParams
 import io.github.rosemoe.sora.text.CharPosition
 import io.github.rosemoe.sora.util.Logger
-import java.util.concurrent.CompletableFuture
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.future.await
 import org.eclipse.lsp4j.CompletionContext
 import org.eclipse.lsp4j.CompletionItem
+import java.util.concurrent.CompletableFuture
 
 class CompletionEvent : AsyncEventListener() {
-  override val eventName = EventType.completion
+    override val eventName = EventType.completion
 
-  private var future: CompletableFuture<List<CompletionItem>>? = null
+    private var future: CompletableFuture<List<CompletionItem>>? = null
 
-  override suspend fun doHandleAsync(context: EventContext) {
-    val editor = context.get<LspEditor>("lsp-editor")
-    val position = context.getByClass<CharPosition>() ?: return
+    override suspend fun doHandleAsync(context: EventContext) {
+        val editor = context.get<LspEditor>("lsp-editor")
+        val position = context.getByClass<CharPosition>() ?: return
 
-    val requestManager = editor.requestManager
+        val requestManager = editor.requestManager
 
-    val completionParams =
-        editor.uri.createCompletionParams(
-            position.asLspPosition(),
-            CompletionContext().apply { triggerCharacter = null },
-        )
-
-    var completionFuture = requestManager.completion(completionParams)
-    if (completionFuture == null) {
-      // 在编辑器刚启动、LSP 会话尚未完全绑定时，短暂重试，确保会主动向服务器发起 completion 请求。
-      for (i in 0 until 5) {
-        delay(120)
-        completionFuture = requestManager.completion(completionParams)
-        if (completionFuture != null) break
-      }
-    }
-
-    val future =
-        completionFuture?.thenApply {
-              if (it == null) {
-                return@thenApply emptyList()
-              }
-              if (it.isLeft) {
-                return@thenApply it.left
-              }
-              if (it.isRight) {
-                return@thenApply it.right.items
-              }
-              emptyList()
+        val future = requestManager
+            .completion(
+                editor.uri.createCompletionParams(
+                    position.asLspPosition(),
+                    CompletionContext().apply {
+                        triggerCharacter = null
+                    }
+                )
+            )?.thenApply {
+                if (it == null) {
+                    return@thenApply emptyList()
+                }
+                if (it.isLeft) {
+                    return@thenApply it.left
+                }
+                if (it.isRight) {
+                    return@thenApply it.right.items
+                }
+                emptyList()
             } ?: CompletableFuture.completedFuture(emptyList())
 
-    this.future = future
+        this.future = future
 
-    context.put("completion-items", future.await())
-  }
-
-  override fun onException(context: EventContext, exception: Exception) {
-    val editor = context.getOrNull<LspEditor>("lsp-editor")
-    editor?.requestManager?.getSessions()?.forEach { it.reportEventException(this, exception) }
-    if (exception !is TimeoutCancellationException) {
-      Logger.instance(this.javaClass.name).e("Request completion failed", exception)
-      throw exception
+        context.put("completion-items", future.await())
     }
-  }
 
-  override fun dispose() {
-    future?.cancel(true)
-    future = null
-  }
+    override fun onException(context: EventContext, exception: Exception) {
+        val editor = context.getOrNull<LspEditor>("lsp-editor")
+        editor?.requestManager?.getSessions()?.forEach {
+            it.reportEventException(this, exception)
+        }
+        if (exception !is TimeoutCancellationException) {
+            Logger.instance(this.javaClass.name).e("Request completion failed", exception)
+            throw exception
+        }
+    }
+
+    override fun dispose() {
+        future?.cancel(true)
+        future = null
+    }
 }
 
 val EventType.completion: String
-  get() = "textDocument/completion"
+    get() = "textDocument/completion"

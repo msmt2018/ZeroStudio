@@ -27,50 +27,62 @@ import io.github.rosemoe.sora.langs.monarch.registry.FileProviderRegistry
 import io.github.rosemoe.sora.langs.monarch.theme.TokenTheme
 import io.github.rosemoe.sora.langs.monarch.theme.toTokenTheme
 
+
 class ThemeModel {
-  private var themeSource: ThemeSource? = null
-  lateinit var value: TokenTheme
-    private set
+    private var themeSource: ThemeSource? = null
+    lateinit var value: TokenTheme
+        private set
 
-  var name: String
-    private set
+    var name: String
+        private set
 
-  var isDark = false
+    var isDark = false
 
-  constructor(themeSource: ThemeSource) {
-    this.themeSource = themeSource
-    this.name = themeSource.name
-  }
-
-  internal constructor(name: String) {
-    this.name = name
-    value = TokenTheme.createFromParsedTokenTheme(emptyList())
-  }
-
-  @Throws(Exception::class)
-  fun load() {
-    val rawThemeString = themeSource?.let { source ->
-      source.rawSource
-          ?: FileProviderRegistry.resolve(source.path)?.use { it.bufferedReader().readText() }
+    constructor(themeSource: ThemeSource) {
+        this.themeSource = themeSource
+        this.name = themeSource.name
     }
 
-    if (rawThemeString == null) {
-      throw Exception("Theme source is null")
+    internal constructor(name: String) {
+        this.name = name
+        value = TokenTheme.createFromParsedTokenTheme(emptyList())
     }
 
-    value = rawThemeString.toTokenTheme()
 
-    if (value.themeType == "dark") {
-      isDark = true
+    @Throws(Exception::class)
+    fun load() {
+        val rawThemeString = themeSource?.let { source ->
+            source.rawSource ?: FileProviderRegistry.resolve(source.path)?.use {
+                it.bufferedReader().readText()
+            }
+        }
+
+        if (rawThemeString == null) {
+            throw Exception("Theme source is null")
+        }
+
+        value = rawThemeString.toTokenTheme()
+
+        if (value.themeType == "dark") {
+            isDark = true
+        }
+
     }
-  }
 
-  val isLoaded: Boolean
-    get() = ::value.isInitialized
+    val isLoaded: Boolean
+        get() = ::value.isInitialized
 
-  companion object {
-    val EMPTY = ThemeModel("EMPTY")
-  }
+
+    companion object {
+        val EMPTY = ThemeModel("EMPTY")
+    }
+
 }
 
-data class ThemeSource(val path: String, val name: String, val rawSource: String? = null)
+
+data class ThemeSource(
+    val path: String,
+    val name: String,
+    val rawSource: String? = null
+)
+

@@ -26,33 +26,39 @@ package io.github.rosemoe.sora.langs.monarch.registry
 import io.github.rosemoe.sora.langs.monarch.registry.provider.FileResolver
 import java.io.InputStream
 
+
 object FileProviderRegistry : FileResolver {
-  private val fileResolvers = mutableListOf<FileResolver>()
+    private val fileResolvers = mutableListOf<FileResolver>()
 
-  init {
-    fileResolvers.add(FileResolver.DEFAULT)
-  }
-
-  @Synchronized
-  fun addProvider(fileResolver: FileResolver) {
-    if (fileResolver !== FileResolver.DEFAULT) {
-      fileResolvers.add(fileResolver)
+    init {
+        fileResolvers.add(FileResolver.DEFAULT)
     }
-  }
 
-  @Synchronized
-  fun removeProvider(fileResolver: FileResolver) {
-    if (fileResolver !== FileResolver.DEFAULT) {
-      fileResolvers.remove(fileResolver)
+    @Synchronized
+    fun addProvider(fileResolver: FileResolver) {
+        if (fileResolver !== FileResolver.DEFAULT) {
+            fileResolvers.add(fileResolver)
+        }
     }
-  }
 
-  override fun resolve(path: String): InputStream? {
-    return fileResolvers.firstNotNullOfOrNull { it.resolve(path) }
-  }
+    @Synchronized
+    fun removeProvider(fileResolver: FileResolver) {
+        if (fileResolver !== FileResolver.DEFAULT) {
+            fileResolvers.remove(fileResolver)
+        }
+    }
 
-  override fun dispose() {
-    fileResolvers.forEach { it.dispose() }
-    fileResolvers.clear()
-  }
+
+    override fun resolve(path: String): InputStream? {
+        return fileResolvers.firstNotNullOfOrNull { it.resolve(path) }
+    }
+
+    override fun dispose() {
+        fileResolvers.forEach {
+            it.dispose()
+        }
+        fileResolvers.clear()
+    }
+
+
 }

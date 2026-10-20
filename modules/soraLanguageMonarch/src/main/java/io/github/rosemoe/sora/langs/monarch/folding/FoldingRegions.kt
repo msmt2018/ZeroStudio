@@ -27,81 +27,82 @@ import android.util.SparseIntArray
 
 class FoldingRegions(
     private val _startIndexes: SparseIntArray,
-    private val _endIndexes: SparseIntArray,
+    private val _endIndexes: SparseIntArray
 ) {
 
-  companion object {
-    const val MAX_FOLDING_REGIONS = 8192
-    const val MAX_LINE_NUMBER = 0x00FFFFFF
-    const val MASK_INDENT = 0xFF000000.toInt()
-  }
-
-  private var _parentsComputed = false
-
-  init {
-    require(_startIndexes.size() == _endIndexes.size()) {
-      "Invalid startIndexes or endIndexes size"
+    companion object {
+        const val MAX_FOLDING_REGIONS = 8192
+        const val MAX_LINE_NUMBER = 0x00FFFFFF
+        const val MASK_INDENT = 0xFF000000.toInt()
     }
-    require(_startIndexes.size() <= MAX_FOLDING_REGIONS) {
-      "startIndexes or endIndexes size exceeds $MAX_FOLDING_REGIONS"
-    }
-  }
 
-  val indices: IntRange
-    get() = IntRange(0, length)
+    private var _parentsComputed = false
 
-  val length: Int
-    get() = _startIndexes.size()
-
-  fun getStartLineNumber(index: Int): Int {
-    return _startIndexes[index] and MAX_LINE_NUMBER
-  }
-
-  fun getEndLineNumber(index: Int): Int {
-    return _endIndexes[index] and MAX_LINE_NUMBER
-  }
-
-  fun toRegion(index: Int): FoldingRegion = FoldingRegion(this, index)
-
-  private fun isInsideLast(
-      parentIndexes: ArrayDeque<Int>,
-      startLineNumber: Int,
-      endLineNumber: Int,
-  ): Boolean {
-    val index = parentIndexes[parentIndexes.size - 1]
-    return getStartLineNumber(index) <= startLineNumber && getEndLineNumber(index) >= endLineNumber
-  }
-
-  private fun ensureParentIndices() {
-    if (!_parentsComputed) {
-      _parentsComputed = true
-      val parentIndexes = ArrayDeque<Int>()
-      for (i in 0 until _startIndexes.size()) {
-        val startLineNumber = _startIndexes[i]
-        val endLineNumber = _endIndexes[i]
-        require(startLineNumber <= MAX_LINE_NUMBER && endLineNumber <= MAX_LINE_NUMBER) {
-          "startLineNumber or endLineNumber must not exceed $MAX_LINE_NUMBER"
+    init {
+        require(_startIndexes.size() == _endIndexes.size()) {
+            "Invalid startIndexes or endIndexes size"
         }
-        while (
-            parentIndexes.isNotEmpty() &&
-                !isInsideLast(parentIndexes, startLineNumber, endLineNumber)
-        ) {
-          parentIndexes.removeFirst()
+        require(_startIndexes.size() <= MAX_FOLDING_REGIONS) {
+            "startIndexes or endIndexes size exceeds $MAX_FOLDING_REGIONS"
         }
-        val parentIndex =
-            if (parentIndexes.isNotEmpty()) parentIndexes[parentIndexes.size - 1] else -1
-        parentIndexes.addFirst(i)
-        _startIndexes.put(i, startLineNumber + ((parentIndex and 0xFF) shl 24))
-        _endIndexes.put(i, endLineNumber + ((parentIndex and 0xFF00) shl 16))
-      }
     }
-  }
 
-  fun getParentIndex(index: Int): Int {
-    ensureParentIndices()
-    val parent =
-        ((_startIndexes[index] and MASK_INDENT) ushr 24) +
-            ((_endIndexes[index] and MASK_INDENT) ushr 16)
-    return if (parent == MAX_FOLDING_REGIONS) -1 else parent
-  }
+    val indices: IntRange
+        get() = IntRange(0, length)
+
+    val length: Int
+        get() = _startIndexes.size()
+
+    fun getStartLineNumber(index: Int): Int {
+        return _startIndexes[index] and MAX_LINE_NUMBER
+    }
+
+    fun getEndLineNumber(index: Int): Int {
+        return _endIndexes[index] and MAX_LINE_NUMBER
+    }
+
+    fun toRegion(index: Int): FoldingRegion = FoldingRegion(this, index)
+
+    private fun isInsideLast(
+        parentIndexes: ArrayDeque<Int>,
+        startLineNumber: Int,
+        endLineNumber: Int
+    ): Boolean {
+        val index = parentIndexes[parentIndexes.size - 1]
+        return getStartLineNumber(index) <= startLineNumber && getEndLineNumber(index) >= endLineNumber
+    }
+
+    private fun ensureParentIndices() {
+        if (!_parentsComputed) {
+            _parentsComputed = true
+            val parentIndexes = ArrayDeque<Int>()
+            for (i in 0 until _startIndexes.size()) {
+                val startLineNumber = _startIndexes[i]
+                val endLineNumber = _endIndexes[i]
+                require(startLineNumber <= MAX_LINE_NUMBER && endLineNumber <= MAX_LINE_NUMBER) {
+                    "startLineNumber or endLineNumber must not exceed $MAX_LINE_NUMBER"
+                }
+                while (parentIndexes.isNotEmpty() && !isInsideLast(
+                        parentIndexes,
+                        startLineNumber,
+                        endLineNumber
+                    )
+                ) {
+                    parentIndexes.removeFirst()
+                }
+                val parentIndex =
+                    if (parentIndexes.isNotEmpty()) parentIndexes[parentIndexes.size - 1] else -1
+                parentIndexes.addFirst(i)
+                _startIndexes.put(i, startLineNumber + ((parentIndex and 0xFF) shl 24))
+                _endIndexes.put(i, endLineNumber + ((parentIndex and 0xFF00) shl 16))
+            }
+        }
+    }
+
+    fun getParentIndex(index: Int): Int {
+        ensureParentIndices()
+        val parent =
+            ((_startIndexes[index] and MASK_INDENT) ushr 24) + ((_endIndexes[index] and MASK_INDENT) ushr 16)
+        return if (parent == MAX_FOLDING_REGIONS) -1 else parent
+    }
 }

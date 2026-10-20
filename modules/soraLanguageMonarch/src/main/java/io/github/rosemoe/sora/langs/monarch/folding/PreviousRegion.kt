@@ -23,8 +23,8 @@
  */
 package io.github.rosemoe.sora.langs.monarch.folding
 
-data class PreviousRegion( // indent or -2 if a marker
+data class PreviousRegion(// indent or -2 if a marker
     var indent: Int, // end line number for the region above
     var endAbove: Int, // start line of the region. Only used for marker regions.
-    var line: Int,
+    var line: Int
 )

@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import io.github.rosemoe.sora.annotations.Experimental;
 import io.github.rosemoe.sora.lang.styling.CodeBlock;
 import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.lang.styling.SpanFactory;
@@ -64,6 +65,50 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> extends BaseAnalyzeMa
     private static int sThreadId = 0;
     private LooperThread thread;
     private volatile long runCount;
+    private final boolean useShallowCopy;
+
+    private static boolean useShallowCopyByDefault = false;
+
+    private static boolean updateStylesDuringAnalysis = true;
+
+    /**
+     * Use shallow copy for initial text copying. Memory usage will be much lower than full copy at the beginning.
+     * <p>
+     * As the text is modified, the memory usage will finally go up to the same usage of full copy when all lines are edited.
+     * <p>
+     * This function is experimental, and is disabled by default.
+     */
+    @Experimental
+    public static void setUseShallowCopyByDefault(boolean useShallowCopy) {
+        useShallowCopyByDefault = useShallowCopy;
+    }
+
+    /**
+     * @see #setUseShallowCopyByDefault(boolean)
+     */
+    public static boolean isUseShallowCopyByDefault() {
+        return useShallowCopyByDefault;
+    }
+
+    /**
+     * Update styles during initial styles analysis. This is useful for long files to show analyzed
+     * lines quickly, instead of showing the result after initial analysis.
+     */
+    public static void setUpdateStylesDuringAnalysis(boolean sendStylesAsAnalysis) {
+        AsyncIncrementalAnalyzeManager.updateStylesDuringAnalysis = sendStylesAsAnalysis;
+    }
+
+    public static boolean isUpdateStylesDuringAnalysis() {
+        return updateStylesDuringAnalysis;
+    }
+
+    public AsyncIncrementalAnalyzeManager() {
+        this(isUseShallowCopyByDefault());
+    }
+
+    public AsyncIncrementalAnalyzeManager(boolean useShallowCopy) {
+        this.useShallowCopy = useShallowCopy;
+    }
 
     private synchronized static int nextThreadId() {
         sThreadId++;
@@ -107,7 +152,7 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> extends BaseAnalyzeMa
         }
         var ref = getContentRef();
         if (ref != null) {
-            final var text = ref.getReference().copyText(false);
+            final var text = ref.getReference().copyText(false, useShallowCopy);
             text.setUndoEnabled(false);
             thread = new LooperThread();
             thread.setName("AsyncAnalyzer-" + nextThreadId());
@@ -456,6 +501,11 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> extends BaseAnalyzeMa
                 states.add(result.clearSpans());
                 onAddState(result.state);
                 mdf.addLineAt(i, spans);
+                if (isUpdateStylesDuringAnalysis() && i > 0 && i % 1000 == 0 && !abort) {
+                    var tmpStyles = new Styles();
+                    tmpStyles.spans = styles.spans;
+                    sendNewStyles(tmpStyles);
+                }
             }
             styles.blocks = computeBlocks(shadowed, delegate);
             styles.setSuppressSwitch(delegate.suppressSwitch);
@@ -588,6 +638,10 @@ public abstract class AsyncIncrementalAnalyzeManager<S, T> extends BaseAnalyzeMa
                 }
             } catch (InterruptedException e) {
                 // ignored
+            } finally {
+                if (useShallowCopy && shadowed != null) {
+                    shadowed.release();
+                }
             }
         }
     }
