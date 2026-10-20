@@ -21,7 +21,6 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.com.google.devtools.ksp)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
-    alias(libs.plugins.kotlin.compose)
 
 }
 
