@@ -30,11 +30,9 @@ android {
   // surface as "duplicate class" errors for Kotlin-generated Java stubs.
   sourceSets {
     configureEach {
-      java.setSrcDirs(
-          java.srcDirs
-              .map { it.canonicalFile }
-              .distinct()
-      )
+      val canonicalDirs = java.directories.map { file(it).canonicalPath }
+       java.directories.clear()
+       java.directories.addAll(canonicalDirs)
     }
   }
 }
