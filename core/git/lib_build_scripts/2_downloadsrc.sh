@@ -1,8 +1,8 @@
 #!/bin/bash
 # set version and download link, make sure download file is tar.gz, else need edit the uncompress command
 LIBSSH2_VERSION="1.11.1"
-OPENSSL_VERSION="4.0.0"
-LIBGIT2_VERSION="1.9.4"
+OPENSSL_VERSION="4.0.1"
+LIBGIT2_VERSION="1.9.7"
 
 
 

@@ -473,7 +473,10 @@ void j_strarray_to_java_array(JNIEnv *env, jobjectArray out, git_strarray *src)
 
     for (size_t i = 0; i < len; i++)
     {
-        (*env)->SetObjectArrayElement(env, out, i, (*env)->NewStringUTF(env, src->strings[i]));
+        jstring jVal = (*env)->NewStringUTF(env, src->strings[i]);
+        (*env)->SetObjectArrayElement(env, out, i, jVal);
+        // fix issue #146: https://github.com/catpuppyapp/PuppyGit/issues/146
+        (*env)->DeleteLocalRef(env, jVal);
     }
 }
 

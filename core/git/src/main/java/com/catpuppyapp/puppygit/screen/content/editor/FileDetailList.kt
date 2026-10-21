@@ -97,7 +97,7 @@ fun FileDetailList(
         filterList = filterList,
         list = list,
         resetSearchVars = resetSearchVars,
-        match = { idx:Int, it: FileDetail ->
+        match = { idx: Int, it: FileDetail ->
             it.file.name.let {
                 it.contains(keyword, ignoreCase = true) || RegexUtil.matchWildcard(it, keyword)
             } || it.file.path.ioPath.contains(keyword, ignoreCase = true)

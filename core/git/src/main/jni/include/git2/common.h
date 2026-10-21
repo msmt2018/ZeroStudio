@@ -257,7 +257,9 @@ typedef enum {
 	GIT_OPT_GET_SERVER_TIMEOUT,
 	GIT_OPT_SET_USER_AGENT_PRODUCT,
 	GIT_OPT_GET_USER_AGENT_PRODUCT,
-	GIT_OPT_ADD_SSL_X509_CERT
+	GIT_OPT_ADD_SSL_X509_CERT,
+	GIT_OPT_GET_PACK_MAX_OBJECT_SIZE,
+	GIT_OPT_SET_PACK_MAX_OBJECT_SIZE
 } git_libgit2_opt_t;
 
 /**
@@ -562,6 +564,16 @@ typedef enum {
  *   opts(GIT_OPT_SET_SERVER_TIMEOUT, int timeout)
  *      > Sets the timeout (in milliseconds) for reading from and writing
  *      > to a remote server. Set to 0 to use the system default.
+ *
+ *   opts(GIT_OPT_GET_PACK_MAX_OBJECT_SIZE, size_t *out)
+ *      > Gets the maximum size of a declared packfile object. This can
+ *      > be used to limit maximum memory usage when fetching from a
+ *      > remote.
+ *
+ *   opts(GIT_OPT_SET_PACK_MAX_OBJECT_SIZE, size_t object_size)
+ *      > Set the maximum size of an object that libgit2 will allow in
+ *      > a pack file when downloading a pack file from a remote.
+ *      > The default is 2 GiB.
  *
  * @param option Option key
  * @return 0 on success, <0 on failure

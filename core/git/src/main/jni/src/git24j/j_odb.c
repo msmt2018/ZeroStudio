@@ -149,12 +149,34 @@ JNIEXPORT jlong JNICALL J_MAKE_METHOD(Odb_jniExpandIdsNew)(JNIEnv *env, jclass o
     for (jsize i = 0; i < len; i++)
     {
         jstring oidStr = (jstring)(*env)->GetObjectArrayElement(env, shortIds, i);
+        if (oidStr == NULL) {
+            // 检测java side是否有异常（比如索引越界）
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionDescribe(env); // 打印异常
+                free(expand_ids);
+                // 返回空指针
+                // 注意：虽然一般出错都返回负数，但这里不行，
+                // 因为c指针一般都是无符号类型（正数或0），
+                // 但java里没有无符号类型，
+                // 所以c的无符号long传给java时，
+                // java读取到的可能会是负数，但底层存储的2进制数据不会变
+                // 若在此返回负数代表错误，会和正常的指针混淆
+                return (jlong)NULL;
+            }
+
+            // 数组元素为 null 但java没异常，继续循环
+            continue;
+        }
+
         int short_id_len;
         j_git_short_id_from_java(env, oidStr, &(expand_ids[i].id), &short_id_len);
         if (i == 0 || expand_ids->length > short_id_len)
         {
             expand_ids->length = short_id_len;
         }
+
+        // fix issue #145: https://github.com/catpuppyapp/PuppyGit/issues/145
+        (*env)->DeleteLocalRef(env, oidStr);
     }
     return (jlong)expand_ids;
 }

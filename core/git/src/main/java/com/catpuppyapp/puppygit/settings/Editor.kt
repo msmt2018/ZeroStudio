@@ -52,7 +52,9 @@ data class Editor (
     var fileAssociationList:List<String> = SettingsCons.editor_defaultFileAssociationList,
 
     /**
-     * recent file list max limit, should less than FileHistoryLimit, but if over it, will not cause an err，超了历史记录数也不会报错，只是顶多显示历史记录那么多个文件
+     * recent file list max count, should less than `fileOpenHistoryLimit`,
+     * if > `fileOpenHistoryLimit`, will only show `fileOpenHistoryLimit` files
+     * 最近文件列表条目数，应小于等于实际记录的文件数量，若超了，只会显示实际记录文件数那么多个文件
      */
     var recentFilesLimit:Int = FileOpenHistoryMan.defaultHistoryMaxCount,
 

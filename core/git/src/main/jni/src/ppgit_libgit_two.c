@@ -549,28 +549,48 @@ JNIEXPORT jobjectArray JNICALL J_MAKE_METHOD(LibgitTwo_jniGetStatusEntries)(JNIE
         }
 
 
-        (*env)->SetObjectArrayElement(
-                env,
-                statusEntryDtoArray,
-                i,
-                createStatusEntryDto(
-                    env,
-                    statusEntryDtoClass,
-                    constructor,
+        jobject dto = createStatusEntryDto(
+            env,
+            statusEntryDtoClass,
+            constructor,
 
-                    index2WorkDirDeltaOldFilePath,
-                    index2WorkDirDeltaNewFilePath,
-                    head2IndexDeltaOldFilePath,
-                    head2IndexDeltaNewFilePath,
+            index2WorkDirDeltaOldFilePath,
+            index2WorkDirDeltaNewFilePath,
+            head2IndexDeltaOldFilePath,
+            head2IndexDeltaNewFilePath,
 
-                    index2WorkDirDeltaOldFileSize,
-                    index2WorkDirDeltaNewFileSize,
-                    head2IndexDeltaOldFileSize,
-                    head2IndexDeltaNewFileSize,
+            index2WorkDirDeltaOldFileSize,
+            index2WorkDirDeltaNewFileSize,
+            head2IndexDeltaOldFileSize,
+            head2IndexDeltaNewFileSize,
 
-                    entry->status
-                )
+            entry->status
         );
+
+        (*env)->SetObjectArrayElement(
+            env,
+            statusEntryDtoArray,
+            i,
+            dto
+        );
+
+        // fix issue #144: https://github.com/catpuppyapp/PuppyGit/issues/144
+        (*env)->DeleteLocalRef(env, dto);
+
+        if(index2WorkDirDeltaOldFilePath) {
+            (*env)->DeleteLocalRef(env, index2WorkDirDeltaOldFilePath);
+        }
+
+        if(index2WorkDirDeltaNewFilePath) {
+            (*env)->DeleteLocalRef(env, index2WorkDirDeltaNewFilePath);
+        }
+        if(head2IndexDeltaOldFilePath) {
+            (*env)->DeleteLocalRef(env, head2IndexDeltaOldFilePath);
+        }
+
+        if(head2IndexDeltaNewFilePath) {
+            (*env)->DeleteLocalRef(env, head2IndexDeltaNewFilePath);
+        }
 
     }
 

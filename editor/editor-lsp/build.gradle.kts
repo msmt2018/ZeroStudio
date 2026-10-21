@@ -44,10 +44,10 @@ android {
 dependencies {
   compileOnly(libs.common.editor)
   implementation(libs.common.org.eclipse.lsp4j)
-    implementation(libs.common.kotlin-coroutines-android)
+    implementation(libs.common.kotlin.coroutines.android)
     testImplementation(libs.tests.junit)
     testImplementation(libs.tests.google.truth)
     testImplementation(libs.tests.robolectric)
-    androidTestImplementation(libs.tests.androidx.test.junit)
-    androidTestImplementation(libs.tests.androidx.test.espresso)
+    androidTestImplementation(libs.tests.androidx.junit)
+    androidTestImplementation(libs.tests.androidx.espresso.core)
 }
