@@ -25,7 +25,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.maven.publish)
 }
-
+description = "sora-editor LSP support module"
 android {
     namespace = "io.github.rosemoe.sora.lsp"
 

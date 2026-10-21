@@ -26,7 +26,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.publish)
 }
-
+description = "sora-editor module"
 android {
     namespace = "io.github.rosemoe.sora.langs.textmate"
 
