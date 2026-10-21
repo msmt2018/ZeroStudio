@@ -40,7 +40,7 @@ android {
         }
     }
 }
-
+ 
 dependencies {
   compileOnly(libs.common.editor)
   implementation(libs.common.org.eclipse.lsp4j)
