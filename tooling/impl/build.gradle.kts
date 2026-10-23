@@ -77,5 +77,5 @@ dependencies {
   implementation(libs.xml.apis)
   implementation(libs.tooling.gradleApi)
 
-  runtimeOnly(libs.tooling.slf4j)
+  runtimeOnly(libs.slf4j.api)
 }

@@ -21,7 +21,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
   //noinspection JavaPluginLanguageLevel
   id("java-library")
-  id("org.jetbrains.kotlin.jvm")
+  alias(libs.plugins.kotlin.jvm) 
 }
 
 // tasks.withType<KotlinCompile> {
@@ -31,8 +31,8 @@ tasks.withType<KotlinCompile>().configureEach {
   compilerOptions {
     jvmTarget.set(JvmTarget.JVM_17)
     
-    apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_3)
-    languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_3)
+    apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_4)
+    languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_4)
   } 
 }
 

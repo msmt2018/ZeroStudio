@@ -1,44 +1,31 @@
 import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
     alias(libs.plugins.android.library)
-    // id 'maven-publish'
 }
 
 android {
-    namespace = namespace = "${BuildConfig.packageName}.mtprovider"
-    compileSdk 35
+    namespace = "${BuildConfig.packageName}.mtprovider"
+    
+    compileSdk = BuildConfig.compileSdk
 
     defaultConfig {
-        minSdk 21
+        minSdk = BuildConfig.minSdk
     }
 
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-    // publishing {
-        // singleVariant("release") {
-            // withSourcesJar()
-            // withJavadocJar()
-        // }
-    // }
-}
 
-// afterEvaluate {
-    // publishing {
-        // publications {
-            // release(MavenPublication) {
-                // from components.release
-                // groupId = 'com.github.L-JINBIN'
-                // artifactId = 'mt-data-files-provider'
-                // version = '1.0.0'
-            // }
-        // }
-    // }
-// }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+    
+}

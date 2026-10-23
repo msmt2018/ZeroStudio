@@ -1,0 +1,2 @@
+/root/termux-app-master2/terminal-emulator/build/intermediates/cxx/Release/332d5c31/obj/local/armeabi-v7a/objs/termux/termux.o: \
+  /root/termux-app-master2/terminal-emulator/src/main/jni/termux.c

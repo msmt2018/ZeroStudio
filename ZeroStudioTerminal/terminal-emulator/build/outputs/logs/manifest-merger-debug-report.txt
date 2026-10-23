@@ -1,0 +1,14 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /root/termux-app-master2/terminal-emulator/src/main/AndroidManifest.xml:1:1-2:12
+INJECTED from /root/termux-app-master2/terminal-emulator/src/main/AndroidManifest.xml:1:1-2:12
+	package
+		INJECTED from /root/termux-app-master2/terminal-emulator/src/main/AndroidManifest.xml
+uses-sdk
+INJECTED from /root/termux-app-master2/terminal-emulator/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /root/termux-app-master2/terminal-emulator/src/main/AndroidManifest.xml
+INJECTED from /root/termux-app-master2/terminal-emulator/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /root/termux-app-master2/terminal-emulator/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /root/termux-app-master2/terminal-emulator/src/main/AndroidManifest.xml

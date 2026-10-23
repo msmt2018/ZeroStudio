@@ -41,7 +41,7 @@ Please indicate the source and author when using
 
 + src/main/cpp/CMakeLists.txt：
 ```CMakeLists.txt
-cmake_minimum_required(VERSION 3.22.1)
+cmake_minimum_required(VERSION 3.31.1)
 
 project("tree-sitter-toml")
 

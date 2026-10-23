@@ -1,12 +1,14 @@
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins { id("com.android.library") }
 
 android {
   namespace = "android.studio.zero.regular.expression.preview"
-  compileSdk = 36
-  ndkVersion = "27.1.12297006"
+  compileSdk = BuildConfig.compileSdk
+  ndkVersion = BuildConfig.ndkVersion
 
   defaultConfig {
-    minSdk = 21
+    minSdk = BuildConfig.minSdk
     consumerProguardFiles("consumer-rules.pro")
     externalNativeBuild {
       cmake {
@@ -27,7 +29,7 @@ android {
   externalNativeBuild {
     cmake {
       path = file("src/main/cpp/CMakeLists.txt")
-      version = "3.22.1"
+      version = "3.31.1"
     }
   }
 

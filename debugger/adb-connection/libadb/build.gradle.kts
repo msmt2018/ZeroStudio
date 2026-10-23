@@ -48,7 +48,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.annotation)
-    implementation(libs.bcprov.jdk15to18)
+    implementation(libs.bouncycastle.bcprov)
     implementation(libs.spake2.android)
 
     testImplementation(libs.tests.junit)

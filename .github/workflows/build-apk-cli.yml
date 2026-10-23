@@ -97,10 +97,10 @@ jobs:
         run: |
           bun install --frozen-lockfile
 
-      - name: Install the specified NDK and Android SDK CMake (3.22.1)
+      - name: Install the specified NDK and Android SDK CMake (3.31.1)
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1" "cmake;3.31.1"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.0.13004108" "cmake;3.31.1"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |

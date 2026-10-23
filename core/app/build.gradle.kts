@@ -138,17 +138,15 @@ configurations.all {
   exclude(group = "com.google.googlejavaformat", module = "google-java-format")
   exclude(group = "org.jetbrains.kotlin", module = "kotlin-android-extensions-runtime")
   exclude(group = "org.jetbrains.kotlin", module = "kotlin-compiler")
-  // exclude(group = "org.jetbrains.kotlin", module = "kotlin-compiler-embeddable")
   exclude(group = "com.google.firebase", module = "protolite-well-known-types")
   exclude(group = "com.google.protobuf", module = "protobuf-java")
   exclude(group = "com.android.tools.build", module = "builder-model")
 }
 
 dependencies {
-    // 强制约束: 防止传递依赖将 core-ktx 升级到 1.19.0 (需要 SDK 37)
     constraints {
-        implementation("androidx.core:core-ktx:1.16.0")
-        implementation("androidx.core:core:1.16.0")
+        implementation("androidx.core:core-ktx:1.19.0")
+        implementation("androidx.core:core:1.19.0")
     }
 
   // Lottie Animation SDK
@@ -173,18 +171,14 @@ dependencies {
   implementation(libs.common.hiddenApiBypass)
   implementation(libs.aapt2.common)
   implementation(libs.common.org.apache.commons.compress)
-  implementation(libs.common.org.tukaani.tarxzip)
-  implementation(libs.bundles.io.markwon) // io.noties.markwon (still used by DisclaimerFragment onboarding)
-  // compose-markdown 内部使用 coil 2.x(与 core/app 自己的 coil 3.x 是分开的版本,
-  // 只为 MarkdownImageSources 暴露的 coil.request.ImageRequest / Disposable 类型存在)
+  implementation(libs.xz)
+  implementation(libs.bundles.io.markwon)
   implementation("io.coil-kt:coil:2.7.0")
   // 【图片预览】Coil 3.x —— 用于 SVG / 位图 / GIF 解码 (ImagePreviewFragment).
-  // 跟上面 coil 2.x 互不干扰, 各自走自己的 ImageLoader.
   implementation(libs.io.coil.core)
   implementation(libs.io.coil.svg)
   implementation(libs.io.coil.gif)
   // 【图片预览】xml/vectormaster —— Android XML vector drawable 解析器,
-  // 让我们从 raw .xml 文件 (在 drawable/ 或 res/ 之外) 也能渲染 vector.
   implementation(projects.xml.vectormaster)
 
   // === Image Preview Fragment: Coil 3.x ===
@@ -318,7 +312,7 @@ dependencies {
   implementation(projects.core.git)
   implementation(projects.core.layoutEditor)
   implementation(project(":core:ZeroStudio-Terminal"))
-  implementation(projects.core.chatai.app)
+  implementation(projects.core.rikkahub.app)
   // QuickJS 原生库 —— IDEApplication.onCreate() 调用 QuickJSLoader.init() 加载 .so,
   // chatai 模块 (highlight/common/search) 虽然用 api(libs.quickjs) 声明,
   // 但 core/app 是通过 implementation(projects.core.chatai.app) 引入它们的,

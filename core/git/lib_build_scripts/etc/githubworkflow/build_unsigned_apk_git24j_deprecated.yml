@@ -49,7 +49,7 @@ jobs:
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.22.1'
+          cmake-version: '3.31.1'
 
       - name: Install Require Software
         run: bash $GITHUB_WORKSPACE/lib_build_scripts/1_installrequire_no_sudo_and_apt.sh

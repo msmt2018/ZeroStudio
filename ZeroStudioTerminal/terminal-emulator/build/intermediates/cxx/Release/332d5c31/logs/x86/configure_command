@@ -1,0 +1,20 @@
+/root/android-sdk/ndk/29.0.14206865/ndk-build \
+  NDK_PROJECT_PATH=null \
+  APP_BUILD_SCRIPT=/root/termux-app-master2/terminal-emulator/src/main/jni/Android.mk \
+  APP_ABI=x86 \
+  NDK_ALL_ABIS=x86 \
+  NDK_DEBUG=0 \
+  APP_PLATFORM=android-21 \
+  NDK_OUT=/root/termux-app-master2/terminal-emulator/build/intermediates/cxx/Release/332d5c31/obj \
+  NDK_LIBS_OUT=/root/termux-app-master2/terminal-emulator/build/intermediates/cxx/Release/332d5c31/lib \
+  APP_CFLAGS+=-std=c11 \
+  APP_CFLAGS+=-Wall \
+  APP_CFLAGS+=-Wextra \
+  APP_CFLAGS+=-Werror \
+  APP_CFLAGS+=-Os \
+  APP_CFLAGS+=-fno-stack-protector \
+  APP_CFLAGS+=-Wl,--gc-sections \
+  APP_SHORT_COMMANDS=false \
+  LOCAL_SHORT_COMMANDS=false \
+  -B \
+  -n

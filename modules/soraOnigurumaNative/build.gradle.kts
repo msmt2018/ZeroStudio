@@ -19,10 +19,13 @@
  * questions
  * ****************************************************************************
  */
+ import com.itsaky.androidide.build.config.BuildConfig
+
 plugins { id("com.android.library") }
 
 android {
   namespace = "io.github.rosemoe.sora.oniguruma"
+  ndkVersion = BuildConfig.ndkVersion
 
   defaultConfig {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -36,12 +39,10 @@ android {
     }
   }
 
-  ndkVersion = "27.1.12297006"
-
   externalNativeBuild {
     cmake {
       path = project.file("src/main/cpp/CMakeLists.txt")
-      version = "3.22.1"
+      version = "3.31.1"
     }
   }
 }

@@ -18,7 +18,10 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-plugins { `kotlin-dsl` }
+plugins { 
+  alias(libs.plugins.kotlin.jvm)
+  `java-gradle-plugin`
+}
 
 repositories {
   google()
@@ -29,13 +32,15 @@ repositories {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_3)
-        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_3)
+        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_4)
+        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_4)
     }
 }
 
 
 dependencies {
+  compileOnly(gradleApi())
+  
   implementation(projects.buildLogic.common)
   implementation(projects.buildLogic.propertiesParser)
   
@@ -52,19 +57,25 @@ dependencies {
 
 gradlePlugin {
   plugins {
-    create("com.itsaky.androidide.build") {
+    // 手动注册主项目根节点专属插件！
+    register("build-logic.root-project") {
+      id = "build-logic.root-project"
+      implementationClass = "com.itsaky.androidide.plugins.AndroidIDERootProjectPlugin" 
+    }
+
+    register("com.itsaky.androidide.build") {
       id = "com.itsaky.androidide.build"
       implementationClass = "com.itsaky.androidide.plugins.AndroidIDEPlugin"
     }
-    create("com.itsaky.androidide.core-app") {
+    register("com.itsaky.androidide.core-app") {
       id = "com.itsaky.androidide.core-app"
       implementationClass = "com.itsaky.androidide.plugins.AndroidIDECoreAppPlugin"
     }
-    create("com.itsaky.androidide.build.propsparser") {
+    register("com.itsaky.androidide.build.propsparser") {
       id = "com.itsaky.androidide.build.propsparser"
       implementationClass = "com.itsaky.androidide.plugins.PropertiesParserPlugin"
     }
-    create("com.itsaky.androidide.build.lexergenerator") {
+    register("com.itsaky.androidide.build.lexergenerator") {
       id = "com.itsaky.androidide.build.lexergenerator"
       implementationClass = "com.itsaky.androidide.plugins.LexerGeneratorPlugin"
     }

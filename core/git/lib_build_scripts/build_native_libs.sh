@@ -5,7 +5,7 @@
 #
 # 本脚本改编自 PuppyGit 上游的 lib_build_scripts/1_installrequire.sh +
 # 2_downloadsrc.sh + 3_buildlibs.sh，适配 ZeroStudio CI 环境已安装的
-# NDK 27.1.12297006 和 CMake 3.31.1。
+# NDK 28.0.13004108 和 CMake 3.31.1。
 #
 # 用法:
 #   bash build_native_libs.sh [output_dir] [archs]
@@ -21,7 +21,7 @@ set -e
 # ---------- 可配置变量 ----------
 
 # NDK 和 CMake 版本 (与 ZeroStudio BuildConfig.kt 保持一致)
-NDK_VERSION="${NDK_VERSION:-27.1.12297006}"
+NDK_VERSION="${NDK_VERSION:-28.0.13004108}"
 CMAKE_VERSION="${CMAKE_VERSION:-3.31.1}"
 
 # Android API level (与 PuppyGit 上游一致)

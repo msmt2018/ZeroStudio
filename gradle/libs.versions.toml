@@ -11,41 +11,41 @@ androidToolsCommon = "31.4.1"
 androidToolsCommonB = "31.2.2"
 jetbrainsAnnotations = "24.1.0"
 # proto 相关
-protobufVersion = "4.33.0"
+protobufVersion = "4.36.2"
 
 # Kotlin相关
 kotlin = "2.4.0"
 ksp = "2.3.12"
 kotlin-coroutines = "1.11.0"
-kotlinxSerializationJson = "1.8.1"
+kotlinxSerializationJson = "1.11.0"
 kotlinx-datetime = "0.8.0"
 kotlinMarkdown = "0.7.3"
-markdown-rikka = "66a56dffca"
+markdown-rikka = "d79a97cc8e"
 kotlin-coroutines-core = "1.11.0"
 
 # Compose
-composeBom = "2026.05.00"
+composeBom = "2026.09.00"
 activityCompose = "1.13.0"
 navigationCompose = "2.10.2"
 androidxCompose-livedata = "1.7.0"
 compose-compiler = "1.5.15"
-material3 = "1.5.0-alpha17"
+material3 = "1.5.0-beta01"
 materialIconsCore = "1.7.8"
 accompanistSystemuicontroller = "0.36.0"
 
 # androidx相关
-androidxCore = "1.7.1"
+androidxCore = "1.8.0"
 androidx-vectordrawable = "1.2.0"
 androidx-navigation = "2.10.2"
-androidx-work = "2.11.2"
+androidx-work = "2.12.0"
 androidx-espresso = "3.7.0"
-androidxCoreKtx = "1.16.0"
+androidxCoreKtx = "1.19.1"
 androidxCoreSplashscreen = "1.0.1"
 androidxDocumentfile = "1.1.0"
 androidDesugarJdkLibs = "2.1.5"
 androidx-lifecycle = "2.10.0"
 androidxViewpager = "1.0.0"
-androidx-room = "2.8.4"
+androidx-room = "2.8.5"
 androidx-benchmark = "1.5.0"
 androidx-benchmark-junit4 = "1.5.0"
 androidConstraintlayout = "2.2.1"
@@ -54,31 +54,32 @@ activityKtx = "1.10.1"
 lifecycleViewmodelKtx = "2.9.2"
 androidxUiautomator = "2.3.0"
 browser = "1.10.0"
-media3 = "1.10.0"
-cameraCore = "1.6.1"
-paging = "3.5.0"
+media3 = "1.11.1"
+cameraCore = "1.6.2"
+paging = "3.5.3"
 androidxWebkit = "1.17.0-alpha03"
-nav3Core = "1.1.1"
+nav3Core = "1.2.0"
 profileinstaller = "1.4.1"
-lifecycleRuntimeKtx = "2.10.0"
-material3AdaptiveNav3 = "1.3.0-alpha09"
-nav3Material = "1.0.0-SNAPSHOT"
-lifecycleViewmodelNav3 = "2.10.0"
+lifecycleRuntimeKtx = "2.11.0"
+material3AdaptiveNav3 = "1.3.0"
+nav3Material = "1.3.0"
+lifecycleViewmodelNav3 = "2.11.0"
 datastore = "1.2.1"
 benchmarkMacroJunit4 = "1.4.1"
 baselineprofile = "1.4.1"
 multidexVersion = "2.0.1"
+ink = "1.1.0-alpha09"
 
 # Google相关
 google-findbugsJsr305 = "3.0.2"
 googleGson = "2.13.1"
 guava-jre = "32.1.3-jre"
 guava-android = "32.1.3-android"
-googleMaterial = "1.14.0"
+googleMaterial = "1.5.0-beta01"
 google-accompanist-pager = "0.28.0"
-google-services = "4.4.4"
-firebase-bom = "34.13.0"
-firebase-crashlytics = "3.0.7"
+google-services = "4.5.0"
+firebase-bom = "35.0.2"
+firebase-crashlytics = "3.0.8"
 zxing = "3.5.4"
 ioGrpcVersion = "1.78.0"
 ioGrpcStubVersion = "1.5.0"
@@ -92,16 +93,17 @@ io-markwon = "4.6.2"
 koin-bom = "4.0.4"
 retrofit = "3.0.0"
 iorealm = "10.19.0"
-slf4j-api = "2.0.17"
+slf4j-api = "2.0.18"
 jrubyJoni = "2.2.6"
 orgEclipseJdtAnnotation = "2.3.100"
 snakeyamlEngine = "2.10"
+snakeyaml = "2.7"
 bcrypt = "0.10.2"
 lsp4jVersion = "0.24.0"
 exposedVersion = "0.37.3"
 jmhVersion = "1.20"
 org-apache-compress = "1.21"
-org-tukaani-tarxz = "1.9"
+org-tukaani-tarxz = "1.12"
 commonsIo = "2.19.0"
 commonUtilcodex = "1.31.1"
 paletteKtx = "1.0.0"
@@ -110,40 +112,43 @@ zoomage = "1.3.1"
 colorpickerview = "2.3.0"
 commonsText = "1.15.0"
 logback = "1.3.15"
-io-ktor = "3.2.3"
+io-ktor = "3.5.2"
 glide = "4.16.0"
-io-coil = "3.4.0"
+io-coil = "3.6.3"
 leakcanary = "2.14"
-jsoup = "1.22.2"
+jsoup = "1.23.2"
 dav4jvm = "main-SNAPSHOT"
 dom4j = "2.2.0"
-jlatexmath = "1.3"
+jlatexmath = "1.5"
 ucrop = "2.2.11-native"
 sonner = "0.4.0"
 sonner-dokar = "0.3.9"
-okhttp = "5.3.2"
-mcp = "0.8.4"
+okhttp = "5.5.0"
+mcp = "0.15.0-rikka.4"
 pebble = "4.1.1"
-quickjs = "3.2.3"
+quickjs = "1.0.15"
 diffutils = "4.17"
 reorderable = "3.1.0"
 objectbox = "4.3.0"
 lucide-icons = "1.1.0"
 image-viewer = "1.1.0-alpha.7"
 quickie-bundled = "1.11.0"
-metadataExtractor = "2.20.0"
+metadataExtractor = "2.21.0"
 javaxAnnotation = "1.3.2"
 orgNanohttpd = "2.3.1"
 incap = "1.0.0"
-haze = "2.0.0-alpha03"
-huge-icons = "1.3"
+haze = "2.0.1"
+huge-icons = "1.5"
 jmdns = "3.6.3"
 slf4j-android = "1.7.36"
 sqlite-android = "-SNAPSHOT"
 sqlite-vector = "0.9.92"
-floatingx = "2.3.7"
+floatingx = "3.0.0"
 fernFlowerVersion = "243.22562.218"
 matrix = "2.1.0"
+termux = "0.118.0"
+jsch = "2.28.0"
+apache-sshd = "2.16.0"
 
 #语法解析分析
 tree-sitter = "4.3.2"
@@ -154,7 +159,7 @@ anrwatchdog = "1.4.0"
 
 libsu = "6.0.0"
 
-bcprov-jdk15to18 = "1.85"
+bouncycastle = "1.85"
 spake2-android = "-SNAPSHOT"
 sun-security-android = "1.1"
 
@@ -242,6 +247,8 @@ common-hiddenApiBypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass
 common-termuxAmLib = { module = "com.termux:termux-am-library", version = "v2.0.0" }
 common-charts = { module = "com.github.AppDevNext:AndroidChart", version = "3.1.0.21" }
 common-realm-android-library = { group = "io.realm", name = "realm-android-library", version.ref = "iorealm" }
+termux-terminal-view = { module = "com.termux.termux-app:terminal-view", version.ref = "termux" }
+
 
 #编辑器相关
 common-soraeditor-language-textmate = { module = "io.github.Rosemoe.sora-editor:language-textmate", version.ref = "soraEditor" }
@@ -260,7 +267,8 @@ common-zoomage = { module = "com.jsibbold:zoomage", version.ref = "zoomage" }
 common-colorpickerview = { module = "com.github.skydoves:colorpickerview", version.ref = "colorpickerview" }
 commons-text = { module = "org.apache.commons:commons-text", version.ref = "commonsText" }
 common-org-apache-commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "org-apache-compress" }
-common-org-tukaani-tarxzip = { module = "org.tukaani:xz", version.ref = "org-tukaani-tarxz" }
+#org.tukaani用于tar xz解压等
+xz = { module = "org.tukaani:xz", version.ref = "org-tukaani-tarxz" }
 common-org-jruby-joni = { module = "org.jruby.joni:joni" , version.ref = "jrubyJoni" }
 common-org-jruby-jcodings = { module = "org.jruby.jcodings:jcodings", version = "1.0.63" }
 common-monarch-code = { module = "io.github.dingyi222666.monarch:monarch", version = "1.0.3" }
@@ -275,7 +283,6 @@ common-com-squareup-javapoet = { module = "com.squareup:javapoet", version = "1.
 common-net-ltgt-gradle-incap = { module = "net.ltgt.gradle.incap:incap", version.ref = "incap" }
 common-net-ltgt-gradle-incap-processor = { module = "net.ltgt.gradle.incap:incap-processor", version.ref = "incap" }
 common-asm = { module = "org.ow2.asm:asm", version = "9.7.1" }
-guava-listenablefuture = { module = "com.google.guava:listenablefuture", version = "9999.0-empty-to-avoid-conflict-with-guava" }
 
 # AndroidX 相关sdk
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidxCore" }
@@ -342,6 +349,12 @@ androidx-media3-datasource = { module = "androidx.media3:media3-datasource", ver
 androidx-media3-extractor = { module = "androidx.media3:media3-extractor", version.ref = "media3" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWebkit" }
 androidx-multidex = { module = "androidx.multidex:multidex", version.ref = "multidexVersion" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version = "1.4.2" }
+androidx-ink-authoring-compose = { group = "androidx.ink", name = "ink-authoring-compose", version.ref = "ink" }
+androidx-ink-brush = { group = "androidx.ink", name = "ink-brush", version.ref = "ink" }
+androidx-ink-geometry = { group = "androidx.ink", name = "ink-geometry", version.ref = "ink" }
+androidx-ink-rendering = { group = "androidx.ink", name = "ink-rendering", version.ref = "ink" }
+androidx-ink-strokes = { group = "androidx.ink", name = "ink-strokes", version.ref = "ink" }
 
 
 # Compose BOM (Bill of Materials)
@@ -384,7 +397,8 @@ firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashly
 firebase-config = { group = "com.google.firebase", name = "firebase-config" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "barcodeScanning" }
-com-google-protobuf-java-util = {group = "com.google.protobuf", name = "protobuf-java-util", version = "3.18.2"}
+com-google-protobuf-java-util = {group = "com.google.protobuf", name = "protobuf-java-util", version.ref = "protobufVersion"}
+guava-listenablefuture = { module = "com.google.guava:listenablefuture", version = "9999.0-empty-to-avoid-conflict-with-guava" }
 
 # AAPT2
 aapt2-common = { module = "com.android.tools:common", version.ref = "androidToolsCommon" }
@@ -398,7 +412,7 @@ tooling-builder = { module = "com.android.tools.build:builder", version.ref = "a
 tooling-builderModel = { module = "com.android.tools.build:builder-model", version.ref = "agp-tooling" }
 tooling-builderTestApi = { module = "com.android.tools.build:builder-test-api", version.ref = "agp-tooling" }
 tooling-gradleApi = { module = "org.gradle:gradle-tooling-api", version.ref = "gradle-tooling" }
-tooling-slf4j = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-api" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-api" }
 
 # use logback-core from logback-android instead
 logging-logback-core = { module = "ch.qos.logback:logback-core", version.ref = "logback" }
@@ -449,24 +463,26 @@ io-coil-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", ver
 io-coil-cache-control = { group = "io.coil-kt.coil3", name = "coil-network-cache-control", version.ref = "io-coil" }
 
 # Ktor
-io-ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "io-ktor" }
-io-ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty", version.ref = "io-ktor" }
-io-ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "io-ktor" }
-io-ktor-server-content-negotiation = { group = "io.ktor", name = "ktor-server-content-negotiation", version.ref = "io-ktor" }
-io-ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "io-ktor" }
-io-ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "io-ktor" }
-io-ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "io-ktor" }
-io-ktor-server-default-headers = { group = "io.ktor", name = "ktor-server-default-headers", version.ref = "io-ktor" }
-io-ktor-server-caching-headers = { group = "io.ktor", name = "ktor-server-caching-headers", version.ref = "io-ktor" }
-io-ktor-server-conditional-headers = { group = "io.ktor", name = "ktor-server-conditional-headers", version.ref = "io-ktor" }
-io-ktor-server-compression = { group = "io.ktor", name = "ktor-server-compression", version.ref = "io-ktor" }
-io-ktor-server-cors = { group = "io.ktor", name = "ktor-server-cors", version.ref = "io-ktor" }
-io-ktor-server-auth = { group = "io.ktor", name = "ktor-server-auth", version.ref = "io-ktor" }
-io-ktor-server-auth-jwt = { group = "io.ktor", name = "ktor-server-auth-jwt", version.ref = "io-ktor" }
-io-ktor-server-host-common = { group = "io.ktor", name = "ktor-server-host-common", version.ref = "io-ktor" }
-io-ktor-server-status-pages = { group = "io.ktor", name = "ktor-server-status-pages", version.ref = "io-ktor" }
-io-ktor-server-sse = { group = "io.ktor", name = "ktor-server-sse", version.ref = "io-ktor" }
-io-ktor-server-cio = { group = "io.ktor", name = "ktor-server-cio", version.ref = "io-ktor" }
+ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "io-ktor" }
+ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty", version.ref = "io-ktor" }
+ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "io-ktor" }
+ktor-server-content-negotiation = { group = "io.ktor", name = "ktor-server-content-negotiation", version.ref = "io-ktor" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "io-ktor" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "io-ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "io-ktor" }
+ktor-server-default-headers = { group = "io.ktor", name = "ktor-server-default-headers", version.ref = "io-ktor" }
+ktor-server-caching-headers = { group = "io.ktor", name = "ktor-server-caching-headers", version.ref = "io-ktor" }
+ktor-server-conditional-headers = { group = "io.ktor", name = "ktor-server-conditional-headers", version.ref = "io-ktor" }
+ktor-server-compression = { group = "io.ktor", name = "ktor-server-compression", version.ref = "io-ktor" }
+ktor-server-cors = { group = "io.ktor", name = "ktor-server-cors", version.ref = "io-ktor" }
+ktor-server-auth = { group = "io.ktor", name = "ktor-server-auth", version.ref = "io-ktor" }
+ktor-server-auth-jwt = { group = "io.ktor", name = "ktor-server-auth-jwt", version.ref = "io-ktor" }
+ktor-server-host-common = { group = "io.ktor", name = "ktor-server-host-common", version.ref = "io-ktor" }
+ktor-server-status-pages = { group = "io.ktor", name = "ktor-server-status-pages", version.ref = "io-ktor" }
+ktor-server-sse = { group = "io.ktor", name = "ktor-server-sse", version.ref = "io-ktor" }
+ktor-server-cio = { group = "io.ktor", name = "ktor-server-cio", version.ref = "io-ktor" }
+# Ktor CIO client (mDNS discovery 心跳/HTTP 用)
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "io-ktor" }
 
 # kotlin相关
 org-jetbrains-kotlin-scripting-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable", version.ref = "kotlin" }
@@ -487,6 +503,9 @@ kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 jetbrains-markdown = { group = "org.jetbrains", name = "markdown", version.ref = "kotlinMarkdown" }
 rikkahub-markdown = { module = "com.github.rikkahub:markdown", version.ref = "markdown-rikka" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlin-coroutines-core" }
+kotlin-compose-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
+
 
 # koin
 koin-bom = { group = "io.insert-koin", name = "koin-bom", version.ref = "koin-bom" }
@@ -526,7 +545,7 @@ xmlLsp-org-eclipse-lemminx = { module = "org.eclipse.lemminx:org.eclipse.lemminx
 
 # grpc二进制协议 + protobuf
 grpc-android = { module = "io.grpc:grpc-android", version.ref = "ioGrpcVersion" }
-google-protobuf-kotlin = { module = "com.google.protobuf:protobuf-kotlin", version.ref = "googleProtobufKotlin" }
+google-protobuf-kotlin = { module = "com.google.protobuf:protobuf-kotlin", version.ref = "protobufVersion" }
 grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "ioGrpcVersion" }
 grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "ioGrpcVersion" }
 grpc-netty-shaded = { module = "io.grpc:grpc-netty-shaded", version.ref = "ioGrpcVersion" }
@@ -541,19 +560,28 @@ org-openjdk-jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh
 org-xerial-sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.41.2.1" }
 hamcrest-all = { module = "org.hamcrest:hamcrest-all", version = "1.3" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
-modelcontextprotocol-kotlin-sdk = { module = "io.modelcontextprotocol:kotlin-sdk", version.ref = "mcp" }
+modelcontextprotocol-kotlin-sdk = { module = "com.github.rikkahub.mcp-kotlin-sdk:kotlin-sdk-client", version.ref = "mcp" }
 pebble = { module = "io.pebbletemplates:pebble", version.ref = "pebble" }
 diffutils = { module = "io.github.java-diff-utils:java-diff-utils", version.ref = "diffutils" }
 lucide-icons = { group = "com.composables", name = "icons-lucide", version.ref = "lucide-icons" }
 image-viewer = { group = "com.jvziyaoyao.scale", name = "image-viewer", version.ref = "image-viewer" }
 metadata-extractor = { module = "com.drewnoakes:metadata-extractor", version.ref = "metadataExtractor" }
-quickjs = { group = "wang.harlon.quickjs", name = "wrapper-android", version.ref = "quickjs" }
+quickjs = { module = "io.github.dokar3:quickjs-kt", version.ref = "quickjs" }
+
 dom4j = { module = "org.dom4j:dom4j", version.ref = "dom4j" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
+haze-blur-material3 = { module = "dev.chrisbanes.haze:haze-blur-material3", version.ref = "haze" }
+haze-glass-material3 = { module = "dev.chrisbanes.haze:haze-glass-material3", version.ref = "haze" }
 haze-blur-materials = { module = "dev.chrisbanes.haze:haze-blur-materials", version.ref = "haze" }
 jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
 slf4j-android = { module = "org.slf4j:slf4j-android", version.ref = "slf4j-android" }
+uk-slf4j-android = { module = "uk.uuid.slf4j:slf4j-android", version = "2.0.17-0" }
+apache-sshd-core = { module = "org.apache.sshd:sshd-core", version.ref = "apache-sshd" }
+apache-sshd-sftp = { module = "org.apache.sshd:sshd-sftp", version.ref = "apache-sshd" }
+jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+
 sqlite-android = { module = "com.github.rikkahub:sqlite-android", version.ref = "sqlite-android" }
 sqlite-vector = { module = "ai.sqlite:vector", version.ref = "sqlite-vector" }
 floatingx = { module = "io.github.petterpx:floatingx", version.ref = "floatingx" }
@@ -571,7 +599,7 @@ libsu-core = { module = "com.github.topjohnwu.libsu:core", version.ref = "libsu"
 # - bcprov-jdk15to18: BouncyCastle TLS 加密
 # - spake2-android: SPAKE2 配对协议 (com.github.Mahmud0808.spake2-java)
 # - sun-security-android: sun.security 替代实现 (com.github.MuntashirAkon)
-bcprov-jdk15to18 = { module = "org.bouncycastle:bcprov-jdk15to18", version.ref = "bcprov-jdk15to18" }
+bouncycastle-bcprov = { module = "org.bouncycastle:bcprov-jdk15to18", version.ref = "bouncycastle" }
 spake2-android = { module = "com.github.Mahmud0808.spake2-java:spake2-android", version.ref = "spake2-android" }
 sun-security-android = { module = "com.github.MuntashirAkon:sun-security-android", version.ref = "sun-security-android" }
 
@@ -596,8 +624,6 @@ lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 # Compose Animation (BOM 之外的显式版本)
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
-# Ktor CIO client (mDNS discovery 心跳/HTTP 用)
-io-ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "io-ktor" }
 # Shizuku 系统级 API 桥接 (Local ADB 通道)
 shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
 shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
@@ -629,22 +655,22 @@ io-markwon = [
     "common-markwon-jeziellago"
 ]
 
-io-ktor-server = [
-    "io-ktor-server-core",
-    "io-ktor-server-netty",
-    "io-ktor-server-cio",
-    "io-ktor-server-auth",
-    "io-ktor-server-auth-jwt",
-    "io-ktor-server-default-headers",
-    "io-ktor-server-caching-headers",
-    "io-ktor-server-conditional-headers",
-    "io-ktor-server-compression",
-    "io-ktor-server-cors",
-    "io-ktor-server-host-common",
-    "io-ktor-server-content-negotiation",
-    "io-ktor-server-status-pages",
-    "io-ktor-server-sse",
-    "io-ktor-serialization-kotlinx-json"
+ktor-server = [
+    "ktor-server-core",
+    "ktor-server-netty",
+    "ktor-server-cio",
+    "ktor-server-auth",
+    "ktor-server-auth-jwt",
+    "ktor-server-default-headers",
+    "ktor-server-caching-headers",
+    "ktor-server-conditional-headers",
+    "ktor-server-compression",
+    "ktor-server-cors",
+    "ktor-server-host-common",
+    "ktor-server-content-negotiation",
+    "ktor-server-status-pages",
+    "ktor-server-sse",
+    "ktor-serialization-kotlinx-json"
 ]
 
 io-insert-koin = [
@@ -667,7 +693,7 @@ baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprof
 
 # google相关
 com-google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-protobuf = { id = "com.google.protobuf", version = "0.9.6" }
+protobuf = { id = "com.google.protobuf", version = "0.10.0" }
 google-services = { id = "com.google.gms.google-services", version.ref = "google-services" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebase-crashlytics" }
 
@@ -675,7 +701,6 @@ firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 org-jetbrains-kotlin-plugin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-org-jetbrains-kotlin-compose = { id = "org.jetbrains.compose", version = "1.11.0" }
 org-jetbrains-kotlin-plugin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 # github
 com-github-jk1-tcdeps = { id = "com.github.jk1.tcdeps", version = "1.2" }

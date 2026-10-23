@@ -15,7 +15,7 @@
 #  along with android-tree-sitter.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-cmake_minimum_required(VERSION 3.22.1)
+cmake_minimum_required(VERSION 3.31.1)
 
 # Project name
 project("android-tree-sitter")

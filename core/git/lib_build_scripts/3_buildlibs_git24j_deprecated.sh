@@ -182,7 +182,7 @@ for arch in $archs; do
     cd $git24j_c_src
     mkdir -p $build_out_tmp
     cd $build_out_tmp
-    # should use cmake 3.16.3 or 3.22.1, if newer, may can't found the jni_md.h even I set include path on the command, 一开始以为是cmaketoolchain限制使用外部目录的库，但我尝试把jdk放到ndk sysroot目录下再设置环境变量也没用，不知道原因，算了，放弃
+    # should use cmake 3.16.3 or 3.31.1, if newer, may can't found the jni_md.h even I set include path on the command, 一开始以为是cmaketoolchain限制使用外部目录的库，但我尝试把jdk放到ndk sysroot目录下再设置环境变量也没用，不知道原因，算了，放弃
     cmake .. -DCMAKE_TOOLCHAIN_FILE=$toolchainfile -DCMAKE_INSTALL_PREFIX=$liboutdir -DCMAKE_BUILD_TYPE=Release -DJAVA_INCLUDE_PATH2=$JAVA_HOME/include/linux -DJAVA_AWT_INCLUDE_PATH=$JAVA_HOME/include -DJAVA_AWT_LIBRARY=$JAVA_HOME/jre/lib/amd64/libawt.so -DJAVA_JVM_LIBRARY=$JAVA_HOME/jre/lib/amd64/server/libjvm.so -DINCLUDE_LIBGIT2=$libgit2src/include -DLINK_LIBGIT2=$liboutdir
     cmake --build .
 

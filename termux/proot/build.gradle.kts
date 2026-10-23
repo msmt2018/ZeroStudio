@@ -9,7 +9,7 @@ android {
     ndkVersion = BuildConfig.ndkVersion
 
     defaultConfig {
-        minSdk = 26
+        minSdk = BuildConfig.minSdk
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
@@ -32,7 +32,7 @@ android {
     externalNativeBuild {
         cmake {
             path("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+            version = "3.31.1"
         }
     }
     // CMakeLists.txt stages libproot.so / libloader.so / libloader32.so into

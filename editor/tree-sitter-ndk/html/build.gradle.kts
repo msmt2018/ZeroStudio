@@ -1,8 +1,10 @@
+import com.itsaky.androidide.build.config.BuildConfig
+
 plugins { id("com.android.library") }
 
 android {
   namespace = "com.itsaky.androidide.treesitter.html"
-  ndkVersion = "27.1.12297006"
+  ndkVersion = BuildConfig.ndkVersion
 
   defaultConfig {
     ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")) }
@@ -13,7 +15,7 @@ android {
   externalNativeBuild {
     cmake {
       path = file("src/main/cpp/CMakeLists.txt")
-      version = "3.22.1"
+      version = "3.31.1"
     }
   }
   buildFeatures { buildConfig = false }

@@ -14,6 +14,7 @@
  *   You should have received a copy of the GNU General Public License
  *  along with android-tree-sitter.  If not, see <https://www.gnu.org/licenses/>.
  */
+import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
   id("com.android.library")
@@ -23,7 +24,7 @@ description = "Android Java bindings for Tree Sitter."
 
 android {
   namespace = "com.itsaky.androidide.treesitter"
-  ndkVersion = "27.1.12297006"
+  ndkVersion = BuildConfig.ndkVersion
 
   defaultConfig {
     // 将 consumer-rules.pro 合并到消费者（TinaIDE app）的 R8 规则中。
@@ -44,7 +45,7 @@ android {
   externalNativeBuild {
     cmake {
       path = file("src/main/cpp/CMakeLists.txt")
-      version = "3.22.1"
+      version = "3.31.1"
     }
   }
 }

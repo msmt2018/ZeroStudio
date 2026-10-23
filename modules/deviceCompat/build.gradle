@@ -1,22 +1,26 @@
 import com.itsaky.androidide.build.config.BuildConfig
+
 plugins {
     alias(libs.plugins.android.library)
 }
 
 android {
-    namespace = namespace = "${BuildConfig.packageName}.DeviceCompat"
-    compileSdk 34
+    namespace = "${BuildConfig.packageName}.DeviceCompat"
+    
+      compileSdk = BuildConfig.compileSdk
+
 
     defaultConfig {
-        minSdk 17
+            minSdk = BuildConfig.minSdk
+
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
 dependencies {
-      implementation(libs.androidx.annotation)
+    implementation(libs.androidx.annotation)
 }

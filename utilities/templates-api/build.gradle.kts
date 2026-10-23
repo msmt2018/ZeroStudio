@@ -26,7 +26,7 @@ android { namespace = "${BuildConfig.packageName}.templates" }
 dependencies {
 
   // Handle tar.xz compressed packages
-  implementation(libs.common.org.tukaani.tarxzip)
+  implementation(libs.xz)
   // Handle .tar archiving
   implementation(libs.common.org.apache.commons.compress)
   // Secondary IO Flow operations

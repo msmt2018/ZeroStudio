@@ -5,4 +5,9 @@
 [submodule "core/rikkahub"]
 	path = core/rikkahub
 	url = https://github.com/msmt2018/rikkahub
+	
+[submodule "core/rikkahub/material3/material-color-utilities"]
+	path = core/rikkahub/material3/material-color-utilities
+	url = https://github.com/material-foundation/material-color-utilities.git
+
 

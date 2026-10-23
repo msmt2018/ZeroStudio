@@ -16,12 +16,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # 发布 Release 需要写权限
 
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          fetch-depth: 0
+          submodules: recursive # 拉取子模块
 
       - name: Install basic system dependency packages
         run: |
@@ -35,40 +38,41 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Configuring a Gradle 9.7.1 environment
+      - name: Configuring a Gradle 9.8.0 environment
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.7.1'
+          gradle-version: '9.8.0'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      # web 模块的 preBuild 会执行 `pnpm run build` 构建前端，必须准备好 Node + pnpm
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
-      
-      - name: Setup Node.js
+          version: 11
+
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: core/chatai/web-ui/pnpm-lock.yaml
 
-      - name: Install pnpm
-        run: |
-          npm install -g pnpm
-          pnpm --version
-
-      - name: Verify Bun
-        run: |
-          which bun
-          bun --version
-
-      - name: Install web-ui dependencies with Bun
+      # gradle 的 buildWebUi 任务只跑 build 不跑 install，需在此提前安装依赖
+      - name: Install core/chatai/web-ui dependencies
         working-directory: core/chatai/web-ui
-        run: |
-          bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
-      - name: Install the specified NDK and Android SDK CMake (3.22.1)
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Install the specified NDK and Android SDK CMake (3.31.1)
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006" "cmake;3.22.1" "cmake;3.31.1"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.0.13004108" "cmake;3.31.1"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |

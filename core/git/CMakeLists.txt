@@ -1,4 +1,4 @@
-# if build git24j failed with "jni_md.h not found", try 3.16.3 or 3.22.1, they are tested
+# if build git24j failed with "jni_md.h not found", try 3.16.3 or 3.31.1, they are tested
 cmake_minimum_required(VERSION 3.31.1)
 
 project(puppygit C)
