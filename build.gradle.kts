@@ -44,6 +44,7 @@ plugins {
   alias(libs.plugins.kotlin.jvm) apply false
   alias(libs.plugins.org.jetbrains.kotlin.plugin.compose) apply false
   alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization) apply false
+  alias(libs.plugins.kotlin.sam.with.receiver) apply false 
 
   // maven插件
   alias(libs.plugins.maven.publish) apply false

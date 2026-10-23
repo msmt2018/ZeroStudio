@@ -14,7 +14,7 @@ jetbrainsAnnotations = "24.1.0"
 protobufVersion = "4.36.2"
 
 # Kotlin相关
-kotlin = "2.4.0"
+kotlin = "2.4.10"
 ksp = "2.3.12"
 kotlin-coroutines = "1.11.0"
 kotlinxSerializationJson = "1.11.0"
@@ -164,7 +164,7 @@ spake2-android = "-SNAPSHOT"
 sun-security-android = "1.1"
 
 hilt = "2.60.1"
-hiltExt = "2.60.1"
+hiltExt = "1.4.0"
 nayukiQR = "1.8.0"
 aboutlibraries = "11.3.0"  # 降级: 15.x 需要 AGP 9 + SDK 37, 11.3.0 兼容 SDK 35
 securityCrypto = "1.1.0"
@@ -700,8 +700,11 @@ firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "
 # kotlin相关
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-sam-with-receiver = { id = "org.jetbrains.kotlin.plugin.sam.with.receiver", version.ref = "kotlin" }
 org-jetbrains-kotlin-plugin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 org-jetbrains-kotlin-plugin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+
+
 # github
 com-github-jk1-tcdeps = { id = "com.github.jk1.tcdeps", version = "1.2" }
 
@@ -715,3 +718,4 @@ maven-publish = { id = "com.vanniktech.maven.publish.base", version.ref = "maven
 com-jaredsburrows-license = { id = "com.jaredsburrows.license", version = "0.8.42" }
 gradle-publish = { id = "com.gradle.plugin-publish", version = "1.2.1" }
 realm-gradle-plugin = { id = "io.realm:realm-gradle-plugin", version.ref = "iorealm" }
+

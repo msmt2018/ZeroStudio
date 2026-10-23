@@ -3,7 +3,8 @@
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
-  includeBuild("composite-builds/build-logic") { name = "build-logic" }
+  // includeBuild("composite-builds/build-logic") { name = "build-logic" }
+  includeBuild("composite-builds/build-logic")
 
   repositories {
     gradlePluginPortal()
