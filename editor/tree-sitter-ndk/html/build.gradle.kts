@@ -1,6 +1,8 @@
 import com.itsaky.androidide.build.config.BuildConfig
 
-plugins { id("com.android.library") }
+plugins { id("com.android.library")
+  alias(libs.plugins.com.google.devtools.ksp)
+}
 
 android {
   namespace = "com.itsaky.androidide.treesitter.html"
@@ -24,5 +26,5 @@ android {
 dependencies {
   implementation(projects.editor.treeSitterNdk.androidTreeSitter)
   implementation(projects.editor.treeSitterNdk.annotations)
-  annotationProcessor(projects.editor.treeSitterNdk.annotationProcessors)
+  ksp(projects.editor.treeSitterNdk.annotationProcessors)
 }

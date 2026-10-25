@@ -16,16 +16,18 @@
  */
 
 @Suppress("DSL_SCOPE_VIOLATION") // TODO: Remove once KTIJ-19369 is fixed
-plugins { id("java-library") }
+plugins { id("java-library")
+  alias(libs.plugins.com.google.devtools.ksp)
+}
 
 dependencies {
   implementation(projects.editor.treeSitterNdk.annotations)
   implementation(libs.common.com.squareup.javapoet)
 
   implementation(libs.google.auto.service.annotations)
-  annotationProcessor(libs.google.auto.service)
+  ksp(libs.google.auto.service)
 
   // Generates the required META-INF descriptor to make the processor incremental.
   compileOnly(libs.common.net.ltgt.gradle.incap)
-  annotationProcessor(libs.common.net.ltgt.gradle.incap.processor)
+  ksp(libs.common.net.ltgt.gradle.incap.processor)
 }

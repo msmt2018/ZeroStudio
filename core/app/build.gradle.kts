@@ -352,7 +352,7 @@ dependencies {
   // 加密 SharedPreferences (ADB 配对凭据)
   implementation(libs.androidx.security.crypto)
   // Ktor CIO client
-  implementation(libs.io.ktor.client.cio)
+  implementation(libs.ktor.client.cio)
 
   coreLibraryDesugaring(libs.androidx.libDesugaring) // 脱糖
   testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")

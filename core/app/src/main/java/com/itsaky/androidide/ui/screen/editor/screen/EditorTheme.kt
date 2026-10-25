@@ -1,4 +1,4 @@
-package com.itsaky.androidide.activities.editor.ui.screen
+package com.itsaky.androidide.ui.screen.editor.screen
 
 import android.content.Context
 import androidx.compose.foundation.isSystemInDarkTheme

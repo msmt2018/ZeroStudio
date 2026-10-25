@@ -6,7 +6,7 @@ plugins {
   alias(libs.plugins.android.library)
   id("kotlin-parcelize")
   alias(libs.plugins.com.google.devtools.ksp)
-  id("androidx.room")
+  alias(libs.plugins.androidx.room)
   alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
   alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
@@ -96,89 +96,67 @@ android {
 dependencies {
 
   // file encoding detector
-  implementation("com.github.albfernandez:juniversalchardet:2.5.0")
-  implementation("org.eclipse.jdt:org.eclipse.jdt.annotation:2.3.100")
-  implementation("org.jruby.joni:joni:2.2.6")
-  implementation("com.google.code.gson:gson:2.13.1")
-  implementation("org.snakeyaml:snakeyaml-engine:2.10")
+  implementation(libs.github.juniversalchardet)
+  implementation(libs.common.org.eclipse.jdt.annotation)
+  implementation(libs.common.org.jruby.joni)
+  implementation(libs.google.gson)
+  implementation(libs.common.snakeyaml.engine)
 
-  // start: temporary markdown dependencies, remove when 'compose-markdown' support custom
-  // coilStore(for load image from relative path)
-  val markwonVersion = "4.6.2"
-  val coilVersion = "2.7.0"
-  implementation("androidx.appcompat:appcompat:1.7.1")
-  implementation("io.noties.markwon:core:$markwonVersion")
-  implementation("io.noties.markwon:ext-strikethrough:$markwonVersion")
-  implementation("io.noties.markwon:ext-tables:$markwonVersion")
-  implementation("io.noties.markwon:html:$markwonVersion")
-  implementation("io.noties.markwon:linkify:$markwonVersion")
-  implementation("io.noties.markwon:ext-tasklist:$markwonVersion")
-  implementation("com.github.jeziellago:Markwon:58aa5aba6a")
-  // end: temporary markdown dependencies
+  // temporary markdown dependencies
+  implementation(libs.androidx.appcompat)
+  implementation(libs.bundles.io.markwon)
 
   // 文件管理器显示图片缩略图
-  implementation("io.coil-kt:coil:$coilVersion")
-  implementation("io.coil-kt:coil-compose:$coilVersion")
-  implementation("io.coil-kt:coil-gif:$coilVersion")
-  implementation("io.coil-kt:coil-svg:$coilVersion")
+  implementation(libs.bundles.io.coil)
 
-  // ktor for http server (git pull/push api)
-  val ktorVersion = "3.2.2"
-  implementation("io.ktor:ktor-server-core:$ktorVersion")
-  implementation("io.ktor:ktor-server-netty:$ktorVersion")
-  implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
-  implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
+  // ktor for http server
+  implementation(libs.bundles.ktor.server)
 
-  implementation("at.favre.lib:bcrypt:0.10.2")
-  implementation("androidx.documentfile:documentfile:1.1.0")
-  val lifecycleVersion = "2.9.2"
-  implementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion")
-  implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
-  // room start
-  val room_version = "2.7.2"
-  implementation("androidx.room:room-runtime:$room_version")
-  annotationProcessor("androidx.room:room-compiler:$room_version")
-  // To use Kotlin Symbol Processing (KSP)
-  ksp("androidx.room:room-compiler:$room_version")
-  // optional - Kotlin Extensions and Coroutines support for Room
-  implementation("androidx.room:room-ktx:$room_version")
-  // room end
-
+  implementation(libs.common.bcrypt)
+  implementation(libs.androidx.documentfile)
+  
+  // Lifecycle
+  implementation(libs.bundles.androidx.lifecycle)
+  
+  // Room 数据库
+  implementation(libs.bundles.androidx.room)
+  ksp(libs.androidx.room.compiler)
+  
   // javax NonNull annotation for git24j
-  implementation("com.google.code.findbugs:jsr305:3.0.2")
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-  implementation("androidx.navigation:navigation-compose:2.9.0")
+  implementation(libs.google.findbugs.jsr305)
+  implementation(libs.kotlinx.serialization.json)
+  implementation(libs.androidx.navigation.compose)
 
   // 启动屏幕
-  implementation("androidx.core:core-splashscreen:1.0.1")
+  implementation(libs.androidx.splashscreen)
 
-  val composeBom = platform("androidx.compose:compose-bom:2026.05.00")
+  // Compose 核心套件
+  implementation(platform(libs.androidx.compose.bom))
+  implementation(libs.bundles.compose)
+  
+  // 额外显式声明的扩展图标
+  implementation(libs.androidx.compose.material.icons.extended)
 
-  implementation("androidx.core:core-ktx:1.16.0")
-  implementation("androidx.activity:activity-compose:1.10.1")
-  implementation(composeBom)
-  implementation("androidx.compose.ui:ui")
-  implementation("androidx.compose.ui:ui-graphics")
-  implementation("androidx.compose.ui:ui-tooling-preview")
-  implementation("androidx.compose.material3:material3")
-  implementation("androidx.compose.material:material-icons-extended")
-  // implementation("androidx.compose.material:material-pull-refresh:1.6.1")
   implementation(projects.core.resources)
   implementation(libs.common.editor)
   implementation(projects.modules.soraLanguageMonarch)
   implementation(libs.common.soraLanguageTextmate)
-  // implementation(projects.modules.soraLanguageTreesitter)
   implementation(projects.modules.soraOnigurumaNative)
 
-  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5") // 脱糖
-  testImplementation(composeBom)
+  // 脱糖
+  coreLibraryDesugaring(libs.androidx.libDesugaring) 
+  // 测试相关
+  testImplementation(platform(libs.androidx.compose.bom))
   testImplementation(libs.tests.junit)
-  androidTestImplementation("androidx.test.ext:junit:1.2.1")
-  androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-  androidTestImplementation(composeBom)
-  androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-  debugImplementation("androidx.compose.ui:ui-tooling")
-  debugImplementation("androidx.compose.ui:ui-test-manifest")
+  // Android 测代与 Espresso
+  androidTestImplementation(libs.tests.androidx.junit)
+  androidTestImplementation(libs.tests.androidx.espresso.core)
+  // Compose 自动化测试与调试
+  androidTestImplementation(platform(libs.androidx.compose.bom))
+  androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+  debugImplementation(libs.androidx.compose.ui.tooling)
+  debugImplementation(libs.androidx.compose.ui.test.manifest)
+
 }
 
 kotlin { jvmToolchain(17) }

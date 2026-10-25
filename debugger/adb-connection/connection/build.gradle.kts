@@ -1,7 +1,7 @@
 /*
  * ZeroStudio IDE - 设备连接管理 connection 模块
  *
- * 包含真正的连接逻辑实现:
+ * 包含连接逻辑实现:
  *   - AdbConnectionManager: RSA 2048 密钥对生成、X509 自签名证书、持久化
  *   - WifiAdbRepositoryImpl: mDNS 发现 + QR 配对 + TLS 连接 + 心跳保活 + 自动重连
  *   - OtgRepositoryImpl: USB OTG ADB 连接
@@ -155,7 +155,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-    // Material Design (View 体系, 部分 Compose 组件回退用)
+    // Material Design
     implementation(libs.google.material)
 
     implementation(libs.androidx.room.ktx)
@@ -177,10 +177,10 @@ dependencies {
     implementation(libs.jmdns)
 
     // Ktor 客户端 (mDNS 心跳/HTTP 通信)
-    implementation(libs.io.ktor.client.core)
-    implementation(libs.io.ktor.client.cio)
-    implementation(libs.io.ktor.client.content.negotiation)
-    implementation(libs.io.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.slf4j.android)
 
     // libsu: Root shell 探测/执行 (Local ADB Root 通道)

@@ -30,7 +30,7 @@ import androidx.compose.material3.TextButton
 import com.blankj.utilcode.util.ThreadUtils
 import com.itsaky.androidide.R
 import com.itsaky.androidide.R.string
-import com.itsaky.androidide.activities.editor.ui.state.EditorDialogHandle
+import com.itsaky.androidide.ui.screen.editor.state.EditorDialogHandle
 import com.itsaky.androidide.handlers.EditorBuildEventListener
 import com.itsaky.androidide.handlers.LspHandler.connectClient
 import com.itsaky.androidide.handlers.LspHandler.destroyLanguageServers
@@ -680,7 +680,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
   protected open fun createFindInProjectDialog(moduleDirs: List<File>): EditorDialogHandle? {
     val modules = moduleDirs.filter { it.isDirectory && File(it, "src").isDirectory }
     mFindInProjectDialog = EditorDialogHandle({ _editorUi }) { dismiss ->
-      com.itsaky.androidide.activities.editor.ui.screen.EditorFindDialog(modules, dismiss) { text, extensions, dirs ->
+      com.itsaky.androidide.ui.screen.editor.screen.EditorFindDialog(modules, dismiss) { text, extensions, dirs ->
         dismiss()
         getProgressSheet(string.msg_searching_project)?.show()
         RecursiveFileSearcher.searchRecursiveAsync(text, extensions, dirs) { results -> handleSearchResults(results) }

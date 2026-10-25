@@ -147,14 +147,11 @@ Thanks to all the developers who have contributed to this project.
 
 ## Contact Us
 - [Telegram channel](https://t.me/android_zero_studio)
-- [Telegram issues](https://t.me/zerostudio_issues)
 - [Tencent QQ group](https://qm.qq.com/q/FjC6t6XSsU)
 
 <p align="center">
   <a href="https://github.com/msmt2018/ZeroStudio/issues/new?labels=bug&template=BUG.yml&title=%5BBug%5D%3A+">Report a bug</a> &nbsp; &#8226; &nbsp;
   <a href="https://github.com/msmt2018/ZeroStudio/issues/new?labels=feature&template=FEATURE.yml&title=%5BFeature%5D%3A+">Request a feature</a> &nbsp; &#8226; &nbsp;
-  <!-- <a href="https://qm.qq.com/q/FjC6t6XSsU">Join the QQ group</a> -->
-  <!-- <a href="https://t.me/android_zero_studio">Join us on Telegram</a> -->
 </p>
 
 
@@ -201,62 +198,68 @@ Thanks to all the developers who have contributed to this project.
 ![Open Source](https://img.shields.io/badge/Source_Code-100%25_Open_Source-success.svg?style=flat-square)
 
 ```
-## 📜 License & Legal Terms (许可与法律条款)
+## 📜 License & Legal Terms
 
-**ZeroStudio** is released under the **ZeroStudio Community License v1.0 (ZSCL)**.
-This is a **Source-Available** license based on GNU GPLv3 but with **strict Mandatory Additional Terms** that take precedence.
+**ZeroStudio** is released under the **GNU GPLv3 License with Mandatory Additional Terms**.
+While preserving the core spirit of open source under GNU GPLv3, this project incorporates **legally binding non-permissions and restrictions** pursuant to **Section 7 (Additional Terms)** of the GNU GPLv3 license.
 
-> 🛑 **CRITICAL WARNING / 重要警示**
+> 🛑 **CRITICAL WARNING**
 >
-> This is **NOT** a standard GPLv3 project. The "Additional Terms" strictly **PROHIBIT** any form of commercial usage, monetization, or closed-source distribution.
->
-> 本项目**不是**标准的 GPLv3 项目。附加条款**严禁**任何形式的商业使用、变现或闭源分发。
+> Under Section 7 of the GNU GPLv3, **any form of commercial usage, commercialization, or unauthorized monetization of this project or its source code is STRICTLY PROHIBITED**. Any attempt to remove or circumvent these additional commercial restrictions via standard GPLv3 loopholes is expressly voided.
 
-### 🚫 Prohibited Actions (绝对禁止行为) 
-：：PS：Prohibited behavior: As the name suggests, it refers to behavior that is not advocated, unusable, harmful to the interests of others, and has a significant impact.Regardless of the protocol/open source protocol of this project, as long as this project is not deleted, it has the root retention, branching, or change. Any malicious, prohibited, or illegal behavior caused by individuals shall be borne by themselves.
-2.法律安全范围内危险/违规行为，除了违法/违规等红线行为：必须获得开发者认可或者授权，在github问题反馈或者讨论区创建你的申请需求书。
-3.在ZeroStudio增加收费：除了github和其它捐赠平台等捐助外，如果是需要在ZeroStudio内增加收费功能，需获得开发者认可或者授权，不得私自增加收费功能到ZeroStudio的apk及项目源码，需获得认可授权。
-en：
-2. Dangerous/illegal activities within the bounds of legality, excluding illegal/violation-of-law-regulation behaviors: Developer approval or authorization is required. Create your application request in the GitHub issue feedback or discussion forum.
-3. Adding paid features to ZeroStudio: Besides donations through GitHub and other donation platforms, adding paid features to ZeroStudio requires developer approval or authorization. Adding paid features to the ZeroStudio APK/project Source without authorization is prohibited.
-
-Under this license, the following actions are **STRICTLY PROHIBITED** and will result in immediate termination of rights and potential legal action:
-
-2.  **No Access Restrictions (严禁访问限制):**
-    *   To ensure user experience, I strongly do not recommend adding advertisements, especially those that greatly affect the use of the drinking client operation
-    *   It is prohibited to add any illegal/criminal content and code within the source code, such as virtual currency, pornography, illegal intrusion/modification of devices, using high-risk permissions to write code that harms the interests/devices of others, fraud, phishing, and other Trojan behaviors. Any illegal behavior of backdoors is also prohibited
-
-### ✅ User Freedoms (用户权利)
-
-*   **Free to Use:** You may use this software for personal, educational, or internal non-profit purposes freely.
-*   **Free to Modify:** You may modify the code, provided you keep it **100% Open Source**.
-*   **Distribution and release** Apart from the revenue from voluntary donations from users/consumers, you are free to distribute/release/publish 100% externally or internally, and to freely modify the source code
 ---
 
+### 🚫 Prohibited Actions & Commercial Restrictions
+
+Without explicit, prior written permission or formal authorization from the developer (`@author android_zero（github.com/msmt2018)`), any individual, organization, corporation, or team is **STRICTLY PROHIBITED** from executing the following actions. Violations will result in immediate termination of all usage rights and may incur legal liabilities:
+
+1. **No Commercial Project Integration:**
+   * **Strictly Prohibited** to integrate any source code, specific files, code snippets, or project modules (including but not limited to APK build outputs, components, and libraries) from this project into any commercial, proprietary, or revenue-generating software or services.
+
+2. **No Commercialization or Monetization of ZeroStudio:**
+   * **Strictly Prohibited** to rebrand, repackage, redistribute, or sell this project or any of its derivatives as a commercial product.
+   * **Strictly Prohibited** to inject commercial advertisements, paywalls, pop-ups, or any user-experience-harming monetization trackers into the open-source code, the official APK, or any forked variants.
+
+3. **No Unauthorized Paid Features:**
+   * This project is completely free. Except for voluntary donations via GitHub Sponsors or other officially designated developer donation channels, **no one is permitted to add built-in paid features, activation keys, pay-to-unlock mechanisms, premium tier limits, or in-app purchase modules** into the ZeroStudio source files or compiled APK packages.
+
+4. **Malicious Code & Security Red Lines:**
+   * **Strictly Prohibited** to inject any malicious payload, including crypto-miners, Trojans, ransomware, phishing scripts, backdoors, or code that unauthorizedly modifies devices or damages other people's systems.
+   * Any specific feature modification within safe/legal bounds that might involve high-risk permissions or operations **must** be submitted as a formal proposal in the GitHub Issues or Discussions section and receive explicit approval from the developer.
+
+---
+
+### ✅ User Freedoms & Requirements
+
+Subject to strict adherence to the [Commercial Restrictions] and [Security Red Lines] above, you enjoy the fundamental freedoms granted by GNU GPLv3:
+
+* **Free for Personal Use:** You are fully allowed to use this software for personal learning, educational purposes, academic research, or internal non-profit utilities completely free of charge.
+* **Freedom to Modify & Fork:** You are free to modify, fork, or redistribute the code, provided that any derivative work **remains 100% open source** (closed-source distribution is explicitly prohibited).
+* **Attribution Required:** You **must** retain the original author attribution (`@author android_zero` and contributors) prominently across all modified or redistributed source files.
+
+---
+
+<summary><strong>⚖️ Detailed Legal Constraints & Compliance Note</strong></summary>
+
+### 1. GNU GPLv3 Section 7 Compliance
+In accordance with Section 7 of the GNU General Public License v3, the copyright holder reserves the right to supplement standard license terms with reasonable restrictions. The "Commercial Prohibition" and "Fee Restriction" enforced here are legal reservations of the author's copyright. Any modification, redistribution, or derivation of this repository must inherit these terms unconditionally.
+
+### 2. Independent Creation & Liability Disclaimer
+As a general-purpose Integrated Development Environment (IDE), any third-party projects, source codes, or applications built, compiled, or generated using ZeroStudio are the sole creation and responsibility of the user. The ZeroStudio team and the original author do not endorse, manage, or assume any joint liability for what users build.
+
+
+```
 <details open>
-<summary><strong>⚖️ Detailed Legal Constraints (详细法律约束与免责)</strong></summary>
 
-### 1. Transparency Requirement (透明化要求)
-Any fork, derivative work, or modification of ZeroStudio **MUST be 100% Open Source**.
-*   **No Closed Source:** You are prohibited from releasing modified versions under closed-source or proprietary licenses.
-*   **Attribution:** You must retain the original author attribution (`@author android_zero` and contributors) in all source files.
+<summary><strong>⚖️ Detailed Legal Constraints & Compliance Note</strong></summary>
 
-### 2. null
-
-### 3. Usage Responsibility (使用责任)
-*   **Malware Prohibition:** It is strictly forbidden to use this IDE to create malicious software (Viruses, Trojans, Spyware) or software that intentionally damages user hardware.
-*   **Disclaimer:** The ZeroStudio team is not responsible for any applications created by third-party developers using this IDE.
-
-### 4. About the License (关于协议)
-This project operates under the **ZeroStudio Community License (ZSCL)**.
-*   While based on GPLv3, the **Section 7 Additional Terms** (prohibiting commercial use) are **MANDATORY** and **IRREVOCABLE**.
-*   Any attempt to remove these restrictions using GPLv3 Section 7 loopholes is expressly voided by the Supremacy Clause of ZSCL.
+### 1. GNU GPLv3 Section 7 Compliance
+In accordance with Section 7 of the GNU General Public License v3, the copyright holder reserves the right to supplement standard license terms with reasonable restrictions. The "Commercial Prohibition" and "Fee Restriction" enforced here are legal reservations of the author's copyright. Any modification, redistribution, or derivation of this repository must inherit these terms unconditionally.
 
 **[📄 Click here to view the full LICENSE file](./LICENSE)**
 
 </details>
 
-```
 ## Contact the author of ZeroStudio:
 * Tencent, China QQ Email：2049219004@qq.com (Commonly used)
 * Tencent QQ account in China：2049219004

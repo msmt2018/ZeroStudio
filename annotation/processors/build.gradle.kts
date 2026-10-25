@@ -18,7 +18,9 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-plugins { kotlin("jvm") }
+plugins { kotlin("jvm") 
+  alias(libs.plugins.com.google.devtools.ksp)
+}
 
 dependencies {
   implementation(kotlin("stdlib"))
@@ -32,12 +34,12 @@ dependencies {
   implementation("de.greenrobot:java-common:2.3.1")
 
   implementation(libs.google.auto.service.annotations)
-  annotationProcessor(libs.google.auto.service)
+  ksp(libs.google.auto.service)
 
   // Generates the required META-INF descriptor to make the processor incremental.
   val incap = "1.0.0"
   compileOnly("net.ltgt.gradle.incap:incap:$incap")
-  annotationProcessor("net.ltgt.gradle.incap:incap-processor:$incap")
+  ksp("net.ltgt.gradle.incap:incap-processor:$incap")
 }
 
 tasks.withType<KotlinCompile>().configureEach {

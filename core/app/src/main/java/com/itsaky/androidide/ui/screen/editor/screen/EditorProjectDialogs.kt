@@ -1,4 +1,4 @@
-package com.itsaky.androidide.activities.editor.ui.screen
+package com.itsaky.androidide.ui.screen.editor.screen
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*

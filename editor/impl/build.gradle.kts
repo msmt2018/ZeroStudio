@@ -31,6 +31,7 @@ ksp {
 dependencies {
   ksp(projects.annotation.processorsKsp)
   ksp(projects.annotation.processors)
+  ksp(projects.annotation.annotations)
 
   api(projects.editor.treeSitterNdk.androidTreeSitter)
   api(libs.androidide.ts.java)
@@ -68,7 +69,6 @@ dependencies {
 
   implementation(libs.google.material)
 
-  implementation(projects.annotation.annotations)
   implementation(projects.core.actions)
   implementation(projects.core.common)
   implementation(projects.core.lspApi)

@@ -1,4 +1,4 @@
-package com.itsaky.androidide.activities.editor.ui.screen
+package com.itsaky.androidide.ui.screen.editor.screen
 
 import android.content.Intent
 import android.graphics.drawable.Drawable
@@ -50,9 +50,9 @@ import com.itsaky.androidide.R
 import com.itsaky.androidide.actions.ActionItem
 import com.itsaky.androidide.actions.ActionsRegistry
 import com.itsaky.androidide.activities.editor.BaseEditorActivity
-import com.itsaky.androidide.activities.editor.ui.state.EditorPage
-import com.itsaky.androidide.activities.editor.ui.state.EditorPageRegistry
-import com.itsaky.androidide.activities.editor.ui.state.EditorUiState
+import com.itsaky.androidide.ui.screen.editor.state.EditorPage
+import com.itsaky.androidide.ui.screen.editor.state.EditorPageRegistry
+import com.itsaky.androidide.ui.screen.editor.state.EditorUiState
 import com.itsaky.androidide.onboarding.OnboardingTarget
 import com.itsaky.androidide.onboarding.onboardingBind
 import com.itsaky.androidide.ui.SymbolInputVisibilityManager

@@ -29,7 +29,7 @@ import com.itsaky.androidide.preferences.internal.DevOpsPreferences
  */
 class AppLogFragment : LogViewFragment() {
 
-  private var session: com.itsaky.androidide.activities.editor.ui.state.EditorAppLogSession? = null
+  private var session: com.itsaky.androidide.ui.screen.editor.state.EditorAppLogSession? = null
   override fun isSimpleFormattingEnabled() = false
   fun appendAppLine(line: String) = appendLine(line)
   override fun getFilename() = "app_logs"
@@ -38,7 +38,7 @@ class AppLogFragment : LogViewFragment() {
     emptyMessage = getString(if (DevOpsPreferences.logsenderEnabled) R.string.msg_emptyview_applogs else R.string.msg_logsender_disabled)
     // The editor owns collection so switching pages cannot interrupt logs.
     if (activity !is com.itsaky.androidide.activities.editor.BaseEditorActivity) {
-      session = com.itsaky.androidide.activities.editor.ui.state.EditorAppLogSession(requireContext(), this::appendLog).also { it.start() }
+      session = com.itsaky.androidide.ui.screen.editor.state.EditorAppLogSession(requireContext(), this::appendLog).also { it.start() }
     }
   }
   override fun onDestroyView() {

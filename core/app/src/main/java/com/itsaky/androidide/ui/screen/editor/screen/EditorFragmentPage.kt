@@ -15,7 +15,7 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.itsaky.androidide.activities.editor.ui.screen
+package com.itsaky.androidide.ui.screen.editor.screen
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -25,7 +25,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.Fragment
 import androidx.fragment.compose.AndroidFragment
-import com.itsaky.androidide.activities.editor.ui.state.EditorPage
+import com.itsaky.androidide.ui.screen.editor.state.EditorPage
 
 /**
  * AndroidX 官方 Fragment 与 Compose 桥接组件。

@@ -16,8 +16,10 @@
  */
 
 plugins {
-  id("com.android.library")
+    alias(libs.plugins.android.library)
   id("com.itsaky.androidide.build")
+    alias(libs.plugins.com.google.devtools.ksp)
+
 }
 
 android { namespace = "com.google.googlejavaformat" }
@@ -30,7 +32,7 @@ dependencies {
 
   implementation(projects.buildDeps.javac)
 
-  annotationProcessor(libs.google.auto.value.ap)
+  ksp(libs.google.auto.value.ap)
 
-  annotationProcessor(libs.google.auto.service)
+  ksp(libs.google.auto.service)
 }

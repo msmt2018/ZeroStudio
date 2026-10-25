@@ -18,6 +18,8 @@ import com.itsaky.androidide.build.config.BuildConfig
 
 plugins {
   id("com.android.library")
+    alias(libs.plugins.com.google.devtools.ksp)
+
 }
 
 description = "Android Java bindings for Tree Sitter."
@@ -52,7 +54,7 @@ android {
 
 dependencies {
   implementation(projects.editor.treeSitterNdk.annotations)
-  annotationProcessor(projects.editor.treeSitterNdk.annotationProcessors)
+  ksp(projects.editor.treeSitterNdk.annotationProcessors)
 
   // 语法包保持远程 Maven 依赖（本地仅核心 android-tree-sitter 已本地化）
   testImplementation(projects.editor.treeSitterNdk.aidl)

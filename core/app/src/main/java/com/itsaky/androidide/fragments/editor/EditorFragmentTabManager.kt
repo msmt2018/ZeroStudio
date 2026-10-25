@@ -2,8 +2,8 @@ package com.itsaky.androidide.fragments.editor
 
 import android.os.Bundle
 import androidx.fragment.app.Fragment
-import com.itsaky.androidide.activities.editor.ui.state.EditorPage
-import com.itsaky.androidide.activities.editor.ui.state.EditorUiState
+import com.itsaky.androidide.ui.screen.editor.state.EditorPage
+import com.itsaky.androidide.ui.screen.editor.state.EditorUiState
 import java.io.File
 import java.util.UUID
 

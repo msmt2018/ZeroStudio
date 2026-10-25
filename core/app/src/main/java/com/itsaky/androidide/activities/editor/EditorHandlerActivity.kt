@@ -41,9 +41,9 @@ import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_TOOLBAR
 import com.itsaky.androidide.actions.ActionsRegistry.Companion.getInstance
 import com.itsaky.androidide.actions.FillMenuParams
-import com.itsaky.androidide.activities.editor.ui.screen.EditorTextInputDialog
-import com.itsaky.androidide.activities.editor.ui.state.EditorDialogHandle
-import com.itsaky.androidide.activities.editor.ui.state.EditorPage
+import com.itsaky.androidide.ui.screen.editor.screen.EditorTextInputDialog
+import com.itsaky.androidide.ui.screen.editor.state.EditorDialogHandle
+import com.itsaky.androidide.ui.screen.editor.state.EditorPage
 import com.itsaky.androidide.editor.language.treesitter.AidlLanguage
 import com.itsaky.androidide.editor.language.treesitter.CLang
 import com.itsaky.androidide.editor.language.treesitter.CmakeLanguage
