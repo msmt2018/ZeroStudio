@@ -1,0 +1,17 @@
+org.eclipse.lemminx.extensions.core.XMLCorePlugin
+org.eclipse.lemminx.extensions.contentmodel.ContentModelPlugin
+org.eclipse.lemminx.extensions.references.XMLReferencesPlugin
+org.eclipse.lemminx.extensions.xsd.XSDPlugin
+org.eclipse.lemminx.extensions.dtd.DTDPlugin
+org.eclipse.lemminx.extensions.xsl.XSLPlugin
+org.eclipse.lemminx.extensions.catalog.XMLCatalogPlugin
+org.eclipse.lemminx.extensions.xsi.XSISchemaPlugin
+org.eclipse.lemminx.extensions.prolog.PrologPlugin
+org.eclipse.lemminx.extensions.filepath.FilePathPlugin
+org.eclipse.lemminx.extensions.entities.EntitiesPlugin
+org.eclipse.lemminx.extensions.xmlmodel.XMLModelPlugin
+org.eclipse.lemminx.extensions.generators.FileContentGeneratorPlugin
+org.eclipse.lemminx.extensions.relaxng.RelaxNGPlugin
+org.eclipse.lemminx.extensions.xinclude.XIncludePlugin
+org.eclipse.lemminx.extensions.colors.XMLColorsPlugin
+org.eclipse.lemminx.extensions.minify.MinifyPlugin

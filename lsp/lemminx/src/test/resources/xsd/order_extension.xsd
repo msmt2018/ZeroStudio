@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+	<xs:complexType name="EpisodeID">
+		<xs:sequence>
+			<xs:element name="episode" type="xs:string" />
+			<xs:element name="episodeType" type="xs:string" minOccurs="0" />
+		</xs:sequence>
+	</xs:complexType>
+
+	<xs:complexType name="Timestamp">
+		<xs:complexContent>
+			<xs:extension base="EpisodeID">
+				<xs:sequence>
+					<xs:element name="episodeTime" type="xs:string" />
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+
+	<xs:element name="root" type="Timestamp" />
+</xs:schema>

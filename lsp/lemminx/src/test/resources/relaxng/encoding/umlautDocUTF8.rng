@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<grammar xmlns="http://relaxng.org/ns/structure/1.0"
+         xmlns:a="http://relaxng.org/ns/compatibility/annotations/1.0">
+  <start>
+    <element name="layout">
+      <a:documentation>Seitenlayout für die Ausgabe</a:documentation>
+      <element name="text">
+        <a:documentation>Textinhalt mit Umlauten: ä, ö, ü, ß</a:documentation>
+        <text/>
+      </element>
+    </element>
+  </start>
+</grammar>

@@ -1,0 +1,20 @@
+<xsd:schema targetNamespace="urn:Platform:Export"
+            xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+            xmlns:benefits="urn:Product:Export:Benefits"
+            xmlns:export="urn:Platform:Export"
+            elementFormDefault="qualified">
+
+  <xsd:import namespace="urn:Product:Export:Benefits" schemaLocation="product-export-benefits.xsd"/>
+
+  <xsd:element name="ExportDef">
+    <xsd:annotation>
+      <xsd:documentation>Root element that defines an export configuration with question value mappings.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:sequence>
+        <xsd:element ref="benefits:QuestionValue" minOccurs="0" maxOccurs="unbounded"/>
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+
+</xsd:schema>

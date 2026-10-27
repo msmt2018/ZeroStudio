@@ -99,7 +99,7 @@ orgEclipseJdtAnnotation = "2.3.100"
 snakeyamlEngine = "2.10"
 snakeyaml = "2.7"
 bcrypt = "0.10.2"
-lsp4jVersion = "0.24.0"
+lsp4jVersion = "1.0.0"
 exposedVersion = "0.37.3"
 jmhVersion = "1.20"
 org-apache-compress = "1.21"
@@ -726,3 +726,5 @@ realm-gradle-plugin = { id = "io.realm:realm-gradle-plugin", version.ref = "iore
 gradleup-shadow = { id = "com.gradleup.shadow", version.ref = "gradleupShadow" }
 
 version-catalog-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "versionCatalogUpdate" }
+bndtools-osgi = { id = "biz.aQute.bnd.builder", version = "7.4.0" }
+graalvm-buildtools-native = { id = "org.graalvm.buildtools.native:org.graalvm.buildtools.native.gradle.plugin", version = "1.1.17" }

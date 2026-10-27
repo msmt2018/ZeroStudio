@@ -1,0 +1,37 @@
+{
+  "Insert Comment": {
+    "prefix": [
+      "<!--"
+    ],
+    "suffix": "-->",
+    "body": [
+      "<!-- $1-->"
+    ],
+    "description": "Insert Comment",
+    "sortText": "ZZa"
+  },
+  "Formatter Off": {
+    "prefix": [
+      "<!--",
+      "@formatter:off"
+    ],
+    "label": "@formatter:off",
+    "body": [
+      "<!-- @formatter:off -->"
+    ],
+    "description": "Disable formatting",
+    "sortText": "ZZa1"
+  },
+  "Formatter On": {
+    "prefix": [
+      "<!--",
+      "@formatter:on"
+    ],
+    "label": "@formatter:on",
+    "body": [
+      "<!-- @formatter:on -->"
+    ],
+    "description": "Enable formatting",
+    "sortText": "ZZa2"
+  }
+ }

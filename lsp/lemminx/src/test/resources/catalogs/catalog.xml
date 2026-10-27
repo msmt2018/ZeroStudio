@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+	<system
+		systemId="http://www.springframework.org/schema/beans/spring-beans-3.0.xsd"
+		uri="../xsd/spring-beans-3.0.xsd" />
+	<system
+		systemId="http://www.springframework.org/schema/beans/spring-beans.xsd"
+		uri="../xsd/spring-beans-3.0.xsd" />
+	<system systemId="http://maven.apache.org/xsd/maven-4.0.0.xsd"
+		uri="../xsd/maven-4.0.0.xsd" />
+	<system
+		systemId="http://camel.apache.org/schema/spring/camel-spring.xsd"
+		uri="../xsd/camel-spring-2.22.0.xsd" />
+	<public publicId="http://camel.apache.org/schema/spring"
+		uri="../xsd/camel-spring-2.22.0.xsd" />
+
+	<system systemId="http://java.sun.com/dtd/web-app_2_3.dtd"
+		uri="../dtd/web-app_2_3.dtd" />
+
+	<system
+		systemId="http://www.oasis-open.org/committees/entity/release/1.0/catalog.dtd"
+		uri="../dtd/catalog.dtd" />
+
+	<system
+		systemId="http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg.dtd"
+		uri="../dtd/svg.dtd" />
+
+	<system systemId="http://invoice.xsd" uri="../xsd/invoice.xsd" />
+
+	<system systemId="http://money.xsd" uri="../xsd/money.xsd" />
+
+	<uri name="http://docs.oasis-open.org/odata/ns/edmx"
+		uri="../xsd/edmx.xsd" />
+	<uri name="http://docs.oasis-open.org/odata/ns/edm"
+		uri="../xsd/edm.xsd" />
+
+	<uri name="http://example.org/schema/root" uri="../xsd/root.xsd" />
+
+	<uri name="http://foo" uri="../xsd/foo-unqualified.xsd" />
+
+</catalog>

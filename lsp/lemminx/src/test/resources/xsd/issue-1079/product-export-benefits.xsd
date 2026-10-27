@@ -1,0 +1,49 @@
+<xsd:schema targetNamespace="urn:Product:Export:Benefits"
+            xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+            xmlns:benefits="urn:Product:Export:Benefits"
+            elementFormDefault="qualified">
+
+  <xsd:simpleType name="QuestionNameType">
+    <xsd:restriction base="xsd:string">
+      <xsd:pattern value="[A-Za-z]+(\.[A-Za-z0-9]+)*"/>
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <xsd:simpleType name="QuestionDataType">
+    <xsd:restriction base="xsd:string">
+      <xsd:enumeration value="String"/>
+      <xsd:enumeration value="Integer"/>
+      <xsd:enumeration value="Boolean"/>
+      <xsd:enumeration value="Date"/>
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <xsd:element name="QuestionValue">
+    <xsd:annotation>
+      <xsd:documentation>Defines a question value mapping for the export process.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:attribute name="default" type="xsd:string">
+        <xsd:annotation>
+          <xsd:documentation>The default value to use when the question has no answer.</xsd:documentation>
+        </xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="name" type="benefits:QuestionNameType" use="required">
+        <xsd:annotation>
+          <xsd:documentation>The fully qualified question name (e.g. Address.Line1, Contact.Email).</xsd:documentation>
+        </xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="ignore-invalid" type="xsd:boolean" default="false">
+        <xsd:annotation>
+          <xsd:documentation>When true, invalid answers are silently ignored instead of raising an error.</xsd:documentation>
+        </xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="type" type="benefits:QuestionDataType">
+        <xsd:annotation>
+          <xsd:documentation>The expected data type of the answer (String, Integer, Boolean, Date).</xsd:documentation>
+        </xsd:annotation>
+      </xsd:attribute>
+    </xsd:complexType>
+  </xsd:element>
+
+</xsd:schema>

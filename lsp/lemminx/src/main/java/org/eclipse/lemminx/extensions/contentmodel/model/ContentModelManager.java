@@ -1,0 +1,695 @@
+/**
+ *  Copyright (c) 2018 Angelo ZERR
+ *  All rights reserved. This program and the accompanying materials
+ *  are made available under the terms of the Eclipse Public License v2.0
+ *  which accompanies this distribution, and is available at
+ *  http://www.eclipse.org/legal/epl-v20.html
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ *  Contributors:
+ *  Angelo Zerr <angelo.zerr@gmail.com> - initial API and implementation
+ */
+package org.eclipse.lemminx.extensions.contentmodel.model;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.concurrent.CompletableFuture;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.eclipse.lemminx.dom.DOMDocument;
+import org.eclipse.lemminx.dom.DOMElement;
+import org.eclipse.lemminx.dom.SchemaLocation;
+import org.eclipse.lemminx.dom.SchemaLocationHint;
+import org.eclipse.lemminx.extensions.contentmodel.model.ContentModelProvider.Identifier;
+import org.eclipse.lemminx.extensions.contentmodel.participants.diagnostics.LSPXMLGrammarPool;
+import org.eclipse.lemminx.extensions.contentmodel.settings.XMLFileAssociation;
+import org.eclipse.lemminx.extensions.contentmodel.uriresolver.XMLCacheResolverExtension;
+import org.eclipse.lemminx.extensions.contentmodel.uriresolver.XMLCatalogResolverExtension;
+import org.eclipse.lemminx.extensions.contentmodel.uriresolver.XMLFileAssociationResolverExtension;
+import org.eclipse.lemminx.uriresolver.CacheResourceDownloadingException;
+import org.eclipse.lemminx.uriresolver.CacheResourcesManager;
+import org.eclipse.lemminx.uriresolver.ResolvedURIInfo;
+import org.eclipse.lemminx.uriresolver.URIResolverExtensionManager;
+import org.eclipse.lemminx.utils.FilesUtils;
+import org.eclipse.lemminx.utils.StringUtils;
+import org.eclipse.lemminx.utils.URIUtils;
+
+/**
+ * Content model manager used to load XML Schema, DTD.
+ *
+ */
+public class ContentModelManager {
+
+	private final Map<String, CMDocument> cmDocumentCache;
+
+	private final URIResolverExtensionManager resolverManager;
+	private final List<ContentModelProvider> modelProviders;
+
+	private final XMLCacheResolverExtension cacheResolverExtension;
+	private final XMLCatalogResolverExtension catalogResolverExtension;
+	private final XMLFileAssociationResolverExtension fileAssociationResolver;
+	private final LSPXMLGrammarPool grammarPool;
+
+	private boolean resolveExternalEntities;
+
+	public ContentModelManager(URIResolverExtensionManager resolverManager) {
+		this.resolverManager = resolverManager;
+		modelProviders = new ArrayList<>();
+		cmDocumentCache = Collections.synchronizedMap(new HashMap<>());
+		fileAssociationResolver = new XMLFileAssociationResolverExtension();
+		resolverManager.registerResolver(fileAssociationResolver);
+		catalogResolverExtension = new XMLCatalogResolverExtension();
+		resolverManager.registerResolver(catalogResolverExtension);
+		cacheResolverExtension = new XMLCacheResolverExtension();
+		resolverManager.registerResolver(cacheResolverExtension);
+		grammarPool = new LSPXMLGrammarPool();
+		// Use cache by default
+		setUseCache(true);
+	}
+
+	/**
+	 * Returns the owner document of the declared element which matches the given
+	 * XML element and null otherwise.
+	 *
+	 * @param element the XML element
+	 *
+	 * @return the owner document of the declared element which matches the given
+	 *         XML element and null otherwise.
+	 */
+	public Collection<CMDocument> findCMDocument(DOMElement element) {
+		return findCMDocument(element.getOwnerDocument(), element.getNamespaceURI());
+	}
+
+	/**
+	 * Returns the owner document of the declared element which matches the given
+	 * XML element and null otherwise.
+	 *
+	 * @param element the XML element
+	 *
+	 * @return the owner document of the declared element which matches the given
+	 *         XML element and null otherwise.
+	 */
+	public Collection<CMDocument> findCMDocument(DOMElement element, String namespaceURI) {
+		return findCMDocument(element.getOwnerDocument(), namespaceURI);
+	}
+
+	public Collection<CMDocument> findCMDocument(DOMDocument xmlDocument, String namespaceURI) {
+		return findCMDocument(xmlDocument, namespaceURI, true);
+	}
+
+	/**
+	 * Returns the declared documents which match the given DOM document.
+	 *
+	 * @param xmlDocument  the DOM document.
+	 * @param namespaceURI the namespace URI
+	 * @return the declared documents which match the given DOM document.
+	 */
+	public Collection<CMDocument> findCMDocument(DOMDocument xmlDocument, String namespaceURI, boolean withInternal) {
+		if (namespaceURI == null) {
+			// This case comes from when an element has no namespace and XML Schema defines
+			// elementFormDefault="unqualified"
+			// --> we use the namespace from the DOM document
+
+			// ex: XSD:
+			// <xs:schema targetNamespace="urn:reports/itops"
+			// elementFormDefault="unqualified"
+
+			// ex : XML
+			// <i:ITOpsReport xmlns:i="urn:reports/itops"
+			// xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+			// xsi:schemaLocation="urn:reports/itops ../schema/reports/itops.xsd">
+			// <templates> --> here template has a null namespace and the DOM document has
+			// "urn:reports/itops" namespace
+			// --> we use urn:reports/itops as namespace to get the DOM Document
+			namespaceURI = xmlDocument.getNamespaceURI();
+		}
+		Collection<CMDocument> documents = new ArrayList<>();
+		boolean findByStandardAssociation = false;
+		for (ContentModelProvider modelProvider : modelProviders) {
+			// internal grammar
+			if (withInternal) {
+				CMDocument internalCMDocument = modelProvider.createInternalCMDocument(xmlDocument,
+						isResolveExternalEntities());
+				if (internalCMDocument != null) {
+					documents.add(internalCMDocument);
+				}
+			}
+			// external grammar
+			if (modelProvider.adaptFor(xmlDocument, false)) {
+				// The content model provider can collect the system ids
+				// ex for <?xml-model , the model provider which takes care of xml-model returns
+				// the href of xml-model.
+				Collection<Identifier> identifiers = modelProvider.getIdentifiers(xmlDocument, namespaceURI);
+				for (Identifier identifier : identifiers) {
+					String systemId = identifier.getSystemId();
+					String publicId = identifier.getPublicId() != null ? identifier.getPublicId() : namespaceURI;
+					// get the content model document from the current system id
+					CMDocument cmDocument = findCMDocument(xmlDocument.getDocumentURI(), publicId, systemId,
+							modelProvider);
+					if (cmDocument != null) {
+						findByStandardAssociation = true;
+						documents.add(cmDocument);
+					}
+				}
+			}
+		}
+		if (!findByStandardAssociation) {
+			// - find the XSD / DTD via file association from a XML file
+			// - find the XSD / DTD via XML catalog from a XML file
+			// - find the XMLSchema (xml.xsd) schema from a XSD file
+			// - find the XMLSchema (xml.xsd), xslt*.xsd schema from a XSL file
+			CMDocument cmDocument = findCMDocument(xmlDocument.getDocumentURI(), namespaceURI, null, null);
+			if (cmDocument != null) {
+				documents.add(cmDocument);
+			}
+		}
+		if (documents.isEmpty() && namespaceURI != null) {
+			// No CMDocument found for the requested namespace through direct
+			// association. The namespace may be transitively imported by a
+			// schema declared for another namespace (xs:import).
+			// Load each declared schema (using its declared namespace) and
+			// check if its XS model covers the requested namespace.
+			for (ContentModelProvider modelProvider : modelProviders) {
+				if (modelProvider.adaptFor(xmlDocument, false)) {
+					SchemaLocation schemaLocation = xmlDocument.getSchemaLocation();
+					if (schemaLocation != null) {
+						for (Map.Entry<String, SchemaLocationHint> entry : schemaLocation
+								.getSchemaLocationEntries()) {
+							String declaredNamespace = entry.getKey();
+							SchemaLocationHint locationHint = entry.getValue();
+							String location = locationHint.getHint();
+							if (!StringUtils.isEmpty(location)) {
+								CMDocument cmDocument = findCMDocument(xmlDocument.getDocumentURI(),
+										declaredNamespace, location, modelProvider);
+								if (cmDocument != null && cmDocument.hasNamespace(namespaceURI)) {
+									documents.add(cmDocument);
+									break;
+								}
+							}
+						}
+					}
+					if (!documents.isEmpty()) {
+						break;
+					}
+				}
+			}
+		}
+		return documents;
+	}
+
+	/**
+	 * Returns true if the given document is linked to the given grammar URI (XML
+	 * Schema, DTD) and false otherwise.
+	 *
+	 * @param document   the DOM document
+	 * @param grammarURI the grammar URI
+	 * @return true if the given document is linked to the given grammar URI (XML
+	 *         Schema, DTD) and false otherwise.
+	 */
+	public boolean dependsOnGrammar(DOMDocument document, String grammarURI) {
+		if (StringUtils.isEmpty(grammarURI)) {
+			return false;
+		}
+		for (ContentModelProvider modelProvider : modelProviders) {
+			if (modelProvider.adaptFor(document, false)) {
+				Collection<Identifier> identifiers = modelProvider.getIdentifiers(document, document.getNamespaceURI());
+				for (Identifier identifier : identifiers) {
+					String publicId = identifier.getPublicId();
+					String systemId = identifier.getSystemId();
+					String key = resolverManager.resolve(document.getDocumentURI(), publicId, systemId);
+					if (grammarURI.equals(key)) {
+						return true;
+					}
+				}
+			}
+		}
+		String key = resolverManager.resolve(document.getDocumentURI(), null, null);
+		return grammarURI.equals(key);
+	}
+
+	/**
+	 * Returns informations about all referenced grammar (XSD, DTD) from the given
+	 * DOM document.
+	 *
+	 * <p>
+	 * In other words, it gives information about
+	 *
+	 * <ul>
+	 * <li>which XSD, DTD files are bound to the DOM document.</li>
+	 * <li>which binding strategies are used (catalog, file association,
+	 * xsi:schemaLocation, xsi:noNamespaceSchemaLocation, DOCTYPE).</li>
+	 * <li>the cache file path (for remote grammar with http://)</li>
+	 *
+	 * </p>
+	 *
+	 * @param document the DOM document.
+	 *
+	 * @return informations about all referenced grammar (XSD, DTD) from the given
+	 *         DOM document.
+	 */
+	public Set<ReferencedGrammarInfo> getReferencedGrammarInfos(DOMDocument document) {
+		Set<ReferencedGrammarInfo> referencedGrammarInfos = new LinkedHashSet<>();
+		for (ContentModelProvider modelProvider : modelProviders) {
+			if (modelProvider.adaptFor(document, false)) {
+				Collection<Identifier> identifiers = modelProvider.getIdentifiers(document, null);
+				for (Identifier identifier : identifiers) {
+					String publicId = identifier.getPublicId();
+					String systemId = identifier.getSystemId();
+					fillReferencedGrammarInfo(document, publicId, systemId, identifier, referencedGrammarInfos);
+				}
+			}
+		}
+		fillReferencedGrammarInfo(document, document.getNamespaceURI(), null, null, referencedGrammarInfos);
+		return referencedGrammarInfos;
+	}
+
+	private void fillReferencedGrammarInfo(DOMDocument document, String publicId, String systemId,
+			Identifier identifier, Set<ReferencedGrammarInfo> referencedGrammarInfos) {
+		ResolvedURIInfo resolvedURIInfo = resolverManager.resolveInfo(document.getDocumentURI(), publicId, systemId);
+		if (resolvedURIInfo != null) {
+			GrammarCacheInfo grammarCacheInfo = null;
+			String cachedResolvedUri = null;
+			boolean downloading = false;
+			Exception cacheError = null;
+			String resolvedUri = resolvedURIInfo.getResolvedURI();
+			if (cacheResolverExtension.canUseCache(resolvedUri)) {
+				// The DTD/XML Schema comes from http://, ftp:// etc and cache manager is
+				// activated
+				// Try to load the DTD/XML Schema with the cache manager
+				try {
+					Path file = cacheResolverExtension.getCachedResource(resolvedUri);
+					if (file != null) {
+						cachedResolvedUri = file.toUri().toString();
+					}
+				} catch (CacheResourceDownloadingException e) {
+					// the DTD/XML Schema is downloading
+					downloading = true;
+				} catch (Exception e) {
+					// other error like network which is not available
+					cacheError = e;
+				} finally {
+					if (cachedResolvedUri == null) {
+						try {
+							cachedResolvedUri = CacheResourcesManager.getResourceCachePath(resolvedUri).toUri()
+									.toString();
+						} catch (IOException e) {
+							// should never occur
+						}
+					}
+				}
+				grammarCacheInfo = new GrammarCacheInfo(cachedResolvedUri, downloading, cacheError);
+			}
+			if (identifier == null) {
+				identifier = new Identifier(publicId, systemId, null, null);
+			}
+			referencedGrammarInfos.add(new ReferencedGrammarInfo(resolvedURIInfo, grammarCacheInfo, identifier));
+		}
+	}
+
+	/**
+	 * Returns the content model document loaded by the given uri and null
+	 * otherwise.
+	 *
+	 * @param publicId      the public identifier.
+	 * @param systemId      the expanded system identifier.
+	 * @param modelProvider
+	 * @return the content model document loaded by the given uri and null
+	 *         otherwise.
+	 */
+	private CMDocument findCMDocument(String uri, String publicId, String systemId,
+			ContentModelProvider modelProvider) {
+		// Resolve the XML Schema/DTD uri (file, http, etc)
+		String resolvedUri = resolverManager.resolve(uri, publicId, systemId);
+		if (resolvedUri == null) {
+			return null;
+		}
+		// the XML Schema, DTD can be resolved
+		if (modelProvider == null) {
+			// the model provider cannot be get with standard mean (xsi:schemaLocation,
+			// xsi:noNamespaceSchemaLocation, doctype)
+			// try to get it by using extension (ex: .xsd, .dtd)
+			modelProvider = getModelProviderByURI(resolvedUri);
+		}
+		if (modelProvider == null) {
+			return null;
+		}
+		// Try to get the document from the cache
+		CMDocument cmDocument = getCMDocumentFromCache(resolvedUri);
+		if (cmDocument != null) {
+			return cmDocument;
+		}
+		try {
+			if (cacheResolverExtension.canUseCache(resolvedUri)) {
+				// The DTD/XML Schema comes from http://, ftp:// etc and cache manager is
+				// activated
+				// Try to load the DTD/XML Schema with the cache manager
+				try {
+					Path file = cacheResolverExtension.getCachedResource(resolvedUri);
+					if (file != null) {
+						cmDocument = modelProvider.createCMDocument(file.toUri().toString(), isResolveExternalEntities());
+					}
+				} catch (CacheResourceDownloadingException e) {
+					// the DTD/XML Schema is downloading
+					return null;
+				} catch (Exception e) {
+					// other error like network which is not available
+					cmDocument = modelProvider.createCMDocument(resolvedUri, isResolveExternalEntities());
+				}
+			} else {
+				cmDocument = modelProvider.createCMDocument(resolvedUri, isResolveExternalEntities());
+			}
+		} catch (InvalidGrammarException e) {
+			return null;
+		}
+		// Cache the document
+		if (cmDocument != null) {
+			cache(resolvedUri, cmDocument);
+		}
+		return cmDocument;
+	}
+
+	private CMDocument getCMDocumentFromCache(String key) {
+		CMDocument document = null;
+		synchronized (cmDocumentCache) {
+			document = cmDocumentCache.get(key);
+			if (document != null && document.isDirty()) {
+				cmDocumentCache.remove(key);
+				return null;
+			}
+		}
+		return document;
+	}
+
+	private void cache(String key, CMDocument cmDocument) {
+		synchronized (cmDocumentCache) {
+			cmDocumentCache.put(key, cmDocument);
+		}
+	}
+
+	/**
+	 * Loads and returns the content model document for the given grammar URI
+	 * (XSD, DTD, RelaxNG, etc.) and null otherwise.
+	 *
+	 * @param grammarURI the grammar file URI.
+	 * @return the content model document for the given grammar URI and null
+	 *         otherwise.
+	 */
+	public CMDocument loadCMDocument(String grammarURI) {
+		ContentModelProvider modelProvider = getModelProviderByURI(grammarURI);
+		if (modelProvider == null) {
+			return null;
+		}
+		CMDocument cmDocument = getCMDocumentFromCache(grammarURI);
+		if (cmDocument != null) {
+			return cmDocument;
+		}
+		try {
+			if (cacheResolverExtension.canUseCache(grammarURI)) {
+				try {
+					Path file = cacheResolverExtension.getCachedResource(grammarURI);
+					if (file != null) {
+						cmDocument = modelProvider.createCMDocument(file.toUri().toString(),
+								isResolveExternalEntities());
+					}
+				} catch (CacheResourceDownloadingException e) {
+					return null;
+				} catch (Exception e) {
+					cmDocument = modelProvider.createCMDocument(grammarURI, isResolveExternalEntities());
+				}
+			} else {
+				cmDocument = modelProvider.createCMDocument(grammarURI, isResolveExternalEntities());
+			}
+		} catch (InvalidGrammarException e) {
+			return null;
+		}
+		if (cmDocument != null) {
+			cache(grammarURI, cmDocument);
+		}
+		return cmDocument;
+	}
+
+	/**
+	 * Loads and returns the content model document for the given grammar URI
+	 * asynchronously. If the grammar needs to be downloaded, returns a future
+	 * that completes when the download finishes.
+	 *
+	 * @param grammarURI the grammar file URI.
+	 * @return a future that resolves to the content model document or null.
+	 */
+	public CompletableFuture<CMDocument> loadCMDocumentAsync(String grammarURI) {
+		ContentModelProvider modelProvider = getModelProviderByURI(grammarURI);
+		if (modelProvider == null) {
+			return CompletableFuture.completedFuture(null);
+		}
+		CMDocument cmDocument = getCMDocumentFromCache(grammarURI);
+		if (cmDocument != null) {
+			return CompletableFuture.completedFuture(cmDocument);
+		}
+		if (cacheResolverExtension.canUseCache(grammarURI)) {
+			try {
+				Path file = cacheResolverExtension.getCachedResource(grammarURI);
+				if (file != null) {
+					cmDocument = modelProvider.createCMDocument(file.toUri().toString(),
+							isResolveExternalEntities());
+					if (cmDocument != null) {
+						cache(grammarURI, cmDocument);
+					}
+					return CompletableFuture.completedFuture(cmDocument);
+				}
+			} catch (CacheResourceDownloadingException e) {
+				CompletableFuture<Path> future = e.getFuture();
+				if (future != null) {
+					return future.thenApply(file -> {
+						if (file == null) {
+							return null;
+						}
+						CMDocument doc = modelProvider.createCMDocument(file.toUri().toString(),
+								isResolveExternalEntities());
+						if (doc != null) {
+							cache(grammarURI, doc);
+						}
+						return doc;
+					});
+				}
+				return CompletableFuture.completedFuture(null);
+			} catch (Exception e) {
+				cmDocument = modelProvider.createCMDocument(grammarURI, isResolveExternalEntities());
+			}
+		} else {
+			cmDocument = modelProvider.createCMDocument(grammarURI, isResolveExternalEntities());
+		}
+		if (cmDocument != null) {
+			cache(grammarURI, cmDocument);
+		}
+		return CompletableFuture.completedFuture(cmDocument);
+	}
+
+	/**
+	 * Returns the model provider by the given uri and null otherwise.
+	 *
+	 * @param uri the grammar URI
+	 *
+	 * @return the model provider by the given uri and null otherwise.
+	 */
+	public ContentModelProvider getModelProviderByURI(String uri) {
+		for (ContentModelProvider modelProvider : modelProviders) {
+			if (modelProvider.adaptFor(uri)) {
+				return modelProvider;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Expand system Id
+	 *
+	 * @param path path to be expanded
+	 * @return the expanded system Id
+	 */
+	public String expandSystemId(String path) {
+		return catalogResolverExtension.expandSystemId(path);
+	}
+
+	/**
+	 * Get XML catalogs.
+	 *
+	 * @return list of catalogs
+	 */
+	public String[] getCatalogs() {
+		return catalogResolverExtension.getCatalogs();
+	}
+
+	/**
+	 * Set up XML catalogs.
+	 *
+	 * @param catalogs list of XML catalog files.
+	 * @return true if catalogs changed and false otherwise
+	 */
+	public boolean setCatalogs(String[] catalogs) {
+		return catalogResolverExtension.setCatalogs(catalogs);
+	}
+
+	/**
+	 * Refresh the XML catalogs.
+	 */
+	public void refreshCatalogs() {
+		catalogResolverExtension.refreshCatalogs();
+	}
+
+	/**
+	 * Set file associations.
+	 *
+	 * @param fileAssociations
+	 * @return true if file associations changed and false otherwise
+	 */
+	public boolean setFileAssociations(XMLFileAssociation[] fileAssociations) {
+		return this.fileAssociationResolver.setFileAssociations(fileAssociations);
+	}
+
+	public void setRootURI(String rootUri) {
+		rootUri = URIUtils.sanitizingUri(rootUri);
+		fileAssociationResolver.setRootUri(rootUri);
+		catalogResolverExtension.setRootUri(rootUri);
+	}
+
+	/**
+	 * Set the workspace folder URIs used for resolving variables in file
+	 * associations.
+	 *
+	 * @param workspaceFolderUris the workspace folder URIs.
+	 */
+	public void setWorkspaceFolderUris(List<String> workspaceFolderUris) {
+		fileAssociationResolver.setWorkspaceFolderUris(workspaceFolderUris);
+	}
+
+	public void setUseCache(boolean useCache) {
+		cacheResolverExtension.setUseCache(useCache);
+		if (!useCache) {
+			grammarPool.clear();
+		}
+	}
+
+	/**
+	 * Returns true if the external resources can be downloaded and false otherwise.
+	 * 
+	 * @return true if the external resources can be downloaded and false otherwise.
+	 */
+	public boolean isDownloadExternalResources() {
+		return cacheResolverExtension.isDownloadExternalResources();
+	}
+
+	/**
+	 * Set true if the external resources can be downloaded and false otherwise.
+	 * 
+	 * @param downloadExternalResources the external resources
+	 */
+	public void setDownloadExternalResources(boolean downloadExternalResources) {
+		cacheResolverExtension.setDownloadExternalResources(downloadExternalResources);
+	}
+
+	/**
+	 * Remove the referenced grammar from the given document and clear the Xerces
+	 * grammar cache which stores the XSD, DTD grammar.
+	 *
+	 * @param document the DOM document
+	 *
+	 * @throws IOException if the delete of grammar file cannot be done.
+	 */
+	public void evictCacheFor(DOMDocument document) throws IOException {
+		// Get the referenced grammars
+		Set<ReferencedGrammarInfo> referencedGrammarInfos = getReferencedGrammarInfos(document);
+		if (referencedGrammarInfos.isEmpty()) {
+			return;
+		}
+		// Loop for each referenced grammars and deleted the XSD, DTD file if it is in
+		// the lemminx cache.
+		int nbDeletedFiles = 0;
+		try {
+			for (ReferencedGrammarInfo referencedGrammarInfo : referencedGrammarInfos) {
+				if (referencedGrammarInfo.isInCache()) {
+					// Delete XSD/DTD file
+					String resolvedURI = referencedGrammarInfo.getGrammarCacheInfo().getCachedResolvedUri();
+					Files.deleteIfExists(FilesUtils.getPath(resolvedURI));
+					// remove the XSD/DTD content model document from the cache.
+					cmDocumentCache.remove(resolvedURI);
+					nbDeletedFiles++;
+				}
+				// TODO : get XSD, DTD dependencies from the current referenced grammar to
+				// delete the file too.
+			}
+		} finally {
+			if (nbDeletedFiles > 0) {
+				// TODO : clear only the DTD, XSD which has been deleted from the cache.
+				grammarPool.clear();
+			}
+		}
+	}
+
+	/**
+	 * Remove the cache directory (.lemminx/cache) if it exists and clear the Xerces
+	 * grammar cache which stores the XSD, DTD grammars.
+	 *
+	 * @throws IOException if the delete of directory (.lemminx/cache) cannot be
+	 *                     done.
+	 */
+	public void evictCache() throws IOException {
+		try {
+			cacheResolverExtension.evictCache();
+		} finally {
+			// clear Xerces cache
+			grammarPool.clear();
+			// clear the XSD/DTD content model documents.
+			cmDocumentCache.clear();
+		}
+
+	}
+
+	public void registerModelProvider(ContentModelProvider modelProvider) {
+		modelProviders.add(modelProvider);
+	}
+
+	public void unregisterModelProvider(ContentModelProvider modelProvider) {
+		modelProviders.remove(modelProvider);
+	}
+
+	public LSPXMLGrammarPool getGrammarPool() {
+		return cacheResolverExtension.isUseCache() ? grammarPool : null;
+	}
+
+	/**
+	 * Returns true if external entities must be resolved and false otherwise.
+	 *
+	 * @return true if external entities must be resolved and false otherwise.
+	 */
+	public boolean isResolveExternalEntities() {
+		return resolveExternalEntities;
+	}
+
+	/**
+	 * Set true if external entities must be resolved and false otherwise.
+	 *
+	 * @param resolveExternalEntities resolve external entities
+	 */
+	public void setResolveExternalEntities(boolean resolveExternalEntities) {
+		this.resolveExternalEntities = resolveExternalEntities;
+	}
+
+	/**
+	 * Force the given <code>url</code> to download.
+	 * 
+	 * @param url the url to download.!
+	 */
+	public void forceDownloadExternalResource(String url) {
+		cacheResolverExtension.forceDownloadExternalResource(url);
+	}
+
+}

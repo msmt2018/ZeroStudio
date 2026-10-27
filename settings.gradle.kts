@@ -24,13 +24,6 @@
  *   ZeroStudio IDE 根设置脚本。
  *   负责启用类型安全项目访问器、配置全局插件管理源、复合构建（Composite Builds）、
  *   依赖项强制替换（Dependency Substitution）、F-Droid 构建检测以及全项目数百个子模块的注册。
- *   已全面适配 Gradle 9+ 配置缓存规范，使用 ValueSource 安全替代配置阶段的外部进程调用。
- * 工作流程线路图：
- *   1. 启用 TYPESAFE_PROJECT_ACCESSORS 特性预览。
- *   2. pluginManagement -> 配置全局 Gradle 插件仓库及 ObjectBox 插件重定向策略。
- *   3. dependencyResolutionManagement -> 挂载 composite-builds/build-deps 复合构建，集中替换内部依赖。
- *   4. 使用 ValueSource 安全检测 Git 状态，加载 F-Droid 配置或通过 Nyx 动态注入 Git 版本号。
- *   5. 注册全项目所有模块。
  * -------------------------------------------------------------------------------------------------
  * @author android_zero
  */
@@ -44,9 +37,11 @@ pluginManagement {
     gradlePluginPortal()
     google()
     mavenCentral()
+
     mavenLocal()
     maven("https://cache-redirector.jetbrains.com/kotlin.bintray.com/kotlin-plugin")
     maven("https://jitpack.io")
+    maven("https://eclipse.org")
     maven("https://repo1.maven.org/maven2/")
     maven("https://repo.itextsupport.com/android")
     maven(url = "https://repo.gradle.org/gradle/libs-releases/")
@@ -103,6 +98,7 @@ dependencyResolutionManagement {
     mavenCentral()
     mavenLocal()
     maven("https://jitpack.io")
+    maven("https://eclipse.org")
     maven("https://repo1.maven.org/maven2/")
     maven("https://repo.itextsupport.com/android")
     maven(url = "https://repo.gradle.org/gradle/libs-releases/")
@@ -251,6 +247,7 @@ include(
     ":lsp:kotlin",
     ":lsp:toml",
     ":lsp:clangd",
+    ":lsp:lemminx",
     ":logging:idestats",
     ":logging:logger",
     ":logging:logsender",
