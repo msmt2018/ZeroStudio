@@ -40,8 +40,8 @@ dependencies {
   api(libs.androidx.collection)
   api(libs.androidx.preference)
   api(libs.androidx.documentfile)
-  api(libs.androidx.vectors)
-  api(libs.androidx.animated.vectors)
+  api(libs.androidx.vectors) //使用androidx.compose.material:material-icons-core 和 androidx.compose.material:material-icons-extended替代
+  api(libs.androidx.animated.vectors)//使用androidx.compose.material:material-icons-core 和 androidx.compose.material:material-icons-extended替代
   api(libs.androidx.nav.ui)
   api(libs.androidx.nav.fragment)
 

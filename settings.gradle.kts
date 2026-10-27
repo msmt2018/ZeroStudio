@@ -1,9 +1,43 @@
+/*
+ *  This file is part of AndroidIDE.
+ *
+ *  AndroidIDE is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  AndroidIDE is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 @file:Suppress("UnstableApiUsage")
+
+/**
+ * -------------------------------------------------------------------------------------------------
+ * 文件名：settings.gradle.kts (Root Settings)
+ * 用途与功能：
+ *   ZeroStudio IDE 根设置脚本。
+ *   负责启用类型安全项目访问器、配置全局插件管理源、复合构建（Composite Builds）、
+ *   依赖项强制替换（Dependency Substitution）、F-Droid 构建检测以及全项目数百个子模块的注册。
+ *   已全面适配 Gradle 9+ 配置缓存规范，使用 ValueSource 安全替代配置阶段的外部进程调用。
+ * 工作流程线路图：
+ *   1. 启用 TYPESAFE_PROJECT_ACCESSORS 特性预览。
+ *   2. pluginManagement -> 配置全局 Gradle 插件仓库及 ObjectBox 插件重定向策略。
+ *   3. dependencyResolutionManagement -> 挂载 composite-builds/build-deps 复合构建，集中替换内部依赖。
+ *   4. 使用 ValueSource 安全检测 Git 状态，加载 F-Droid 配置或通过 Nyx 动态注入 Git 版本号。
+ *   5. 注册全项目所有模块。
+ * -------------------------------------------------------------------------------------------------
+ * @author android_zero
+ */
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
-  // includeBuild("composite-builds/build-logic") { name = "build-logic" }
   includeBuild("composite-builds/build-logic")
 
   repositories {
@@ -47,14 +81,11 @@ dependencyResolutionManagement {
                   "logback-core",
                   "editor",
                   "compose-pullrefresh",
-                  
                   "soraLanguageTextmate",
-                  // "kotlinc",
-
               ),
       )
 
-    for ((build, modules) in dependencySubstitutions) {
+  for ((build, modules) in dependencySubstitutions) {
     includeBuild("composite-builds/${build}") {
       this.name = build
       dependencySubstitution {
@@ -62,7 +93,6 @@ dependencyResolutionManagement {
           substitute(module("com.itsaky.androidide.build:${module}"))
             .using(project(":${module}"))
         }
-        
       }
     }
   }
@@ -79,33 +109,51 @@ dependencyResolutionManagement {
     maven(url = "https://www.jetbrains.com/intellij-repository/releases/")
     maven { url = uri("${rootProject.projectDir}/gradle/libs") }
   }
-  // versionCatalogs { create("ktlib") { from(files("gradle/kotlin.versions.toml")) } }
 }
 
 val skipNyx = System.getenv("ZEROSTUDIO_SKIP_NYX") == "true"
 
 buildscript {
-  repositories { mavenCentral() }
+  repositories { 
+  mavenCentral() 
+  gradlePluginPortal()
+  }
   dependencies {
-    if (System.getenv("ZEROSTUDIO_SKIP_NYX") != "true") classpath("com.mooltiverse.oss.nyx:gradle:2.5.2")
+    if (System.getenv("ZEROSTUDIO_SKIP_NYX") != "true") {
+      classpath("com.mooltiverse.oss.nyx:com.mooltiverse.oss.nyx.gradle.plugin:3.1.7")
+    }
   }
 }
 
-val isGitRepo by lazy {
-  // 如果遇到"git",构建报错，就设置git的绝对路径，比如d：/git/git.exe
-  cmdOutput("git", "rev-parse", "--is-inside-work-tree").trim() == "true"
+/**
+ * -------------------------------------------------------------------------------------------------
+ * 类名：GitInsideWorkTreeValueSource
+ * 用途与功能：
+ *   符合 Gradle 9 配置缓存规范的 ValueSource 实现。
+ *   替代原先被废弃的、在配置阶段直接通过 ProcessBuilder 启动外部进程的做法，
+ *   安全地检测当前目录是否处于 Git 工作树内。
+ * -------------------------------------------------------------------------------------------------
+ */
+abstract class GitInsideWorkTreeValueSource : org.gradle.api.provider.ValueSource<Boolean, org.gradle.api.provider.ValueSourceParameters.None> {
+  @get:javax.inject.Inject
+  abstract val execOperations: org.gradle.process.ExecOperations
+
+  override fun obtain(): Boolean {
+    return try {
+      val stdout = java.io.ByteArrayOutputStream()
+      execOperations.exec {
+        commandLine("git", "rev-parse", "--is-inside-work-tree")
+        standardOutput = stdout
+      }
+      stdout.toString().trim() == "true"
+    } catch (e: Exception) {
+      false
+    }
+  }
 }
 
-private fun cmdOutput(vararg args: String): String {
-  return ProcessBuilder(*args)
-      .directory(File("."))
-      .redirectErrorStream(true)
-      .start()
-      .inputStream
-      .bufferedReader()
-      .readText()
-      .trim()
-}
+// 采用 Gradle 9 配置缓存安全的惰性 Provider 获取 Git 状态
+val isGitRepo = providers.of(GitInsideWorkTreeValueSource::class) {}.get()
 
 FDroidConfig.load(rootDir)
 
@@ -127,7 +175,7 @@ if (FDroidConfig.hasRead && FDroidConfig.isFDroidBuild) {
 
 rootProject.name = "ZeroStudio"
 
-// keep this sorted alphabetically
+// 保持按字母顺序排序注册全项目子模块
 include(
     ":annotation:annotations",
     ":annotation:processors",
@@ -163,22 +211,11 @@ include(
 
     ":debugger:Breakpoint-debugger:library",
 
-    // ADB 连接管理模块 (复刻自 debugger/android-adb-shell 参考工程的 adblib/libadb/fastbootlib)
-    // - adblib: Cameron Gutman 的 ADB 协议 Java 实现 (OTG/USB ADB 用)
-    // - libadb: Muntashirakon 的 ADB 库 (WiFi/TLS ADB 用, 含 mDNS + SPAKE2 配对)
-    // - fastbootlib: Fastboot 协议 Kotlin 实现
-    // - connection: 完整复刻 android-adb-shell/app 的 shell+core 源码, 包含
-    //   AdbConnectionManager/WifiAdbRepositoryImpl/OtgRepositoryImpl/FastbootRepositoryImpl
-    //   /ShellViewModel/WifiAdbViewModel/OtgViewModel/FastbootViewModel 等真正实现
-    //   Clean Architecture + Hilt + Room + JmDNS + Shizuku
-    // 设备连接管理 BottomSheet 通过这些模块实现 Local+WiFi+OTG+Fastboot 四种连接方式
+    // ADB 连接管理模块
     ":debugger:adb-connection:adblib",
     ":debugger:adb-connection:libadb",
     ":debugger:adb-connection:fastbootlib",
     ":debugger:adb-connection:connection",
-    // settings-dsl 模块 (复刻自 debugger/android-adb-shell 参考工程)
-    // 提供 Kotlin DSL 风格的设置页构建器 (switchItem/clickableItem/radioGroupItem/
-    // buttonGroupItem/settingsPage 等), 被 connection 模块的 SettingsProvider.kt 引用。
     ":debugger:adb-connection:settings-dsl",
 
     ":editor:api",
@@ -208,15 +245,12 @@ include(
     ":debugger:Breakpoint-debugger:ide-log-plugin",
     ":debugger:ide-language",
     ":debugger:Breakpoint-debugger:logwire",
-    ":debugger:Breakpoint-debugger:library",
 
     ":java:javac-services",
     ":java:lsp",
     ":lsp:kotlin",
     ":lsp:toml",
     ":lsp:clangd",
-    // ":lsp:smali",
-    // ":lsp:groovy",
     ":logging:idestats",
     ":logging:logger",
     ":logging:logsender",
@@ -249,10 +283,9 @@ include(
     ":utilities:shared",
     ":utilities:templates-api",
     ":utilities:templates-impl",
-    ":utilities:treeview",
+    // ":utilities:treeview",
     ":utilities:FileTree",
-    // ":utilities:uidesigner",  //已经完全归档
-    // ":utilities:xml-inflater", //归档
+    
     ":xml:aaptcompiler",
     ":xml:dom",
     ":xml:lsp",
@@ -262,7 +295,6 @@ include(
     ":modules:colorpicker",
     ":modules:compose-preview",
     ":modules:deviceCompat",
-  //  ":modules:image-preview",
     ":modules:kotlinc",
     ":modules:mt-data-files-provider",
     ":modules:soraLanguageMonarch",
@@ -274,17 +306,22 @@ include(
     ":modules:universal-preview",
     ":modules:web-preview",
     ":modules:zero-onboarding-guide",
-    // Shizuku 客户端 API: 子项目 3 断点调试连接层用
-    // (api 内部依赖 :modules:shizuku:aidl 和 :modules:shizuku:shared)
-    // provider: ShizukuProvider ContentProvider, 接收 Shizuku server 下发的 binder,
-    //   没有 provider 注册则 Shizuku.pingBinder() 永远 false (设备连接管理 BottomSheet 用)
+    
+    // Shizuku 客户端 API
     ":modules:shizuku:aidl",
     ":modules:shizuku:shared",
     ":modules:shizuku:api",
     ":modules:shizuku:provider",
-
 )
 
+/**
+ * -------------------------------------------------------------------------------------------------
+ * 类名：FDroidConfig
+ * 用途与功能：
+ *   负责在构建初始化阶段解析 rootDir 下的 `fdroid.properties` 配置文件，
+ *   以确定当前是否为 F-Droid 离线/打包渠道构建，并安全注入版本信息。
+ * -------------------------------------------------------------------------------------------------
+ */
 object FDroidConfig {
 
   var hasRead: Boolean = false

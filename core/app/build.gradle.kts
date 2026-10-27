@@ -71,8 +71,8 @@ android {
   }
 
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
     isCoreLibraryDesugaringEnabled = true
   }
 
@@ -209,8 +209,8 @@ dependencies {
   implementation(libs.androidx.preference)
   implementation(libs.androidx.recyclerview)
   implementation(libs.androidx.transition)
-  implementation(libs.androidx.vectors)
-  implementation(libs.androidx.animated.vectors)
+  implementation(libs.androidx.vectors)//使用androidx.compose.material:material-icons-core 和 androidx.compose.material:material-icons-extended替代
+  implementation(libs.androidx.animated.vectors)//使用androidx.compose.material:material-icons-core 和 androidx.compose.material:material-icons-extended替代
   implementation(libs.androidx.work)
   implementation(libs.androidx.work.ktx)
   // implementation(libs.androidx.multidex)

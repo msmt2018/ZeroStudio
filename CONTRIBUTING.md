@@ -63,4 +63,4 @@ logs, and build outputs in `code blocks`.
 ## Contact us
 
 If you want to discuss anything about the project, you can discuss it in
-the [Telegram group](https://t.me/androidide_discussions).
+the [Telegram group](https://t.me/android_zero_studio).

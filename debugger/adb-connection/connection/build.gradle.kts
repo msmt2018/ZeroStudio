@@ -27,7 +27,7 @@ plugins {
 android {
     namespace = "android.zero.studio"
 
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26  
@@ -52,8 +52,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     buildFeatures {
@@ -93,7 +93,7 @@ android {
 
 tasks.withType<KotlinCompile>().configureEach {
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_17
+        jvmTarget = JvmTarget.JVM_21
     }
 }
 

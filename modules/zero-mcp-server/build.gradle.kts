@@ -5,7 +5,7 @@ plugins {
 
 android {
   namespace = "android.zero.studio.chatai.server.mcp"
-  compileSdk = 36
+  compileSdk = 37
 
   defaultConfig {
     minSdk = 26
@@ -24,8 +24,8 @@ android {
   // }
 
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
   }
 
 
@@ -80,4 +80,4 @@ dependencies {
   androidTestImplementation(libs.tests.androidx.junit)
   androidTestImplementation(libs.tests.androidx.espresso.core)
 }
-kotlin { jvmToolchain(17) }
+kotlin { jvmToolchain(21) }

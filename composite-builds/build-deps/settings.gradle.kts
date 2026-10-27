@@ -60,7 +60,6 @@ include(
 
 // 注册项目主构建模块到复合构建内
 project(":soraOnigurumaNative").projectDir = file("../../modules/soraOnigurumaNative")
-// project(":kotlinc").projectDir = file("../../modules/kotlinc")
 
 rootProject.name = "build-deps"
 

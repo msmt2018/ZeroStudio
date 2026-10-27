@@ -2,7 +2,7 @@
 agp = "9.4.1"
 
 #构建系统  >  可以从此获得com.android.tools.build版本信息和source.jar 和javadoc.jar :https://maven.google.com/web/m_index.html?q=aapt#com.android.tools.build
-agp-tooling = "9.4.1-15978811"
+agp-tooling = "9.4.1"
 gradle-tooling = "9.5.1"  #从这里获得最新版本资讯：https://repo.gradle.org/ui/native/libs-releases/org/gradle/gradle-tooling-api/
 # aapt2
 aapt2-proto = "9.4.1-15978811"
@@ -34,7 +34,7 @@ materialIconsCore = "1.7.8"
 accompanistSystemuicontroller = "0.36.0"
 
 # androidx相关
-androidxCore = "1.8.0"
+androidxCore = "1.11.0"
 androidx-vectordrawable = "1.2.0"
 androidx-navigation = "2.10.2"
 androidx-work = "2.12.0"
@@ -43,15 +43,15 @@ androidxCoreKtx = "1.19.1"
 androidxCoreSplashscreen = "1.0.1"
 androidxDocumentfile = "1.1.0"
 androidDesugarJdkLibs = "2.1.5"
-androidx-lifecycle = "2.10.0"
+androidx-lifecycle = "2.11.0"
 androidxViewpager = "1.0.0"
 androidx-room = "2.8.5"
 androidx-benchmark = "1.5.0"
 androidx-benchmark-junit4 = "1.5.0"
 androidConstraintlayout = "2.2.1"
 androidRecyclerview = "1.3.2"
-activityKtx = "1.10.1"
-lifecycleViewmodelKtx = "2.9.2"
+activityKtx = "1.13.0"
+lifecycleViewmodelKtx = "2.11.0"
 androidxUiautomator = "2.3.0"
 browser = "1.10.0"
 media3 = "1.11.1"
@@ -69,12 +69,12 @@ benchmarkMacroJunit4 = "1.4.1"
 baselineprofile = "1.4.1"
 multidexVersion = "2.0.1"
 ink = "1.1.0-alpha09"
-
+androidxAppcompatCore = "1.8.0"
 # Google相关
 google-findbugsJsr305 = "3.0.2"
 googleGson = "2.13.1"
-guava-jre = "32.1.3-jre"
-guava-android = "32.1.3-android"
+guava-jre = "33.3.1-jre"
+guava-android = "33.3.1-android"
 googleMaterial = "1.5.0-beta01"
 google-accompanist-pager = "0.28.0"
 google-services = "4.5.0"
@@ -104,14 +104,14 @@ exposedVersion = "0.37.3"
 jmhVersion = "1.20"
 org-apache-compress = "1.21"
 org-tukaani-tarxz = "1.12"
-commonsIo = "2.19.0"
+commonsIo = "2.16.1"
 commonUtilcodex = "1.31.1"
 paletteKtx = "1.0.0"
 preferenceKtx = "1.2.1"
 zoomage = "1.3.1"
 colorpickerview = "2.3.0"
 commonsText = "1.15.0"
-logback = "1.3.15"
+logback = "1.6.5"
 io-ktor = "3.5.2"
 glide = "4.16.0"
 io-coil = "3.6.3"
@@ -182,6 +182,10 @@ junit = "4.13.2"
 androidxTestExtJunit = "1.3.0"
 espressoCore = "3.7.0"
 junit-jupiter = "5.10.2"
+
+# plugin
+gradleupShadow = "9.6.1"
+versionCatalogUpdate = "1.1.1"
 
 
 [libraries]
@@ -286,9 +290,9 @@ common-asm = { module = "org.ow2.asm:asm", version = "9.7.1" }
 
 # AndroidX 相关sdk
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidxCore" }
-androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidxCore" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidxAppcompatCore" }
 androidx-cardview = { module = "androidx.cardview:cardview", version = "1.0.0" }
-androidx-collection = { module = "androidx.collection:collection", version = "1.4.0" }
+androidx-collection = { module = "androidx.collection:collection", version = "1.5.0" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "androidConstraintlayout" }
 androidx-coordinatorlayout = { module = "androidx.coordinatorlayout:coordinatorlayout", version = "1.2.0" }
 androidx-drawer = { module = "androidx.drawerlayout:drawerlayout", version = "1.2.0" }
@@ -505,6 +509,7 @@ jetbrains-markdown = { group = "org.jetbrains", name = "markdown", version.ref =
 rikkahub-markdown = { module = "com.github.rikkahub:markdown", version.ref = "markdown-rikka" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlin-coroutines-core" }
 kotlin-compose-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
+kotlin-metadata-jvm = { module = "org.jetbrains.kotlin:kotlin-metadata-jvm", version.ref = "kotlin" }
 
 
 # koin
@@ -718,4 +723,6 @@ maven-publish = { id = "com.vanniktech.maven.publish.base", version.ref = "maven
 com-jaredsburrows-license = { id = "com.jaredsburrows.license", version = "0.8.42" }
 gradle-publish = { id = "com.gradle.plugin-publish", version = "1.2.1" }
 realm-gradle-plugin = { id = "io.realm:realm-gradle-plugin", version.ref = "iorealm" }
+gradleup-shadow = { id = "com.gradleup.shadow", version.ref = "gradleupShadow" }
 
+version-catalog-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "versionCatalogUpdate" }

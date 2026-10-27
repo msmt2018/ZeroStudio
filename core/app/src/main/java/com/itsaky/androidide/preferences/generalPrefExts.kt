@@ -29,6 +29,16 @@ import com.itsaky.androidide.ui.themes.IDETheme
 import com.itsaky.androidide.ui.themes.IThemeManager
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
+import com.itsaky.androidide.preferences.internal.SidebarPreferences
+import com.itsaky.androidide.ui.screen.editor.sidebar.SidebarBarPosition
+import com.itsaky.androidide.ui.screen.editor.sidebar.SidebarPositionSelectorCard
+import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 
 @Parcelize
 class GeneralPreferencesScreen(
@@ -54,7 +64,7 @@ class InterfaceConfig(
 
   init {
     addPreference(UiMode())
-
+    addPreference(SidebarPositionPreference())
     addPreference(ThemeSelector())
     addPreference(LocaleSelector())
     addPreference(lottieAnimationPreference)
@@ -88,6 +98,46 @@ class TerminalConfig(
     addPreference(UseSytemShell())
   }
 }
+**
+ * 现代可视化侧滑栏位置选择 Preference
+ */
+@Parcelize
+class SidebarPositionPreference(
+    override val key: String = SidebarPreferences.KEY_SIDEBAR_BAR_POSITION,
+    override val title: Int = R.string.title_sidebar_tab_position,
+    override val summary: Int? = R.string.desc_sidebar_tab_position,
+    override val icon: Int? = R.drawable.ic_view_sidebar,
+) : IPreference() {
+
+  override fun onCreateView(context: Context): Preference {
+    return Preference(context).apply {
+      key = this@SidebarPositionPreference.key
+      title = context.getString(this@SidebarPositionPreference.title)
+      summary = this@SidebarPositionPreference.summary?.let { context.getString(it) }
+      icon = this@SidebarPositionPreference.icon?.let { androidx.core.content.ContextCompat.getDrawable(context, it) }
+    }
+  }
+  /**
+ * 扩展到常规界面的 Compose 渲染分支：
+ * 在 PreferencesScreen.kt 中，当 item is SidebarPositionPreference 时，直接内联渲染该前沿卡片
+ */
+@Composable
+fun RenderSidebarPositionPreference(
+    modifier: Modifier = Modifier,
+) {
+  var currentPosition by remember { mutableStateOf(SidebarPreferences.sidebarBarPosition) }
+
+  SidebarPositionSelectorCard(
+      currentPosition = currentPosition,
+      onPositionChanged = { newPos ->
+        currentPosition = newPos
+        SidebarPreferences.sidebarBarPosition = newPos
+      },
+      modifier = modifier,
+  )
+}
+}
+
 
 @Parcelize
 class UiMode(

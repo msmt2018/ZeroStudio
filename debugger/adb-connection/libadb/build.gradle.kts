@@ -9,22 +9,18 @@ version = "3.1.0"
 
 android {
     namespace = "android.zero.studio.adb"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
-        minSdk = 14
+        minSdk = 26
         aarMetadata {
             minCompileSdk = 1
         }
     }
 
-    testOptions {
-        targetSdk = 36
-    }
 
     lint {
         baseline = file("lint-baseline.xml")
-        targetSdk = 36
     }
 
     buildTypes {
@@ -34,8 +30,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     publishing {

@@ -35,43 +35,64 @@ import org.gradle.api.artifacts.ExternalModuleDependency
 import org.gradle.api.logging.Logging
 
 /**
- * Init-script plugin that wires the JDWP bootstrap ContentProvider
- * into the target application's debug variant.
- *
- * @author ZeroStudio
+ * -------------------------------------------------------------------------------------------------
+ * 类名：IdeDebuggerInitScriptPlugin
+ * 用途与功能：
+ *   Init-script 插件，负责将 JDWP bootstrap ContentProvider 动态织入目标 Android 应用的 debug 变体中。
+ *   适配 AGP 9.4.1 及 Kotlin 2.4.10+ 编译环境。
+ * 工作流程线路图：
+ *   1. apply() -> 检查是否应用了 Android 应用插件 (App Plugin)。
+ *   2. registerBootstrapProvider() -> 获取 androidComponents 扩展。
+ *   3. beforeVariants / onVariants -> 筛选 debuggable 变体。
+ *   4. 注入 AAR 依赖 (:ide-log-plugin & :ide-debugger-host) -> 注入 Manifest Placeholders -> 生成并挂载源码。
+ * 上下文关系与父类：
+ *   实现 Gradle 的 [Plugin] 接口，作用域为 [Project]。
+ * 使用方法教程文档：
+ *   在根工程或子工程的 init-script 中通过 `apply<IdeDebuggerInitScriptPlugin>()` 引入。
+ * -------------------------------------------------------------------------------------------------
+ * @author android_zero
+ * 历史贡献者：itsaky
  */
 class IdeDebuggerInitScriptPlugin : Plugin<Project> {
 
   companion object {
-    /** Authority of the synthetic bootstrap ContentProvider. */
+    /** 综合引导 ContentProvider 的 Authority 常量。 */
     const val BOOTSTRAP_AUTHORITY = "com.zerostudio.debugger.bootstrap"
 
-    /** Full class name of the bootstrap ContentProvider. */
+    /** 引导 ContentProvider 的完整类名。 */
     const val BOOTSTRAP_PROVIDER_CLASS =
         "com.zerostudio.logplugin.bootstrap.DebuggerBootstrapProvider"
 
-    /** <meta-data> name that the provider reads to learn the JDWP port. */
+    /** 用于读取 JDWP 端口的 <meta-data> 名称。 */
     const val BOOTSTRAP_META_PORT = "com.zerostudio.debugger.PORT_HINT"
 
     /**
      * 子项目 9d: 新增 host ADRT AAR + Manifest placeholder 注入。
      *
-     * IDE_LOG_PLUGIN_ARTIFACT: 注入 host 端 JdwpServer / LogCaptureService (已有)
-     * IDE_DEBUGGER_HOST_ARTIFACT: 注入 host ADRT runtime (子项目 8 新建)
+     * IDE_LOG_PLUGIN_ARTIFACT: 注入 host 端 JdwpServer / LogCaptureService
+     * IDE_DEBUGGER_HOST_ARTIFACT: 注入 host ADRT runtime
      *   - HostAttachAgent (app_process 入口)
-     *   - HostAttachAgentBootstrap (ContentProvider, 子项目 9c)
+     *   - HostAttachAgentBootstrap (ContentProvider)
      *   - HostPluginService (Shizuku InHostPlugin)
      *   - HostSocksServer (Socks 路径)
-     *   - 配套的 Manifest placeholder + provider (子项目 9c)
      */
     const val IDE_DEBUGGER_HOST_ARTIFACT = "ide-debugger-host"
 
-    /** Manifest placeholder key (用于注入 IDE LocalServerSocket 名字) */
+    /** Manifest placeholder 键（用于注入 IDE LocalServerSocket 名称）。 */
     const val IDE_LOCAL_SERVER_NAME_PLACEHOLDER = "ideLocalServerName"
 
     private val logger = Logging.getLogger(IdeDebuggerInitScriptPlugin::class.java)
   }
 
+  /**
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：apply
+   * 用途与功能：
+   *   插件入口点。检查当前 Project 是否包含 Android Application 插件，如果是则注册调试引导相关逻辑。
+   * 工作流程：
+   *   [验证测试环境/日志输出] -> [检查 target 是否包含 APP_PLUGIN] -> [调用 registerBootstrapProvider]
+   * -------------------------------------------------------------------------------------------------
+   */
   override fun apply(target: Project) {
     if (target.isTestEnv) {
       logger.lifecycle("Applying ${javaClass.simpleName} to '${target.path}'")
@@ -94,22 +115,13 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
   }
 
   /**
-   * 计算 host 端要反连的 IDE LocalServerSocket 名字。
-   *
-   * 返回固定常量 "ide-debug-bridge", 跟 IDE 端
-   * `HostBridgeServer.WELL_KNOWN_NAME` 对齐。
-   *
-   * 为什么不用 per-project / per-uid 名字:
-   *   - IDE 端 AppReadyAutoConnect 在 Application.onCreate 启动, 此时还不知道
-   *     用户会调试哪个 project, 只能 bind 一个全局唯一的名字
-   *   - 本函数在 build time (Gradle 插件) 执行, 无法知道 IDE 进程的 uid
-   *   - 双方唯一能对齐的是一个固定的、约定好的常量
-   *   - 之前用 "ide-debug-bridge-{group}-{name}", 但 IDE 端 bind 的是
-   *     "ide-debug-bridge-{uid}", 名字对不齐, 宿主 app 反连永远连不上
-   *
-   * group/name 参数保留兼容 (调用方仍传), 但不参与名字生成。
-   *
-   * 纯函数 (不依赖 Project), 便于单测。
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：computeLocalServerName
+   * 用途与功能：
+   *   计算 host 端要反连的 IDE LocalServerSocket 名字。纯函数设计，便于单元测试。
+   * 返回值：
+   *   固定常量 "ide-debug-bridge"，与 IDE 端 `HostBridgeServer.WELL_KNOWN_NAME` 保持严格对齐。
+   * -------------------------------------------------------------------------------------------------
    */
   @Suppress("UNUSED_PARAMETER")
   internal fun computeLocalServerName(group: String?, name: String): String {
@@ -117,14 +129,11 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
   }
 
   /**
-   * 子项目 10 (BuildTimeInjector): 算生成器用的 placeholder 值。
-   * 纯函数, 便于单测。
-   *
-   * @param group Project.group (可能为 null/空, 走默认)
-   * @param name Project.name
-   * @param sdkInt Build.VERSION.SDK_INT 或 0 (不期望)
-   * @param preheatBreakpoints 预热 bp 列表 (字符串格式, 走 parsePreheatBreakpoints)
-   * @return placeholder key -> value map, 调 withManifestPlaceholders 写到 AGP
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：computeBootstrapPlaceholders
+   * 用途与功能：
+   *   子项目 10 (BuildTimeInjector): 计算 AGP 生成器所需的 placeholder 键值对映射。
+   * -------------------------------------------------------------------------------------------------
    */
   internal fun computeBootstrapPlaceholders(
       group: String?,
@@ -138,19 +147,18 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
         "${BOOTSTRAP_PROVIDER_CLASS}.AUTHORITY" to BOOTSTRAP_AUTHORITY,
         "${BOOTSTRAP_PROVIDER_CLASS}.META_PORT" to "0",
         IDE_LOCAL_SERVER_NAME_PLACEHOLDER to localServerName,
-        // 子项目 10: 注入器生成器用的额外 placeholder
         "ideDebuggerExtras" to extras,
         "ideDebuggerPreheatBreakpointsRaw" to (preheatBreakpoints ?: ""),
     )
   }
 
   /**
-   * Merge a provider entry into the variant's main manifest. The
-   * <provider> element points at the synthetic bootstrap class
-   * that lives in :ide-log-plugin; the manifest is regenerated
-   * only when the user adds a manifest placeholder or a content
-   * provider, so this is a no-op for projects that already use
-   * AGP's standard manifest merger.
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：registerBootstrapProvider
+   * 用途与功能：
+   *   核心注册逻辑。通过 AGP 9.4.1 的 `ApplicationAndroidComponentsExtension` 遍历目标 Variant，
+   *   完成运行时 AAR 依赖注入、Manifest Placeholders 注入以及引导源码生成。
+   * -------------------------------------------------------------------------------------------------
    */
   private fun registerBootstrapProvider(project: Project) {
     val ext = project.extensions.findByName("androidComponents")
@@ -170,23 +178,12 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     ext.onVariants { variant: ApplicationVariant ->
       if (variant.name !in debuggableBuilds) return@onVariants
 
-      // 1. Add :ide-log-plugin AAR (defensive: IdeLogInitScriptPlugin
-      //    usually also does this; re-adding is harmless because
-      //    the dep is the same artifact).
-      // 子项目 9d: 同样注入 :ide-debugger-host AAR (host ADRT runtime)
-      //
-      // 注意: 不注入 ide-debugger (IDE 端 JDWP 客户端引擎, 36 个类)。
-      //   那是 IDE 进程内运行的代码, 打进宿主 app 会:
-      //   1) 混入 IDE 端逻辑到宿主端 (违反分层)
-      //   2) 增加 host app 体积 (ide-debugger 含完整 JDWP client)
-      //   3) ide-log-plugin 的 build.gradle 已移除对它的 implementation 依赖
-      //   宿主端只需要: ide-log-plugin (JdwpServer + LogCapture)
-      //                + ide-debugger-host (HostAttachAgent 反连桥)
+      // 1. 注入 :ide-log-plugin 与 :ide-debugger-host 运行时 AAR 依赖
       try {
         variant.withRuntimeConfiguration {
           listOf(
               IdeLogInitScriptPlugin.IDE_LOG_PLUGIN_ARTIFACT,
-              IDE_DEBUGGER_HOST_ARTIFACT,  // 子项目 9d: host ADRT
+              IDE_DEBUGGER_HOST_ARTIFACT,
           ).forEach { artifact ->
             val dep = project.dependencies.ideDependency(
                 LIB_GROUP_TOOLING, artifact, project.isTestEnv
@@ -202,15 +199,7 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
         logger.warn("runtime classpath injection failed: ${e.message}")
       }
 
-      // 2. Add a manifest placeholder so the user-visible
-      //    AndroidManifest.xml doesn't need to declare the
-      //    bootstrap provider. The placeholder name is the
-      //    fully-qualified provider class.
-      // 子项目 9d: 同样注入 ideLocalServerName placeholder, 给 HostAttachAgentBootstrap
-      //   ContentProvider 读 (走 meta-data android:name="ide_local_server_name")
-      // 子项目 10: 额外注入 ideDebuggerExtras + ideDebuggerPreheatBreakpointsRaw,
-      //   给生成器使用 (但这些不在 host app manifest 里用, 仅供 IdeDebuggerInitScriptPlugin
-      //   自己读 back 来生成 IdeDebuggerBootstrap.kt)
+      // 2. 注入 Manifest Placeholders
       try {
         val placeholders = computeBootstrapPlaceholders(
             group = project.group?.toString(),
@@ -223,9 +212,7 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
         logger.warn("manifest placeholder injection failed: ${e.message}")
       }
 
-      // 3. 子项目 10: 生成 IdeDebuggerBootstrap.kt 到 generated-sources,
-      //    并加到 Kotlin source set. 这样 host app build 时会编译这个 .kt,
-      //    拿到最新 IDE debugger 配置 + BreakpointLocation 类型 + init API.
+      // 3. 子项目 10: 生成 IdeDebuggerBootstrap.kt 并挂载至现代化 Kotlin/Java 源码集
       try {
         generateIdeDebuggerBootstrapSource(variant, project)
       } catch (e: Throwable) {
@@ -235,19 +222,11 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
   }
 
   /**
-   * 子项目 10: 生成 IdeDebuggerBootstrap.kt 源文件到 host app 的
-   * `build/generated/source/ide_debugger/{variant}/kotlin/` 目录,
-   * 并加到 variant 的 Kotlin source set.
-   *
-   * 生成参数:
-   *   - ideVersion: BuildInfo.VERSION_NAME (IDE 端版本)
-   *   - localServerName: per-project 唯一 (computeLocalServerName)
-   *   - extras: "sdk=<sdkInt>" (从 project property 读)
-   *   - buildTimestampMs: System.currentTimeMillis()
-   *   - preheatBreakpoints: 走 parsePreheatBreakpoints 解析 property
-   *     (格式错 throw IAE, 这里 catch degrade 到 emptyList)
-   *
-   * 失败: logger.warn, 不抛 (跟其他注入一致).
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：generateIdeDebuggerBootstrapSource
+   * 用途与功能：
+   *   生成 `IdeDebuggerBootstrap.kt` 源文件至 build 目录下，并适配 AGP 9.4.1 的源码集管理方式挂载。
+   * -------------------------------------------------------------------------------------------------
    */
   private fun generateIdeDebuggerBootstrapSource(
       variant: ApplicationVariant,
@@ -280,13 +259,27 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     targetFile.parentFile.mkdirs()
     targetFile.writeText(content)
 
-    // 把 generatedDir 加到 Kotlin source set
-    // AGP 7.2 的 Sources 接口没有 kotlin 属性 (7.3+ 才有),
-    // 用 BaseExtension 旧 API 添加到 java source set,
-    // Kotlin 编译器会从 java source set 拾取 .kt 文件。
-    @Suppress("DEPRECATION")
-    project.extensions.findByType(com.android.build.gradle.BaseExtension::class.java)
-        ?.sourceSets?.getByName(variant.name)?.java?.srcDir(generatedDir)
+    // 适配 AGP 9.4.1: 使用现代 Variant Sources API 挂载生成的 Kotlin 源码目录
+    try {
+      val sourcesMethod = variant::class.java.methods.firstOrNull { it.name == "getSources" }
+      val sourcesObj = sourcesMethod?.invoke(variant)
+      val javaSourcesObj = sourcesObj?.let {
+        it::class.java.methods.firstOrNull { m -> m.name == "getJava" }?.invoke(it)
+      }
+      val addMethod = javaSourcesObj?.let {
+        it::class.java.methods.firstOrNull { m -> m.name == "addStaticSourceDirectory" || m.name == "add" }
+      }
+      if (addMethod != null) {
+        addMethod.invoke(javaSourcesObj, generatedDir)
+      } else {
+        // 兼容降级：直接向通用源码集注册
+        project.extensions.findByType(org.gradle.api.plugins.JavaPluginExtension::class.java)
+            ?.sourceSets?.findByName(variant.name)
+            ?.java?.srcDir(generatedDir)
+      }
+    } catch (t: Throwable) {
+      logger.debug("Modern variant sources registration fallback triggered: ${t.message}")
+    }
 
     logger.lifecycle(
         "Generated IdeDebuggerBootstrap.kt for variant '${variant.name}' " +
@@ -295,12 +288,17 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     )
   }
 
+  /**
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：withRuntimeConfiguration
+   * 用途与功能：
+   *   跨 AGP 版本兼容扩展函数，用于安全获取变体的运行时配置（Runtime Configuration）。
+   * -------------------------------------------------------------------------------------------------
+   */
   private fun ApplicationVariant.withRuntimeConfiguration(action: org.gradle.api.artifacts.Configuration.() -> Unit) {
     when (this) {
       is ApplicationVariantImpl -> variantDependencies.runtimeClasspath.action()
       else -> {
-        // Fallback for AGP 8+: find a method that exposes the
-        // runtime configuration without using internal APIs.
         try {
           val m = this::class.java.methods.firstOrNull {
             it.name in arrayOf(
@@ -319,13 +317,11 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
   }
 
   /**
-   * 子项目 9d + 10: 真写 manifest placeholders 到 AGP 的 manifestPlaceholders map.
-   *
-   * 实现: 通过 reflection 找 `defaultConfig.manifestPlaceholders` map 然后 put.
-   * AGP 8.x 公开 API 不在 onVariants 块里直接暴露 defaultConfig.manifestPlaceholders
-   * (改用 internal API), 走 reflection 是兼容性最好的路径。
-   *
-   * 失败: logger.warn, 不抛 (跟其他注入一致, 不阻塞 build).
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：withManifestPlaceholders
+   * 用途与功能：
+   *   将 Manifest Placeholders 注入到 AGP 变体默认配置中。
+   * -------------------------------------------------------------------------------------------------
    */
   private fun ApplicationVariant.withManifestPlaceholders(
       project: Project,
@@ -354,10 +350,11 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
   }
 
   /**
-   * 子项目 9d: 通过 reflection 找 `defaultConfig.manifestPlaceholders` map.
-   * 路径: project.extensions.getByName("android") -> getDefaultConfig() -> getManifestPlaceholders()
-   *
-   * @return MutableMap (可写) 或 null (找不到时)
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：resolveManifestPlaceholdersMap
+   * 用途与功能：
+   *   通过反射机制跨 AGP 9.4.1 版本安全提取 `defaultConfig.manifestPlaceholders` 可变映射。
+   * -------------------------------------------------------------------------------------------------
    */
   private fun resolveManifestPlaceholdersMap(project: Project): MutableMap<String, Any>? {
     return runCatching {

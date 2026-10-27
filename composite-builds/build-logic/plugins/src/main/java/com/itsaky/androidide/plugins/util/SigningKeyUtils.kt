@@ -22,19 +22,35 @@ import com.itsaky.androidide.build.config.AUTH_USER
 import com.itsaky.androidide.build.config.KEY_BIN
 import com.itsaky.androidide.build.config.KEY_URL
 import com.itsaky.androidide.build.config.signingKey
+import java.io.FileInputStream
 import java.util.Base64
+import java.util.Properties
 import org.gradle.api.Project
 import org.gradle.api.invocation.Gradle
 
 /**
- * Helper class for downloading and setting up the signing key.
- *
- * @author Akash Yadav
+ * -------------------------------------------------------------------------------------------------
+ * 工具类：SigningKeyUtils
+ * 用途与功能：
+ *   负责下载、解密并配置 Android 模块所需的签名密钥文件 (`signingKey`)。
+ *   适配 Gradle 9/10 标准：
+ *     1. 彻底移除了已被废弃的 `project.properties` 全局映射调用，改用精准的 `signing.properties` 文件读取与 `providers.gradleProperty`。
+ *     2. 移除了旧版被移除的 `project.exec`，升级为标准安全的命令调用方案。
+ * -------------------------------------------------------------------------------------------------
+ * @author android_zero
+ * 历史贡献者：Akash Yadav
  */
 object SigningKeyUtils {
 
   private val _warned = mutableMapOf<String, Boolean>()
 
+  /**
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：downloadSigningKey
+   * 用途与功能：
+   *   检查签名密钥是否存在。若不存在，则依次尝试通过 Base64 环境变量、`signing.properties` 或远程脚本下载配置。
+   * -------------------------------------------------------------------------------------------------
+   */
   @JvmStatic
   fun Project.downloadSigningKey() {
     val signingKey = signingKey.get().asFile
@@ -51,35 +67,59 @@ object SigningKeyUtils {
       return
     }
 
-    // URL to download the signing key
+    // 下载签名密钥所需的 URL
     val url = getEnvOrProp(KEY_URL) ?: return
 
-    // Username and password required to download the keystore
+    // 下载密钥所需的用户名和密码
     val user = getEnvOrProp(AUTH_USER) ?: return
     val pass = getEnvOrProp(AUTH_PASS) ?: return
 
     logger.info("Downloading signing key...")
     
-    val result = project.providers.exec {
-      var rootGradle: Gradle? = gradle
-      while (rootGradle?.parent != null) {
-        rootGradle = rootGradle.parent
-      }
-
-      this.workingDir(rootGradle!!.rootProject.projectDir)
-      
-      this.executable("bash")
-      this.args("./scripts/download_key.sh", signingKey.absolutePath, url, user, pass)
+    var rootGradle: Gradle? = gradle
+    while (rootGradle?.parent != null) {
+      rootGradle = rootGradle.parent
     }
+    val rootDir = rootGradle!!.rootProject.projectDir
 
-   result.result.get().assertNormalExitValue()
+    // 使用 Gradle 9 兼容的进程执行方式
+    val execResult = providers.exec {
+      workingDir(rootDir)
+      commandLine("bash", "./scripts/download_key.sh", signingKey.absolutePath, url, user, pass)
+    }.result.get()
 
+    execResult.assertNormalExitValue()
   }
 
+  /**
+   * -------------------------------------------------------------------------------------------------
+   * 方法名：getEnvOrProp
+   * 用途与功能：
+   *   安全地按优先级获取配置项（环境变量 -> 根目录 signing.properties -> Gradle 属性 Provider），
+   *   彻底摒弃了已被 Gradle 9 废弃的 `project.properties` 映射调用。
+   * -------------------------------------------------------------------------------------------------
+   */
   internal fun Project.getEnvOrProp(key: String, warn: Boolean = true): String? {
+    // 优先检查系统环境变量
     var value: String? = System.getenv(key)
+
+    // 检查根目录下的 signing.properties 文件
     if (value.isNullOrBlank()) {
-      value = project.properties[key] as? String?
+      val signingPropsFile = rootProject.file("signing.properties")
+      if (signingPropsFile.exists() && signingPropsFile.isFile) {
+        try {
+          val props = Properties()
+          FileInputStream(signingPropsFile).use { props.load(it) }
+          value = props.getProperty(key)
+        } catch (e: Exception) {
+          logger.warn("Failed to read signing.properties for key '$key': ${e.message}")
+        }
+      }
+    }
+
+    // 回退到安全的 Gradle Provider 属性
+    if (value.isNullOrBlank()) {
+      value = providers.gradleProperty(key).orNull ?: findProperty(key)?.toString()
     }
 
     if (value.isNullOrBlank()) {

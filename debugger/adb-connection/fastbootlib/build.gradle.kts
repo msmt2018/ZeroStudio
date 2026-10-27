@@ -4,19 +4,12 @@ plugins {
 
 android {
     namespace = "android.zero.studio.fastboot"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26
     }
 
-    testOptions {
-        targetSdk = 36
-    }
-
-    lint {
-        targetSdk = 36
-    }
 
     buildTypes {
         release {
@@ -29,8 +22,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 

@@ -28,13 +28,25 @@ import com.itsaky.androidide.plugins.tasks.SetupAapt2Task
 import com.itsaky.androidide.plugins.util.SdkUtils.getAndroidJar
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-// import org.gradle.configurationcache.extensions.capitalized
 import org.gradle.api.tasks.bundling.Zip
 
 /**
- * Handles asset copying and generation.
- *
- * @author Akash Yadav
+ * -------------------------------------------------------------------------------------------------
+ * 类名：AndroidIDEAssetsPlugin
+ * 用途与功能：
+ *   负责管理 AndroidIDE 应用构建过程中的资产（Assets）复制、工具链打包与生成逻辑。
+ *   适配 AGP 9.4.1、Kotlin 2.4.10+ 及 Gradle 9 构建规范。
+ * 工作流程线路图：
+ *   1. 注册基础生成任务：`generateGradleWrapper`、`setupAapt2`、`addAndroidJarToAssets`。
+ *   2. 遍历 ApplicationAndroidComponentsExtension 的各个变体（Variants）：
+ *      - 挂载 JniLibs 源码集（AAPT2）。
+ *      - 挂载 Assets 源码集（Gradle Wrapper、Android Jar）。
+ *      - 动态注册并挂载 `generate<Variant>InitScript` 初始化脚本生成任务。
+ *      - 动态注册并挂载 `copy<Variant>DebuggerLibraryToAssets` 调试器运行时打包分发任务。
+ *      - 动态注册并挂载 `copy<Variant>ToolingApiJar` Tooling API JAR 复制任务。
+ * -------------------------------------------------------------------------------------------------
+ * @author android_zero
+ * 历史贡献者：Akash Yadav
  */
 class AndroidIDEAssetsPlugin : Plugin<Project> {
 
@@ -54,7 +66,10 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
           }
 
       androidComponentsExtension.onVariants { variant ->
-       val variantNameCapitalized = variant.name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        // 使用现代化安全首字母大写转换，替代已废弃的 capitalized()
+        val variantNameCapitalized = variant.name.replaceFirstChar { 
+          if (it.isLowerCase()) it.titlecase() else it.toString() 
+        }
 
         variant.sources.jniLibs?.addGeneratedSourceDirectory(
             setupAapt2TaskTaskProvider,
@@ -71,7 +86,7 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             AddAndroidJarToAssetsTask::outputDirectory,
         )
 
-        // Init script generator
+        // 初始化脚本生成器任务
         val generateInitScript =
             tasks.register(
                 "generate${variantNameCapitalized}InitScript",
@@ -86,6 +101,7 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             GenerateInitScriptTask::outputDir,
         )
 
+        // 调试器库打包复制任务
         val copyDebuggerLibrary =
             tasks.register(
                 "copy${variantNameCapitalized}DebuggerLibraryToAssets",
@@ -109,7 +125,7 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             AddFileToAssetsTask::outputDirectory,
         )
 
-        // Tooling API JAR copier
+        // Tooling API JAR 复制器任务
         val copyToolingApiJar =
             tasks.register(
                 "copy${variantNameCapitalized}ToolingApiJar",
@@ -132,7 +148,6 @@ class AndroidIDEAssetsPlugin : Plugin<Project> {
             copyToolingApiJar,
             AddFileToAssetsTask::outputDirectory,
         )
-
       }
     }
   }

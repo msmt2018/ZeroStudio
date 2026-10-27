@@ -7,24 +7,24 @@ android {
   namespace = "com.github.appintro"
 
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
   }
 
-  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach {
-    this.compilerOptions {
-        this.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
-    }
+
 }
-}
-
-
-kotlin { jvmToolchain(17) }
-
 dependencies {
   implementation(libs.androidx.appcompat)
   implementation(libs.androidx.annotation)
   implementation(libs.androidx.constraintlayout)
   implementation(libs.androidx.viewpager2)
   implementation(libs.androidx.fragment.ktx)
+}
+
+kotlin { jvmToolchain(21) }
+
+  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach {
+    this.compilerOptions {
+        this.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
 }

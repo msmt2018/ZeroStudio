@@ -6,13 +6,12 @@ plugins {
 }
 
 java {
-  toolchain {
-    languageVersion.set(JavaLanguageVersion.of(17))
-  }
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 kotlin {
-  jvmToolchain(17)
+  jvmToolchain(21)
 }
 
 sourceSets {

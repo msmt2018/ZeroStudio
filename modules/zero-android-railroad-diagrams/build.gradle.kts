@@ -5,12 +5,11 @@ plugins {
 
 android {
   namespace = "com.example.mybottom.navigation"
-  compileSdk = 36
+  compileSdk = 37
 
   defaultConfig {
     applicationId = "com.example.mybottom.navigation"
     minSdk = 21
-    targetSdk = 34
     versionCode = 1
     versionName = "1.0"
 
@@ -20,11 +19,11 @@ android {
   buildFeatures { viewBinding = true }
 
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
   }
   kotlin {
-    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")) }
+    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("21")) }
   }
 }
 

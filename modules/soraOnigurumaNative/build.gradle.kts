@@ -19,13 +19,12 @@
  * questions
  * ****************************************************************************
  */
- import com.itsaky.androidide.build.config.BuildConfig
 
 plugins { id("com.android.library") }
 
 android {
   namespace = "io.github.rosemoe.sora.oniguruma"
-  ndkVersion = BuildConfig.ndkVersion
+  ndkVersion = "29.0.14206865"
 
   defaultConfig {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

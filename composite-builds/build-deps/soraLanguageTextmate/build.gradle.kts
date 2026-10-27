@@ -24,9 +24,7 @@
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.publish)
 }
-description = "sora-editor module"
 android {
     namespace = "io.github.rosemoe.sora.langs.textmate"
 
@@ -69,10 +67,10 @@ dependencies {
 }
 
 
-kotlin { jvmToolchain(17) }
+kotlin { jvmToolchain(21) }
 
   tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach {
     this.compilerOptions {
-        this.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        this.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
     }
 }

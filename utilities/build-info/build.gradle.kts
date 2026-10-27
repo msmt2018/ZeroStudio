@@ -20,13 +20,11 @@ plugins {
 
 description = "Information about the AndroidIDE build"
 
-// 因为升级了kotlin，所以将 createDirectory() 替换为Java API mkdirs()
 val buildInfoGenDir: Provider<Directory> =
     project.layout.buildDirectory.dir("generated/buildInfo").also { it.get().asFile.mkdirs() }
 
 sourceSets { getByName("main").java.srcDir(buildInfoGenDir) }
 
-// 将弃用的 tasks.create 替换为推荐的 tasks.register
 tasks.register("generateBuildInfo") {
   val buildInfoPath = "com/itsaky/androidide/buildinfo/BuildInfo.java"
   val buildInfo = buildInfoGenDir.get().file(buildInfoPath)

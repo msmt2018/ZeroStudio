@@ -19,10 +19,10 @@ import com.itsaky.androidide.build.config.BuildConfig
 
 @Suppress("JavaPluginLanguageLevel")
 plugins {
-  id("com.github.johnrengelman.shadow") version "8.1.1"
   id("java-library")
-  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
   id("org.jetbrains.kotlin.jvm")
+  alias(libs.plugins.gradleup.shadow)
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
   alias(libs.plugins.com.google.devtools.ksp)
 
 }

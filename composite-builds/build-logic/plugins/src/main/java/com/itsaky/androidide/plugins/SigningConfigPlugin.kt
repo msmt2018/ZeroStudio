@@ -18,7 +18,6 @@
 package com.itsaky.androidide.plugins
 
 import com.android.build.api.dsl.ApplicationExtension
-import com.android.build.api.dsl.CommonExtension
 import com.itsaky.androidide.build.config.KEY_ALIAS
 import com.itsaky.androidide.build.config.KEY_PASS
 import com.itsaky.androidide.build.config.KEY_STORE_PASS
@@ -30,16 +29,26 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 
 /**
- * Configures the signing keys to application modules.
- *
- * @author Akash Yadav
+ * -------------------------------------------------------------------------------------------------
+ * 类名：SigningConfigPlugin
+ * 用途与功能：
+ *   负责为 Android 应用模块（Application Modules）动态配置正式发布签名（Signing Config）。
+ *   兼容 AGP 9.4.1、Kotlin 2.4.10+ 及 Gradle 9 规范。
+ * 工作流程线路图：
+ *   1. 检查是否为 F-Droid 构建，如果是则跳过签名配置。
+ *   2. 调用 downloadSigningKey 准备密钥文件。
+ *   3. 通过安全高效的 getEnvOrProp 获取别名、密钥密码及仓库密码。
+ *   4. 如果签名配置完整，创建 "common" 签名配置并应用到所有 BuildTypes 中。
+ * -------------------------------------------------------------------------------------------------
+ * @author android_zero
+ * 历史贡献者：Akash Yadav
  */
 class SigningConfigPlugin : Plugin<Project> {
 
   override fun apply(target: Project) {
     target.run {
       if (isFDroidBuild) {
-        logger.warn("!!! Do not apply ${javaClass.simpleName} when building or F-Droid.")
+        logger.warn("!!! Do not apply ${javaClass.simpleName} when building for F-Droid.")
         return
       }
 
@@ -57,13 +66,19 @@ class SigningConfigPlugin : Plugin<Project> {
       val storePass = getEnvOrProp(KEY_STORE_PASS)
       val keyPass = getEnvOrProp(KEY_PASS)
 
-      if (alias != null && storePass != null && keyPass != null && signingKey.exists()) {
+      if (!alias.isNullOrBlank() && !storePass.isNullOrBlank() && !keyPass.isNullOrBlank() && signingKey.exists()) {
         val config =
             extension.signingConfigs.create("common") {
               storeFile = signingKey
               keyAlias = alias
               storePassword = storePass
               keyPassword = keyPass
+              
+              // 显式启用现代安全签名机制 (V1, V2, V3, V4)
+              enableV1Signing = true
+              enableV2Signing = true
+              enableV3Signing = true
+              enableV4Signing = true
             }
 
         extension.buildTypes.forEach { buildType -> 

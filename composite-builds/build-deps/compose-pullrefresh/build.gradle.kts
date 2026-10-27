@@ -16,12 +16,12 @@ repositories {
 
 android {
   namespace = "androidx.compose.material3.pullrefresh"
-  compileSdk = 34
-  defaultConfig { minSdk = 21 }
+  compileSdk = 37
+  defaultConfig { minSdk = 26 }
   buildFeatures { compose = true }
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
   }
 }
 
@@ -30,10 +30,10 @@ dependencies {
   compileOnly("androidx.compose.foundation:foundation:1.10.0")
 }
 
-kotlin { jvmToolchain(11) }
+kotlin { jvmToolchain(21) }
 
   tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach {
     this.compilerOptions {
-        this.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        this.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
     }
 }

@@ -1,19 +1,3 @@
-/*
- *  This file is part of ZeroStudio.
- *
- *  ZeroStudio is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  ZeroStudio is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *   along with ZeroStudio.  If not, see <https://www.gnu.org/licenses/>.
- */
 package com.itsaky.androidide.ui.screen.editor.bottomsheet
 
 import android.view.View
@@ -37,6 +21,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -73,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
@@ -98,17 +84,9 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 // ============================================================================
-// 三分屏状态机系统 (基于 Animatable 单一事实来源驱动)
+// 1. 三分屏核心状态机（Animatable 单一事实来源驱动）
 // ============================================================================
 
-/**
- * 严格遵照三分屏规则铁律定义的抽屉分档：
- * - [HIDDEN]: 0% (完全收起)
- * - [PEEK]: 30% 屏幕高度 (折叠态 · 露个头，绝不触发遮罩阻断主编辑视口)
- * - [HALF]: 60% 屏幕高度 (半开态 · 拉到中间)
- * - [FULL]: 80% 屏幕高度 (全屏态 · 猛一滑)
- * @author android_zero
- */
 enum class BottomDrawerValue(val heightFraction: Float) {
   HIDDEN(0.00f),
   PEEK(0.30f),
@@ -124,7 +102,6 @@ class BottomDrawerSheetState(
         stiffness = Spring.StiffnessMediumLow,
     ),
 ) {
-  // 单一事实来源 (Single Source of Truth)，保证物理补间数学连续
   internal val animatable = Animatable(initialValue.heightFraction)
 
   var currentValue by mutableStateOf(initialValue)
@@ -142,30 +119,21 @@ class BottomDrawerSheetState(
   val isFull: Boolean
     get() = currentValue == BottomDrawerValue.FULL
 
-  // 内部供手势流同步灌入，内置溢出保护
   internal suspend fun snapToFraction(fraction: Float) {
     animatable.snapTo(fraction.coerceIn(-0.02f, 0.95f))
   }
 
-  /**
-   * 展开预热，收起滞后的严谨生命周期状态变迁：
-   * - 展开时提前预热，使得处于冷冻中的 Fragment 提前唤醒渲染，杜绝白屏；
-   * - 收起时等待动画完全收敛，才彻底切换至 HIDDEN 实施冷冻，防止滑行动画中途内容被销毁。
-   */
   suspend fun animateTo(target: BottomDrawerValue) {
     targetValue = target
-
     // 展开预热
     if (target != BottomDrawerValue.HIDDEN) {
       currentValue = target
     }
-
-    // 物理动效平滑过渡
+    // 物理动效平滑收敛
     animatable.animateTo(
         targetValue = target.heightFraction,
         animationSpec = animationSpec,
     )
-
     // 收起滞后
     if (target == BottomDrawerValue.HIDDEN) {
       currentValue = target
@@ -186,21 +154,14 @@ fun rememberBottomDrawerSheetState(
   return remember { BottomDrawerSheetState(initialValue) }
 }
 
-/**
- * 具有单任务背压合并（Conflated Channel）与多点触控防抖的手势拖拽修饰符。
- * 彻底消除了高频手势在 while 循环中多次调用 scope.launch 产生的协程排队竞争。
- */
 fun Modifier.bottomDrawerDraggable(
     state: BottomDrawerSheetState,
     scope: CoroutineScope,
     totalHeightPx: Float,
 ): Modifier = pointerInput(totalHeightPx) {
   val velocityTracker = VelocityTracker()
-
-  // 创建背压合并通道，120Hz 下仅保留最新一帧，杜绝并发排队
   val dragChannel = Channel<Float>(Channel.CONFLATED)
 
-  // 启动单一常驻消费者协程，保证顺序绝对一致
   val consumerJob = scope.launch {
     dragChannel.receiveAsFlow().collect { targetFraction ->
       state.snapToFraction(targetFraction)
@@ -227,8 +188,6 @@ fun Modifier.bottomDrawerDraggable(
           velocityTracker.addPosition(dragChange.uptimeMillis, dragChange.position)
 
           val deltaFraction = -deltaY / totalHeightPx
-
-          // 物理边界非线性阻尼
           val damping = when {
             currentFraction > BottomDrawerValue.FULL.heightFraction && deltaFraction > 0 -> 0.22f
             currentFraction < 0f && deltaFraction < 0 -> 0.22f
@@ -236,7 +195,6 @@ fun Modifier.bottomDrawerDraggable(
           }
 
           currentFraction = (currentFraction + deltaFraction * damping).coerceIn(-0.02f, 0.95f)
-          // 实时将物理位移推入通道，永不堆叠挂起任务
           dragChannel.trySend(currentFraction)
         }
 
@@ -244,7 +202,6 @@ fun Modifier.bottomDrawerDraggable(
       }
 
       val velocity = velocityTracker.calculateVelocity().y
-      // 读取瞬时真实位置（与手指完全同步）
       val endFraction = currentFraction
 
       val target = when {
@@ -277,13 +234,13 @@ fun Modifier.bottomDrawerDraggable(
 }
 
 // ============================================================================
-// 混合自适应栅格体系 (外边距比例收缩 + 槽间距物理像素锁定)
+// 2. 响应式栅格系统与无限测量屏障隔离 (Measurement Barrier)
 // ============================================================================
 
 enum class DrawerWidthBreakpoint {
-  COMPACT,   // < 600dp (手机竖屏)
-  MEDIUM,    // 600dp ~ 840dp (折叠屏展开态 / 小平板)
-  EXPANDED,  // >= 840dp (大平板 / 横屏工作台)
+  COMPACT,   // < 600dp
+  MEDIUM,    // 600dp ~ 840dp
+  EXPANDED,  // >= 840dp
 }
 
 enum class DrawerHeightInterval {
@@ -309,7 +266,7 @@ data class DrawerWindowContext(
 )
 
 val LocalDrawerWindowContext = compositionLocalOf<DrawerWindowContext> {
-  error("LocalDrawerWindowContext 未被注入，请在 M3ResponsiveBottomDrawerLayout 内部使用")
+  error("LocalDrawerWindowContext 未被注入")
 }
 
 fun resolveDrawerWindowContext(
@@ -331,9 +288,9 @@ fun resolveDrawerWindowContext(
   }
 
   val gridSpec = when (widthBreakpoint) {
-    DrawerWidthBreakpoint.COMPACT -> DrawerGridSpec(columns = 4, horizontalMarginRatio = 0.04f)
-    DrawerWidthBreakpoint.MEDIUM -> DrawerGridSpec(columns = 8, horizontalMarginRatio = 0.06f)
-    DrawerWidthBreakpoint.EXPANDED -> DrawerGridSpec(columns = 12, horizontalMarginRatio = 0.08f)
+    DrawerWidthBreakpoint.COMPACT -> DrawerGridSpec(columns = 4, horizontalMarginRatio = 0.03f)
+    DrawerWidthBreakpoint.MEDIUM -> DrawerGridSpec(columns = 8, horizontalMarginRatio = 0.04f)
+    DrawerWidthBreakpoint.EXPANDED -> DrawerGridSpec(columns = 12, horizontalMarginRatio = 0.05f)
   }
 
   return DrawerWindowContext(
@@ -346,16 +303,13 @@ fun resolveDrawerWindowContext(
 }
 
 /**
- * 混合自适应栅格：
- * 1. 外边距（Margin）随设备动态比例收缩，保证整体呼吸感与边缘留白；
- * 2. 槽间距（Gutter）严格锁定物理像素（如 12.dp），彻底杜绝超大屏下间距无限稀释、空旷松散的问题；
- * 3. 严格使用 remember(gridSpec.columns, totalWidth, fixedGutter) 缓存 Scope，消除重组震荡。
+ * 具有测量屏障隔离的自适应栅格系统
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AdaptiveDrawerGrid(
     modifier: Modifier = Modifier,
-    fixedGutter: Dp = 12.dp, // 钉死物理间距，大屏上不稀释
+    fixedGutter: Dp = 12.dp, // 钉死物理像素槽间距
     content: @Composable AdaptiveGridScope.() -> Unit,
 ) {
   val drawerContext = LocalDrawerWindowContext.current
@@ -372,14 +326,17 @@ fun AdaptiveDrawerGrid(
         @Composable
         override fun GridItem(span: Int, modifier: Modifier, itemContent: @Composable () -> Unit) {
           val safeSpan = span.coerceIn(1, totalColumns)
-
-          // 可用宽度 = 总宽 - 两侧动态百分比边距 - 固定物理间距总和
           val totalGutterSpace = fixedGutter * (totalColumns - 1)
           val availableWidth = totalWidth - (margin * 2) - totalGutterSpace
           val columnWidth = availableWidth / totalColumns
           val itemWidth = (columnWidth * safeSpan) + (fixedGutter * (safeSpan - 1))
 
-          Box(modifier = modifier.width(itemWidth)) {
+          // 核心治理：通过宽度截断与裁剪屏障，隔离内部可能产生的任何无限扩展测量
+          Box(
+              modifier = modifier
+                  .width(itemWidth)
+                  .clipToBounds(),
+          ) {
             itemContent()
           }
         }
@@ -424,7 +381,6 @@ fun DrawerFragmentLifecycleController(
   val currentContainerId by rememberUpdatedState(containerId)
   val currentTagPrefix by rememberUpdatedState(targetTagPrefix)
 
-  // 状态感知：目标或当前值任意一个非 HIDDEN，立即唤醒
   val isTargetVisible = drawerState.targetValue != BottomDrawerValue.HIDDEN
   val isCurrentVisible = drawerState.currentValue != BottomDrawerValue.HIDDEN
   val shouldBeActive = isTargetVisible || isCurrentVisible
@@ -437,7 +393,6 @@ fun DrawerFragmentLifecycleController(
 
   DisposableEffect(targetLifecycle) {
     val fm = currentActivity.supportFragmentManager
-
     if (!fm.isStateSaved) {
       applyFragmentLifecycle(
           fragmentManager = fm,
@@ -471,30 +426,24 @@ private fun applyFragmentLifecycle(
   if (fragments.isEmpty()) return
 
   var transaction: FragmentTransaction? = null
-
   for (frag in fragments) {
-    if (frag == null || !frag.isAdded || frag.isDetached || frag.isRemoving) {
-      continue
-    }
+    if (frag == null || !frag.isAdded || frag.isDetached || frag.isRemoving) continue
 
     val isTarget = (targetContainerId != View.NO_ID && frag.id == targetContainerId) ||
         (!frag.tag.isNullOrBlank() && frag.tag!!.startsWith(tagPrefix))
 
-    if (isTarget) {
-      if (frag.lifecycle.currentState != targetState) {
-        if (transaction == null) {
-          transaction = fragmentManager.beginTransaction().setReorderingAllowed(true)
-        }
-        transaction.setMaxLifecycle(frag, targetState)
+    if (isTarget && frag.lifecycle.currentState != targetState) {
+      if (transaction == null) {
+        transaction = fragmentManager.beginTransaction().setReorderingAllowed(true)
       }
+      transaction.setMaxLifecycle(frag, targetState)
     }
   }
-
   transaction?.commitAllowingStateLoss()
 }
 
 // ============================================================================
-// M3 响应式抽屉主布局 
+// 4. M3 响应式抽屉主布局
 // ============================================================================
 
 @Composable
@@ -509,7 +458,6 @@ fun M3ResponsiveBottomDrawerLayout(
   val scope = rememberCoroutineScope()
   val density = LocalDensity.current
 
-  // 挂载局部靶向生命周期休眠/唤醒控制器
   DrawerFragmentLifecycleController(
       drawerState = drawerState,
       activity = activity,
@@ -524,14 +472,12 @@ fun M3ResponsiveBottomDrawerLayout(
         heightFraction = drawerState.progressFraction,
     )
 
-    // 主编辑区视口
+    // 主编辑区
     Box(modifier = Modifier.fillMaxSize()) {
       content()
     }
 
-    // 副视口遮罩层 (Scrim) ：
-    // 严格限制：仅当手势目标已确立落位在 HALF(60%) 或 FULL(80%) 时才淡入，
-    // 在 30%~45% 之间单手微调拖拽时，绝对保持全透，杜绝主视口忽明忽暗。
+    // 副视口遮罩层 (Scrim) 优化：仅在明确进入 HALF 或 FULL 档位时淡入
     val shouldShowScrim = drawerState.targetValue == BottomDrawerValue.HALF ||
         drawerState.targetValue == BottomDrawerValue.FULL
 
@@ -558,7 +504,6 @@ fun M3ResponsiveBottomDrawerLayout(
       )
     }
 
-    // 抽屉 Surface 渲染
     val currentHeightFraction = drawerState.progressFraction
     if (currentHeightFraction > 0.005f) {
       val currentHeightDp = maxHeight * currentHeightFraction
@@ -596,60 +541,146 @@ fun M3ResponsiveBottomDrawerLayout(
                 actions = topActions,
             )
 
-            // 抽屉子选项卡栏
-            val pageList = pages.pages
-            if (pageList.isNotEmpty()) {
-              val selectedIndex = pageList.indexOfFirst { it.id == pages.selectedId }.coerceAtLeast(0)
+            // 区分大屏与手机竖屏的展示架构
+            val isWideScreen = drawerContext.widthBreakpoint != DrawerWidthBreakpoint.COMPACT
+            val isFullOrHalf = drawerContext.heightInterval == DrawerHeightInterval.FULL ||
+                drawerContext.heightInterval == DrawerHeightInterval.HALF
 
-              ScrollableTabRow(
-                  selectedTabIndex = selectedIndex,
-                  modifier = Modifier.fillMaxWidth().height(32.dp),
-                  edgePadding = maxWidth * 0.02f,
-                  divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)) }
+            if (isWideScreen && isFullOrHalf) {
+              // -------------------------------------------------------------
+              // M3 Canonical Supporting Pane 架构 (折叠屏/大平板双手舒适区排版)
+              // -------------------------------------------------------------
+              Row(
+                  modifier = Modifier
+                      .fillMaxWidth()
+                      .weight(1f)
+                      .navigationBarsPadding(),
               ) {
-                pageList.forEachIndexed { index, page ->
-                  Tab(
-                      selected = selectedIndex == index,
-                      onClick = { pages.select(page.id) },
-                      text = {
-                        Text(
-                            text = page.title,
-                            fontSize = 11.sp,
-                            fontWeight = if (selectedIndex == index) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                      },
-                  )
+                // 左侧舒适区：页面切换导航面板 (Supporting Navigation Pane)
+                Surface(
+                    modifier = Modifier
+                        .width((drawerContext.containerWidth * 0.24f).coerceIn(180.dp, 260.dp))
+                        .fillMaxHeight(),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                ) {
+                  Column(
+                      modifier = Modifier
+                          .fillMaxSize()
+                          .padding(8.dp),
+                      verticalArrangement = Arrangement.spacedBy(4.dp),
+                  ) {
+                    Text(
+                        text = "CONSOLE VIEWS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                    )
+                    pages.pages.forEach { page ->
+                      val selected = page.id == pages.selectedId
+                      Surface(
+                          selected = selected,
+                          onClick = { pages.select(page.id) },
+                          shape = RoundedCornerShape(10.dp),
+                          color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                          modifier = Modifier.fillMaxWidth().height(36.dp),
+                      ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        ) {
+                          Text(
+                              text = page.title,
+                              fontSize = 12.sp,
+                              fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                              color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
+                              maxLines = 1,
+                              overflow = TextOverflow.Ellipsis,
+                          )
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // 物理分割线
+                Box(modifier = Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)))
+
+                // 右侧主工作区：主控制台 / 活跃子视口
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clipToBounds(),
+                ) {
+                  RenderSelectedPage(pages, activity, drawerState)
                 }
               }
-            }
+            } else {
+              // -------------------------------------------------------------
+              // 标准移动端紧凑架构 (顶部 ScrollableTabRow + 单列主视口)
+              // -------------------------------------------------------------
+              val pageList = pages.pages
+              if (pageList.isNotEmpty()) {
+                val selectedIndex = pageList.indexOfFirst { it.id == pages.selectedId }.coerceAtLeast(0)
 
-            // 抽屉主视口容器
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .navigationBarsPadding(),
-            ) {
-              pages.selectedPage?.let { activePage ->
-                when (activePage) {
-                  is EditorPage.ScreenPage -> activePage.content()
-                  is EditorPage.FragmentPage -> {
-                    // 引入 key(activePage.id) 保证换 Tab 时重新初始化 View 树
-                    AndroidFragmentBridge(
-                        activity = activity,
-                        page = activePage,
-                        isActive = drawerState.currentValue != BottomDrawerValue.HIDDEN,
+                ScrollableTabRow(
+                    selectedTabIndex = selectedIndex,
+                    modifier = Modifier.fillMaxWidth().height(32.dp),
+                    edgePadding = maxWidth * 0.02f,
+                    divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)) }
+                ) {
+                  pageList.forEachIndexed { index, page ->
+                    Tab(
+                        selected = selectedIndex == index,
+                        onClick = { pages.select(page.id) },
+                        text = {
+                          Text(
+                              text = page.title,
+                              fontSize = 11.sp,
+                              fontWeight = if (selectedIndex == index) FontWeight.Bold else FontWeight.Normal,
+                              maxLines = 1,
+                              overflow = TextOverflow.Ellipsis,
+                          )
+                        },
                     )
                   }
-                  is EditorPage.ActionPage -> Unit
                 }
+              }
+
+              Box(
+                  modifier = Modifier
+                      .fillMaxWidth()
+                      .weight(1f)
+                      .navigationBarsPadding(),
+              ) {
+                RenderSelectedPage(pages, activity, drawerState)
               }
             }
           }
         }
       }
+    }
+  }
+}
+
+@Composable
+private fun RenderSelectedPage(
+    pages: EditorPageRegistry,
+    activity: FragmentActivity,
+    drawerState: BottomDrawerSheetState,
+) {
+  pages.selectedPage?.let { activePage ->
+    when (activePage) {
+      is EditorPage.ScreenPage -> activePage.content()
+      is EditorPage.FragmentPage -> {
+        AndroidFragmentBridge(
+            activity = activity,
+            page = activePage,
+            isActive = drawerState.currentValue != BottomDrawerValue.HIDDEN,
+        )
+      }
+      is EditorPage.ActionPage -> Unit
     }
   }
 }
@@ -700,7 +731,6 @@ private fun ResponsiveDrawerHandle(
 
     Spacer(Modifier.weight(1f))
 
-    // 居中磁吸把手条 (按容器宽度百分比自适应伸缩)
     Box(
         modifier = Modifier
             .width((drawerContext.containerWidth * 0.10f).coerceIn(32.dp, 64.dp))
@@ -719,14 +749,6 @@ private fun ResponsiveDrawerHandle(
   }
 }
 
-/**
- * 彻底消除重组副作用、视图丢失与 Tab 切换失效的 Fragment 桥接隔离组件。
- *
- * 核心保障：
- * 1. 外层包裹 `key(page.id)`：当从 Tab A (FragmentPage) 切换至 Tab B 时，强制当前 AndroidView 销毁并重建，
- *    确保新 Tab 的 factory 必定执行，根除 FrameLayout 被无脑复用导致的视图不更新。
- * 2. 事务绝对收敛在 factory 块内执行，update 保持留空，不产生重复 Replace 扰动。
- */
 @Composable
 private fun AndroidFragmentBridge(
     activity: FragmentActivity,
@@ -736,7 +758,7 @@ private fun AndroidFragmentBridge(
   val tag = "bottom_sheet_frag_${page.id}"
   val containerId = remember(page.id) { View.generateViewId() }
 
-  // 注入页面标识 Key，切换 Tab 时绝对重新创建 AndroidView
+  // 严格引入 key(page.id)，彻底消灭 Tab 切换复用旧 View 导致的视图不更新 Bug
   key(page.id) {
     AndroidView(
         factory = { ctx ->
@@ -761,7 +783,7 @@ private fun AndroidFragmentBridge(
           }
         },
         update = {
-          // 事务坚决不进入 update 块，杜绝重组震荡
+          // 纯粹留空：Fragment 生命周期与内容由外部控制器和自身内部订阅精准响应
         },
         modifier = Modifier.fillMaxSize(),
     )

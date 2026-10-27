@@ -42,6 +42,7 @@ dependencies {
   api(libs.androidx.nav.fragment)
   api(libs.androidx.nav.ui)
   
+  implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.runtime)
 

@@ -1,8 +1,0 @@
-com.itsaky.androidide.DeviceCompat.deviceCompat-pngs-0 /root/ZeroStudio-ZeroStudio-devs/modules/deviceCompat/build/generated/res/pngs/release
-com.itsaky.androidide.DeviceCompat.deviceCompat-resValues-1 /root/ZeroStudio-ZeroStudio-devs/modules/deviceCompat/build/generated/res/resValues/release
-com.itsaky.androidide.DeviceCompat.deviceCompat-updated_navigation_xml-2 /root/ZeroStudio-ZeroStudio-devs/modules/deviceCompat/build/generated/updated_navigation_xml/release
-com.itsaky.androidide.DeviceCompat.deviceCompat-mergeReleaseResources-3 /root/ZeroStudio-ZeroStudio-devs/modules/deviceCompat/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
-com.itsaky.androidide.DeviceCompat.deviceCompat-mergeReleaseResources-4 /root/ZeroStudio-ZeroStudio-devs/modules/deviceCompat/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
-com.itsaky.androidide.DeviceCompat.deviceCompat-release-5 /root/ZeroStudio-ZeroStudio-devs/modules/deviceCompat/build/intermediates/merged_res/release/mergeReleaseResources
-com.itsaky.androidide.DeviceCompat.deviceCompat-main-6 /root/ZeroStudio-ZeroStudio-devs/modules/deviceCompat/src/main/res
-com.itsaky.androidide.DeviceCompat.deviceCompat-release-7 /root/ZeroStudio-ZeroStudio-devs/modules/deviceCompat/src/release/res

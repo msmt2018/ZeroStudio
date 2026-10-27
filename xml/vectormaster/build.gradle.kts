@@ -7,7 +7,7 @@ plugins {
 
 android {
   namespace = "android.studio.layouteditor.vectormaster"
-  compileSdk = 36
+  compileSdk = 37
 
   defaultConfig { minSdk = 26 }
 
@@ -19,14 +19,14 @@ android {
   }
 
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
   }
 }
 
-kotlin { jvmToolchain(17) }
+kotlin { jvmToolchain(21) }
 
-tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
+tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_25) }
 
 dependencies {
   implementation(libs.androidx.appcompat)

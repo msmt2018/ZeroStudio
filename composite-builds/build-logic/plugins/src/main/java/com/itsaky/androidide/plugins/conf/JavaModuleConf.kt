@@ -22,6 +22,18 @@ import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.kotlin.dsl.configure
 
+/**
+ * -------------------------------------------------------------------------------------------------
+ * 文件名：configureJavaModule.kt
+ * 用途与功能：
+ *   为纯 Java 库项目提供标准化的编译目标和源码兼容性版本配置。
+ *   适配 AGP 9.4.1、Kotlin 2.4.10+ 及 Gradle 9 构建缓存规范。
+ * 工作流程线路图：
+ *   1. 断言检查：验证当前 Project 是否正确应用了 "java-library" 插件。
+ *   2. 通过 `configure<JavaPluginExtension>` 统一指定 sourceCompatibility 与 targetCompatibility。
+ * -------------------------------------------------------------------------------------------------
+ * @author android_zero
+ */
 fun Project.configureJavaModule() {
   assert(plugins.hasPlugin("java-library")) {
     "${javaClass.simpleName} can only be applied to Java library projects."

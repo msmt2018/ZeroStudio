@@ -1,3 +1,20 @@
+/*
+ *  This file is part of AndroidIDE.
+ *
+ *  AndroidIDE is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  AndroidIDE is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a `GNU General Public License`
+ *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package com.itsaky.androidide.plugins.conf
 
 import com.android.build.api.dsl.ApplicationExtension
@@ -17,10 +34,28 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 /**
- * ABIs for which the product flavors will be created. The keys in this map are the names of the
- * product flavors; the value is no longer used to compute per-ABI versionCode (since the new
- * versionCode is shared across all ABIs) and is kept only for the [flavorsAbis] consumer
- * (`splits { abi { ... } }`).
+ * -------------------------------------------------------------------------------------------------
+ * 文件名：ProjectConfig.kt (Android Module Configuration)
+ * 用途与功能：
+ *   为项目中的 Android Application 模块及 Library 模块提供统一且标准化的 DSL 配置。
+ *   适配 AGP 9.4.1、Kotlin 2.4.10+ 及 Gradle 9 构建缓存与签名规范。
+ * 工作流程线路图：
+ *   1. 校验当前 Project 是否合法应用了 Android 应用或库插件。
+ *   2. 获取并同步 Android SDK 的 android.jar 至 :utilities:framework-stubs。
+ *   3. 统一配置 KotlinCompile 的 JVM 17 目标。
+ *   4. 根据模块类型（Application 还是 Library）：
+ *      - 配置 compileSdk、minSdk、targetSdk、versionCode、versionName。
+ *      - 配置 Java 17 兼容性及 Core Library Desugaring。
+ *      - 配置 Lint 选项、资源排除/冲突合并策略（Packaging Options）。
+ *      - 针对特定核心 App 模块注入 JniLibs 传统打包配置及 ABI Splits 架构过滤。
+ * -------------------------------------------------------------------------------------------------
+ * @author android_zero
+ * 历史贡献者：Akash Yadav
+ */
+
+/**
+ * 为产品风味（Product Flavors）创建的 ABI 映射。
+ * 键代表 ABI 名称；值保留给兼容 `splits { abi { ... } }` 的消费者使用。
  */
 internal val flavorsAbis = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" to 3)
 
@@ -44,6 +79,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     androidJar.copyTo(frameworkStubsJar)
   }
 
+  // 统一所有 Kotlin 编译任务的 JVM 目标为 17
   tasks.withType(KotlinCompile::class.java).configureEach {
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
@@ -127,6 +163,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
           }
         }
 
+        // AGP 9.4.1 兼容的 ABI Splits 策略
         splits {
           abi {
             reset()
@@ -219,6 +256,13 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
   configureCoreLibDesugaring(coreLibDesugDep)
 }
 
+/**
+ * -------------------------------------------------------------------------------------------------
+ * 函数名：configureCoreLibDesugaring
+ * 用途与功能：
+ *   为未声明 NoDesugarPlugin 的模块自动附加核心库 Desugaring 依赖。
+ * -------------------------------------------------------------------------------------------------
+ */
 private fun Project.configureCoreLibDesugaring(
     coreLibDesugDep: Provider<MinimalExternalModuleDependency>
 ) {

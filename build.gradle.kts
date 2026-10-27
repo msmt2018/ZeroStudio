@@ -24,13 +24,14 @@ import com.itsaky.androidide.plugins.AndroidIDEPlugin
 import com.itsaky.androidide.plugins.conf.configureAndroidModule
 import com.itsaky.androidide.plugins.conf.configureJavaModule
 import com.itsaky.androidide.plugins.conf.configureMavenPublish
+import org.gradle.plugin.devel.GradlePluginDevelopmentExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
   id("build-logic.root-project")
 
-  // Android/Google
+  // Android/Google 插件
   alias(libs.plugins.android.application) apply false
   alias(libs.plugins.android.library) apply false
   alias(libs.plugins.android.test) apply false
@@ -40,20 +41,21 @@ plugins {
   alias(libs.plugins.google.services) apply false
   alias(libs.plugins.firebase.crashlytics) apply false
 
-  // kotlin相关
+  // Kotlin 相关插件
   alias(libs.plugins.kotlin.jvm) apply false
   alias(libs.plugins.org.jetbrains.kotlin.plugin.compose) apply false
   alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization) apply false
   alias(libs.plugins.kotlin.sam.with.receiver) apply false 
 
-  // maven插件
+  // Maven 插件
   alias(libs.plugins.maven.publish) apply false
   alias(libs.plugins.gradle.publish) apply false
 
-  // 其它插件
+  // 其它实用插件
   alias(libs.plugins.androidx.room) apply false
   alias(libs.plugins.benchmark) apply false
   alias(libs.plugins.baselineprofile) apply false
+  // alias(libs.plugins.version.catalog.update) apply false
 }
 
 buildscript {
@@ -63,7 +65,7 @@ buildscript {
   }
 }
 
-// Root project has 'com.itsaky.androidide' as the group ID
+// 根项目以 BuildConfig.packageName 作为默认组 ID
 project.group = BuildConfig.packageName
 
 subprojects {
@@ -75,7 +77,7 @@ subprojects {
     project.group = group
   }
 
-  // Always load the F-Droid config
+  // 始终加载 F-Droid 配置
   FDroidConfig.load(project)
 
   afterEvaluate { apply { plugin(AndroidIDEPlugin::class.java) } }
@@ -90,7 +92,10 @@ subprojects {
         .using(project(":editor:tree-sitter-ndk:annotations"))
     }
 
-    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:2.2.20")
+     resolutionStrategy {
+        force(libs.kotlin.metadata.jvm.get().toString())
+        force(libs.slf4j.api.get().toString())
+     }
   }
 
   plugins.withId("com.android.application") { configureAndroidModule(libs.androidx.libDesugaring) }
@@ -99,7 +104,9 @@ subprojects {
   plugins.withId("com.vanniktech.maven.publish.base") { configureMavenPublish() }
 
   plugins.withId("com.gradle.plugin-publish") {
-    configure<GradlePluginDevelopmentExtension> { version = project.publishingVersion }
+    configure<GradlePluginDevelopmentExtension> { 
+      version = project.publishingVersion 
+    }
   }
 
   tasks.withType<KotlinCompile>().configureEach {
@@ -108,6 +115,11 @@ subprojects {
       freeCompilerArgs.add("-Xstring-concat=inline")
     }
   }
+  
+
 }
 
+
+
+// 根目录清理任务
 tasks.register<Delete>("clean") { delete(rootProject.layout.buildDirectory) }

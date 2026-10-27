@@ -64,7 +64,7 @@ object BuildConfig {
   /*SetupAapt2Task.class Android build Platform appt2 tools*/
   const val SetupAapt2Task = "35.0.2"
   const val elf_file = ".so"
-  // 中国区域的github加速镜像
+  // 中国区的github加速镜像
   const val GitHub_Acceleration_Mirror = "https://gh.fhjhy.top/"
   /* SetupAapt2Task.class appt2 download url*/
   const val AAPT2_DOWNLOAD_URL =

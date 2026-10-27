@@ -22,7 +22,12 @@ plugins {
 
 }
 
-android { namespace = "com.google.googlejavaformat" }
+android { namespace = "com.google.googlejavaformat" 
+compileSdk = 37
+defaultConfig {
+        minSdk = 26
+    }
+}
 
 dependencies {
   implementation(libs.google.guava)

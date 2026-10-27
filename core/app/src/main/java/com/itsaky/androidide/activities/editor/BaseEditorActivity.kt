@@ -1,18 +1,5 @@
 /*
  *  This file is part of AndroidIDE.
- *
- *  AndroidIDE is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  AndroidIDE is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package com.itsaky.androidide.activities.editor
@@ -43,6 +30,7 @@ import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem
 import com.itsaky.androidide.actions.ActionsRegistry
 import com.itsaky.androidide.actions.ComposeSidebarActionItem
+import com.itsaky.androidide.actions.SidebarActionItem
 import com.itsaky.androidide.actions.internal.DefaultActionsRegistry
 import com.itsaky.androidide.actions.menu.EditorLineOperations
 import com.itsaky.androidide.activities.editor.ui.screen.EditorActivityContent
@@ -87,15 +75,8 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 /**
- * 编辑器主界面的基础 Activity。
+ * 现代版编辑器主界面的基础 Activity。
  *
- * 本类完全遵循 Jetpack Compose 与单向数据流（UDF）现代化规范开发：
- * 1. 彻底移除旧有 Fragment 与 supportFragmentManager 依赖；
- * 2. 侧滑栏与底层页面容器完全由纯粹的 Compose [EditorPage.ScreenPage] 承载；
- * 3. 暴露现代化选项卡操作函数，完全打通 ComposeEditorTabs 的关闭和选择调度；
- * 4. 彻底移除旧式 View Adapter 对 Compose 底栏状态的无效穿透调用。
- *
- * @author android_zero
  */
 @Suppress("MemberVisibilityCanBePrivate")
 abstract class BaseEditorActivity :
@@ -149,19 +130,9 @@ abstract class BaseEditorActivity :
   protected abstract fun getOpenedFiles(): List<OpenedFile>
   internal abstract fun doConfirmProjectClose()
 
-  // ============================================================================================
-  // 选项卡（Tab）调度 API —— 供 ComposeEditorTabs 回调触发，由子类 EditorHandlerActivity 实现
-  // ============================================================================================
-
-  /** 关闭指定索引位置的选项卡 */
   open fun closeTabAt(tabIndex: Int, runAfter: () -> Unit = {}) {}
-
-  /** 保留指定索引的选项卡，关闭其余所有选项卡 */
   open fun closeOtherTabs(keepTabIndex: Int) {}
-
-  /** 关闭所有打开的选项卡 */
   open fun closeAll(runAfter: () -> Unit = {}) {}
-
   open fun getCurrentEditor(): CodeEditorView? = provideCurrentEditor()
 
   open fun openFileAndSelect(file: File, selection: Range?) {
@@ -273,10 +244,10 @@ abstract class BaseEditorActivity :
   fun unregisterIdePage(id: String) = content.bottomSheet.pages.unregister(id)
 
   /**
-   * 纯 Compose 侧滑栏抽屉页面装配中心。
-   *
-   * 彻底摒弃任何 Fragment 容器，优先注册纯 Compose 界面 [ComposeSidebarActionItem]，
-   * 对于普通功能型动作则注册为点击后直接执行逻辑的 [EditorPage.ActionPage]。
+   * 纯 Compose 侧滑栏抽屉页面装配中心：
+   * - 优先注册 ComposeSidebarActionItem 为 ScreenPage；
+   * - 兼容支持带有 Fragment 的 SidebarActionItem 注册为 FragmentPage；
+   * - 普通动作注册为 ActionPage。
    */
   private fun setupSidebarPages() {
     ActionsRegistry.getInstance()
@@ -285,7 +256,6 @@ abstract class BaseEditorActivity :
         .sortedBy { it.order }
         .forEach { action ->
           when (action) {
-            // 现代 Compose 界面：直接注册为 ScreenPage，直通 Compose 渲染树
             is ComposeSidebarActionItem -> {
               content.sidebar.register(
                   EditorPage.ScreenPage(
@@ -295,7 +265,32 @@ abstract class BaseEditorActivity :
                   )
               )
             }
-            // 纯功能型点击动作：执行后自动关闭抽屉
+            is SidebarActionItem -> {
+              val fragClass = action.fragmentClass
+              if (fragClass != null) {
+                content.sidebar.register(
+                    EditorPage.FragmentPage(
+                        id = action.id,
+                        title = action.label.ifBlank { action.id.substringAfterLast('.') },
+                        fragmentClass = fragClass.java,
+                    )
+                )
+              } else {
+                content.sidebar.register(
+                    EditorPage.ActionPage(
+                        id = action.id,
+                        title = action.label.ifBlank { action.id.substringAfterLast('.') },
+                    ) {
+                      val data = ActionData().apply { put(Context::class.java, this@BaseEditorActivity) }
+                      action.prepare(data)
+                      if (action.enabled && action.visible) {
+                        content.drawerOpen = false
+                        (ActionsRegistry.getInstance() as DefaultActionsRegistry).executeAction(action, data)
+                      }
+                    }
+                )
+              }
+            }
             else -> {
               content.sidebar.register(
                   EditorPage.ActionPage(
@@ -437,10 +432,6 @@ abstract class BaseEditorActivity :
     content.bottomSheet.tryExpandSheetFromControl()
   }
 
-  // ============================================================================================
-  // LSP 客户端与诊断调用兼容桩（No-op Stub，解除旧 Adapter 对 Compose BottomPanel 的直接依赖）
-  // ============================================================================================
-
   open fun setSearchResultAdapter(adapter: SearchListAdapter) {}
   open fun setDiagnosticsAdapter(adapter: DiagnosticsAdapter) {}
   open fun handleDiagnosticsResultVisibility(errorVisible: Boolean) {}
@@ -454,10 +445,6 @@ abstract class BaseEditorActivity :
   open fun showFirstBuildNotice() {
     showEditorMessage(getString(string.title_first_build), getString(string.msg_first_build))
   }
-
-  // ============================================================================================
-  // 现代化 Compose 提示对话框实现
-  // ============================================================================================
 
   fun showEditorMessage(title: String, message: String, confirm: () -> Unit = {}) {
     content.dialog = {

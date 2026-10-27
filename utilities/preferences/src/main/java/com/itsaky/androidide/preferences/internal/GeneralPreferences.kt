@@ -19,7 +19,7 @@ package com.itsaky.androidide.preferences.internal
 
 import androidx.appcompat.app.AppCompatDelegate
 import com.itsaky.androidide.resources.localization.LocaleProvider
-
+import com.itsaky.androidide.ui.screen.editor.sidebar.SidebarBarPosition
 /** @author Akash Yadav */
 @Suppress("MemberVisibilityCanBePrivate")
 object GeneralPreferences {
@@ -128,4 +128,19 @@ object GeneralPreferences {
     set(value) {
       prefManager.putString(PREF_LOTTIE_ANIMATION, value)
     }
+    
+    /**
+ * 侧滑栏预置导航 Bar 位置持久化配置
+ */
+object SidebarPreferences {
+  const val KEY_SIDEBAR_BAR_POSITION = "idepref_general_sidebar_bar_position"
+
+  var sidebarBarPosition: SidebarBarPosition
+    get() = SidebarBarPosition.fromId(
+        prefManager.getString(KEY_SIDEBAR_BAR_POSITION, SidebarBarPosition.LEFT.id)
+    )
+    set(value) {
+      prefManager.putString(KEY_SIDEBAR_BAR_POSITION, value.id)
+    }
+}
 }
