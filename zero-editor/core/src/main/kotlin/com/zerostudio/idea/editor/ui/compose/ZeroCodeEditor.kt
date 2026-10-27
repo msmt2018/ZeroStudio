@@ -6,17 +6,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
-import com.zerostudio.idea.editor.core.buffer.LargeTextPieceTree
+import com.zerostudio.idea.editor.core.buffer.LargePieceTree
 import com.zerostudio.idea.editor.core.config.EditorPreferencesState
 import com.zerostudio.idea.editor.ui.actions.ZeroEditorFloatingActionMenu
 import com.zerostudio.idea.editor.ui.view.ZeroCodeEditorView
 
-/**
- * 顶层 Jetpack Compose 高性能代码编辑器控件组件
- */
 @Composable
 fun ZeroCodeEditor(
-    pieceTree: LargeTextPieceTree,
+    pieceTree: LargePieceTree,
     preferences: EditorPreferencesState,
     modifier: Modifier = Modifier,
     onEditorInitialized: ((ZeroCodeEditorView) -> Unit)? = null
@@ -52,10 +49,11 @@ fun ZeroCodeEditor(
                 view.lineSpacingMultiplier = preferences.lineSpacingMultiplier
                 view.setTextSize(preferences.scaledFontSizeSp)
                 view.isLineNumberEnabled = preferences.showLineNumbers
+                view.props.showMinimap = preferences.showMinimap
+                view.props.magnifierEnabled = preferences.magnifierEnabled
             }
         )
 
-        // 现代 M3 悬浮 Action 菜单 (长按光标手柄处弹出)
         editorInstance?.let { editor ->
             ZeroEditorFloatingActionMenu(
                 visible = showFloatingMenu,

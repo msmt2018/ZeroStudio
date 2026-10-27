@@ -1,83 +1,116 @@
 package com.zerostudio.idea.editor.lsp
 
 import com.zerostudio.idea.editor.ui.view.ZeroCodeEditorView
-import io.github.rosemoe.sora.lang.completion.CompletionItem
 import io.github.rosemoe.sora.lang.completion.CompletionPublisher
+import io.github.rosemoe.sora.lang.completion.SimpleCompletionItem
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticDetail
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.eclipse.lsp4j.*
+import org.eclipse.lsp4j.jsonrpc.Launcher
+import org.eclipse.lsp4j.services.LanguageClient
+import org.eclipse.lsp4j.services.LanguageServer
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * 语言服务器注册描述符
- */
-data class LanguageServerDescriptor(
-    val languageId: String,
-    val fileExtensions: List<String>,
-    val triggerChars: Set<Char>,
-    val launchCommand: List<String>
-)
+enum class LspEngineStatus { DISCONNECTED, CONNECTING, RUNNING, ERROR }
 
-/**
- * 全局 LSP 服务管理总线 
- */
-object ZeroLspRegistry {
-    private val descriptors = ConcurrentHashMap<String, LanguageServerDescriptor>()
-    private val activeClients = ConcurrentHashMap<String, LspCoreClient>()
+data class DiagnosticReport(val uri: String, val diagnostics: List<Diagnostic>)
 
-    fun register(descriptor: LanguageServerDescriptor) {
-        descriptors[descriptor.languageId] = descriptor
+class LspCoreClient(
+    val serverId: String,
+    val workspaceRootUri: String,
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+) {
+    private val _status = MutableStateFlow(LspEngineStatus.DISCONNECTED)
+    val status = _status.asStateFlow()
+
+    private val _diagnosticsFlow = MutableSharedFlow<DiagnosticReport>(extraBufferCapacity = 64)
+    val diagnosticsFlow = _diagnosticsFlow.asSharedFlow()
+
+    private var server: LanguageServer? = null
+
+    fun connectViaProcess(process: Process) {
+        scope.launch {
+            _status.value = LspEngineStatus.CONNECTING
+            startProtocolLoop(process.inputStream, process.outputStream)
+        }
     }
 
-    fun getDescriptorForFile(file: File): LanguageServerDescriptor? {
-        val ext = file.extension.lowercase()
-        return descriptors.values.find { it.fileExtensions.contains(ext) }
+    fun connectViaSocket(host: String, port: Int) {
+        scope.launch {
+            _status.value = LspEngineStatus.CONNECTING
+            val socket = Socket(host, port)
+            startProtocolLoop(socket.getInputStream(), socket.getOutputStream())
+        }
     }
 
-    fun getOrCreateClient(workspaceRoot: File, descriptor: LanguageServerDescriptor): LspCoreClient {
-        return activeClients.getOrPut(descriptor.languageId) {
-            val client = LspCoreClient(descriptor.languageId, workspaceRoot.toURI().toString())
-            val process = ProcessBuilder(descriptor.launchCommand)
-                .directory(workspaceRoot)
-                .start()
-            client.connectViaProcess(process)
-            client
+    private suspend fun startProtocolLoop(input: InputStream, output: OutputStream) = withContext(Dispatchers.IO) {
+        val client = object : LanguageClient {
+            override fun telemetryEvent(`object`: Any?) {}
+            override fun publishDiagnostics(diagnostics: PublishDiagnosticsParams) {
+                _diagnosticsFlow.tryEmit(DiagnosticReport(diagnostics.uri, diagnostics.diagnostics))
+            }
+            override fun showMessage(messageParams: MessageParams) {}
+            override fun showMessageRequest(requestParams: ShowMessageRequestParams) = null
+            override fun logMessage(message: MessageParams) {}
+        }
+
+        val launcher = Launcher.createLauncher(client, LanguageServer::class.java, input, output)
+        this@LspCoreClient.server = launcher.remoteProxy
+        launcher.startListening()
+
+        val initParams = InitializeParams().apply {
+            rootUri = workspaceRootUri
+            capabilities = ClientCapabilities()
+        }
+        server?.initialize(initParams)?.get()
+        server?.initialized(InitializedParams())
+        _status.value = LspEngineStatus.RUNNING
+    }
+
+    fun getLanguageServer(): LanguageServer? = server
+
+    fun disconnect() {
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                server?.shutdown()?.get()
+                server?.exit()
+            }
+            _status.value = LspEngineStatus.DISCONNECTED
+            scope.cancel()
         }
     }
 }
 
-/**
- * 将 LSP 自动完成无缝集成至 Sora CompletionPublisher
- */
-class ZeroLspCompletionProvider(
-    private val lspClient: LspCoreClient,
-    private val fileUri: String
+class ZeroLspEditorBridge(
+    private val editor: ZeroCodeEditorView,
+    private val client: LspCoreClient,
+    private val fileUri: String,
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 ) {
-    suspend fun fetchCompletions(
-        line: Int,
-        column: Int,
-        publisher: CompletionPublisher
-    ) = withContext(Dispatchers.IO) {
-        val server = lspClient.status.value
-        if (server != LspEngineStatus.RUNNING) return@withContext
+    private val diagnosticContainer = DiagnosticsContainer()
 
-        // 向语言服务器请求补全项
-        val params = CompletionParams(TextDocumentIdentifier(fileUri), Position(line, column))
-        // 转换至 Sora 的 CompletionItem 并在主线程发射
+    fun attach() {
+        scope.launch {
+            client.diagnosticsFlow.collect { report ->
+                if (report.uri == fileUri) {
+                    applyDiagnostics(report.diagnostics)
+                }
+            }
+        }
     }
-}
 
-/**
- * LSP 诊断流至编辑器绘制容器的桥梁适配器
- */
-class ZeroLspDiagnosticAdapter(private val editor: ZeroCodeEditorView) {
-    private val container = DiagnosticsContainer()
-
-    fun updateDiagnostics(diagnostics: List<Diagnostic>) {
-        container.reset()
+    private fun applyDiagnostics(diagnostics: List<Diagnostic>) {
+        diagnosticContainer.reset()
         val indexer = editor.text.indexer
 
         for (d in diagnostics) {
@@ -96,12 +129,15 @@ class ZeroLspDiagnosticAdapter(private val editor: ZeroCodeEditorView) {
                 else -> DiagnosticRegion.SEVERITY_NONE
             }
 
-            container.addDiagnostic(DiagnosticRegion(startIndex, endIndex, severity, 0, DiagnosticDetail(d.message)))
+            diagnosticContainer.addDiagnostic(
+                DiagnosticRegion(startIndex, endIndex, severity, 0, DiagnosticDetail(d.message))
+            )
         }
+        editor.diagnostics = diagnosticContainer
+        editor.invalidateDiagnostics()
+    }
 
-        editor.post {
-            editor.diagnostics = container
-            editor.invalidateDiagnostics()
-        }
+    fun detach() {
+        scope.cancel()
     }
 }

@@ -3,52 +3,41 @@ package com.zerostudio.idea.editor.core.buffer
 import io.github.rosemoe.sora.text.CharPosition
 import io.github.rosemoe.sora.text.Content
 import io.github.rosemoe.sora.text.ContentLine
-import io.github.rosemoe.sora.text.ContentListener
 import io.github.rosemoe.sora.text.Indexer
 import java.lang.StringBuilder
 
 /**
- * 64 位深度集成的虚拟视口 Indexer
- * 解决 Sora 32 位 int 偏移与长整型 Piece Tree 之间的坐标投影
+ * 专为 Sora 设计的 64 位 Piece Tree Indexer 适配器
+ * 行与列的计算直接由红黑树在 O(log N) 内返回，杜绝遍历式查找引发的 ANR
  */
-class ZeroVirtualIndexer(
-    private val pieceTree: LargeTextPieceTree,
-    private val baseGlobalOffset: Long
-) : Indexer {
+class PieceTreeIndexer(private val pieceTree: LargeTextPieceTree) : Indexer {
 
     override fun getCharPosition(line: Int, column: Int): CharPosition {
-        // 从 PieceTree 获取绝对物理行首偏移，加上列偏移
-        var globalLine = 0
-        var lineStartOffset = 0L
-        val total = pieceTree.length()
-
-        for (i in 0L until total) {
-            if (globalLine == line) {
-                lineStartOffset = i
-                break
-            }
-            if (pieceTree.charAt(i) == '\n') {
-                globalLine++
-            }
-        }
-
-        val targetIndex = (lineStartOffset + column - baseGlobalOffset).toInt().coerceAtLeast(0)
-        return CharPosition(line, column, targetIndex)
+        val lineStartOffset = pieceTree.getOffsetForLine(line)
+        val targetOffset = (lineStartOffset + column).coerceAtMost(pieceTree.length())
+        return CharPosition(line, column, targetOffset.toInt())
     }
 
     override fun getCharPosition(index: Int): CharPosition {
-        val globalOffset = baseGlobalOffset + index
-        var currentLine = 0
-        var lastLineBreak = -1L
+        // 二分定位全局字符位于哪一行
+        var low = 0
+        var high = pieceTree.lineCount() - 1
+        var line = 0
+        val targetOffset = index.toLong()
 
-        for (i in 0L until globalOffset) {
-            if (pieceTree.charAt(i) == '\n') {
-                currentLine++
-                lastLineBreak = i
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            val midOffset = pieceTree.getOffsetForLine(mid)
+            if (midOffset <= targetOffset) {
+                line = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
             }
         }
-        val col = (globalOffset - (lastLineBreak + 1)).toInt()
-        return CharPosition(currentLine, col, index)
+        val lineStart = pieceTree.getOffsetForLine(line)
+        val col = (targetOffset - lineStart).toInt()
+        return CharPosition(line, col, index)
     }
 
     override fun getCharIndex(line: Int, column: Int): Int {
@@ -62,73 +51,101 @@ class ZeroVirtualIndexer(
     override fun getCharColumn(index: Int): Int {
         return getCharPosition(index).column
     }
+
+    override fun getCharPosition(index: Int, dest: CharPosition) {
+        val p = getCharPosition(index)
+        dest.line = p.line
+        dest.column = p.column
+        dest.index = p.index
+    }
+
+    override fun getCharPosition(line: Int, column: Int, dest: CharPosition) {
+        val p = getCharPosition(line, column)
+        dest.line = p.line
+        dest.column = p.column
+        dest.index = p.index
+    }
 }
 
 /**
- * 核心实现：以 PieceTree 为物理载体的 Sora 原生 Content
- * 彻底消灭原生数十万 ContentLine 对象分配
+ * 重写的 Sora Content 核心实现
+ * 内存中零冗余分配，Sora 渲染引擎查询某一行时，通过按需即时物化（Lazy Materialization）
+ * 从 Piece Tree 获取该行内容构建轻量缓存，完全兼容 Sora-Editor 渲染层。
  */
 class ZeroPieceTreeContent(
-    val pieceTree: LargeTextPieceTree,
-    val pageManager: VirtualPageManager
-) : Content() {
+    val pieceTree: LargeTextPieceTree
+) : Content("", false) {
 
-    private val directIndexer = ZeroVirtualIndexer(pieceTree, 0L)
-    private var isDispatching = false
-
-    init {
-        // 初始填充首批可视页数据，防止空指针
-        val firstPageText = StringBuilder()
-        val slice = pageManager.getCurrentSlice()
-        for (i in slice.startGlobalOffset until slice.endGlobalOffset) {
-            firstPageText.append(pieceTree.charAt(i))
-        }
-        // 初始化基类行链表（仅维持当前页尺寸，而非整篇大文件）
-        super.insert(0, 0, firstPageText)
-    }
+    private val fastIndexer = PieceTreeIndexer(pieceTree)
+    private val lineCache = HashMap<Int, ContentLine>(128)
 
     override fun getIndexer(): Indexer {
-        return directIndexer
-    }
-
-    override fun insert(line: Int, column: Int, text: CharSequence?) {
-        if (text == null || text.isEmpty()) return
-        if (isDispatching) {
-            super.insert(line, column, text)
-            return
-        }
-
-        isDispatching = true
-        try {
-            val globalPos = directIndexer.getCharPosition(line, column)
-            // 直接更新底层 64 位平衡树
-            pieceTree.insert(globalPos.index.toLong(), text.toString())
-            // 同步更新当前视口行数据
-            super.insert(line, column, text)
-        } finally {
-            isDispatching = false
-        }
-    }
-
-    override fun delete(startLine: Int, columnOnStartLine: Int, endLine: Int, columnOnEndLine: Int) {
-        if (isDispatching) {
-            super.delete(startLine, columnOnStartLine, endLine, columnOnEndLine)
-            return
-        }
-
-        isDispatching = true
-        try {
-            val startIndex = directIndexer.getCharIndex(startLine, columnOnStartLine)
-            val endIndex = directIndexer.getCharIndex(endLine, columnOnEndLine)
-            // 底层树实施区间修剪...
-            super.delete(startLine, columnOnStartLine, endLine, columnOnEndLine)
-        } finally {
-            isDispatching = false
-        }
+        return fastIndexer
     }
 
     override fun length(): Int {
-        // 限制在当前虚拟分页或者整文件（视配置而定）
         return pieceTree.length().coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    override fun getLineCount(): Int {
+        return pieceTree.lineCount()
+    }
+
+    override fun getLine(line: Int): ContentLine {
+        require(line in 0 until getLineCount()) { "Line index out of bounds: $line" }
+        // 局部 LRU 视口缓存优化
+        lineCache[line]?.let { return it }
+
+        val start = pieceTree.getOffsetForLine(line)
+        val end = if (line + 1 < getLineCount()) {
+            pieceTree.getOffsetForLine(line + 1) - 1 // 剥离尾部换行
+        } else {
+            pieceTree.length()
+        }
+
+        val len = (end - start).toInt().coerceAtLeast(0)
+        val sb = StringBuilder(len)
+        for (i in 0 until len) {
+            sb.append(pieceTree.charAt(start + i))
+        }
+
+        val contentLine = ContentLine(sb)
+        if (lineCache.size > 200) {
+            lineCache.clear()
+        }
+        lineCache[line] = contentLine
+        return contentLine
+    }
+
+    override fun getColumnCount(line: Int): Int {
+        val start = pieceTree.getOffsetForLine(line)
+        val end = if (line + 1 < getLineCount()) {
+            pieceTree.getOffsetForLine(line + 1) - 1
+        } else {
+            pieceTree.length()
+        }
+        return (end - start).toInt().coerceAtLeast(0)
+    }
+
+    override fun charAt(line: Int, column: Int): Char {
+        val offset = pieceTree.getOffsetForLine(line) + column
+        return pieceTree.charAt(offset)
+    }
+
+    override fun insert(line: Int, column: Int, text: CharSequence?) {
+        if (text.isNullOrEmpty()) return
+        val offset = pieceTree.getOffsetForLine(line) + column
+        pieceTree.insert(offset, text.toString())
+        lineCache.clear()
+    }
+
+    override fun delete(startLine: Int, columnOnStartLine: Int, endLine: Int, columnOnEndLine: Int) {
+        val startOffset = pieceTree.getOffsetForLine(startLine) + columnOnStartLine
+        val endOffset = pieceTree.getOffsetForLine(endLine) + columnOnEndLine
+        val deleteLen = endOffset - startOffset
+        if (deleteLen > 0) {
+            pieceTree.delete(startOffset, deleteLen)
+            lineCache.clear()
+        }
     }
 }

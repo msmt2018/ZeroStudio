@@ -1,9 +1,8 @@
 package com.zerostudio.idea.editor.ui.tabs
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -20,55 +19,53 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.zerostudio.idea.editor.tab.ZeroEditorTab
+import java.io.File
 
-@OptIn(ExperimentalFoundationApi::class)
+data class WorkspaceEditorTab(
+    val id: String,
+    val file: File,
+    val title: String,
+    var isDirty: Boolean = false,
+    var isReadOnly: Boolean = false
+)
+
 @Composable
-fun ZeroTabStrip(
-    tabs: List<ZeroEditorTab>,
+fun ZeroTabWorkspace(
+    tabs: List<WorkspaceEditorTab>,
     activeTabIndex: Int,
-    onTabSelected: (Int) -> Unit,
-    onTabClosed: (Int) -> Unit,
-    onCloseOthers: (Int) -> Unit,
-    onCloseAll: () -> Unit,
+    onTabSelect: (Int) -> Unit,
+    onTabClose: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var contextMenuTabIndex by remember { mutableStateOf<Int?>(null) }
+    if (tabs.isEmpty()) return
 
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
         tonalElevation = 1.dp,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().height(42.dp)
     ) {
         LazyRow(
-            modifier = Modifier.fillMaxWidth().height(40.dp),
+            modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             itemsIndexed(tabs, key = { _, tab -> tab.id }) { index, tab ->
                 val isActive = index == activeTabIndex
-                val backgroundColor by animateColorAsState(
-                    targetValue = if (isActive) {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    } else {
-                        Color.Transparent
-                    },
-                    label = "TabBgAnimation"
+                val bgColor by animateColorAsState(
+                    targetValue = if (isActive) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+                    label = "tabBg"
                 )
 
                 Row(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
-                        .background(backgroundColor)
-                        .combinedClickable(
-                            onClick = { onTabSelected(index) },
-                            onLongClick = { contextMenuTabIndex = index }
-                        )
+                        .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+                        .background(bgColor)
+                        .clickable { onTabSelect(index) }
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 脏标记红点
-                    if (tab.state.isDirty) {
+                    // 脏数据修改指示点
+                    if (tab.isDirty) {
                         Box(
                             modifier = Modifier
                                 .size(6.dp)
@@ -79,7 +76,7 @@ fun ZeroTabStrip(
                     }
 
                     Text(
-                        text = tab.state.title,
+                        text = tab.title,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -90,57 +87,27 @@ fun ZeroTabStrip(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     IconButton(
-                        onClick = { onTabClosed(index) },
-                        modifier = Modifier.size(18.dp)
+                        onClick = { onTabClose(index) },
+                        modifier = Modifier.size(16.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "关闭",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(12.dp)
                         )
                     }
                 }
 
-                // 标签分割线
+                // 标签分割虚线
                 if (index < tabs.size - 1 && !isActive && index + 1 != activeTabIndex) {
                     Box(
                         modifier = Modifier
-                            .height(18.dp)
+                            .height(16.dp)
                             .width(1.dp)
                             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     )
                 }
-            }
-        }
-
-        // 标签上下文快捷菜单
-        contextMenuTabIndex?.let { index ->
-            DropdownMenu(
-                expanded = true,
-                onDismissRequest = { contextMenuTabIndex = null }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("关闭当前标签") },
-                    onClick = {
-                        onTabClosed(index)
-                        contextMenuTabIndex = null
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("关闭其他标签") },
-                    onClick = {
-                        onCloseOthers(index)
-                        contextMenuTabIndex = null
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("关闭所有标签") },
-                    onClick = {
-                        onCloseAll()
-                        contextMenuTabIndex = null
-                    }
-                )
             }
         }
     }
