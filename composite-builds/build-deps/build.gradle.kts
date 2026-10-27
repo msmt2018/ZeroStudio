@@ -25,11 +25,6 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
  * 用途与功能：
  *   AndroidIDE 根构建脚本。统一管理子模块的通用编译配置、AGP 9.4.1 属性、
  *   Kotlin 2.4.10+ JVM 目标版本以及自定义构建类型（BuildTypes）。
- * 工作流程线路图：
- *   1. 声明根级插件引用（apply false 延迟加载）。
- *   2. subprojects 闭包拦截所有子项目：
- *      - 当应用 "com.android.library" 插件时，自动配置 LibraryExtension（CompileSdk、MinSdk、Java 17 兼容、dev 变体）。
- *      - 统一拦截所有 KotlinCompile 任务，将 jvmTarget 显式指定为 JVM_17。
  * -------------------------------------------------------------------------------------------------
  * @author android_zero
  * 历史贡献者：AndroidIDE Team

@@ -23,9 +23,9 @@ plugins {
     alias(libs.plugins.com.google.devtools.ksp)
 }
 
-kotlin { jvmToolchain(25) }
+kotlin { jvmToolchain(21) }
 
-tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_25) }
+tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_21) }
 
 dependencies {
   ksp(libs.google.auto.service)

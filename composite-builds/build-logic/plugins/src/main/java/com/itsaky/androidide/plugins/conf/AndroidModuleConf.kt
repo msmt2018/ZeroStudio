@@ -79,9 +79,9 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     androidJar.copyTo(frameworkStubsJar)
   }
 
-  // 统一所有 Kotlin 编译任务的 JVM 目标为 17
+  // 统一所有 Kotlin 编译任务的 JVM 目标为 21
   tasks.withType(KotlinCompile::class.java).configureEach {
-    compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
   }
 
   if (isAppModule) {
@@ -98,8 +98,8 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
       }
 
       compileOptions {
-        sourceCompatibility = BuildConfig.javaVersion17
-        targetCompatibility = BuildConfig.javaVersion17
+        sourceCompatibility = BuildConfig.javaVersion
+        targetCompatibility = BuildConfig.javaVersion
         isCoreLibraryDesugaringEnabled = !plugins.hasPlugin(NoDesugarPlugin::class.java)
       }
 
@@ -193,8 +193,8 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
       }
 
       compileOptions {
-        sourceCompatibility = BuildConfig.javaVersion17
-        targetCompatibility = BuildConfig.javaVersion17
+        sourceCompatibility = BuildConfig.javaVersion21
+        targetCompatibility = BuildConfig.javaVersion21
         isCoreLibraryDesugaringEnabled = !plugins.hasPlugin(NoDesugarPlugin::class.java)
       }
 
@@ -236,6 +236,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
       buildFeatures {
         viewBinding = true
         buildConfig = true
+        // compose = true //每个模块不是很统一，所以不要在这里添加compose
       }
 
       buildTypes {
@@ -243,7 +244,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
           isMinifyEnabled = false
         }
         getByName("release") {
-          isMinifyEnabled = false
+          isMinifyEnabled = true
           proguardFiles(
               getDefaultProguardFile("proguard-android-optimize.txt"),
               "proguard-rules.pro",
