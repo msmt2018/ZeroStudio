@@ -13,7 +13,8 @@ plugins {
 
 android {
     namespace = "com.zerostudio.ide"
-    compileSdk = 35
+    compileSdk = 37
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         minSdk = 26
@@ -26,7 +27,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                version = "3.31.1"
+                version = "4.1.2"
                 arguments(
                     "-DANDROID_STL=c++_shared",
                     "-DCMAKE_BUILD_TYPE=Release"
@@ -66,25 +67,25 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = "21"
-        freeCompilerArgs += listOf(
-            "-Xjvm-default=all",
-            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
-            "-opt-in=kotlinx.coroutines.FlowPreview"
-        )
+   tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+        freeCompilerArgs.addAll("-opt-in=kotlin.RequiresOptIn")
     }
+}
+
 
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.31.1"
+            version = "4.1.2"
         }
     }
 
     sourceSets {
         getByName("main") {
-            assets.srcDirs("src/main/assets")
+assets.directories.add("src/main/assets")
+
         }
     }
 }

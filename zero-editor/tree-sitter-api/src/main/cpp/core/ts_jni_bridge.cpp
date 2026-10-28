@@ -20,24 +20,24 @@ static void throwJavaException(JNIEnv *env, const char *msg) {
 extern "C" {
 
 JNIEXPORT jstring JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeGetEngineVersion(JNIEnv *env, jclass) {
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeGetEngineVersion(JNIEnv *env, jclass) {
     return env->NewStringUTF("0.25.3-zerostudio-full-tsh");
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeCreate(JNIEnv *, jclass) {
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeCreate(JNIEnv *, jclass) {
     auto *engine = new TSHighlighterEngine();
     return reinterpret_cast<jlong>(engine);
 }
 
 JNIEXPORT void JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeDestroy(JNIEnv *, jclass, jlong engine_ptr) {
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeDestroy(JNIEnv *, jclass, jlong engine_ptr) {
     auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
     delete engine;
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetLanguageFromSharedLib(
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeSetLanguageFromSharedLib(
     JNIEnv *env, jclass, jlong engine_ptr, jstring lib_path, jstring func_name) {
     auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
     if (!engine) return JNI_FALSE;
@@ -70,7 +70,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetLanguageFromSh
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetQuery(
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeSetQuery(
     JNIEnv *env, jclass, jlong engine_ptr, jstring query_str, jintArray out_error) {
     auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
     if (!engine || !query_str) return JNI_FALSE;
@@ -93,7 +93,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetQuery(
 }
 
 JNIEXPORT void JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetCaptureStyleTable(
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeSetCaptureStyleTable(
     JNIEnv *env, jclass, jlong engine_ptr, jintArray style_table, jint entry_count) {
     auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
     if (!engine || !style_table) return;
@@ -104,7 +104,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetCaptureStyleTa
 }
 
 JNIEXPORT void JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetText(
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeSetText(
     JNIEnv *env, jclass, jlong engine_ptr, jstring text_str) {
     auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
     if (!engine || !text_str) return;
@@ -118,7 +118,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeSetText(
 }
 
 JNIEXPORT void JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeApplyEdit(
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeApplyEdit(
     JNIEnv *env, jclass, jlong engine_ptr,
     jint start_byte, jint old_end_byte, jint new_end_byte,
     jint start_row, jint start_col,
@@ -153,7 +153,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeApplyEdit(
 }
 
 JNIEXPORT jintArray JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeComputeViewportHighlight(
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeComputeViewportHighlight(
     JNIEnv *env, jclass, jlong engine_ptr, jint start_line, jint end_line) {
     auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
     if (!engine) return nullptr;
@@ -172,7 +172,7 @@ Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeComputeViewportHi
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_zerostudio_ide_treesitter_NativeHighlightEngine_nativeHasSyntaxError(
+Java_com_zerostudio_idea_treesitter_NativeHighlightEngine_nativeHasSyntaxError(
     JNIEnv *, jclass, jlong engine_ptr) {
     auto *engine = reinterpret_cast<TSHighlighterEngine *>(engine_ptr);
     return (engine && engine->hasSyntaxError()) ? JNI_TRUE : JNI_FALSE;
