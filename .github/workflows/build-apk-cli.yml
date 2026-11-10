@@ -72,30 +72,7 @@ jobs:
         with:
           gradle-version: '9.7.1'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install pnpm
-        run: |
-          npm install -g pnpm
-          pnpm --version
-
-      - name: Verify Bun
-        run: |
-          which bun
-          bun --version
-
-      - name: Install web-ui dependencies with Bun
-        working-directory: core/chatai/web-ui
-        run: |
-          bun install --frozen-lockfile
+      # 当前分支不包含 core/chatai/web-ui 前端工程，无需安装 Bun/Node/pnpm。
 
       - name: Install the specified NDK and Android SDK CMake (3.31.1)
         run: |
