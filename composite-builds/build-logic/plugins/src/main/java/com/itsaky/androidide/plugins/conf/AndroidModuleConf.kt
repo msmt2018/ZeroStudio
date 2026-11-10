@@ -57,7 +57,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
  * 为产品风味（Product Flavors）创建的 ABI 映射。
  * 键代表 ABI 名称；值保留给兼容 `splits { abi { ... } }` 的消费者使用。
  */
-internal val flavorsAbis = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" to 3)
+internal val flavorsAbis = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" to 3, "x86" to 4)
 
 fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModuleDependency>) {
   val isAppModule = plugins.hasPlugin("com.android.application")
