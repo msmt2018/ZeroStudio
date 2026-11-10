@@ -32,6 +32,8 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
   includeBuild("composite-builds/build-logic")
+  // Load RikkaHub convention plugins when its modules are included in the root build.
+  includeBuild("core/rikkahub/build-logic")
 
   repositories {
     gradlePluginPortal()
