@@ -33,7 +33,7 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     vectorDrawables { useSupportLibrary = true }
-    ndk { abiFilters += listOf("arm64-v8a", "x86_64", "armeabi-v7a") }
+    ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86") }
 
     if (prebuiltNativeLibsAvailable) {
       externalNativeBuild {
