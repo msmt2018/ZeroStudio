@@ -67,15 +67,18 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Configuring a Gradle 9.7.1 environment
+      - name: Configuring a Gradle 9.8.0 environment
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.7.1'
+          gradle-version: '9.8.0'
 
       - name: Install the specified NDK and Android SDK CMake (3.31.1)
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.3.11579264" "ndk;29.0.14206865" "cmake;3.31.1"
+          # BuildConfig.compileSdk=37; install the platform explicitly before AGP configures modules.
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37" "build-tools;37.0.0" "ndk;26.3.11579264" "ndk;29.0.14206865" "cmake;3.31.1"
+          test -s "$ANDROID_HOME/platforms/android-37/android.jar"
+          test -x "$ANDROID_HOME/build-tools/37.0.0/aapt2"
           test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
           test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
           test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
