@@ -42,8 +42,8 @@ CORE_GIT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEFAULT_OUT="$CORE_GIT_DIR/src/main/jniLibs"
 OUTPUT_DIR="${1:-$DEFAULT_OUT}"
 
-# 默认架构 (ZeroStudio 只构建 3 个 ABI: arm64-v8a, armeabi-v7a, x86_64)
-DEFAULT_ARCHS="arm64 arm32 x8664"
+# 默认架构 (ZeroStudio 构建 4 个 ABI: arm64-v8a, armeabi-v7a, x86_64, x86)
+DEFAULT_ARCHS="arm64 arm32 x8664 x86"
 ARCHS="${2:-$DEFAULT_ARCHS}"
 
 # 将用户请求的架构解析为唯一列表，并提前校验，避免无效参数触发下载/编译。
