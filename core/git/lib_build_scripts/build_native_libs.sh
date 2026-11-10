@@ -11,7 +11,7 @@
 #   bash build_native_libs.sh [output_dir] [archs]
 #
 #   output_dir  - .so 文件输出目录，默认为 $CORE_GIT_DIR/src/main/jniLibs
-#   archs       - 要编译的架构，空格分隔，支持 arm64 arm32 x8664 x86，默认为 "arm64 arm32 x8664"
+#   archs       - 要编译的架构，空格分隔，支持 arm64 arm32 x8664 x86，默认为 "arm64 arm32 x8664 x86"
 #
 # 在 CI 中调用:
 #   bash core/git/lib_build_scripts/build_native_libs.sh
@@ -362,13 +362,39 @@ echo "Contents:"
 find "$OUTPUT_DIR" -name "*.so" -type f | sort
 
 # 只校验本次请求的 ABI；默认 ARCHS 会完整校验 CI 使用的四个 ABI。
+# 除文件存在性外，还检查 ELF e_machine，防止错误架构或错误工具链产物混入 APK。
+READELF_PATH="$ANDROID_TOOLCHAIN_ROOT/bin/llvm-readelf"
+if [ ! -x "$READELF_PATH" ]; then
+    echo "ERROR: NDK llvm-readelf not found: $READELF_PATH"
+    exit 1
+fi
+
 for abi in "${REQUIRED_ABIS[@]}"; do
+    case "$abi" in
+        arm64-v8a) expected_machine="AArch64" ;;
+        armeabi-v7a) expected_machine="ARM" ;;
+        x86_64) expected_machine="Advanced Micro Devices X86-64" ;;
+        x86) expected_machine="Intel 80386" ;;
+        *)
+            echo "ERROR: no ELF machine mapping for ABI: $abi"
+            exit 1
+            ;;
+    esac
+
     for lib in libcrypto.so libssl.so libssh2.so libgit2.so; do
-        if [ ! -s "$OUTPUT_DIR/$abi/$lib" ]; then
-            echo "ERROR: required native library is missing or empty: $OUTPUT_DIR/$abi/$lib"
+        file="$OUTPUT_DIR/$abi/$lib"
+        if [ ! -s "$file" ]; then
+            echo "ERROR: required native library is missing or empty: $file"
+            exit 1
+        fi
+
+        machine="$("$READELF_PATH" --file-header "$file" | sed -n 's/^[[:space:]]*Machine:[[:space:]]*//p')"
+        if [ "$machine" != "$expected_machine" ]; then
+            echo "ERROR: wrong ELF architecture for $file: expected '$expected_machine', got '${machine:-<unknown>}'"
             exit 1
         fi
     done
+    echo "Validated ELF machine '$expected_machine' for ABI: $abi"
 done
 
 echo "Validated required PuppyGit native libraries for: ${REQUIRED_ABIS[*]}"
