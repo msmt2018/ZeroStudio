@@ -75,8 +75,12 @@ jobs:
       - name: Install the specified NDK and Android SDK CMake (3.31.1)
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          # BuildConfig.compileSdk=37; install the platform explicitly before AGP configures modules.
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37" "build-tools;37.0.0" "ndk;26.3.11579264" "ndk;29.0.14206865" "cmake;3.31.1"
+          # API 37 is published as android-37.0; AGP 9.4.1 still resolves compileSdk=37 via android-37.
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;26.3.11579264" "ndk;29.0.14206865" "cmake;3.31.1"
+          test -s "$ANDROID_HOME/platforms/android-37.0/android.jar"
+          if [ ! -e "$ANDROID_HOME/platforms/android-37" ] && [ ! -L "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s "$ANDROID_HOME/platforms/android-37.0" "$ANDROID_HOME/platforms/android-37"
+          fi
           test -s "$ANDROID_HOME/platforms/android-37/android.jar"
           test -x "$ANDROID_HOME/build-tools/37.0.0/aapt2"
           test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
