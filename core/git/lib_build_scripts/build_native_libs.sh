@@ -11,7 +11,7 @@
 #   bash build_native_libs.sh [output_dir] [archs]
 #
 #   output_dir  - .so 文件输出目录，默认为 $CORE_GIT_DIR/src/main/jniLibs
-#   archs       - 要编译的架构，空格分隔，默认为 "arm64 arm32 x8664"
+#   archs       - 要编译的架构，空格分隔，支持 arm64 arm32 x8664 x86，默认为 "arm64 arm32 x8664"
 #
 # 在 CI 中调用:
 #   bash core/git/lib_build_scripts/build_native_libs.sh
