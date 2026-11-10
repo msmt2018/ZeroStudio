@@ -17,6 +17,7 @@ protobufVersion = "4.36.2"
 kotlin = "2.4.10"
 ksp = "2.3.12"
 spotless = "8.10.3"
+ktlint = "1.8.0"
 kotlin-coroutines = "1.11.0"
 kotlinxSerializationJson = "1.11.0"
 kotlinx-datetime = "0.8.0"
@@ -727,6 +728,7 @@ gradle-publish = { id = "com.gradle.plugin-publish", version = "1.2.1" }
 realm-gradle-plugin = { id = "io.realm:realm-gradle-plugin", version.ref = "iorealm" }
 gradleup-shadow = { id = "com.gradleup.shadow", version.ref = "gradleupShadow" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
 version-catalog-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "versionCatalogUpdate" }
 bndtools-osgi = { id = "biz.aQute.bnd.builder", version = "7.4.0" }
