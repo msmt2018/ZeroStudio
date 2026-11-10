@@ -4,8 +4,8 @@
 # libgit2) 到 core/git/src/main/jniLibs/<abi>/ 目录。
 #
 # 本脚本改编自 PuppyGit 上游的 lib_build_scripts/1_installrequire.sh +
-# 2_downloadsrc.sh + 3_buildlibs.sh，适配 ZeroStudio CI 环境已安装的
-# NDK 28.0.13004108 和 CMake 3.31.1。
+# 2_downloadsrc.sh + 3_buildlibs.sh，与 PuppyGit 上游保持一致，使用 NDK 26.3.11579264 和 CMake 3.31.1。
+# 注意：ZeroStudio Android Gradle 模块使用 NDK 29；本脚本独立使用 26.3，避免混用工具链。
 #
 # 用法:
 #   bash build_native_libs.sh [output_dir] [archs]
@@ -20,8 +20,8 @@ set -e
 
 # ---------- 可配置变量 ----------
 
-# NDK 和 CMake 版本 (与 ZeroStudio BuildConfig.kt 保持一致)
-NDK_VERSION="${NDK_VERSION:-28.0.13004108}"
+# PuppyGit 原生库构建固定使用上游验证过的 NDK 26.3；Gradle Android 模块另用 BuildConfig.ndkVersion。
+NDK_VERSION="${NDK_VERSION:-26.3.11579264}"
 CMAKE_VERSION="${CMAKE_VERSION:-3.31.1}"
 
 # Android API level (与 PuppyGit 上游一致)
@@ -312,4 +312,16 @@ echo "========== Build complete =========="
 echo "Output directory: $OUTPUT_DIR"
 echo "Contents:"
 find "$OUTPUT_DIR" -name "*.so" -type f | sort
+
+# 不允许缺少 ABI 或依赖库时继续进入 APK 打包阶段。
+for abi in arm64-v8a armeabi-v7a x86_64; do
+    for lib in libcrypto.so libssl.so libssh2.so libgit2.so; do
+        if [ ! -s "$OUTPUT_DIR/$abi/$lib" ]; then
+            echo "ERROR: required native library is missing or empty: $OUTPUT_DIR/$abi/$lib"
+            exit 1
+        fi
+    done
+done
+
+echo "Validated all required PuppyGit native libraries for: arm64-v8a armeabi-v7a x86_64"
 echo "===================================="
