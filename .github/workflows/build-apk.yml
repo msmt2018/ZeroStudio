@@ -19,6 +19,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      BUILD_TYPE: ${{ github.event.inputs.build_type || 'assemble' }}
     permissions:
       contents: write   # 发布 Release 需要写权限
 
@@ -106,10 +108,10 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL: "2"
         run: |
           # 使用 --max-workers=2 限制模块并发
-          gradle ${{ github.event.inputs.build_type }} --build-cache --max-workers=2
+          gradle "$BUILD_TYPE" --build-cache --max-workers=2
 
       - name: Upload app-arm64-v8a-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleRelease' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-arm64-v8a-release.apk
@@ -117,7 +119,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-armeabi-v7a-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleRelease' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-armeabi-v7a-release.apk
@@ -125,7 +127,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-x86_64-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleRelease' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-x86_64-release.apk
@@ -133,7 +135,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-x86-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleRelease' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-x86-release.apk
@@ -141,7 +143,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-arm64-v8a-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleDebug' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-arm64-v8a-debug.apk
@@ -149,7 +151,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-armeabi-v7a-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleDebug' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-armeabi-v7a-debug.apk
@@ -157,7 +159,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-x86_64-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleDebug' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-x86_64-debug.apk
@@ -165,7 +167,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-x86-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleDebug' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-x86-debug.apk
