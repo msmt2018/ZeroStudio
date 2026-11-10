@@ -1,6 +1,9 @@
 name: Build Android APK
 
 on:
+  push:
+    branches:
+      - fix/puppygit-native-ndk-ci
   workflow_dispatch:
     inputs:
       build_type:
