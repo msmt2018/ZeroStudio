@@ -16,6 +16,7 @@ protobufVersion = "4.36.2"
 # Kotlin相关
 kotlin = "2.4.10"
 ksp = "2.3.12"
+spotless = "8.10.3"
 kotlin-coroutines = "1.11.0"
 kotlinxSerializationJson = "1.11.0"
 kotlinx-datetime = "0.8.0"
@@ -707,6 +708,7 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-sam-with-receiver = { id = "org.jetbrains.kotlin.plugin.sam.with.receiver", version.ref = "kotlin" }
 org-jetbrains-kotlin-plugin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 org-jetbrains-kotlin-plugin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
 
@@ -724,6 +726,7 @@ com-jaredsburrows-license = { id = "com.jaredsburrows.license", version = "0.8.4
 gradle-publish = { id = "com.gradle.plugin-publish", version = "1.2.1" }
 realm-gradle-plugin = { id = "io.realm:realm-gradle-plugin", version.ref = "iorealm" }
 gradleup-shadow = { id = "com.gradleup.shadow", version.ref = "gradleupShadow" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 
 version-catalog-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "versionCatalogUpdate" }
 bndtools-osgi = { id = "biz.aQute.bnd.builder", version = "7.4.0" }
