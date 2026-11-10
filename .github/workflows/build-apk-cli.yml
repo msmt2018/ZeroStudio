@@ -100,7 +100,9 @@ jobs:
       - name: Install the specified NDK and Android SDK CMake (3.31.1)
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.0.13004108" "cmake;3.31.1"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.3.11579264" "ndk;29.0.14206865" "cmake;3.31.1"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |
@@ -113,6 +115,9 @@ jobs:
           python3 --version
 
       - name: Build puppygit native libs (libcrypto, libssl, libssh2, libgit2)
+        env:
+          # PuppyGit upstream native build uses NDK 26.3; Gradle modules use BuildConfig NDK 29.
+          NDK_VERSION: "26.3.11579264"
         run: |
           bash core/git/lib_build_scripts/build_native_libs.sh
           echo "=== Built .so files ==="
