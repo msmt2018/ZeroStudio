@@ -434,6 +434,11 @@ xml-javax-stream = { module = "zerostudio:javax-stream", version = "1.0" }
 
 # Tests
 tests-junit = { module = "junit:junit", version.ref = "junit" }
+junit = { module = "junit:junit", version.ref = "junit" }
+androidx-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExtJunit" }
+androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "androidx-espresso" }
+androidx-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+androidx-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 tests-junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
 tests-junit-platformLauncher = { module = "org.junit.platform:junit-platform-launcher" }
 tests-google-truth = { module = "com.google.truth:truth", version = "1.4.4" }
