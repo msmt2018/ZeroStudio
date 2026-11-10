@@ -46,6 +46,46 @@ OUTPUT_DIR="${1:-$DEFAULT_OUT}"
 DEFAULT_ARCHS="arm64 arm32 x8664"
 ARCHS="${2:-$DEFAULT_ARCHS}"
 
+# 将用户请求的架构解析为唯一列表，并提前校验，避免无效参数触发下载/编译。
+arch_to_abi() {
+    case "$1" in
+        x86)    printf '%s\\n' "x86" ;;
+        x8664)  printf '%s\\n' "x86_64" ;;
+        arm32)  printf '%s\\n' "armeabi-v7a" ;;
+        arm64)  printf '%s\\n' "arm64-v8a" ;;
+        *) return 1 ;;
+    esac
+}
+
+declare -a ARCH_LIST=()
+declare -a REQUIRED_ABIS=()
+declare -a REQUESTED_ARCHS=()
+read -r -a REQUESTED_ARCHS <<< "$ARCHS"
+
+if [ "${#REQUESTED_ARCHS[@]}" -eq 0 ]; then
+    echo "ERROR: no target architectures were specified."
+    exit 1
+fi
+
+for arch in "${REQUESTED_ARCHS[@]}"; do
+    if ! abi="$(arch_to_abi "$arch")"; then
+        echo "ERROR: Unknown arch '$arch'. Supported: arm64 arm32 x8664 x86"
+        exit 1
+    fi
+
+    # 重复架构只构建一次。
+    case " ${ARCH_LIST[*]} " in
+        *" $arch "*) echo "Skipping duplicate architecture: $arch" ;;
+        *)
+            ARCH_LIST+=("$arch")
+            REQUIRED_ABIS+=("$abi")
+            ;;
+    esac
+done
+
+# 后续构建循环统一使用已验证、去重后的架构列表。
+ARCHS="${ARCH_LIST[*]}"
+
 # 构建工作区 (放在 home 下，避免污染源码树)
 export build_root="$HOME/puppylibsbuild"
 export build_out="$build_root/out"
@@ -290,7 +330,12 @@ fi
 export SOURCE_DATE_EPOCH=1779714574
 
 # 3. 逐个架构编译
-for arch in $ARCHS; do
+for abi in "${REQUIRED_ABIS[@]}"; do
+    # 清除本次目标 ABI 的旧产物，防止上次构建结果掩盖当前构建缺失。
+    rm -rf "$build_out/$abi" "$OUTPUT_DIR/$abi"
+done
+
+for arch in "${ARCH_LIST[@]}"; do
     build_for_arch "$arch"
 done
 
@@ -298,13 +343,16 @@ done
 echo ""
 echo "========== Copying libs to output dir =========="
 mkdir -p "$OUTPUT_DIR"
-for arch_dir in "$build_out"/*/; do
-    if [ -d "$arch_dir" ]; then
-        abi_name="$(basename "$arch_dir")"
-        mkdir -p "$OUTPUT_DIR/$abi_name"
-        cp -f "$arch_dir"/*.so "$OUTPUT_DIR/$abi_name/" 2>/dev/null || true
-        echo "Copied libs for $abi_name"
+for abi in "${REQUIRED_ABIS[@]}"; do
+    arch_dir="$build_out/$abi"
+    if [ ! -d "$arch_dir" ] || ! compgen -G "$arch_dir/*.so" >/dev/null; then
+        echo "ERROR: no native libraries were produced for requested ABI: $abi"
+        exit 1
     fi
+
+    mkdir -p "$OUTPUT_DIR/$abi"
+    cp -f "$arch_dir"/*.so "$OUTPUT_DIR/$abi/"
+    echo "Copied requested ABI: $abi"
 done
 
 echo ""
@@ -313,8 +361,8 @@ echo "Output directory: $OUTPUT_DIR"
 echo "Contents:"
 find "$OUTPUT_DIR" -name "*.so" -type f | sort
 
-# 不允许缺少 ABI 或依赖库时继续进入 APK 打包阶段。
-for abi in arm64-v8a armeabi-v7a x86_64; do
+# 只校验本次请求的 ABI；默认 ARCHS 仍会完整校验 CI 使用的三个 ABI。
+for abi in "${REQUIRED_ABIS[@]}"; do
     for lib in libcrypto.so libssl.so libssh2.so libgit2.so; do
         if [ ! -s "$OUTPUT_DIR/$abi/$lib" ]; then
             echo "ERROR: required native library is missing or empty: $OUTPUT_DIR/$abi/$lib"
@@ -323,5 +371,5 @@ for abi in arm64-v8a armeabi-v7a x86_64; do
     done
 done
 
-echo "Validated all required PuppyGit native libraries for: arm64-v8a armeabi-v7a x86_64"
+echo "Validated required PuppyGit native libraries for: ${REQUIRED_ABIS[*]}"
 echo "===================================="
