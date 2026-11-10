@@ -43,23 +43,7 @@ jobs:
         with:
           gradle-version: '9.8.0'
 
-      # web 模块的 preBuild 会执行 `pnpm run build` 构建前端，必须准备好 Node + pnpm
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: core/chatai/web-ui/pnpm-lock.yaml
-
-      # gradle 的 buildWebUi 任务只跑 build 不跑 install，需在此提前安装依赖
-      - name: Install core/chatai/web-ui dependencies
-        working-directory: core/chatai/web-ui
-        run: pnpm install --frozen-lockfile
+      # 当前分支不包含 core/chatai/web-ui 前端工程；不初始化 Node/pnpm，避免缓存路径指向不存在的 lockfile。
 
       - name: Gradle cache
         uses: actions/cache@v4
