@@ -361,7 +361,7 @@ echo "Output directory: $OUTPUT_DIR"
 echo "Contents:"
 find "$OUTPUT_DIR" -name "*.so" -type f | sort
 
-# 只校验本次请求的 ABI；默认 ARCHS 仍会完整校验 CI 使用的三个 ABI。
+# 只校验本次请求的 ABI；默认 ARCHS 会完整校验 CI 使用的四个 ABI。
 for abi in "${REQUIRED_ABIS[@]}"; do
     for lib in libcrypto.so libssl.so libssh2.so libgit2.so; do
         if [ ! -s "$OUTPUT_DIR/$abi/$lib" ]; then
