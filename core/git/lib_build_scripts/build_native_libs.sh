@@ -49,10 +49,10 @@ ARCHS="${2:-$DEFAULT_ARCHS}"
 # 将用户请求的架构解析为唯一列表，并提前校验，避免无效参数触发下载/编译。
 arch_to_abi() {
     case "$1" in
-        x86)    printf '%s\\n' "x86" ;;
-        x8664)  printf '%s\\n' "x86_64" ;;
-        arm32)  printf '%s\\n' "armeabi-v7a" ;;
-        arm64)  printf '%s\\n' "arm64-v8a" ;;
+        x86)    printf '%s\n' "x86" ;;
+        x8664)  printf '%s\n' "x86_64" ;;
+        arm32)  printf '%s\n' "armeabi-v7a" ;;
+        arm64)  printf '%s\n' "arm64-v8a" ;;
         *) return 1 ;;
     esac
 }
