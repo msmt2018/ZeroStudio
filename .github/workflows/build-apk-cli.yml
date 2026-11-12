@@ -67,40 +67,30 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Configuring a Gradle 9.7.1 environment
+      - name: Configuring a Gradle 9.8.0 environment
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.7.1'
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install pnpm
-        run: |
-          npm install -g pnpm
-          pnpm --version
-
-      - name: Verify Bun
-        run: |
-          which bun
-          bun --version
-
-      - name: Install web-ui dependencies with Bun
-        working-directory: core/chatai/web-ui
-        run: |
-          bun install --frozen-lockfile
+          gradle-version: '9.8.0'
 
       - name: Install the specified NDK and Android SDK CMake (3.31.1)
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.0.13004108" "cmake;3.31.1"
+          # API 37 is published as android-37.0; AGP 9.4.1 still resolves compileSdk=37 via android-37.
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;26.3.11579264" "ndk;29.0.14206865" "cmake;3.31.1"
+          test -s "$ANDROID_HOME/platforms/android-37.0/android.jar"
+          if [ ! -e "$ANDROID_HOME/platforms/android-37" ] && [ ! -L "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s "$ANDROID_HOME/platforms/android-37.0" "$ANDROID_HOME/platforms/android-37"
+          fi
+          test -s "$ANDROID_HOME/platforms/android-37/android.jar"
+          test -x "$ANDROID_HOME/build-tools/37.0.0/aapt2"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |
@@ -113,6 +103,9 @@ jobs:
           python3 --version
 
       - name: Build puppygit native libs (libcrypto, libssl, libssh2, libgit2)
+        env:
+          # PuppyGit upstream native build uses NDK 26.3; Gradle modules use BuildConfig NDK 29.
+          NDK_VERSION: "26.3.11579264"
         run: |
           bash core/git/lib_build_scripts/build_native_libs.sh
           echo "=== Built .so files ==="

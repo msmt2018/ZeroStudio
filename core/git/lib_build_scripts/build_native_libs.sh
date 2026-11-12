@@ -4,14 +4,14 @@
 # libgit2) 到 core/git/src/main/jniLibs/<abi>/ 目录。
 #
 # 本脚本改编自 PuppyGit 上游的 lib_build_scripts/1_installrequire.sh +
-# 2_downloadsrc.sh + 3_buildlibs.sh，适配 ZeroStudio CI 环境已安装的
-# NDK 28.0.13004108 和 CMake 3.31.1。
+# 2_downloadsrc.sh + 3_buildlibs.sh，与 PuppyGit 上游保持一致，使用 NDK 26.3.11579264 和 CMake 3.31.1。
+# 注意：ZeroStudio Android Gradle 模块使用 NDK 29；本脚本独立使用 26.3，避免混用工具链。
 #
 # 用法:
 #   bash build_native_libs.sh [output_dir] [archs]
 #
 #   output_dir  - .so 文件输出目录，默认为 $CORE_GIT_DIR/src/main/jniLibs
-#   archs       - 要编译的架构，空格分隔，默认为 "arm64 arm32 x8664"
+#   archs       - 要编译的架构，空格分隔，支持 arm64 arm32 x8664 x86，默认为 "arm64 arm32 x8664 x86"
 #
 # 在 CI 中调用:
 #   bash core/git/lib_build_scripts/build_native_libs.sh
@@ -20,8 +20,8 @@ set -e
 
 # ---------- 可配置变量 ----------
 
-# NDK 和 CMake 版本 (与 ZeroStudio BuildConfig.kt 保持一致)
-NDK_VERSION="${NDK_VERSION:-28.0.13004108}"
+# PuppyGit 原生库构建固定使用上游验证过的 NDK 26.3；Gradle Android 模块另用 BuildConfig.ndkVersion。
+NDK_VERSION="${NDK_VERSION:-26.3.11579264}"
 CMAKE_VERSION="${CMAKE_VERSION:-3.31.1}"
 
 # Android API level (与 PuppyGit 上游一致)
@@ -42,9 +42,49 @@ CORE_GIT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEFAULT_OUT="$CORE_GIT_DIR/src/main/jniLibs"
 OUTPUT_DIR="${1:-$DEFAULT_OUT}"
 
-# 默认架构 (ZeroStudio 只构建 3 个 ABI: arm64-v8a, armeabi-v7a, x86_64)
-DEFAULT_ARCHS="arm64 arm32 x8664"
+# 默认架构 (ZeroStudio 构建 4 个 ABI: arm64-v8a, armeabi-v7a, x86_64, x86)
+DEFAULT_ARCHS="arm64 arm32 x8664 x86"
 ARCHS="${2:-$DEFAULT_ARCHS}"
+
+# 将用户请求的架构解析为唯一列表，并提前校验，避免无效参数触发下载/编译。
+arch_to_abi() {
+    case "$1" in
+        x86)    printf '%s\n' "x86" ;;
+        x8664)  printf '%s\n' "x86_64" ;;
+        arm32)  printf '%s\n' "armeabi-v7a" ;;
+        arm64)  printf '%s\n' "arm64-v8a" ;;
+        *) return 1 ;;
+    esac
+}
+
+declare -a ARCH_LIST=()
+declare -a REQUIRED_ABIS=()
+declare -a REQUESTED_ARCHS=()
+read -r -a REQUESTED_ARCHS <<< "$ARCHS"
+
+if [ "${#REQUESTED_ARCHS[@]}" -eq 0 ]; then
+    echo "ERROR: no target architectures were specified."
+    exit 1
+fi
+
+for arch in "${REQUESTED_ARCHS[@]}"; do
+    if ! abi="$(arch_to_abi "$arch")"; then
+        echo "ERROR: Unknown arch '$arch'. Supported: arm64 arm32 x8664 x86"
+        exit 1
+    fi
+
+    # 重复架构只构建一次。
+    case " ${ARCH_LIST[*]} " in
+        *" $arch "*) echo "Skipping duplicate architecture: $arch" ;;
+        *)
+            ARCH_LIST+=("$arch")
+            REQUIRED_ABIS+=("$abi")
+            ;;
+    esac
+done
+
+# 后续构建循环统一使用已验证、去重后的架构列表。
+ARCHS="${ARCH_LIST[*]}"
 
 # 构建工作区 (放在 home 下，避免污染源码树)
 export build_root="$HOME/puppylibsbuild"
@@ -290,7 +330,12 @@ fi
 export SOURCE_DATE_EPOCH=1779714574
 
 # 3. 逐个架构编译
-for arch in $ARCHS; do
+for abi in "${REQUIRED_ABIS[@]}"; do
+    # 清除本次目标 ABI 的旧产物，防止上次构建结果掩盖当前构建缺失。
+    rm -rf "$build_out/$abi" "$OUTPUT_DIR/$abi"
+done
+
+for arch in "${ARCH_LIST[@]}"; do
     build_for_arch "$arch"
 done
 
@@ -298,13 +343,16 @@ done
 echo ""
 echo "========== Copying libs to output dir =========="
 mkdir -p "$OUTPUT_DIR"
-for arch_dir in "$build_out"/*/; do
-    if [ -d "$arch_dir" ]; then
-        abi_name="$(basename "$arch_dir")"
-        mkdir -p "$OUTPUT_DIR/$abi_name"
-        cp -f "$arch_dir"/*.so "$OUTPUT_DIR/$abi_name/" 2>/dev/null || true
-        echo "Copied libs for $abi_name"
+for abi in "${REQUIRED_ABIS[@]}"; do
+    arch_dir="$build_out/$abi"
+    if [ ! -d "$arch_dir" ] || ! compgen -G "$arch_dir/*.so" >/dev/null; then
+        echo "ERROR: no native libraries were produced for requested ABI: $abi"
+        exit 1
     fi
+
+    mkdir -p "$OUTPUT_DIR/$abi"
+    cp -f "$arch_dir"/*.so "$OUTPUT_DIR/$abi/"
+    echo "Copied requested ABI: $abi"
 done
 
 echo ""
@@ -312,4 +360,42 @@ echo "========== Build complete =========="
 echo "Output directory: $OUTPUT_DIR"
 echo "Contents:"
 find "$OUTPUT_DIR" -name "*.so" -type f | sort
+
+# 只校验本次请求的 ABI；默认 ARCHS 会完整校验 CI 使用的四个 ABI。
+# 除文件存在性外，还检查 ELF e_machine，防止错误架构或错误工具链产物混入 APK。
+READELF_PATH="$ANDROID_TOOLCHAIN_ROOT/bin/llvm-readelf"
+if [ ! -x "$READELF_PATH" ]; then
+    echo "ERROR: NDK llvm-readelf not found: $READELF_PATH"
+    exit 1
+fi
+
+for abi in "${REQUIRED_ABIS[@]}"; do
+    case "$abi" in
+        arm64-v8a) expected_machine="AArch64" ;;
+        armeabi-v7a) expected_machine="ARM" ;;
+        x86_64) expected_machine="Advanced Micro Devices X86-64" ;;
+        x86) expected_machine="Intel 80386" ;;
+        *)
+            echo "ERROR: no ELF machine mapping for ABI: $abi"
+            exit 1
+            ;;
+    esac
+
+    for lib in libcrypto.so libssl.so libssh2.so libgit2.so; do
+        file="$OUTPUT_DIR/$abi/$lib"
+        if [ ! -s "$file" ]; then
+            echo "ERROR: required native library is missing or empty: $file"
+            exit 1
+        fi
+
+        machine="$("$READELF_PATH" --file-header "$file" | sed -n 's/^[[:space:]]*Machine:[[:space:]]*//p')"
+        if [ "$machine" != "$expected_machine" ]; then
+            echo "ERROR: wrong ELF architecture for $file: expected '$expected_machine', got '${machine:-<unknown>}'"
+            exit 1
+        fi
+    done
+    echo "Validated ELF machine '$expected_machine' for ABI: $abi"
+done
+
+echo "Validated required PuppyGit native libraries for: ${REQUIRED_ABIS[*]}"
 echo "===================================="

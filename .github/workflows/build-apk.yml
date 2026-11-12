@@ -1,6 +1,9 @@
 name: Build Android APK
 
 on:
+  push:
+    branches:
+      - fix/puppygit-native-ndk-ci
   workflow_dispatch:
     inputs:
       build_type:
@@ -16,6 +19,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      BUILD_TYPE: ${{ github.event.inputs.build_type || 'assemble' }}
     permissions:
       contents: write   # 发布 Release 需要写权限
 
@@ -43,24 +48,6 @@ jobs:
         with:
           gradle-version: '9.8.0'
 
-      # web 模块的 preBuild 会执行 `pnpm run build` 构建前端，必须准备好 Node + pnpm
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: core/chatai/web-ui/pnpm-lock.yaml
-
-      # gradle 的 buildWebUi 任务只跑 build 不跑 install，需在此提前安装依赖
-      - name: Install core/chatai/web-ui dependencies
-        working-directory: core/chatai/web-ui
-        run: pnpm install --frozen-lockfile
-
       - name: Gradle cache
         uses: actions/cache@v4
         with:
@@ -72,7 +59,22 @@ jobs:
       - name: Install the specified NDK and Android SDK CMake (3.31.1)
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;28.0.13004108" "cmake;3.31.1"
+          # API 37 is published as android-37.0; AGP 9.4.1 still resolves compileSdk=37 via android-37.
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;26.3.11579264" "ndk;29.0.14206865" "cmake;3.31.1"
+          test -s "$ANDROID_HOME/platforms/android-37.0/android.jar"
+          if [ ! -e "$ANDROID_HOME/platforms/android-37" ] && [ ! -L "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s "$ANDROID_HOME/platforms/android-37.0" "$ANDROID_HOME/platforms/android-37"
+          fi
+          test -s "$ANDROID_HOME/platforms/android-37/android.jar"
+          test -x "$ANDROID_HOME/build-tools/37.0.0/aapt2"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+          test -x "$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |
@@ -85,6 +87,9 @@ jobs:
           python3 --version
 
       - name: Build puppygit native libs (libcrypto, libssl, libssh2, libgit2)
+        env:
+          # PuppyGit upstream native build uses NDK 26.3; Gradle modules use BuildConfig NDK 29.
+          NDK_VERSION: "26.3.11579264"
         run: |
           bash core/git/lib_build_scripts/build_native_libs.sh
           echo "=== Built .so files ==="
@@ -103,10 +108,10 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL: "2"
         run: |
           # 使用 --max-workers=2 限制模块并发
-          gradle ${{ github.event.inputs.build_type }} --build-cache --max-workers=2
+          gradle "$BUILD_TYPE" --build-cache --max-workers=2
 
       - name: Upload app-arm64-v8a-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleRelease' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-arm64-v8a-release.apk
@@ -114,7 +119,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-armeabi-v7a-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleRelease' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-armeabi-v7a-release.apk
@@ -122,15 +127,23 @@ jobs:
           compression-level: 0
 
       - name: Upload app-x86_64-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleRelease' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-x86_64-release.apk
           path: core/app/build/outputs/apk/release/app-x86_64-release.apk
           compression-level: 0
 
+      - name: Upload app-x86-release.apk
+        if: env.BUILD_TYPE == 'assembleRelease' || env.BUILD_TYPE == 'assemble'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-x86-release.apk
+          path: core/app/build/outputs/apk/release/app-x86-release.apk
+          compression-level: 0
+
       - name: Upload app-arm64-v8a-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleDebug' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-arm64-v8a-debug.apk
@@ -138,7 +151,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-armeabi-v7a-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleDebug' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-armeabi-v7a-debug.apk
@@ -146,9 +159,17 @@ jobs:
           compression-level: 0
 
       - name: Upload app-x86_64-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: env.BUILD_TYPE == 'assembleDebug' || env.BUILD_TYPE == 'assemble'
         uses: actions/upload-artifact@v4
         with:
           name: app-x86_64-debug.apk
           path: core/app/build/outputs/apk/debug/app-x86_64-debug.apk
+          compression-level: 0
+
+      - name: Upload app-x86-debug.apk
+        if: env.BUILD_TYPE == 'assembleDebug' || env.BUILD_TYPE == 'assemble'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-x86-debug.apk
+          path: core/app/build/outputs/apk/debug/app-x86-debug.apk
           compression-level: 0
