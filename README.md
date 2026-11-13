@@ -119,78 +119,15 @@ See the [contributing guide](./CONTRIBUTING.md).
 
 For translations, visit the [Crowdin project page](https://crowdin.com/project/zerosrudio).
 
-<details close>
-<summary>⚖️ <strong>🍀 Core projects referenced in project integration</strong></summary>
+## Disclaimer
 
-## Thank you to the developers for their outstanding contributions to open source.
--> The order of arrangement is not important.
+ZeroStudio is a general-purpose development tool. Users are responsible for
+the software they create, build, or distribute with it and for complying with
+the laws applicable to their activities.
 
- - [x] (sora editor)[https://github.com/Rosemoe/sora-editor]
- - [x] (PuppyGit)[https://github.com/catpuppyapp/PuppyGit]
- - [x] (rikkahub)[https://github.com/rikkahub/rikkahub] 
- - [x] (termux)[https://github.com/termux/termux-app]
-
-## Thanks to
-
-- **[AndroidIDE](https://github.com/AndroidIDEOfficial/AndroidIDE)** by **[itsaky](https://github.com/itsaky)** and **[AndroidIDEOfficial](https://github.com/AndroidIDEOfficial)** for the original project foundation.
-- [Rosemoe](https://github.com/Rosemoe) for the awesome [CodeEditor](https://github.com/Rosemoe/sora-editor)
-- [Termux](https://github.com/termux) for [Terminal Emulator](https://github.com/termux/termux-app)
-- [Bogdan Melnychuk](https://github.com/bmelnychuk) for [AndroidTreeView](https://github.com/bmelnychuk/AndroidTreeView)
-- [George Fraser](https://github.com/georgewfraser) for the [Java Language Server](https://github.com/georgewfraser/java-language-server)
-- [Vivek](https://github.com/itsvks19) for [LayoutEditor](https://github.com/itsvks19/LayoutEditor)
-- [catpuppyapp](https://github.com/catpuppyapp) for [PuppyGit](https://github.com/catpuppyapp/PuppyGit)
-- [rikkahub](https://github.com/rikkahub) for [Rikkahub](https://github.com/rikkahub/rikkahub)
-
-Thanks to all the developers who have contributed to this project.
-</details>
-
-
-## Contact Us
-- [Telegram channel](https://t.me/android_zero_studio)
-- [Tencent QQ group](https://qm.qq.com/q/FjC6t6XSsU)
-
-<p align="center">
-  <a href="https://github.com/msmt2018/ZeroStudio/issues/new?labels=bug&template=BUG.yml&title=%5BBug%5D%3A+">Report a bug</a> &nbsp; &#8226; &nbsp;
-  <a href="https://github.com/msmt2018/ZeroStudio/issues/new?labels=feature&template=FEATURE.yml&title=%5BFeature%5D%3A+">Request a feature</a> &nbsp; &#8226; &nbsp;
-</p>
-
-
-<details close>
-<summary>⚖️ <strong>IMPORTANT DISCLAIMER / 重要免责声明 (CLICK TO READ)</strong></summary>
-
-### 🛡️ Legal Disclaimer & Liability Waiver (免责声明与责任豁免)
-
-> [!CAUTION]
-> **CRITICAL NOTICE: PLEASE READ CAREFULLY BEFORE USE**
-> **重要通告：请在使用前仔细阅读本条款，使用本软件即代表您完全接受以下内容**
-
-#### 1. Neutrality of Tool (工具中立性与责任切割)
-*   **CN:** `ZeroStudio` 仅作为一款通用集成开发环境（IDE）提供，属于技术生产力工具。**任何使用本 IDE 构建、编译、生成的软件项目、代码或应用程序，均属于用户的个人行为，与 `ZeroStudio` 开源项目、维护团队及贡献者（下称“我们”）完全无关。** 我们不对用户开发的内容、功能、安全性或合法性承担任何明示或暗示的担保或连带责任。
-*   **EN:** `ZeroStudio` is provided solely as a general-purpose Integrated Development Environment (IDE) and is a technical productivity tool. **Any software projects, code, or applications built, compiled, or generated using this IDE are the sole acts of the user and are completely independent of the `ZeroStudio` open-source project, its maintenance team, and contributors (hereinafter "We").** We assume no express or implied warranty or joint liability for the content, functionality, security, or legality of what users develop.
-
-#### 2. Strict Prohibition of Malicious Use (严禁恶意用途)
-*   **CN:** 严禁使用 `ZeroStudio` 编写、构建或传播任何**恶意代码（Malware）**或用于**非法用途**。
-    *   **禁止范围包括但不限于**：勒索软件（Ransomware）、特洛伊木马（Trojans）、计算机病毒、网络蠕虫、间谍软件、僵尸网络控制端、DDOS 攻击工具、非法渗透/入侵工具、流量劫持软件、以及任何旨在窃取数据、破坏计算机系统、损坏硬件设备或干扰网络正常运行的程序。
-    *   **后果**：任何利用本工具进行上述违规开发的行为，其后果完全由使用者自行承担，与本项目及开发者无关。
-*   **EN:** It is strictly prohibited to use `ZeroStudio` to write, build, or distribute any **Malicious Code** or for any **Illegal Purposes**.
-    *   **Prohibited acts include but are not limited to**: Ransomware, Trojans, Computer Viruses, Worms, Spyware, Botnet controllers, DDoS attack tools, Illegal Penetration/Hacking tools, Traffic Hijacking software, and any program intended to steal data, damage computer systems, brick hardware devices, or disrupt network operations.
-    *   **Consequences**: The consequences of any such non-compliant development using this tool shall be borne solely by the user This has nothing to do with this project or its developers.。
-
-#### 3. Legal Compliance & Indemnification (法律合规与赔偿)
-*   **CN:** 用户必须承诺在**遵守当地国家/地区法律法规**（包括但不限于《中华人民共和国网络安全法》、《计算机信息系统安全保护条例》等）的前提下使用本工具。
-    *   **独担责任**：因用户使用本 IDE 开发的软件导致任何第三方损失、法律纠纷或行政处罚，**全部法律责任与赔偿责任由用户独立承担**。
-    *   **无关联声明**：项目作者 `github/msmt2018(android_zero）` 及所有贡献者不对用户的任何违法行为背书，亦不承担任何法律责任。
-*   **EN:** Users must commit to using this tool in full **compliance with local/national laws and regulations** (e.g., Cybersecurity Laws, Computer Fraud and Abuse Acts).
-    *   **Sole Liability**: The user assumes **full legal and indemnification liability** for any third-party losses, legal disputes, or administrative penalties caused by software developed using this IDE.
-    *   **Non-Affiliation**: The project author `github/msmt2018(android_zero）` and all contributors do not endorse any illegal acts by users and assume no legal liability whatsoever.
-
-> [!NOTE]
-> **Transparency Statement / 透明化声明**
-> This project is 100% open-source and transparent. The code is available for public audit to prove it contains no built-in malice. Users are responsible for their own creations.
-> 本项目保持 100% 开源透明，代码接受公众审计以证明不包含内置恶意功能。用户需对其创造的内容全权负责。
-
-
-</details>
+The project is provided under the licenses identified by the applicable
+file-level SPDX notices and third-party license files. This informational
+disclaimer does not add restrictions to, or replace, those license terms.
 
 ## License
 
