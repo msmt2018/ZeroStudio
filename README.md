@@ -145,12 +145,12 @@ ZeroStudio 的原创项目代码采用以下三份开源许可证组成的**组�
 
 本项目使用的 SPDX 许可证表达式为：
 
-\`\`\`text
+```text
 SPDX-License-Identifier: AGPL-3.0-only AND GPL-3.0-only AND Apache-2.0
-\`\`\`
+```
 
 这三份许可证共同构成 ZeroStudio 原创代码采用的许可协议组。这里的
-\`AND\` 是 SPDX 许可证表达式中的逻辑“与”，表示列出的三份许可证条件
+`AND` 是 SPDX 许可证表达式中的逻辑“与”，表示列出的三份许可证条件
 **同时适用、需要一并遵守**，并不是让使用者从 AGPL、GPL 或 Apache
 中任选一份，也不是三种互相独立的可选授权方案。不能只挑选其中条件较宽松
 的一份来代替整个组合许可。
@@ -182,9 +182,9 @@ SPDX-License-Identifier: AGPL-3.0-only AND GPL-3.0-only AND Apache-2.0
 由相应版权持有人原创、拥有必要版权或再许可权利，并且文件中明确标注以下
 SPDX 表达式的作品：
 
-\`\`\`text
+```text
 SPDX-License-Identifier: AGPL-3.0-only AND GPL-3.0-only AND Apache-2.0
-\`\`\`
+```
 
 判断文件许可证时，应按以下原则处理：
 
@@ -198,9 +198,9 @@ SPDX-License-Identifier: AGPL-3.0-only AND GPL-3.0-only AND Apache-2.0
 
 ZeroStudio 的项目归属标识与具体文件的作者、版权持有人是不同概念：
 
-- ZeroStudio 原创主源码可以标注 \`Project: ZeroStudio\`，并保留其实际作者和版权声明。
+- ZeroStudio 原创主源码可以标注 `Project: ZeroStudio`，并保留其实际作者和版权声明。
 - 贡献者修复 Bug 或修改现有文件时，应保留原文件已有的作者、版权、许可证和 SPDX 声明；可以在修改位置、提交记录、Pull Request 或变更日志中注明自己的署名及实际修改内容。
-- 贡献者独立新建源码文件时，可以按实际创作情况自行署名，并明确该文件的版权归属和许可证；如同时属于 ZeroStudio 项目，可以并列标注 \`Project: ZeroStudio\`。
+- 贡献者独立新建源码文件时，可以按实际创作情况自行署名，并明确该文件的版权归属和许可证；如同时属于 ZeroStudio 项目，可以并列标注 `Project: ZeroStudio`。
 - 代码被合并到 ZeroStudio，并不当然构成贡献者著作权向项目作者或项目本身的转让。贡献者授权、署名和修改记录的详细规则见 [协议.md](./协议.md)。
 
 ### 许可证与项目文件索引
