@@ -31,8 +31,6 @@ Files inherited from AndroidIDE and other third-party projects retain their
 original copyright notices and license terms. This notice does not relicense
 third-party works or files carrying separate license identifiers.
 
-No additional non-commercial, organization-size, anti-obfuscation, or other
-custom restrictions are imposed by the former ZeroStudio Community License
-(ZSCL). ZSCL is withdrawn and is no longer the licensing policy for
-ZeroStudio. The applicable standard license texts above govern only the
-works to which their SPDX identifiers validly apply.
+No additional custom restrictions are imposed by this repository notice.
+The standard license texts above govern only the works to which their SPDX
+identifiers validly apply.
