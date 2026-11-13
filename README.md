@@ -154,9 +154,8 @@ Read [协议.md](./协议.md) for the licensing scope and third-party code polic
 [COPYRIGHT_HEADER.txt](./COPYRIGHT_HEADER.txt) for the source-file header.
 
 AndroidIDE-derived and other third-party files retain their original licenses
-and copyright notices. The former ZeroStudio Community License (ZSCL) and its
-custom non-commercial, organization-size, anti-obfuscation, and other extra
-restrictions are withdrawn and no longer apply as ZeroStudio licensing terms.
+and copyright notices. Previous custom licensing terms have been withdrawn
+and do not apply to the new SPDX license group.
 
 ## Contact the author of ZeroStudio
 
