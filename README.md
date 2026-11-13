@@ -193,81 +193,35 @@ Thanks to all the developers who have contributed to this project.
 </details>
 
 ## License
-![License](https://img.shields.io/badge/License-ZeroStudio_Community_License-red.svg?style=flat-square)
-![Commercial](https://img.shields.io/badge/Commercial_Use-STRICTLY_PROHIBITED-critical.svg?style=flat-square)
-![Open Source](https://img.shields.io/badge/Source_Code-100%25_Open_Source-success.svg?style=flat-square)
 
+ZeroStudio uses file-level licensing because the repository contains original
+ZeroStudio code as well as code inherited from AndroidIDE and other third-party
+projects.
+
+Original ZeroStudio files that carry the following SPDX identifier are
+licensed under all three licenses cumulatively:
+
+```text
+SPDX-License-Identifier: AGPL-3.0-only AND GPL-3.0-only AND Apache-2.0
 ```
-## 📜 License & Legal Terms
 
-**ZeroStudio** is released under the **GNU GPLv3 License with Mandatory Additional Terms**.
-While preserving the core spirit of open source under GNU GPLv3, this project incorporates **legally binding non-permissions and restrictions** pursuant to **Section 7 (Additional Terms)** of the GNU GPLv3 license.
+The `AND` operator means all three licenses apply simultaneously; it is not
+a choice between licenses. See the complete license texts:
 
-> 🛑 **CRITICAL WARNING**
->
-> Under Section 7 of the GNU GPLv3, **any form of commercial usage, commercialization, or unauthorized monetization of this project or its source code is STRICTLY PROHIBITED**. Any attempt to remove or circumvent these additional commercial restrictions via standard GPLv3 loopholes is expressly voided.
+- [GNU AGPL v3.0 only](./LICENSE-AGPL-3.0-only.txt)
+- [GNU GPL v3.0 only](./LICENSE-GPL-3.0-only.txt)
+- [Apache License 2.0](./LICENSE-Apache-2.0.txt)
 
----
+Read [协议.md](./协议.md) for the licensing scope and third-party code policy,
+[LICENSE](./LICENSE) for the repository license index, and
+[COPYRIGHT_HEADER.txt](./COPYRIGHT_HEADER.txt) for the source-file header.
 
-### 🚫 Prohibited Actions & Commercial Restrictions
+AndroidIDE-derived and other third-party files retain their original licenses
+and copyright notices. The former ZeroStudio Community License (ZSCL) and its
+custom non-commercial, organization-size, anti-obfuscation, and other extra
+restrictions are withdrawn and no longer apply as ZeroStudio licensing terms.
 
-Without explicit, prior written permission or formal authorization from the developer (`@author android_zero（github.com/msmt2018)`), any individual, organization, corporation, or team is **STRICTLY PROHIBITED** from executing the following actions. Violations will result in immediate termination of all usage rights and may incur legal liabilities:
+## Contact the author of ZeroStudio
 
-1. **No Commercial Project Integration:**
-   * **Strictly Prohibited** to integrate any source code, specific files, code snippets, or project modules (including but not limited to APK build outputs, components, and libraries) from this project into any commercial, proprietary, or revenue-generating software or services.
-
-2. **No Commercialization or Monetization of ZeroStudio:**
-   * **Strictly Prohibited** to rebrand, repackage, redistribute, or sell this project or any of its derivatives as a commercial product.
-   * **Strictly Prohibited** to inject commercial advertisements, paywalls, pop-ups, or any user-experience-harming monetization trackers into the open-source code, the official APK, or any forked variants.
-
-3. **No Unauthorized Paid Features:**
-   * This project is completely free. Except for voluntary donations via GitHub Sponsors or other officially designated developer donation channels, **no one is permitted to add built-in paid features, activation keys, pay-to-unlock mechanisms, premium tier limits, or in-app purchase modules** into the ZeroStudio source files or compiled APK packages.
-
-4. **Malicious Code & Security Red Lines:**
-   * **Strictly Prohibited** to inject any malicious payload, including crypto-miners, Trojans, ransomware, phishing scripts, backdoors, or code that unauthorizedly modifies devices or damages other people's systems.
-   * Any specific feature modification within safe/legal bounds that might involve high-risk permissions or operations **must** be submitted as a formal proposal in the GitHub Issues or Discussions section and receive explicit approval from the developer.
-
----
-
-### ✅ User Freedoms & Requirements
-
-Subject to strict adherence to the [Commercial Restrictions] and [Security Red Lines] above, you enjoy the fundamental freedoms granted by GNU GPLv3:
-
-* **Free for Personal Use:** You are fully allowed to use this software for personal learning, educational purposes, academic research, or internal non-profit utilities completely free of charge.
-* **Freedom to Modify & Fork:** You are free to modify, fork, or redistribute the code, provided that any derivative work **remains 100% open source** (closed-source distribution is explicitly prohibited).
-* **Attribution Required:** You **must** retain the original author attribution (`@author android_zero` and contributors) prominently across all modified or redistributed source files.
-
----
-
-<summary><strong>⚖️ Detailed Legal Constraints & Compliance Note</strong></summary>
-
-### 1. GNU GPLv3 Section 7 Compliance
-In accordance with Section 7 of the GNU General Public License v3, the copyright holder reserves the right to supplement standard license terms with reasonable restrictions. The "Commercial Prohibition" and "Fee Restriction" enforced here are legal reservations of the author's copyright. Any modification, redistribution, or derivation of this repository must inherit these terms unconditionally.
-
-### 2. Independent Creation & Liability Disclaimer
-As a general-purpose Integrated Development Environment (IDE), any third-party projects, source codes, or applications built, compiled, or generated using ZeroStudio are the sole creation and responsibility of the user. The ZeroStudio team and the original author do not endorse, manage, or assume any joint liability for what users build.
-
-
-```
-<details open>
-
-<summary><strong>⚖️ Detailed Legal Constraints & Compliance Note</strong></summary>
-
-### 1. GNU GPLv3 Section 7 Compliance
-In accordance with Section 7 of the GNU General Public License v3, the copyright holder reserves the right to supplement standard license terms with reasonable restrictions. The "Commercial Prohibition" and "Fee Restriction" enforced here are legal reservations of the author's copyright. Any modification, redistribution, or derivation of this repository must inherit these terms unconditionally.
-
-**[📄 Click here to view the full LICENSE file](./LICENSE)**
-
-</details>
-
-## Contact the author of ZeroStudio:
-* Tencent, China QQ Email：2049219004@qq.com (Commonly used)
-* Tencent QQ account in China：2049219004
-* Tencent WeChat account in China：android_zero
-
-Any violations to the license can be reported either by opening an issue or writing a mail to us
-directly.
-
-
-
-
+- Email: 2049219004@qq.com
+- WeChat: android_zero
