@@ -122,105 +122,126 @@ For translations, visit the [Crowdin project page](https://crowdin.com/project/z
 ## Disclaimer
 
 ZeroStudio is a general-purpose Android development environment. It is provided
-under the terms of the licenses that apply to each individual source file and
-component in this repository. The repository contains original ZeroStudio work,
-upstream AndroidIDE-derived work, and other third-party components; it is not
-a single uniformly licensed work.
+under the licenses applicable to each individual source file and component.
+This repository contains original ZeroStudio work, AndroidIDE-derived work,
+and other third-party components; it is not a single uniformly licensed work.
 
 Users are responsible for the software they create, build, modify, or distribute
 with ZeroStudio, including compliance with the licenses and laws applicable to
 that software and to any third-party components they use.
 
+---
+
 ## License
 
-### ZeroStudio 三协议组合许可
+![License](https://img.shields.io/badge/License-AGPL--3.0--only%20AND%20GPL--3.0--only%20AND%20Apache--2.0-blue.svg?style=flat-square)
+![Commercial Use](https://img.shields.io/badge/Commercial_Use-PERMITTED_UNDER_LICENSE_TERMS-success.svg?style=flat-square)
+![Source Code](https://img.shields.io/badge/Source_Code-OPEN_SOURCE_FILE--LEVEL-green.svg?style=flat-square)
 
-ZeroStudio 的原创项目代码采用以下三份开源许可证组成的**组合许可协议组**：
+<details open>
+<summary><strong>📜 ZeroStudio License & Legal Terms — Three-License Combination</strong></summary>
 
-<blockquote>
-<strong>GNU Affero General Public License v3.0 only（AGPL-3.0-only）</strong><br/>
-<strong>GNU General Public License v3.0 only（GPL-3.0-only）</strong><br/>
-<strong>Apache License 2.0（Apache-2.0）</strong>
-</blockquote>
+### 📜 License Overview
 
-本项目使用的 SPDX 许可证表达式为：
+**ZeroStudio original project code** that is owned by the relevant copyright holder or is otherwise properly authorized is released under a combination of these three open-source licenses:
 
-```text
+1. **GNU Affero General Public License v3.0 only** — AGPL-3.0-only
+2. **GNU General Public License v3.0 only** — GPL-3.0-only
+3. **Apache License 2.0** — Apache-2.0
+
+The project's combined SPDX license expression is:
+
+~~~text
 SPDX-License-Identifier: AGPL-3.0-only AND GPL-3.0-only AND Apache-2.0
-```
+~~~
 
-这三份许可证共同构成 ZeroStudio 原创代码采用的许可协议组。这里的
-`AND` 是 SPDX 许可证表达式中的逻辑“与”，表示列出的三份许可证条件
-**同时适用、需要一并遵守**，并不是让使用者从 AGPL、GPL 或 Apache
-中任选一份，也不是三种互相独立的可选授权方案。不能只挑选其中条件较宽松
-的一份来代替整个组合许可。
+**Important — the meaning of AND:** The SPDX operator AND means that all three listed licenses apply cumulatively to a file carrying this exact expression. It is **not** an OR choice, does not let a recipient select only one of the three licenses, and does not mean that the repository offers three alternative licensing options. The applicable terms of all three license texts must be read together.
 
-### 三份许可证分别包含什么
+### 📚 What the Three Licenses Cover
 
-| 许可证 | 主要许可内容与要求 |
+| License | Main subject and obligations |
 | --- | --- |
-| **GNU AGPL v3.0 only** | 以 GNU GPL v3.0 为基础，并针对通过网络向用户提供修改版程序交互服务的情形规定相应的源代码提供义务。具体触发条件、对应源代码范围和履行方式以 AGPL-3.0 正文为准。 |
-| **GNU GPL v3.0 only** | 允许使用、研究、修改和再分发程序；在分发受其约束的作品或修改版本时，须遵守相应的版权声明、许可证文本、源代码提供及同等许可等条件。具体义务以 GPL-3.0 正文为准。 |
-| **Apache License 2.0** | 提供较宽松的使用、修改和分发许可，并包含明确的专利授权条款；再分发时仍须遵守许可证要求的版权、专利、修改声明、许可证副本及 NOTICE 文件等条件。具体义务以 Apache-2.0 正文为准。 |
+| **GNU AGPL v3.0 only** | Based on GPL v3, with additional source-code offer requirements for certain modified versions that interact with users over a network. Whether the requirements apply depends on the circumstances described in the AGPL text. |
+| **GNU GPL v3.0 only** | Grants rights to run, study, modify, and redistribute covered software. Distribution of covered works and modified versions is subject to the license's conditions, including applicable source-code, notice, and same-license requirements. |
+| **Apache License 2.0** | Provides broad rights to use, modify, and distribute covered works, and includes an express patent license. Redistribution remains subject to its applicable copyright, license-copy, modification-notice, patent, and NOTICE requirements. |
 
-**请注意：** 上表仅用于帮助理解每份许可证的主要特点，并不意味着三份许可证可以
-拆开选择或分别适用于同一文件的不同使用场景。对于明确标注上述 SPDX 表达式的
-作品，应将三份许可证作为一个整体阅读和遵守；发生具体法律问题时，应以对应的
-完整许可证文本为准。
+This table is an informational summary only. It does not replace, narrow, or override
+the actual license texts. For the precise scope and conditions of each license, consult
+the complete texts linked below.
 
-### 完整许可证文本
+### 📄 Full License Texts
 
-以下文件包含三份许可证的完整正文：
+- [GNU Affero General Public License v3.0 only — AGPL-3.0-only](./LICENSE-AGPL-3.0-only.txt)
+- [GNU General Public License v3.0 only — GPL-3.0-only](./LICENSE-GPL-3.0-only.txt)
+- [Apache License 2.0 — Apache-2.0](./LICENSE-Apache-2.0.txt)
 
-1. [GNU Affero General Public License v3.0 only（AGPL-3.0-only）](./LICENSE-AGPL-3.0-only.txt)
-2. [GNU General Public License v3.0 only（GPL-3.0-only）](./LICENSE-GPL-3.0-only.txt)
-3. [Apache License 2.0（Apache-2.0）](./LICENSE-Apache-2.0.txt)
+### 🧭 Scope of This License Group
 
-### 哪些文件适用这组三协议
+The three-license combination is **not a blanket relicensing of every file in this Git repository**. It applies to an original work only where the relevant copyright holder owns or has obtained the necessary rights to license that work and the file is expressly marked with the combined SPDX expression:
 
-这组三协议**不是对整个 Git 仓库所有文件的一揽子重新许可**。它仅适用于
-由相应版权持有人原创、拥有必要版权或再许可权利，并且文件中明确标注以下
-SPDX 表达式的作品：
-
-```text
+~~~text
 SPDX-License-Identifier: AGPL-3.0-only AND GPL-3.0-only AND Apache-2.0
-```
+~~~
 
-判断文件许可证时，应按以下原则处理：
+The following file-level boundaries apply:
 
-- **ZeroStudio 原创文件：** 由项目作者原创并依法持有相应权利，且明确标注上述 SPDX 表达式的文件，适用这组三协议。
-- **AndroidIDE 上游及其衍生文件：** 继承、复制或修改自 AndroidIDE 的代码，继续遵循其适用的上游许可证和版权声明。不能仅因文件被放入 ZeroStudio 仓库，就自动改为这组三协议。
-- **其他第三方代码：** RikkaHub、PuppyGit、Termux、Tree-sitter、libgit2、Sora Editor、Eclipse 及其他第三方项目的代码，继续遵循各自适用的许可证、版权声明和 NOTICE 要求。
-- **混合来源文件：** 应保留上游作者、版权和许可证信息，并准确标记 ZeroStudio 自主修改部分。没有取得全部必要权利人授权时，不得把整个文件统一标注为这组三协议。
-- **未标明许可证的文件：** 不应仅凭文件位于本仓库或缺少许可证头，就推断其自动适用这组三协议；应先核实来源、版权归属和授权情况。
+1. **Original ZeroStudio code:** Original code created by the project author and properly controlled or authorized by the relevant rights holder may use the three-license expression above.
+2. **AndroidIDE-derived code:** Code inherited, copied, or modified from AndroidIDE remains subject to its applicable upstream license and copyright notices. Its presence in this repository does not automatically place it under the ZeroStudio three-license group.
+3. **Other third-party components:** Code originating from RikkaHub, PuppyGit, Termux, Tree-sitter, libgit2, Sora Editor, Eclipse, or other third-party projects remains subject to its own applicable license, copyright notices, and NOTICE requirements.
+4. **Files containing mixed-origin code:** Upstream notices and license terms must be preserved. The entire file must not be relabeled under the three-license group unless all necessary rights and permissions have been obtained. Where appropriate, identify ZeroStudio's own modifications separately.
+5. **Files without a clear license notice:** The absence of a license header does not by itself establish that a file belongs to ZeroStudio or is covered by the three-license group. Its origin, copyright ownership, and licensing authority must be checked before adding or changing a license notice.
 
-### 版权、作者与贡献者署名
+### 💼 Commercial Use and Distribution
 
-ZeroStudio 的项目归属标识与具体文件的作者、版权持有人是不同概念：
+The three licenses named above are open-source licenses and **this project does not add a blanket non-commercial restriction** to works validly covered by the combined SPDX expression.
 
-- ZeroStudio 原创主源码可以标注 `Project: ZeroStudio`，并保留其实际作者和版权声明。
-- 贡献者修复 Bug 或修改现有文件时，应保留原文件已有的作者、版权、许可证和 SPDX 声明；可以在修改位置、提交记录、Pull Request 或变更日志中注明自己的署名及实际修改内容。
-- 贡献者独立新建源码文件时，可以按实际创作情况自行署名，并明确该文件的版权归属和许可证；如同时属于 ZeroStudio 项目，可以并列标注 `Project: ZeroStudio`。
-- 代码被合并到 ZeroStudio，并不当然构成贡献者著作权向项目作者或项目本身的转让。贡献者授权、署名和修改记录的详细规则见 [协议.md](./协议.md)。
+Commercial use, commercial modification, and commercial distribution are not prohibited merely because the code belongs to ZeroStudio. They must, however, comply with **all applicable conditions** of AGPL-3.0-only, GPL-3.0-only, and Apache-2.0, as well as any separate license terms that apply to third-party components.
 
-### 许可证与项目文件索引
+In particular:
 
-| 文件 | 说明 |
-| --- | --- |
-| [LICENSE](./LICENSE) | 仓库根目录的许可证说明和文件级许可证索引。 |
-| [协议.md](./协议.md) | ZeroStudio 许可证适用范围、第三方代码边界、版权归属及贡献者署名规则。 |
-| [LICENSE-AGPL-3.0-only.txt](./LICENSE-AGPL-3.0-only.txt) | GNU AGPL v3.0 only 完整许可证文本。 |
-| [LICENSE-GPL-3.0-only.txt](./LICENSE-GPL-3.0-only.txt) | GNU GPL v3.0 only 完整许可证文本。 |
-| [LICENSE-Apache-2.0.txt](./LICENSE-Apache-2.0.txt) | Apache License 2.0 完整许可证文本。 |
-| [COPYRIGHT_HEADER.txt](./COPYRIGHT_HEADER.txt) | ZeroStudio 原创源码版权头模板。 |
+- Do not remove or misrepresent applicable copyright, license, attribution, modification, or NOTICE information.
+- When distributing covered binaries or modified works, satisfy the corresponding source-code and license obligations that apply under the relevant license texts.
+- Where the AGPL network-interaction provisions apply to a modified covered version, comply with those provisions.
+- Respect the separate licenses of upstream and third-party components; this README does not grant rights that their copyright holders have not granted.
 
-### 旧版自定义许可说明
+### ✍️ Copyright, Author Attribution, and Contributions
 
-此前使用的 ZeroStudio Community License（ZSCL）及其自定义条款已经撤销，
-不再作为 ZeroStudio 当前原创代码的许可协议，也不构成上述三协议组合许可的
-附加条件。当前适用的许可条件以具体文件的有效 SPDX 声明、对应完整许可证
-正文及合法授权范围为准。本 README 和仓库说明文件不另行增加非商业使用、
-组织规模、额外商业许可门槛或其他自定义限制。
+Project attribution and file copyright ownership are related but distinct:
+
+- Original ZeroStudio main-source files may identify the project with **Project: ZeroStudio** while retaining the actual author and copyright information.
+- A contributor fixing a bug or modifying an existing file should preserve its existing author, copyright, SPDX, and upstream license notices. The contributor may record their own name or ID and the exact change in a nearby comment where appropriate, a change log, commit, or Pull Request.
+- A contributor creating a new source file may provide their own author and copyright notice based on the actual authorship. The file may also include **Project: ZeroStudio** to identify its project affiliation.
+- A contribution being merged into ZeroStudio does not, by itself, transfer the contributor's copyright to the project author or to the project.
+- A newly created file may use the combined three-license SPDX expression only when the contributor has the necessary rights and has expressly authorized that licensing.
+
+See [协议.md](./协议.md) for the detailed rules on project attribution, existing-file modifications, new contributor files, authorization, and third-party attribution.
+
+### 🛡️ Independent Works and Responsibility
+
+ZeroStudio is a general-purpose development environment. Applications, libraries, source code, and other works that users independently create, build, or generate with the IDE remain the responsibility of their respective authors and distributors.
+
+The inclusion of a tool or component in ZeroStudio does not mean that the ZeroStudio project endorses, controls, or assumes responsibility for independently created user projects. Users must assess and comply with the licenses and legal requirements applicable to the dependencies and outputs they choose to use or distribute.
+
+### 📂 License and Legal Reference Files
+
+- [LICENSE](./LICENSE) — repository-level license notice and file-level license index.
+- [协议.md](./协议.md) — detailed license scope, third-party boundaries, copyright ownership, and contributor attribution policy.
+- [COPYRIGHT_HEADER.txt](./COPYRIGHT_HEADER.txt) — source-file copyright header template.
+- [AGPL-3.0-only full text](./LICENSE-AGPL-3.0-only.txt)
+- [GPL-3.0-only full text](./LICENSE-GPL-3.0-only.txt)
+- [Apache-2.0 full text](./LICENSE-Apache-2.0.txt)
+
+### ⚖️ Legal Interpretation and No Additional Restrictions
+
+This README section is an explanatory project notice, not a separate custom license and not a substitute for the complete license texts. It does not create additional restrictions or permissions beyond those validly granted by the relevant copyright holders.
+
+The former **ZeroStudio Community License (ZSCL)** and its custom terms have been withdrawn. They are not part of the current three-license combination and must not be treated as additional conditions on works covered by the current SPDX expression.
+
+For any particular file, the controlling information is its valid file-level license notice, the rights held by the relevant copyright holder, applicable upstream notices, and the complete license text. Nothing in this README relicenses third-party works or overrides their original terms.
+
+**[📄 View the repository LICENSE notice](./LICENSE)** · **[📜 Read the detailed license and copyright policy](./协议.md)**
+
+</details>
 
 ## Contact the author of ZeroStudio
 
