@@ -134,7 +134,9 @@ that software and to any third-party components they use.
 
 ## License
 
-![License](https://img.shields.io/badge/License-AGPL--3.0--only%20AND%20GPL--3.0--only%20AND%20Apache--2.0-blue.svg?style=flat-square)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0.html)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 ![Commercial Use](https://img.shields.io/badge/Commercial_Use-PERMITTED_UNDER_LICENSE_TERMS-success.svg?style=flat-square)
 ![Source Code](https://img.shields.io/badge/Source_Code-OPEN_SOURCE_FILE--LEVEL-green.svg?style=flat-square)
 
