@@ -32,6 +32,9 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
   includeBuild("composite-builds/build-logic")
+  includeBuild("core/rikkahub/build-logic") {
+    this.name = "rikkahub-build-logic"
+  }
 
   repositories {
     gradlePluginPortal()
@@ -201,7 +204,6 @@ include(
     ":core:rikkahub:material3",
     ":core:rikkahub:ui",
     ":core:rikkahub:terminal", 
-    ":core:rikkahub:app:baselineprofile",
     ":core:rikkahub:mediagen",
     ":core:rikkahub:oauth",
 
