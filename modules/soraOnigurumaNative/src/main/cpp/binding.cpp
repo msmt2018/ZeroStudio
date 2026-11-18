@@ -18,7 +18,6 @@
 #include <new>
 #include <unordered_map>
 #include <utility>
-#include <vector>
 
 struct OnigCachedResult {
     jlong cacheKey{0};
@@ -270,12 +269,15 @@ Java_io_github_rosemoe_oniguruma_OnigNative_nCreateRegex(
     }
 
     const jsize size = env->GetArrayLength(pattern);
-    jbyte* content = env->GetByteArrayElements(pattern, nullptr);
-    if (content == nullptr) {
+    jbyte emptyPattern = 0;
+    jbyte* content = size > 0 ? env->GetByteArrayElements(pattern, nullptr) : nullptr;
+    if (size > 0 && content == nullptr) {
         return 0;
     }
 
-    auto* bytes = reinterpret_cast<unsigned char*>(content);
+    auto* bytes = size > 0
+            ? reinterpret_cast<unsigned char*>(content)
+            : reinterpret_cast<unsigned char*>(&emptyPattern);
     const bool hasGAnchor = checkGAnchor(bytes, size);
     OnigOptionType options = ignore_case == JNI_TRUE ? ONIG_OPTION_IGNORECASE : ONIG_OPTION_NONE;
     options |= ONIG_OPTION_CAPTURE_GROUP;
@@ -285,7 +287,9 @@ Java_io_github_rosemoe_oniguruma_OnigNative_nCreateRegex(
     const int status = onig_new(&compiledRegex, bytes, bytes + size, options,
                                 ONIG_ENCODING_UTF8, ONIG_SYNTAX_DEFAULT, &errorInfo);
 
-    env->ReleaseByteArrayElements(pattern, content, JNI_ABORT);
+    if (content != nullptr) {
+        env->ReleaseByteArrayElements(pattern, content, JNI_ABORT);
+    }
 
     if (status != ONIG_NORMAL || compiledRegex == nullptr) {
         return 0;
@@ -323,19 +327,22 @@ Java_io_github_rosemoe_oniguruma_OnigNative_nRegexSearch(
         return nullptr;
     }
 
-    jbyte* content = env->GetByteArrayElements(str, nullptr);
-    if (content == nullptr) {
+    jbyte emptyText = 0;
+    jbyte* content = length > 0 ? env->GetByteArrayElements(str, nullptr) : nullptr;
+    if (length > 0 && content == nullptr) {
         return nullptr;
     }
 
+    auto* bytes = length > 0
+            ? reinterpret_cast<unsigned char*>(content)
+            : reinterpret_cast<unsigned char*>(&emptyText);
     auto region = makeRegion();
-    bool success = false;
-    if (region) {
-        auto* bytes = reinterpret_cast<unsigned char*>(content);
-        success = searchCached(regex, cache_key, bytes, start, end, region.get());
-    }
+    const bool success = region &&
+            searchCached(regex, cache_key, bytes, start, end, region.get());
 
-    env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+    if (content != nullptr) {
+        env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+    }
 
     if (!success || !region) {
         return nullptr;
@@ -382,22 +389,26 @@ Java_io_github_rosemoe_oniguruma_OnigNative_nRegexSearchBatch(
         regexes[static_cast<size_t>(i)] = acquireRegex(handles[static_cast<size_t>(i)]);
     }
 
-    jbyte* content = env->GetByteArrayElements(str, nullptr);
-    if (content == nullptr) {
+    jbyte emptyText = 0;
+    jbyte* content = textLength > 0 ? env->GetByteArrayElements(str, nullptr) : nullptr;
+    if (textLength > 0 && content == nullptr) {
         return nullptr;
     }
 
+    auto* bytes = textLength > 0
+            ? reinterpret_cast<unsigned char*>(content)
+            : reinterpret_cast<unsigned char*>(&emptyText);
     auto currentRegion = makeRegion();
     auto bestRegion = makeRegion();
     if (!currentRegion || !bestRegion) {
-        env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+        if (content != nullptr) {
+            env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+        }
         return nullptr;
     }
 
     int bestIndex = -1;
     int bestLocation = std::numeric_limits<int>::max();
-    auto* bytes = reinterpret_cast<unsigned char*>(content);
-
     for (int i = 0; i < regexCount; ++i) {
         const auto& regex = regexes[static_cast<size_t>(i)];
         if (!regex) {
@@ -422,7 +433,9 @@ Java_io_github_rosemoe_oniguruma_OnigNative_nRegexSearchBatch(
         }
     }
 
-    env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+    if (content != nullptr) {
+        env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+    }
 
     if (bestIndex < 0) {
         return nullptr;
