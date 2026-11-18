@@ -73,6 +73,29 @@ public class OnigNativeLifecycleTest {
         }
     }
 
+
+    @Test
+    public void batchSearchUsesOpaqueHandlesAndReturnsEarliestMatch() {
+        long later = OnigNative.newRegex("bar", false);
+        long earlier = OnigNative.newRegex("foo", false);
+        assertTrue(later != 0L && earlier != 0L);
+
+        try {
+            byte[] source = "xxfoo-bar".getBytes(StandardCharsets.UTF_8);
+            int[] result = OnigNative.regexSearchBatch(
+                    new long[]{later, earlier}, 77L, source, 0, source.length);
+
+            assertNotNull(result);
+            assertTrue(result.length >= 3);
+            assertArrayEquals(new int[]{2, 5}, new int[]{result[0], result[1]});
+            assertTrue("wrong regex index: " + result[result.length - 1],
+                    result[result.length - 1] == 1);
+        } finally {
+            OnigNative.releaseRegex(later);
+            OnigNative.releaseRegex(earlier);
+        }
+    }
+
     private static void assertEqualsRange(int actualStart, int actualEnd,
                                           int expectedStart, int expectedEnd) {
         assertTrue("unexpected match start: " + actualStart, actualStart == expectedStart);
