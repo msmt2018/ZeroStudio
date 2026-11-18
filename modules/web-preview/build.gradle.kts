@@ -24,10 +24,7 @@ plugins {
 android {
   namespace = "com.zerostudio.webpreview"
 
-  compileSdk = BuildConfig.compileSdk
-
   defaultConfig {
-    minSdk = BuildConfig.minSdk
     consumerProguardFiles("consumer-rules.pro")
   }
 

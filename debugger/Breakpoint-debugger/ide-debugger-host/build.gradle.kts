@@ -19,7 +19,6 @@ android {
   namespace = "${BuildConfig.packageName}.zerostudio.ide.debugger.host"
 
   defaultConfig {
-    minSdk = 21
     consumerProguardFiles("consumer-rules.pro")
     // 提供 manifest placeholder 默认值, 这样 AAR 的 merged manifest 在库构建时
     // 就把 ${ideLocalServerName} 替换为字面值 "ide-debug-bridge", 消费方 (用户

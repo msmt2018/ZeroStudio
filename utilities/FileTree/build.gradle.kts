@@ -9,10 +9,8 @@ plugins {
 
 android {
   namespace = "android.zero.studio.view.filetree"
-  compileSdk = BuildConfig.compileSdk
 
   defaultConfig {
-    minSdk = 24
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     consumerProguardFiles("consumer-rules.pro")

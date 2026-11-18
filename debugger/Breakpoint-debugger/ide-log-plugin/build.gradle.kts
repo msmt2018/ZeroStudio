@@ -15,7 +15,6 @@ android {
   namespace = "${BuildConfig.packageName}.zerostudio.ide.logplugin"
 
   defaultConfig {
-    minSdk = 21
     consumerProguardFiles("consumer-rules.pro")
   }
 

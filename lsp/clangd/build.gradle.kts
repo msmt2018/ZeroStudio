@@ -24,10 +24,8 @@ plugins {
 
 android {
     namespace = "${BuildConfig.packageName}.lsp.clangd"
-    compileSdk = 35
     
     defaultConfig {
-        minSdk = 21
     }
 
     buildFeatures {

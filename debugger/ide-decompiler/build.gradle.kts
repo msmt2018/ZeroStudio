@@ -5,9 +5,7 @@ plugins {
 
 android {
     namespace = "com.zerostudio.decompiler"
-    compileSdk = 34
     defaultConfig {
-        minSdk = 21
         consumerProguardFiles("consumer-rules.pro")
     }
     compileOptions {
