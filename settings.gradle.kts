@@ -282,6 +282,9 @@ include(
 
 )
 
+// The gRPC protocol module was moved to this directory; keep the stable Gradle project path.
+project(":tooling:build-grpc").projectDir = file("tooling/gradle-build-grpc-protocol")
+
 object FDroidConfig {
 
   var hasRead: Boolean = false
