@@ -56,6 +56,7 @@ import com.itsaky.androidide.utils.StopWatch
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import org.gradle.tooling.BuildCancelledException
@@ -95,7 +96,7 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
     private set
 
   /** Whether a build or project synchronization is in progress. */
-  private var isBuildInProgress: Boolean = false
+  private val buildInProgress = AtomicBoolean(false)
 
   /** Whether the server has a live connection to Gradle. */
   val isConnected: Boolean
