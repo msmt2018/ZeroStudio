@@ -17,6 +17,7 @@
 package com.itsaky.androidide.tooling.impl.sync
 
 import com.android.builder.model.v2.ide.SyncIssue
+import com.android.builder.model.v2.models.BasicAndroidProject
 import com.android.builder.model.v2.models.Versions
 import com.itsaky.androidide.builder.model.DefaultSyncIssue
 import com.itsaky.androidide.builder.model.IDESyncIssue
@@ -142,10 +143,29 @@ abstract class AbstractModelBuilder<P, R>(
     protected fun getAndroidVersions(model: Model, controller: BuildController): Versions? {
       return try {
         controller.findModel(model, Versions::class.java)
-      } catch (e: Exception) {
-        // AGP 9.x may throw exceptions when trying to fetch Versions model
-        // Fall back to null and handle gracefully in the caller
-        log("Failed to fetch Versions model: ${e.message}")
+      } catch (e: UnknownModelException) {
+        // A missing optional model is a supported compatibility case.
+        null
+      }
+    }
+
+    /**
+     * Fetches the stable AGP basic Android project model.
+     *
+     * BasicAndroidProject is the authoritative Android-module marker for AGP 9.x and
+     * remains the minimal model needed to discover variants and source sets.
+     *
+     * Build/configuration failures are deliberately not swallowed: treating a failed
+     * Android model query as "not Android" silently misclassifies the module as Java.
+     */
+    @JvmStatic
+    protected fun getBasicAndroidProject(
+        model: Model,
+        controller: BuildController,
+    ): BasicAndroidProject? {
+      return try {
+        controller.findModel(model, BasicAndroidProject::class.java)
+      } catch (e: UnknownModelException) {
         null
       }
     }
