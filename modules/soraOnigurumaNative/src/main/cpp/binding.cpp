@@ -284,13 +284,13 @@ Java_io_github_rosemoe_oniguruma_OnigNative_nCreateRegex(
 
     try {
         auto state = std::make_shared<OnigCachedRegex>(compiledRegex, hasGAnchor);
-        const RegexHandle handle = registerRegex(std::move(state));
-        if (handle == 0) {
+        // Ownership transfers to OnigCachedRegex as soon as construction succeeds.
+        compiledRegex = nullptr;
+        return registerRegex(std::move(state));
+    } catch (const std::bad_alloc&) {
+        if (compiledRegex != nullptr) {
             onig_free(compiledRegex);
         }
-        return handle;
-    } catch (const std::bad_alloc&) {
-        onig_free(compiledRegex);
         return 0;
     }
 }
