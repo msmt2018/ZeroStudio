@@ -61,12 +61,24 @@ internal class ProjectImpl(
   }
 
   private fun getProject(path: String): IGradleProject? {
-    return if (path.isBlank()) rootProject
-    else projects.find { it.getMetadata().get().projectPath == path }
+    // Gradle project paths are not blank for the root project (normally ":").
+    // Use the explicit root path captured by RootModelBuilder instead of relying
+    // on a blank-path convention or a duplicate root entry in the module list.
+    return if (path.isBlank() || path == rootProjectPath) {
+      rootProject
+    } else {
+      projects.find { it.getMetadata().get().projectPath == path }
+    }
   }
 
   override fun getProjects(): CompletableFuture<List<BasicProjectMetadata>> {
-    return CompletableFuture.supplyAsync { projects.map { it.getMetadata().get() } }
+    return CompletableFuture.supplyAsync {
+      projects
+          .asSequence()
+          .map { it.getMetadata().get() }
+          .filter { it.projectPath != rootProjectPath }
+          .toList()
+    }
   }
 
   override fun getProjectSyncIssues(): CompletableFuture<DefaultProjectSyncIssues> {
