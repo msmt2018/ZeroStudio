@@ -2,11 +2,8 @@ plugins { id("com.android.library") }
 
 android {
   namespace = "android.studio.zero.regular.expression.preview"
-  compileSdk = 36
-  ndkVersion = "29.0.14206865"
 
   defaultConfig {
-    minSdk = 21
     consumerProguardFiles("consumer-rules.pro")
     externalNativeBuild {
       cmake {

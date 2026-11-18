@@ -11,7 +11,6 @@ plugins {
 
 android {
   namespace = "moe.shizuku.manager"
-  ndkVersion = BuildConfig.NDK_VERSION
 
   defaultConfig { externalNativeBuild { cmake { arguments += "-DANDROID_STL=none" } } }
 
@@ -52,5 +51,5 @@ dependencies {
   implementation(libs.bcpkix.jdk18on)
 
   //noinspection UseTomlInstead
-  implementation("org.lsposed.libcxx:libcxx:${BuildConfig.NDK_VERSION}")
+  implementation("org.lsposed.libcxx:libcxx:${BuildConfig.ndkVersion}")
 }

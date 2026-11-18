@@ -97,6 +97,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
 
   extensions.getByType(BaseExtension::class.java).run {
     compileSdkVersion(BuildConfig.compileSdk)
+    ndkVersion = BuildConfig.ndkVersion
 
     defaultConfig {
       minSdk = BuildConfig.minSdk
