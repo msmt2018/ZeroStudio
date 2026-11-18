@@ -315,34 +315,9 @@
 }
 
 
-# --- gRPC & Protobuf Rules ---
-
-# 保留 Protobuf 生成的消息类
+# Protobuf generated classes used by the AAPT resource pipeline.
 -keep class com.google.protobuf.** { *; }
 -keep class * extends com.google.protobuf.GeneratedMessageLite { *; }
-
-# 保留 gRPC 核心
--keep class io.grpc.** { *; }
-
-# 保留 Netty (Server端)
--keep class io.grpc.netty.shaded.** { *; }
--keep class io.netty.** { *; }
-
-# 保留 OkHttp (Client端，通常 OkHttp 自带规则，但为了保险)
--keep class io.grpc.okhttp.** { *; }
-
-# 忽略注解相关的警告
--dontwarn javax.annotation.**
--dontwarn com.google.errorprone.annotations.**
--dontwarn org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
-
-# gRPC Kotlin 协程存根
--keep class io.grpc.kotlin.** { *; }
-
-# Java Lite 模式
--keep class * extends com.google.protobuf.GeneratedMessageLite {
-  <fields>;
-}
 
 # 忽略 BlockHound 的缺失引用
 -dontwarn reactor.blockhound.integration.BlockHoundIntegration
