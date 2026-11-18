@@ -160,10 +160,10 @@ jobs:
             }
 
             # Run connected Android tests for every Android module in the main build.
-            run_gradle ./gradlew --no-daemon --max-workers=2 --continue connectedDebugAndroidTest connectedReleaseAndroidTest
+            run_gradle ./gradlew --no-daemon --max-workers=2 --continue connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest
 
             # Test Android modules inside the independently included dependency build as well.
-            run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue connectedDebugAndroidTest connectedReleaseAndroidTest
+            run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest
 
             exit "$status"
 
