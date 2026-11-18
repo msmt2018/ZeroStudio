@@ -420,9 +420,10 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
 
       GradleDistributionType.GRADLE_INSTALLATION -> {
         val file = File(params.value)
-        if (!file.exists() || !file.isDirectory) {
-          log.error("Specified Gradle installation does not exist: {}", params)
-          return
+        if (!file.exists() || !file.isDirectory || !file.canRead()) {
+          throw IllegalArgumentException(
+              "Specified Gradle installation must be an existing readable directory: ${file.absolutePath}"
+          )
         }
 
         log.info("Using Gradle installation: {}", file.canonicalPath)
@@ -525,16 +526,17 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
 
   private inline fun <T : Any?> runBuild(crossinline action: () -> T): CompletableFuture<T> =
       supplyAsync {
-        if (isBuildInProgress) {
-          log.error("Cannot run build, build is already in prorgess!")
-          throw IllegalStateException("Build is already in progress")
+        // JSON-RPC requests may be dispatched on different executor threads.
+        // Atomically gate access to the shared ProjectConnection.
+        if (!buildInProgress.compareAndSet(false, true)) {
+          log.error("Cannot run build: another build or synchronization is already in progress")
+          throw IllegalStateException("A Gradle build or project synchronization is already in progress")
         }
 
-        isBuildInProgress = true
         try {
           action()
         } finally {
-          isBuildInProgress = false
+          buildInProgress.set(false)
         }
       }
 
