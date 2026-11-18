@@ -90,7 +90,7 @@ class RootModelBuilder(initializationParams: InitializeProjectParams) :
 
       // Check AGP and Gradle version compatibility for Android projects
       if (isAndroidProject) {
-        val detectedAgpVersion = detectAgpVersion(rootModule.gradleProject)
+        val detectedAgpVersion = rootProjectVersions?.agp ?: detectAgpVersion(rootModule.gradleProject)
         val gradleVersion = buildEnvironment?.gradle?.gradleVersion
         
         if (detectedAgpVersion != null && gradleVersion != null) {
