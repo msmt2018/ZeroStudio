@@ -23,7 +23,7 @@ description = "Android Java bindings for Tree Sitter."
 
 android {
   namespace = "com.itsaky.androidide.treesitter"
-  ndkVersion = "27.1.12297006"
+  ndkVersion = "29.0.14206865"
 
   defaultConfig {
     // 将 consumer-rules.pro 合并到消费者（TinaIDE app）的 R8 规则中。
