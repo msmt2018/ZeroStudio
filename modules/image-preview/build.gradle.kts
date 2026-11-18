@@ -1,5 +1,3 @@
-import com.itsaky.androidide.build.config.BuildConfig
-
 plugins {
   id("com.android.library")
   id("org.jetbrains.kotlin.android")
@@ -8,11 +6,7 @@ plugins {
 
 android {
   namespace = "android.zero.studio.images.preview"
-  compileSdk = BuildConfig.compileSdk
-  ndkVersion = BuildConfig.ndkVersion
-
   defaultConfig {
-    minSdk = BuildConfig.minSdk
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     ndk { abiFilters += listOf("arm64-v8a", "x86_64", "armeabi-v7a") }

@@ -15,8 +15,6 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import com.itsaky.androidide.build.config.BuildConfig
-
 plugins {
   id("com.android.library")
   id("kotlin-android")
@@ -24,7 +22,6 @@ plugins {
 
 android {
   namespace = "com.termux.view"
-  ndkVersion = BuildConfig.ndkVersion
 }
 
 dependencies {

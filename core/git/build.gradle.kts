@@ -31,11 +31,7 @@ android {
   val packageName = "com.catpuppyapp.puppygit.play.pro"
 
   namespace = packageName
-  compileSdk = BuildConfig.compileSdk
-  ndkVersion = BuildConfig.ndkVersion
-
   defaultConfig {
-    minSdk = BuildConfig.minSdk
     //versionName = "1.1.5.5"
     buildConfigField("String", "FILE_PROVIDIER_AUTHORITY", "\"$packageName.file_provider\"")
 

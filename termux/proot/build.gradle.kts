@@ -1,15 +1,9 @@
-import com.itsaky.androidide.build.config.BuildConfig
-
 plugins {
     alias(libs.plugins.android.library)
 }
 
 android {
     namespace = "android.zero.studio"
-    ndkVersion = BuildConfig.ndkVersion
-
-    
-
     defaultConfig {
         minSdk = 26
 

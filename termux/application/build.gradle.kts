@@ -15,8 +15,6 @@ val packageVariant =
 
 android {
   namespace = "com.termux"
-  ndkVersion = BuildConfig.ndkVersion
-
   defaultConfig {
     buildConfigField(
         "String",

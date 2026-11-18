@@ -1,5 +1,3 @@
-import com.itsaky.androidide.build.config.BuildConfig
-
 /*
  * modules/universal-preview
  *
@@ -17,13 +15,7 @@ plugins {
 
 android {
   namespace = "com.zerostudio.preview"
-
-  compileSdk = BuildConfig.compileSdk
-  ndkVersion = BuildConfig.ndkVersion
-
   defaultConfig {
-    minSdk = BuildConfig.minSdk
-
     // GLES 3.0 + ImGui 需要的 ABI; 跟 image-preview 一致
     ndk { abiFilters += listOf("arm64-v8a", "x86_64", "armeabi-v7a") }
 
