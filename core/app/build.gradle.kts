@@ -75,7 +75,6 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
     isCoreLibraryDesugaringEnabled = true
   }
-  composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
   buildFeatures { compose = true }
   packaging.resources.excludes +=
       listOf(
