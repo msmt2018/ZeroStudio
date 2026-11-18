@@ -16,6 +16,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     env:
       NDK_VERSION: "29.0.14206865"
 
@@ -137,6 +138,9 @@ jobs:
 
       - name: Run Android instrumentation tests (debug and release)
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ZEROSTUDIO_SKIP_NYX: "true"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' -Dorg.gradle.daemon=false"
         with:
           api-level: 35
           target: google_apis
