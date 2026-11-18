@@ -38,7 +38,7 @@ import java.io.File
 fun imguiActivityProject(): ProjectTemplate =
     baseProjectImpl(
         useNdk = useNdkParameter { default = true },
-        ndkVersion = projectNdkVersionParameter { default = NdkVersion.R27A },
+        ndkVersion = projectNdkVersionParameter { default = NdkVersion.R29C },
         useCmake = useCmakeParameter { default = false },
     ) {
       templateName = R.string.title_template_native_build_imgui
