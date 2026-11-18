@@ -229,7 +229,6 @@ include(
     ":testing:unitTest",
     
     ":tooling:api",
-    ":tooling:build-grpc",
     ":tooling:builder-model-impl",
     ":tooling:events",
     ":tooling:impl",
@@ -282,8 +281,6 @@ include(
 
 )
 
-// The gRPC protocol module was moved to this directory; keep the stable Gradle project path.
-project(":tooling:build-grpc").projectDir = file("tooling/gradle-build-grpc-protocol")
 
 object FDroidConfig {
 
