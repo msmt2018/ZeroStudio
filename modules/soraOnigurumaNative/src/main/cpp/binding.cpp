@@ -178,7 +178,7 @@ bool searchCached(const RegexPtr& regex, jlong cacheKey,
         // A cached miss remains a miss for any later start position in the
         // same immutable source string.
         if (cached == nullptr) {
-            return true == false;
+            return false;
         }
 
         if (cached->num_regs > 0 &&
@@ -232,7 +232,16 @@ jintArray makeResultArray(JNIEnv* env, const OnigRegion* region,
         return nullptr; // JVM has raised OutOfMemoryError.
     }
 
-    std::vector<jint> values(static_cast<size_t>(count));
+    if (region->num_regs > 0 && (region->beg == nullptr || region->end == nullptr)) {
+        return nullptr;
+    }
+
+    std::unique_ptr<jint[]> values(
+            count > 0 ? new (std::nothrow) jint[static_cast<size_t>(count)] : nullptr);
+    if (count > 0 && !values) {
+        return nullptr;
+    }
+
     for (int i = 0; i < region->num_regs; ++i) {
         values[static_cast<size_t>(i) * 2] = region->beg[i];
         values[static_cast<size_t>(i) * 2 + 1] = region->end[i];
@@ -242,7 +251,7 @@ jintArray makeResultArray(JNIEnv* env, const OnigRegion* region,
     }
 
     if (count > 0) {
-        env->SetIntArrayRegion(result, 0, count, values.data());
+        env->SetIntArrayRegion(result, 0, count, values.get());
         if (env->ExceptionCheck()) {
             return nullptr;
         }
@@ -356,16 +365,21 @@ Java_io_github_rosemoe_oniguruma_OnigNative_nRegexSearchBatch(
         return nullptr;
     }
 
-    std::vector<jlong> handles(static_cast<size_t>(regexCount));
-    env->GetLongArrayRegion(native_handles, 0, regexCount, handles.data());
+    std::unique_ptr<jlong[]> handles(
+            new (std::nothrow) jlong[static_cast<size_t>(regexCount)]);
+    std::unique_ptr<RegexPtr[]> regexes(
+            new (std::nothrow) RegexPtr[static_cast<size_t>(regexCount)]);
+    if (!handles || !regexes) {
+        return nullptr;
+    }
+
+    env->GetLongArrayRegion(native_handles, 0, regexCount, handles.get());
     if (env->ExceptionCheck()) {
         return nullptr;
     }
 
-    std::vector<RegexPtr> regexes;
-    regexes.reserve(static_cast<size_t>(regexCount));
-    for (const jlong handle : handles) {
-        regexes.emplace_back(acquireRegex(handle));
+    for (jsize i = 0; i < regexCount; ++i) {
+        regexes[static_cast<size_t>(i)] = acquireRegex(handles[static_cast<size_t>(i)]);
     }
 
     jbyte* content = env->GetByteArrayElements(str, nullptr);
