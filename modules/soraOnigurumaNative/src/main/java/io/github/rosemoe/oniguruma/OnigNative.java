@@ -28,7 +28,8 @@ import java.util.Objects;
 
 /**
  * Oniguruma native function bridge.
- * Use with carefulness. Dirty pointer may cause a direct crash of your app.
+ * Returned values are opaque native handles; callers must release each handle once
+ * when it is no longer needed. Releasing an already released handle is harmless.
  *
  * @author Rosemoe
  */
@@ -44,7 +45,7 @@ public class OnigNative {
      *
      * @param pattern    Pattern string
      * @param ignoreCase Ignore case when matching
-     * @return The pointer of newly created regex, or null if it fails
+     * @return An opaque handle for the newly created regex, or 0 if compilation fails
      */
     public static long newRegex(String pattern, boolean ignoreCase) {
         Objects.requireNonNull(pattern, "pattern can not be null");
@@ -66,20 +67,20 @@ public class OnigNative {
     /**
      * Release a OnigRegex previously created by {@link #newRegex}
      *
-     * @param nativePtr Native pointer. Passing null pointer will have no effect.
+     * @param nativePtr Opaque handle. Zero or an already released handle has no effect.
      */
     public static native void releaseRegex(long nativePtr);
 
     /**
      * Search using the given OnigRegex.
      *
-     * @param nativePointer OnigRegex pointer from {@link #newRegex}
+     * @param nativePointer Opaque handle returned by {@link #newRegex}
      * @param cacheKey  The cache key for the source string
      * @param str       String to be search in
      * @param start     Start position in the string (inclusive)
      * @param end       End position in the string (exclusive)
      * @return Ranges if the match is successful. Each range is represented as two integer start and end.
-     * Null if the match failed.
+     * Null if the match failed or the handle is no longer valid.
      */
     public static int[] regexSearch(long nativePointer, long cacheKey, byte[] str, int start, int end) {
         Objects.requireNonNull(str, "string can not be null");
@@ -93,7 +94,7 @@ public class OnigNative {
     /**
      * Search using the given OnigRegex list
      *
-     * @param nativePointers OnigRegex pointers from {@link #newRegex}
+     * @param nativePointers Opaque handles returned by {@link #newRegex}
      * @param cacheKey   The cache key for the source string
      * @param str        String to be search in
      * @param start      Start position in the string (inclusive)
