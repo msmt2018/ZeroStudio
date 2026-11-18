@@ -16,7 +16,6 @@
  */
 
 @file:Suppress("UnstableApiUsage")
-
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 dependencyResolutionManagement {
@@ -35,6 +34,8 @@ dependencyResolutionManagement {
   versionCatalogs { create("libs") { from(files("../../gradle/libs.versions.toml")) } }
 }
 
-include(":common", ":desugaring", ":desugaring-core", ":plugins", ":properties-parser")
+// desugaring-core is owned by the build-deps-common composite build.
+// Do not include it as a project of build-logic: that directory no longer exists.
+include(":common", ":desugaring", ":plugins", ":properties-parser")
 
 rootProject.name = "build-logic"
