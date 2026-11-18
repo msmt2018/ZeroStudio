@@ -81,9 +81,6 @@ google-services = "4.4.4"
 firebase-bom = "34.13.0"
 firebase-crashlytics = "3.0.7"
 zxing = "3.5.4"
-ioGrpcVersion = "1.78.0"
-ioGrpcStubVersion = "1.5.0"
-googleProtobufKotlin = "4.33.2"
 barcodeScanning = "17.3.0"
 
 # common
@@ -405,7 +402,6 @@ google-auto-value-ap = { module = "com.google.auto.value:auto-value", version = 
 google-auto-service-annotations = { module = "com.google.auto.service:auto-service-annotations", version = "1.1.1" }
 google-auto-service = { module = "com.google.auto.service:auto-service", version = "1.1.1" }
 google-protobuf = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobufVersion" }
-google-protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobufVersion" }
 google-java-format = { module = "com.google.googlejavaformat:google-java-format", version = "1.20.0" }
 google-flexbox = { module = "com.google.android.flexbox:flexbox", version = "3.0.0" }
 google-findbugs-jsr305 = { group = "com.google.code.findbugs", name = "jsr305", version.ref = "google-findbugsJsr305" }
@@ -557,13 +553,6 @@ jlatexmath-font-cyrillic = { module = "com.github.rikkahub.jlatexmath-android:jl
 # lsp4j 语言服务器
 xmlLsp-org-eclipse-lemminx = { module = "org.eclipse.lemminx:org.eclipse.lemminx", version = "0.31.0" }
 
-# grpc二进制协议 + protobuf
-grpc-android = { module = "io.grpc:grpc-android", version.ref = "ioGrpcVersion" }
-google-protobuf-kotlin = { module = "com.google.protobuf:protobuf-kotlin", version.ref = "googleProtobufKotlin" }
-grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "ioGrpcVersion" }
-grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "ioGrpcVersion" }
-grpc-netty-shaded = { module = "io.grpc:grpc-netty-shaded", version.ref = "ioGrpcVersion" }
-grpc-kotlin-stub = { module = "io.grpc:grpc-kotlin-stub", version.ref = "ioGrpcStubVersion" }
 
 
 # 其它sdk
