@@ -208,7 +208,8 @@ abstract class AbstractModelBuilder<P, R>(
         } catch (err: UnknownModelException) {
           throw ModelBuilderException(
               "Failed to fetch model for type '${modelType.name}'." +
-                  " Model not found or the project does not support this model."
+                  " Model not found or the project does not support this model.",
+              err,
           )
         }
       }
@@ -239,7 +240,8 @@ abstract class AbstractModelBuilder<P, R>(
         } catch (err: UnknownModelException) {
           throw ModelBuilderException(
               "Failed to fetch model for type '${modelType.name}'." +
-                  " Model not found or the project does not support this model."
+                  " Model not found or the project does not support this model.",
+              err,
           )
         } catch (err: UnsupportedVersionException) {
           throw ModelBuilderException(
