@@ -46,6 +46,10 @@ dependencies {
 
 gradlePlugin {
   plugins {
+    create("com.itsaky.androidide.android-sdk") {
+      id = "com.itsaky.androidide.android-sdk"
+      implementationClass = "com.itsaky.androidide.plugins.AndroidSdkConventionPlugin"
+    }
     create("com.itsaky.androidide.build") {
       id = "com.itsaky.androidide.build"
       implementationClass = "com.itsaky.androidide.plugins.AndroidIDEPlugin"

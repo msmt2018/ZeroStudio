@@ -1,23 +1,6 @@
-plugins {
-    alias(libs.plugins.kotlin.mpp) apply false
-    alias(libs.plugins.android.library) apply false
-    alias(libs.plugins.kotest) apply false
-    alias(libs.plugins.ksp) apply false
-    alias(libs.plugins.dokka) apply false
-}
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-
+// Reuse the canonical Android SDK/NDK versions from composite-builds/build-logic.
 subprojects {
-    group = "io.github.tree-sitter"
-}
-
-tasks.wrapper {
-    gradleVersion = "8.14.3"
-    distributionType = Wrapper.DistributionType.BIN
+    plugins.withId("com.android.library") {
+        apply(plugin = "com.itsaky.androidide.android-sdk")
+    }
 }

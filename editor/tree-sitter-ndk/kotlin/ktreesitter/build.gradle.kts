@@ -109,10 +109,7 @@ kotlin {
 
 android {
     namespace = "io.github.treesitter.$name"
-    compileSdk = (property("sdk.version.compile") as String).toInt()
-    ndkVersion = property("ndk.version") as String
     defaultConfig {
-        minSdk = (property("sdk.version.min") as String).toInt()
         ndk {
             //noinspection ChromeOsAbiSupport
             abiFilters += setOf("x86_64", "arm64-v8a", "armeabi-v7a")
