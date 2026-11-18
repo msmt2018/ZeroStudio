@@ -16,6 +16,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      NDK_VERSION: "29.0.14206865"
 
     steps:
       - name: Checkout repository code
@@ -71,7 +73,11 @@ jobs:
           yes | "$SDKMANAGER" --licenses
 
           # Android 17 / API 37 is published as android-37.0, not android-37.
-          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "cmake;3.31.1"
+          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+
+          # Fail immediately if the requested NDK revision was not installed exactly.
+          test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
+          grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
 
           # AGP resolves compileSdk 37 using the canonical android-37 directory.
           # Keep the installed preview platform intact and provide the expected alias.
