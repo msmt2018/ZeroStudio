@@ -185,7 +185,8 @@ abstract class AbstractModelBuilder<P, R>(
         } catch (err: UnknownModelException) {
           throw ModelBuilderException(
               "Failed to fetch model for type '${modelType.name}'." +
-                  " Model not found or the project does not support this model."
+                  " Model not found or the project does not support this model.",
+              err,
           )
         }
       }
@@ -243,19 +244,22 @@ abstract class AbstractModelBuilder<P, R>(
         } catch (err: UnsupportedVersionException) {
           throw ModelBuilderException(
               "Failed to fetch model for type '${modelType.name}'." +
-                  " Model not supported by project or Gradle version does not support parameterized models."
+                  " Model not supported by project or Gradle version does not support parameterized models.",
+              err,
           )
         } catch (err: Exception) {
           // Handle any other exceptions that might occur, including unsupported methods
           if (err.message?.contains("Unsupported method") == true) {
             throw ModelBuilderException(
                 "Failed to fetch model for type '${modelType.name}'." +
-                    " Method not supported by the connected Gradle version: ${err.message}"
+                    " Method not supported by the connected Gradle version: ${err.message}",
+                err,
             )
           } else {
             throw ModelBuilderException(
                 "Failed to fetch model for type '${modelType.name}'." +
-                    " Unexpected error: ${err.message}"
+                    " Unexpected error: ${err.message}",
+                err,
             )
           }
         }
