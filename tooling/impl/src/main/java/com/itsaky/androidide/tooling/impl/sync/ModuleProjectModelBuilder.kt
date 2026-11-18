@@ -35,7 +35,7 @@ class ModuleProjectModelBuilder(initializationParams: InitializeProjectParams) :
     val basicAndroidProject = getBasicAndroidProject(param.module, param.controller)
 
     return if (versions != null || basicAndroidProject != null) {
-      checkAgpVersion(versions, param.syncIssueReporter)
+      versions?.let { checkAgpVersion(it, param.syncIssueReporter) }
       AndroidProjectModelBuilder(initializationParams)
           .build(
               AndroidProjectModelBuilderParams(
