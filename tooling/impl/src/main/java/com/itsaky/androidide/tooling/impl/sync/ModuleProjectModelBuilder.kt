@@ -30,7 +30,11 @@ class ModuleProjectModelBuilder(initializationParams: InitializeProjectParams) :
 
   override fun build(param: ModuleProjectModelBuilderParams): IModuleProject {
     val versions = getAndroidVersions(param.module, param.controller)
-    return if (versions != null) {
+    // AGP 9.x can expose the basic Android model even when optional/legacy
+    // version metadata is unavailable. Do not classify such modules as Java.
+    val basicAndroidProject = getBasicAndroidProject(param.module, param.controller)
+
+    return if (versions != null || basicAndroidProject != null) {
       checkAgpVersion(versions, param.syncIssueReporter)
       AndroidProjectModelBuilder(initializationParams)
           .build(
