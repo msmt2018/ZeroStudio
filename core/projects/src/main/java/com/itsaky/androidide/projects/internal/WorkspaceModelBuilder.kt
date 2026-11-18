@@ -42,7 +42,7 @@ internal object WorkspaceModelBuilder {
 
   private val log = LoggerFactory.getLogger(WorkspaceModelBuilder::class.java)
 
-  fun build(projectDir: File, project: IProject): WorkspaceImpl? {
+  fun build(projectDir: File, project: IProject): WorkspaceImpl {
     try {
       val allProjects = project.getProjects().get()
       val selectionResult = project.selectProject(StringParameter("")).get()
@@ -64,9 +64,13 @@ internal object WorkspaceModelBuilder {
           CopyOnWriteArrayList(transform(allProjects, project)),
           project.getProjectSyncIssues().get(),
       )
-    } catch (error: Throwable) {
-      log.error("Unable to transform project", error)
-      return null
+    } catch (error: Exception) {
+      log.error(
+          "Workspace model transformation failed for project '{}'. Preserve the original model failure.",
+          projectDir.absolutePath,
+          error,
+      )
+      throw WorkspaceModelBuildException(projectDir, error)
     }
   }
 
@@ -163,3 +167,15 @@ internal object WorkspaceModelBuilder {
     }
   }
 }
+
+/**
+ * Raised when the Tooling API project model cannot be transformed into an IDE workspace.
+ * Keeps the original cause so callers and crash reports can identify the failing module/model.
+ */
+internal class WorkspaceModelBuildException(
+    projectDir: File,
+    cause: Throwable,
+) : IllegalStateException(
+    "Unable to initialize workspace for '${projectDir.absolutePath}': ${cause.message}",
+    cause,
+)
