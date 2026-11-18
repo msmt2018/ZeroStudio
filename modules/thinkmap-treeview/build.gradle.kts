@@ -1,11 +1,9 @@
 plugins { id("com.android.library") }
 
 android {
-  compileSdk = 36
   namespace = "com.gyso.treeview"
 
   defaultConfig {
-    minSdk = 21
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     consumerProguardFiles("consumer-rules.pro")
   }

@@ -9,10 +9,8 @@ plugins {
 
 android {
     namespace = "android.zero.studio.settingsdsl"
-    compileSdk = 36
 
     defaultConfig {
-        minSdk = 26
     }
 
     compileOptions {

@@ -9,10 +9,8 @@ plugins {
 
 android {
     namespace = "me.rerere.common"
-    compileSdk = 36
 
     defaultConfig {
-        minSdk = 26
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")

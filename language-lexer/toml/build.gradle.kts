@@ -5,10 +5,8 @@ plugins {
 
 android {
     namespace = "android.zero.studio.editor.language.toml"
-    compileSdk = 36
 
     defaultConfig {
-        minSdk = 26
     }
 
     compileOptions {

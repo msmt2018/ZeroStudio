@@ -8,7 +8,6 @@ plugins {
 
 android {
   namespace = "android.studio.layouteditor.vectormaster"
-  compileSdk = 36
 
   defaultConfig { minSdk = 26 }
 

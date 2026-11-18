@@ -4,19 +4,15 @@ plugins {
 
 android {
     namespace = "android.zero.studio.adblib"
-    compileSdk = 36
 
     defaultConfig {
-        minSdk = 14
     }
 
     testOptions {
-        targetSdk = 36
     }
 
     lint {
         baseline = file("lint-baseline.xml")
-        targetSdk = 36
     }
 
     buildTypes {

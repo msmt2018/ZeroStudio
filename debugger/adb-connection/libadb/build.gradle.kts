@@ -9,22 +9,18 @@ version = "3.1.0"
 
 android {
     namespace = "android.zero.studio.adb"
-    compileSdk = 36
 
     defaultConfig {
-        minSdk = 14
         aarMetadata {
             minCompileSdk = 1
         }
     }
 
     testOptions {
-        targetSdk = 36
     }
 
     lint {
         baseline = file("lint-baseline.xml")
-        targetSdk = 36
     }
 
     buildTypes {

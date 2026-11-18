@@ -6,10 +6,8 @@ plugins {
 
 android {
   namespace = "android.zero.studio.chatai.server.mcp"
-  compileSdk = 36
 
   defaultConfig {
-    minSdk = 26
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

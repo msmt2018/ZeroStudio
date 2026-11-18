@@ -5,7 +5,6 @@ plugins {
 
 android {
   namespace = "android.zero.studio.editor.language.properties"
-  compileSdk = 36
   defaultConfig { minSdk = 26 }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17

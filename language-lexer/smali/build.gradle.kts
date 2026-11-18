@@ -5,10 +5,8 @@ plugins {
 
 android {
     namespace = "android.zero.studio.editor.language.smali"
-    compileSdk = 36
 
     defaultConfig {
-        minSdk = 26
     }
 
     compileOptions {

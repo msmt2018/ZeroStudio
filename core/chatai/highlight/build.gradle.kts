@@ -7,10 +7,8 @@ plugins {
 
 android {
     namespace = "me.rerere.highlight"
-    compileSdk = 36
 
     defaultConfig {
-        minSdk = 24
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
