@@ -35,24 +35,3 @@ dependencies {
   api(libs.common.lsp4j.jsonrpc)
   implementation(libs.common.jkotlin)
 }
-
-    // plugins {
-        // create("grpc") {
-            // artifact = "io.grpc:protoc-gen-grpc-java:1.62.0"
-        // }
-        // create("grpckt") {
-            // artifact = "io.grpc:protoc-gen-grpc-kotlin:1.4.1:jdk8@jar"
-        // }
-    // }
-    // generateProtoTasks {
-        // all().forEach {
-            // it.plugins {
-                // create("grpc")
-                // create("grpckt")
-            // }
-            // it.builtins {
-                // create("kotlin")
-            // }
-        // }
-    // }
-// }
