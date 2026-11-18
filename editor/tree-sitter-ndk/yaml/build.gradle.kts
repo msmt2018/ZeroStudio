@@ -2,7 +2,7 @@ plugins { id("com.android.library") }
 
 android {
   namespace = "com.itsaky.androidide.treesitter.yaml"
-  ndkVersion = "27.1.12297006"
+  ndkVersion = "29.0.14206865"
 
   defaultConfig {
     ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")) }
