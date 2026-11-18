@@ -27,15 +27,9 @@ plugins {
 
 subprojects {
   plugins.withId("com.android.library") {
+    apply(plugin = "com.itsaky.androidide.android-sdk")
+
     extensions.getByType(BaseExtension::class.java).apply {
-      compileSdkVersion(34)
-
-      defaultConfig {
-        minSdk = 26
-        //noinspection ExpiredTargetSdkVersion
-        targetSdk = 28
-      }
-
       compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

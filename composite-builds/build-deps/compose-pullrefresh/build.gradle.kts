@@ -16,8 +16,6 @@ repositories {
 
 android {
   namespace = "androidx.compose.material3.pullrefresh"
-  compileSdk = 34
-  defaultConfig { minSdk = 21 }
   buildFeatures { compose = true }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
