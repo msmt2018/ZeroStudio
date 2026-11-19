@@ -50,7 +50,7 @@ class AndroidProjectModelBuilder(initializationParams: InitializeProjectParams) 
     val projectPath = module.gradleProject.path
 
     // Detect AGP version from build file
-    val detectedAgpVersion = detectAgpVersion(module.gradleProject)
+    val detectedAgpVersion = versions?.agp ?: detectAgpVersion(module.gradleProject)
 
     log("Detected AGP version: {}", detectedAgpVersion ?: "unknown")
 

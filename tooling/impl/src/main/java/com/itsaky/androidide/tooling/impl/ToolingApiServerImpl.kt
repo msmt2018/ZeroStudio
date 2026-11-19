@@ -56,6 +56,7 @@ import com.itsaky.androidide.utils.StopWatch
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import org.gradle.tooling.BuildCancelledException
@@ -95,7 +96,7 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
     private set
 
   /** Whether a build or project synchronization is in progress. */
-  private var isBuildInProgress: Boolean = false
+  private val buildInProgress = AtomicBoolean(false)
 
   /** Whether the server has a live connection to Gradle. */
   val isConnected: Boolean
@@ -140,6 +141,9 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
           return@runBuild InitializeResult(false, failureReason)
         }
 
+        // Validate custom installation settings before touching the active connection.
+        validateGradleDistribution(params.gradleDistribution)
+
         // Ensure Gradle sees UTF-8/locale early via project gradle.properties
         ensureProjectGradleProperties(projectDirectory)
 
@@ -150,28 +154,33 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
           log.info("Project is being reinitialized")
           log.info("Reusing connector instance...")
         } else {
-          // a new project is being initialized
-          // or the project is being initialized with different parameters
-          connector?.disconnect()
-
-          connector = GradleConnector.newConnector().forProjectDirectory(projectDirectory)
-          setupConnectorForGradleInstallation(this.connector!!, params.gradleDistribution)
+          // Configure and connect the candidate first. If it fails, the currently
+          // active connection remains available and its state fields stay coherent.
+          val candidateConnector = GradleConnector.newConnector().forProjectDirectory(projectDirectory)
+          setupConnectorForGradleInstallation(candidateConnector, params.gradleDistribution)
           stopWatch.lap("Connector created")
-        }
+          notifyBeforeBuild(BuildInfo(emptyList()))
+          val candidateConnection = candidateConnector.connect()
 
-        lastInitParams = params
+          val previousConnection = this.connection
+          val previousConnector = this.connector
+          this.connector = candidateConnector
+          this.connection = candidateConnection
+          this.lastInitParams = params
+          this.isInitialized = false
+
+          runCatching { previousConnection?.close() }
+          runCatching { previousConnector?.disconnect() }
+        }
 
         val connector =
             checkNotNull(connector) {
               "Unable to create gradle connector for project directory: ${params.directory}"
             }
 
-        notifyBeforeBuild(BuildInfo(emptyList()))
-
         if (isReinitializing) {
+          notifyBeforeBuild(BuildInfo(emptyList()))
           log.info("Reusing project connection...")
-        } else {
-          connection = connector.connect()
         }
 
         val connection =
@@ -408,6 +417,15 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
     }
   }
 
+  private fun validateGradleDistribution(params: GradleDistributionParams) {
+    if (params.type == GradleDistributionType.GRADLE_INSTALLATION) {
+      val installation = File(params.value)
+      require(installation.exists() && installation.isDirectory && installation.canRead()) {
+        "Specified Gradle installation must be an existing readable directory: ${installation.absolutePath}"
+      }
+    }
+  }
+
   private fun setupConnectorForGradleInstallation(
       connector: GradleConnector,
       params: GradleDistributionParams,
@@ -419,9 +437,10 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
 
       GradleDistributionType.GRADLE_INSTALLATION -> {
         val file = File(params.value)
-        if (!file.exists() || !file.isDirectory) {
-          log.error("Specified Gradle installation does not exist: {}", params)
-          return
+        if (!file.exists() || !file.isDirectory || !file.canRead()) {
+          throw IllegalArgumentException(
+              "Specified Gradle installation must be an existing readable directory: ${file.absolutePath}"
+          )
         }
 
         log.info("Using Gradle installation: {}", file.canonicalPath)
@@ -524,16 +543,17 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
 
   private inline fun <T : Any?> runBuild(crossinline action: () -> T): CompletableFuture<T> =
       supplyAsync {
-        if (isBuildInProgress) {
-          log.error("Cannot run build, build is already in prorgess!")
-          throw IllegalStateException("Build is already in progress")
+        // JSON-RPC requests may be dispatched on different executor threads.
+        // Atomically gate access to the shared ProjectConnection.
+        if (!buildInProgress.compareAndSet(false, true)) {
+          log.error("Cannot run build: another build or synchronization is already in progress")
+          throw IllegalStateException("A Gradle build or project synchronization is already in progress")
         }
 
-        isBuildInProgress = true
         try {
           action()
         } finally {
-          isBuildInProgress = false
+          buildInProgress.set(false)
         }
       }
 

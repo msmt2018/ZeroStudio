@@ -61,12 +61,17 @@ internal class ProjectImpl(
   }
 
   private fun getProject(path: String): IGradleProject? {
-    return if (path.isBlank()) rootProject
-    else projects.find { it.getMetadata().get().projectPath == path }
+    // Blank selection resolves to the Gradle workspace root. Explicit Gradle
+    // paths resolve from the module list first, including the root Java/Android
+    // module, which is distinct from the workspace root model.
+    return projects.find { it.getMetadata().get().projectPath == path }
+        ?: if (path == rootProjectPath) rootProject else null
   }
 
   override fun getProjects(): CompletableFuture<List<BasicProjectMetadata>> {
-    return CompletableFuture.supplyAsync { projects.map { it.getMetadata().get() } }
+    return CompletableFuture.supplyAsync {
+      projects.map { it.getMetadata().get() }
+    }
   }
 
   override fun getProjectSyncIssues(): CompletableFuture<DefaultProjectSyncIssues> {

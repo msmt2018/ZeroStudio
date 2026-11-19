@@ -47,6 +47,7 @@ class DefaultVariant : Variant, Serializable {
         this.name = variant.name
         this.displayName = variant.displayName
         this.isInstantAppCompatible = variant.isInstantAppCompatible
+        this.runTestInSeparateProcess = variant.runTestInSeparateProcess
         this.desugaredMethods = variant.desugaredMethods
         this.mainArtifact = DefaultAndroidArtifact.fromArtifact(variant.mainArtifact)
 
@@ -94,7 +95,7 @@ class DefaultVariant : Variant, Serializable {
   override var testedTargetVariant: DefaultTestedTargetVariant? = null
   @Deprecated("Contained in hostTestArtifacts")
   override var unitTestArtifact: DefaultJavaArtifact? = null
-  override val runTestInSeparateProcess: Boolean = false
+  override var runTestInSeparateProcess: Boolean = false
   override var deviceTestArtifacts: Map<String, AndroidArtifact> = emptyMap()
   override var hostTestArtifacts: Map<String, JavaArtifact> = emptyMap()
 

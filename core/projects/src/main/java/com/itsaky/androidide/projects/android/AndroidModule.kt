@@ -338,8 +338,14 @@ open class AndroidModule(
     }
   }
 
-  private fun collectLibraries(root: IWorkspace, libraries: Set<String>, result: MutableSet<File>) {
+  private fun collectLibraries(
+      root: IWorkspace,
+      libraries: Set<String>,
+      result: MutableSet<File>,
+      visited: MutableSet<String> = mutableSetOf(),
+  ) {
     for (library in libraries) {
+      if (!visited.add(library)) continue
       val lib = this.libraryMap[library] ?: continue
       if (lib.type == PROJECT) {
         val module = root.findProject(lib.projectInfo!!.projectPath) ?: continue
@@ -354,7 +360,7 @@ open class AndroidModule(
         result.add(lib.artifact!!)
       }
 
-      collectLibraries(root, lib.dependencies, result)
+      collectLibraries(root, lib.dependencies, result, visited)
     }
   }
 
