@@ -51,7 +51,6 @@ dependencyResolutionManagement {
                   // "kotlinc",
 
               ),
-          "build-deps-common" to arrayOf("desugaring-core"),
       )
 
     for ((build, modules) in dependencySubstitutions) {

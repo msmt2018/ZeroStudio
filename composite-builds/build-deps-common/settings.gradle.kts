@@ -36,10 +36,6 @@ dependencyResolutionManagement {
   versionCatalogs { create("libs") { from(files("../../gradle/libs.versions.toml")) } }
 }
 
-include(
-    ":desugaring-core",
-)
-
 rootProject.name = "build-deps-common"
 
 gradle.rootProject {
