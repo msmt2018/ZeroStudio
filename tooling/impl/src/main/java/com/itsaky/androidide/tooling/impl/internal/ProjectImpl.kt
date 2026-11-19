@@ -61,13 +61,9 @@ internal class ProjectImpl(
   }
 
   private fun getProject(path: String): IGradleProject? {
-    // Gradle project paths are not blank for the root project (normally ":").
-    // Use the explicit root path captured by RootModelBuilder instead of relying
-    // on a blank-path convention or a duplicate root entry in the module list.
-    if (path.isBlank()) return rootProject
-    // A root Java/Android module is represented in the module list as well as
-    // the Gradle workspace root. Prefer that module entry when explicitly
-    // selecting its Gradle path; keep the root Gradle model for blank selection.
+    // Blank selection resolves to the Gradle workspace root. Explicit Gradle
+    // paths resolve from the module list first, including the root Java/Android
+    // module, which is distinct from the workspace root model.
     return projects.find { it.getMetadata().get().projectPath == path }
         ?: if (path == rootProjectPath) rootProject else null
   }
