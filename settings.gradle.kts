@@ -176,6 +176,12 @@ include(
     // buttonGroupItem/settingsPage 等), 被 connection 模块的 SettingsProvider.kt 引用。
     ":debugger:adb-connection:settings-dsl",
 
+    ":editor-core:editor-analysis",
+    ":editor-core:editor-core",
+    ":editor-core:editor-dual",
+    ":editor-core:editor-language",
+    ":editor-core:editor-lsp",
+
     ":editor:api",
     ":editor:impl",
     ":editor:lexers",
