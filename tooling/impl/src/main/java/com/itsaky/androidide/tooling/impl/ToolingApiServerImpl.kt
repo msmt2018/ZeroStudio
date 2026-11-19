@@ -141,6 +141,9 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
           return@runBuild InitializeResult(false, failureReason)
         }
 
+        // Validate custom installation settings before touching the active connection.
+        validateGradleDistribution(params.gradleDistribution)
+
         // Ensure Gradle sees UTF-8/locale early via project gradle.properties
         ensureProjectGradleProperties(projectDirectory)
 
@@ -151,28 +154,33 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
           log.info("Project is being reinitialized")
           log.info("Reusing connector instance...")
         } else {
-          // a new project is being initialized
-          // or the project is being initialized with different parameters
-          connector?.disconnect()
-
-          connector = GradleConnector.newConnector().forProjectDirectory(projectDirectory)
-          setupConnectorForGradleInstallation(this.connector!!, params.gradleDistribution)
+          // Configure and connect the candidate first. If it fails, the currently
+          // active connection remains available and its state fields stay coherent.
+          val candidateConnector = GradleConnector.newConnector().forProjectDirectory(projectDirectory)
+          setupConnectorForGradleInstallation(candidateConnector, params.gradleDistribution)
           stopWatch.lap("Connector created")
-        }
+          notifyBeforeBuild(BuildInfo(emptyList()))
+          val candidateConnection = candidateConnector.connect()
 
-        lastInitParams = params
+          val previousConnection = this.connection
+          val previousConnector = this.connector
+          this.connector = candidateConnector
+          this.connection = candidateConnection
+          this.lastInitParams = params
+          this.isInitialized = false
+
+          runCatching { previousConnection?.close() }
+          runCatching { previousConnector?.disconnect() }
+        }
 
         val connector =
             checkNotNull(connector) {
               "Unable to create gradle connector for project directory: ${params.directory}"
             }
 
-        notifyBeforeBuild(BuildInfo(emptyList()))
-
         if (isReinitializing) {
+          notifyBeforeBuild(BuildInfo(emptyList()))
           log.info("Reusing project connection...")
-        } else {
-          connection = connector.connect()
         }
 
         val connection =
@@ -405,6 +413,15 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
         ExecutionRequest.OperationType.BUILD_PHASE -> OperationType.BUILD_PHASE
         ExecutionRequest.OperationType.BUILD -> OperationType.ROOT
         ExecutionRequest.OperationType.PROBLEM -> OperationType.PROBLEMS
+      }
+    }
+  }
+
+  private fun validateGradleDistribution(params: GradleDistributionParams) {
+    if (params.type == GradleDistributionType.GRADLE_INSTALLATION) {
+      val installation = File(params.value)
+      require(installation.exists() && installation.isDirectory && installation.canRead()) {
+        "Specified Gradle installation must be an existing readable directory: ${installation.absolutePath}"
       }
     }
   }
