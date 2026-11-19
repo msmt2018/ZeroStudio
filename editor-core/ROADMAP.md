@@ -1,79 +1,72 @@
-# Editor Core Refactor Roadmap
+# Editor Core Bootstrap and Refactor Roadmap
 
-## Phase 0 — Architecture and source audit
+## Phase 0 — module bootstrap and source audit
 
-- [ ] Replace the superseded 11-module scaffold with the 5-module plan documented here.
-- [ ] Inventory legacy `:editor:impl`, `:editor/api`, lexers, Tree-sitter/JNI, LSP and UI consumers.
-- [ ] Map each Sora class/API to current callers and identify custom ZeroStudio patches.
-- [ ] Identify Tree-sitter code/assets/native build pieces that should be retained or refactored.
-- [ ] Inventory LSP framework/server/client implementation and its consumers.
-- [ ] Define migration ownership and dependency boundaries; document any exceptions.
+- [x] Establish the five approved empty Android library modules: editor-core, editor-language, editor-lsp, editor-analysis and editor-dual.
+- [x] Document module responsibilities and ownership boundaries.
+- [ ] Audit legacy `:editor:impl`, `:editor:api`, lexers, Tree-sitter/JNI/native, existing LSP modules and their consumers.
+- [ ] Map Sora classes/APIs, ZeroStudio custom changes and current dependency relationships to the five target modules.
+- [ ] Record a build baseline before migrating implementation code.
 
-**Exit criteria:** a source-to-target migration map, dependency map and build baseline exist. No destructive source deletion.
+**Exit criteria:** source-to-target migration map and dependency map are documented. No destructive source deletion.
 
-## Phase 1 — editor-engine foundation
+## Phase 1 — editor-core foundation
 
-- [ ] Establish engine-owned public contracts and internal package structure.
-- [ ] Refactor Sora core incrementally into ZeroStudio-owned boundaries.
-- [ ] Document document/change/selection/viewport contracts.
-- [ ] Establish tests for editing operations, offsets, selection and history.
-- [ ] Verify the module builds independently within the repository.
+- [ ] Audit Sora's document, editing, input, layout and rendering internals.
+- [ ] Define editor View API, state, events, document/change/version contracts and lifecycle.
+- [ ] Refactor text editing, transactions, undo/redo, cursor and selection incrementally.
+- [ ] Refactor input/IME, layout, viewport, rendering and editor interaction.
+- [ ] Establish deterministic tests for editing correctness, input, layout, rendering and large documents.
 
-**Exit criteria:** basic document editing, cursor/selection, edit transactions and undo/redo have deterministic tests.
+**Exit criteria:** editor-core exposes a usable integrated editor View and passes focused tests.
 
-## Phase 2 — Tree-sitter framework (editor-language)
+## Phase 2 — editor-language
 
-- [ ] Audit current Tree-sitter Java/Kotlin/JNI/native modules and grammar assets.
-- [ ] Refactor framework lifecycle/resource ownership and public integration contracts.
-- [ ] Validate parser/query/capture behavior and incremental parse handling.
-- [ ] Define parse result/version handling so stale analysis cannot overwrite newer document state.
-- [ ] Integrate syntax results with editor-engine decorations/styles without engine-to-parser dependencies.
-- [ ] Test native resource cleanup and large-document degradation.
+- [ ] Audit existing Tree-sitter Java/Kotlin/JNI/native code and grammar/query assets.
+- [ ] Refactor parser/tree/query lifecycle and native resource ownership.
+- [ ] Implement incremental parse scheduling, cancellation and revision-aware result handling.
+- [ ] Connect syntax-highlight data to editor-core through stable result/decorations contracts.
+- [ ] Validate representative languages and large-file memory behavior.
 
-**Exit criteria:** at least one representative language parses and highlights using the new contracts; existing useful grammar/native infrastructure remains working.
+**Exit criteria:** representative source files parse and highlight correctly without stale results corrupting current editor state.
 
-## Phase 3 — LSP framework (editor-lsp)
+## Phase 3 — editor-lsp
 
-- [ ] Audit existing LSP API/model, transports, clients, servers and language integrations.
-- [ ] Refactor JSON-RPC lifecycle, capability negotiation, cancellation and error handling.
-- [ ] Establish document synchronization/change version contracts.
-- [ ] Implement diagnostics integration first.
-- [ ] Add feature adapters in slices: completion/hover, navigation, formatting/code actions/inlay hints.
-- [ ] Validate a representative server end-to-end.
+- [ ] Audit existing LSP APIs, models, transports, clients, servers and language integrations.
+- [ ] Refactor JSON-RPC, server lifecycle, capabilities, cancellation and error handling.
+- [ ] Establish version-aware document synchronization.
+- [ ] Integrate diagnostics, then completion/hover/navigation/formatting/code actions/inlay features.
+- [ ] Validate at least one representative language server end-to-end.
 
-**Exit criteria:** server starts/stops reliably, documents synchronize correctly, diagnostics and at least one interactive feature work end-to-end.
+**Exit criteria:** server lifecycle and document synchronization are reliable; diagnostics and interactive language features work through editor contracts.
 
-## Phase 4 — editor-ui and IDE integration
+## Phase 4 — editor-analysis
 
-- [ ] Build Compose editor surface using editor-engine contracts.
-- [ ] Implement theme, focus, lifecycle, scrolling and editor actions.
-- [ ] Integrate Tree-sitter and LSP results without coupling the UI to their internals.
-- [ ] Integrate project/file open-save workflows.
-- [ ] Validate editor behavior on supported Android API levels and device configurations.
+- [ ] Define analysis provider and unified diagnostic/result contracts.
+- [ ] Integrate Tree-sitter and LSP diagnostic sources without duplicating their implementations.
+- [ ] Implement task scheduling, cancellation, severity aggregation and stale-result filtering.
+- [ ] Validate result mapping against document revisions and editor positions.
 
-**Exit criteria:** project files can be opened, edited, saved, highlighted, diagnosed and navigated with the new editor path.
+**Exit criteria:** multiple analysis sources can publish consistent, version-correct results.
 
-## Phase 5 — extensions and stabilization
+## Phase 5 — editor-dual
 
-- [ ] Define internal extension registration contracts.
-- [ ] Migrate optional editor capabilities to extensions where useful.
-- [ ] Validate extension lifecycle and conflict handling.
-- [ ] Run unit, instrumentation, integration and performance tests.
-- [ ] Review memory usage, responsiveness and large-file behavior.
+- [ ] Define dual-editor pair and lifecycle APIs over two editor-core instances.
+- [ ] Implement split orientation, pane sizing, active-editor and focus coordination.
+- [ ] Add optional viewport/scroll/cursor synchronization policies.
+- [ ] Define external comparison-data mapping hooks; do not implement Git or Diff algorithms here.
+- [ ] Validate independent documents and comparison workflows.
 
-## Phase 6 — remove legacy editor implementation
+**Exit criteria:** two independent editor instances can be hosted and coordinated without duplicating editor-core implementation.
 
-Removal of `:editor:impl` is allowed only after:
-- [ ] All direct and transitive consumers are migrated.
-- [ ] Required editor behavior is covered by the new engine.
-- [ ] Compose/UI and IDE integrations no longer import legacy implementation types.
-- [ ] Tree-sitter, LSP and native components do not rely on old implementation internals.
-- [ ] Build files, dependency substitutions, resources and tests are migrated.
-- [ ] Clean build and targeted tests pass.
-- [ ] No remaining references to legacy implementation packages/modules exist.
+## Phase 6 — ZeroStudio integration and legacy removal
 
-Then remove the legacy module and obsolete dependencies, rerun full validation, and record the migration commit.
+- [ ] Integrate the editor View into Activity-owned IDE layouts.
+- [ ] Connect project/file open-save flows, language parsing, LSP and analysis results.
+- [ ] Integrate dual-editor workflows where required by the IDE.
+- [ ] Migrate all consumers, resources, dependencies and tests from legacy editor implementation.
+- [ ] Remove `:editor:impl` only after no consumers or package references remain and clean builds/tests pass.
 
 ## Work discipline
 
-Work in small, reviewable changes. Do not jump directly to Compose controls while engine contracts and underlying behavior remain unsettled. Do not rewrite Tree-sitter or LSP blindly: inspect current implementations and modify the framework at its real bottlenecks and integration boundaries.
+Keep bootstrap modules empty until their contracts and source ownership are ready. Do not add speculative dependencies or placeholder implementation classes. Work bottom-up in small, buildable slices; preserve useful Sora, Tree-sitter, JNI/native and LSP infrastructure after auditing it rather than blindly rewriting or deleting it.
