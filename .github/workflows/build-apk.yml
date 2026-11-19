@@ -1,6 +1,9 @@
 name: Build Android APK
 
 on:
+  push:
+    branches:
+      - '**'
   workflow_dispatch:
     inputs:
       build_type:
@@ -47,7 +50,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -187,8 +190,6 @@ jobs:
           # 限制 Gradle JVM 最大使用 5GB 内存，不开启守护进程以免内存驻留
           GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' -Dorg.gradle.daemon=false"
           # 限制 CMake 底层的 Ninja 并发数为 2，防止 C++ 编译器吃光内存
-
-          # export CMAKE_BUILD_PARALLEL_LEVEL=2
           CMAKE_BUILD_PARALLEL_LEVEL: "2"
         run: |
           # 使用 --max-workers=2 限制模块并发
@@ -227,14 +228,6 @@ jobs:
           compression-level: 0
 
       - name: Upload app-armeabi-v7a-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-armeabi-v7a-debug.apk
-          path: core/app/build/outputs/apk/debug/app-armeabi-v7a-debug.apk
-          compression-level: 0
-
-      - name: Upload app-x86_64-debug.apk
         if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
         uses: actions/upload-artifact@v4
         with:
