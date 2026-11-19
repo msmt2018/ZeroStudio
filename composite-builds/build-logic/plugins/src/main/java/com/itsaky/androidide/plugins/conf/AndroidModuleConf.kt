@@ -64,7 +64,6 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
   }
 
   extensions.getByType(BaseExtension::class.java).run {
-    lintOptions { checkDependencies = true }
 
     packagingOptions {
       resources {
