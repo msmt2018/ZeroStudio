@@ -15,7 +15,7 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -29,7 +29,7 @@ subprojects {
   plugins.withId("com.android.library") {
     apply(plugin = "com.itsaky.androidide.android-sdk")
 
-    extensions.getByType(BaseExtension::class.java).apply {
+    extensions.configure<LibraryExtension> {
       compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -42,5 +42,7 @@ subprojects {
     }
   }
 
-  tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
+  tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+  }
 }
