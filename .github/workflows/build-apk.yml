@@ -124,7 +124,7 @@ jobs:
           path: |
             **/build/test-results/**
             **/build/reports/tests/**
-                                              if-no-files-found: warn
+          if-no-files-found: warn
           retention-days: 14
 
   build:
@@ -261,7 +261,9 @@ jobs:
         with:
           name: zerostudio-instrumentation-reports
           path: |
-                                    **/build/reports/androidTests/**
+            **/build/test-results/**
+            **/build/reports/tests/**
+            **/build/reports/androidTests/**
             **/build/outputs/androidTest-results/**
             **/build/outputs/connected_android_test_additional_output/**
           if-no-files-found: warn
