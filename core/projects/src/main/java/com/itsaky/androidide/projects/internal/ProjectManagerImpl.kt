@@ -106,10 +106,15 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
   }
 
   override fun openProject(directory: File) {
-    // IMP: Always use canonical path
+    // Always use the canonical path and invalidate the previous workspace before
+    // the new project's model is built. A failed sync must never expose project A
+    // while project B is the active directory.
+    this._workspace?.setVariantSelections(emptyMap())
+    this._workspace = null
     this._projectDir = directory.canonicalFile
-    // 清除上一个项目的缓存状态
     this.pluginProjectCached = null
+    this.projectInitialized = false
+    this.cachedInitResult = null
   }
 
   override suspend fun isGradleSyncNeeded(projectDir: File): Boolean {
