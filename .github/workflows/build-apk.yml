@@ -1,9 +1,6 @@
 name: Build Android APK
 
 on:
-  push:
-    branches:
-      - fix/tooling-gradle-9.5.1-agp-9.3-models
   workflow_dispatch:
     inputs:
       build_type:
