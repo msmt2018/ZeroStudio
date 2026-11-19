@@ -1,6 +1,8 @@
 package com.itsaky.androidide.plugins
 
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.CommonExtension
+import com.android.build.api.dsl.LibraryExtension
+import com.android.build.api.dsl.ApplicationExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -19,8 +21,17 @@ class AndroidSdkConventionPlugin : Plugin<Project> {
   }
 
   private fun configureAndroidSdk(project: Project) {
-    project.extensions.getByType(BaseExtension::class.java).apply {
-      compileSdkVersion(BuildConfig.compileSdk)
+    val extension =
+        project.extensions.findByType(LibraryExtension::class.java)
+            ?: project.extensions.findByType(ApplicationExtension::class.java)
+            ?: error("Android DSL extension is unavailable for ${project.path}")
+
+    configureAndroidSdk(extension)
+  }
+
+  private fun configureAndroidSdk(extension: CommonExtension<*, *, *, *, *, *>) {
+    extension.apply {
+      compileSdk = BuildConfig.compileSdk
       ndkVersion = BuildConfig.ndkVersion
       defaultConfig {
         minSdk = BuildConfig.minSdk
