@@ -237,20 +237,6 @@ public class IDEWrapperGenerator {
   }
 
   /**
-   * Set Wrapper versions resources.
-   *
-   * @since 8.1
-   */
-  @Incubating
-  public void setWrapperVersionsResources(WrapperVersionsResources wrapperVersionsResources) {
-    DefaultWrapperVersionsResources defaultWrapperVersionsResources = (DefaultWrapperVersionsResources) wrapperVersionsResources;
-    gradleVersionResolver.setTextResources(defaultWrapperVersionsResources.getLatest(),
-        defaultWrapperVersionsResources.getReleaseCandidate(),
-        defaultWrapperVersionsResources.getNightly(),
-        defaultWrapperVersionsResources.getReleaseNightly());
-  }
-
-  /**
    * Returns the gradle version for the wrapper.
    *
    * @throws GradleException if the label that can be provided via {@link #setGradleVersion(String)}
