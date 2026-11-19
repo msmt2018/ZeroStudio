@@ -1,72 +1,53 @@
 # Editor Core Architecture
 
-## Design direction
+## Product boundary
 
-Build ZeroStudio's editor by refactoring the Sora Editor core, not by replacing it with a brand-new text engine. The objective is to progressively own the editor architecture and APIs, adapt existing capabilities, and eventually remove the legacy `:editor:impl`.
+`editor-core` is the integrated code-editor control and editing engine. It exposes a complete Android View that an Activity can host. Activity owns IDE page composition and application UI such as toolbars, tabs, sidebars, panels and navigation. There is no separate `editor-ui` module.
 
-The architecture uses five coarse Gradle modules. Internal engine concerns remain package-level subsystems unless a concrete independent build/runtime boundary justifies splitting them.
-
-## Module overview
+## Module map
 
 ```mermaid
 flowchart TD
-  UI[editor-ui: Compose and IDE UI]
-  ENG[editor-engine: Sora-based editing core]
-  LANG[editor-language: Tree-sitter and syntax framework]
-  LSP[editor-lsp: LSP framework and server integration]
-  EXT[editor-extensions: internal extension points]
-  UI --> ENG
-  UI --> LANG
-  UI --> LSP
-  EXT --> ENG
-  EXT --> UI
-  LANG -. analysis results .-> ENG
-  LSP -. diagnostics and language features .-> UI
+  ACT[ZeroStudio Activity / IDE UI] --> CORE[editor-core: integrated editor View]
+  ACT --> DUAL[editor-dual: dual-editor API]
+  DUAL --> CORE
+  LANG[editor-language: parsing and syntax] --> CORE
+  LSP[editor-lsp: language server protocol] --> CORE
+  ANALYSIS[editor-analysis: analysis and diagnostics] --> CORE
+  LANG --> ANALYSIS
+  LSP --> ANALYSIS
 ```
 
-## Ownership boundaries
+The diagram describes integration relationships, not permission for implementation-level cyclic dependencies. Modules must communicate through stable contracts and dependency direction must be verified during implementation.
 
-### editor-engine
-Owns the edit session, document operations, selection/cursor state, input/IME behavior, layout and viewport, rendering and decorations, undo/redo, internal event flow, and engine performance/memory behavior. Sora is the initial technical foundation; its internals may be changed, replaced, or removed as the ZeroStudio-owned implementation matures.
+## Module ownership
 
-### editor-ui
-Owns Compose surfaces and IDE-facing UI, including focus/lifecycle, theme, toolbar/context actions and view state. It must not duplicate document storage, editing transactions, undo history, parser implementation or LSP protocol logic.
+### editor-core
+Owns the complete editor View and its internal editing systems: text storage and mutation, edit transactions, undo/redo, cursor, selection, keyboard/IME input, layout, measurement, rendering, viewport and scrolling, gutter, folding, clipboard, search/replace, completion interaction, snippet expansion, formatting-result application, decorations, editor state/events and performance safeguards.
+
+It does not own Activity page UI, project/file-browser management, Git repository operations, Tree-sitter implementation or LSP transport. Text/document editing internals remain inside this module rather than being extracted into separate `editor-text` or `editor-document` modules.
 
 ### editor-language
-Owns Tree-sitter integration and syntax framework: parser/query/grammar management, JNI/native integration boundaries, incremental parse scheduling, language registration and highlighting data conversion. Existing language/Tree-sitter modules should be inspected and selectively reused; they are not automatically migrated wholesale.
+Owns language registration/configuration, Tree-sitter integration, parser/tree/node/query lifecycle, grammar and query assets, JNI/native boundaries, incremental parsing, parse scheduling/cancellation, stale-result/version checks, syntax highlighting data and parser memory/large-file safeguards.
 
 ### editor-lsp
-Owns language-server framework changes and integration: protocol/model boundaries, JSON-RPC transport, client/server lifecycle, capability negotiation, document synchronization, requests/notifications/cancellation and language-server feature adapters. The server framework must remain editor-control agnostic.
+Owns LSP protocol models, JSON-RPC, transport, client/server lifecycle, server registry/configuration, capability negotiation, workspace/document synchronization, requests/notifications, cancellation, error handling and language-server feature adapters.
 
-### editor-extensions
-Owns internal extension registration, lifecycle, optional capabilities, commands, key bindings and decorations. Start with statically registered/internal extensions. Dynamic loading, sandboxing and marketplace features are explicitly out of scope until needed.
+### editor-analysis
+Owns analysis provider/rule contracts, analysis task scheduling/cancellation, unified diagnostic models, multi-source diagnostic aggregation, severity/filtering, document-position mapping, result caching and document-version/stale-result validation. It can consume Tree-sitter, local analyzers and LSP diagnostics; it does not own their underlying transports or parsers.
 
-## Data and event flow
+### editor-dual
+Owns APIs for composing and coordinating two independent editor-core instances: editor pairing, document binding, split direction/ratio configuration, active-editor and focus management, command routing, optional viewport/scroll/cursor synchronization, and comparison-data anchors. It does not calculate diffs, operate Git or own IDE page layout.
 
-1. User input enters editor-engine through the UI boundary.
-2. editor-engine updates the document and selection through its edit model/transactions.
-3. Document change events are exposed with revision/position information to language and LSP integrations.
-4. editor-language updates parse/highlight data; editor-lsp delivers diagnostics and other asynchronous language features.
-5. UI consumes stable editor-facing state and rendering/decorations, not parser or protocol internals.
-6. Extensions register optional behavior through explicit contracts; core editing remains usable without them.
+## Internal features, not Gradle modules
 
-## Dependency rules
+Text buffer/index, edit transactions, undo/redo, input/IME, cursor, selection, layout, rendering, scrolling, gutter, folding, search/replace, completion interaction, formatting application, snippets, clipboard and decorations remain packages/subsystems within `editor-core`.
 
-- editor-engine must not depend on editor-ui, Tree-sitter, LSP, or extension implementations.
-- editor-ui depends on editor-engine and may integrate editor-language/editor-lsp via public contracts.
-- editor-language depends on engine-facing contracts for document/change information, not private engine classes.
-- editor-lsp depends on stable document synchronization/position contracts and protocol abstractions, not the concrete Compose UI.
-- editor-extensions integrates through public/internal extension contracts; avoid cycles and core-to-extension dependencies.
-- tests are colocated with their owning module.
+## Migration constraints
 
-## Migration strategy
-
-Keep current source modules available while inventorying their code and consumers. Move/refactor in small slices and keep the project buildable. Do not remove old `:editor:impl` before the replacement has feature coverage, migrated consumers, tests and build validation. Preserve Tree-sitter and language-server infrastructure where useful; migrate ownership and interfaces rather than blindly deleting it.
-
-## Non-goals for the initial architecture
-
-- Rewriting text storage from scratch before auditing Sora.
-- Creating separate Gradle modules for every editor subsystem.
-- Building a plugin marketplace, arbitrary dynamic code loading or sandbox.
-- Coupling language analysis or LSP lifecycle to Compose UI.
-- Removing existing parser/native/server infrastructure without a dependency audit.
+- Sora Editor remains the technical foundation to audit and refactor; do not replace it with a speculative from-scratch text engine.
+- Keep the current legacy editor implementation and existing Tree-sitter/JNI/LSP code until their consumers and responsibilities are mapped.
+- Do not create speculative cross-module dependencies in empty bootstrap modules.
+- Design stable document/change/version and editor-facing result contracts before connecting language and analysis services.
+- `editor-dual` must reuse editor-core instances rather than duplicate the editing engine.
+- Remove legacy `:editor:impl` only after consumers, resources, dependencies and tests have migrated and clean builds pass.
