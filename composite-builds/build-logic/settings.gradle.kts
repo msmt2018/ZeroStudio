@@ -27,15 +27,7 @@ dependencyResolutionManagement {
   versionCatalogs { create("libs") { from(files("../../gradle/libs.versions.toml")) } }
 }
 
-repositories {
-    google()
-    mavenCentral()
-  }
 
-  versionCatalogs { create("libs") { from(files("../../gradle/libs.versions.toml")) } }
-}
-
-// Do not include it as a project of build-logic: that directory no longer exists.
 include(":common", ":plugins", ":properties-parser")
 
 rootProject.name = "build-logic"
