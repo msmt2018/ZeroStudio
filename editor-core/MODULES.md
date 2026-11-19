@@ -1,92 +1,88 @@
 # Editor Core Modules and Responsibilities
 
-The plan intentionally uses five coarse modules. Text buffer, undo, input, layout and rendering are internal subsystems of editor-engine, not separate Gradle modules. Unit/instrumentation tests are colocated with each module.
+The initial structure contains five intentionally empty Android library modules. These are the only modules approved for the current bootstrap. Internal editor subsystems are packages inside their owning module, not separate Gradle projects.
 
-## 1. editor-engine — Sora-based editor core
+## 1. editor-core — integrated editor control
 
-**Purpose:** refactor Sora's core into a ZeroStudio-owned editing engine and progressively retire the legacy `:editor:impl`.
-
-**Owns**
-- Sora core adaptation/refactoring and editor API/internal boundaries.
-- Document/buffer representation, text indexing and line mapping.
-- Edit operations, transactions and change/revision tracking.
-- Undo/redo and history grouping.
-- Selection, cursor/caret and navigation.
-- Keyboard input, IME/composing, touch/gesture edit behavior.
-- Layout, visual lines, wrapping, measurement, viewport and coordinate mapping.
-- Rendering, line numbers, selection/caret, decorations and drawing caches.
-- Engine state/lifecycle, internal events, performance and memory protections.
-
-**Does not own:** Compose UI screens, Tree-sitter grammar/framework, LSP protocol/server lifecycle, IDE project/file management.
-
-**Tests:** text correctness, offset mapping, transactions, undo/redo, IME/input, layout/viewport, rendering behavior, performance and large-file tests.
-
-## 2. editor-ui — Compose editor surface and IDE integration
-
-**Purpose:** implement the user-facing editor surface and IDE-specific composition around editor-engine.
+**Purpose:** provide the complete ZeroStudio-owned code editor Android View and its editing engine, refactoring Sora-based capabilities incrementally.
 
 **Owns**
-- Compose editor component and layout.
-- Theme, typography, editor chrome and UI state.
-- Focus, lifecycle, scrolling coordination and viewport presentation.
-- Toolbars, context menus and editor actions UI.
-- File/editor page integration and IDE navigation.
+- Editor View, controller-facing API, configuration, state, events and lifecycle.
+- Text storage, indexing, line mapping, edit operations and transactions.
+- Undo/redo and edit-history grouping.
+- Cursor, caret, selection and navigation within the document.
+- Keyboard, IME/composing and input handling.
+- Text measurement, line layout, wrapping, viewport and coordinate mapping.
+- Rendering, scrolling, gutter, line numbers, folding and decorations.
+- Clipboard, search/replace, completion interaction, snippets and formatting-result application.
+- Performance, caching, memory safeguards and large-document editing behavior.
 
-**Does not own:** text buffer, edit transactions, undo stack, parser internals or LSP transport/protocol.
+**Does not own:** Activity/IDE page UI, project file management, Git operations, Tree-sitter implementation or LSP protocol transport.
 
-**Tests:** Compose behavior, focus/lifecycle, UI actions and integration tests.
+## 2. editor-language — language parsing framework
 
-## 3. editor-language — Tree-sitter and language support
-
-**Purpose:** own syntax analysis framework and language-specific parsing support.
-
-**Owns**
-- Tree-sitter framework refactoring and integration.
-- Parser, tree/node/query lifecycle and incremental parsing.
-- JNI/native bridge boundaries and native resource management.
-- Grammar/query assets and language registration.
-- Parse scheduling, cancellation and stale-result handling.
-- Syntax highlighting capture-to-editor style conversion.
-- Language-specific parser setup and large-file degradation strategies.
-
-**Does not own:** editing transactions, editor UI, LSP transport.
-
-**Tests:** grammar/query/parser correctness, incremental parsing, native/JNI lifecycle, language registration and memory/performance tests.
-
-## 4. editor-lsp — LSP framework and language server integration
-
-**Purpose:** refactor and centralize ZeroStudio's LSP infrastructure and language-server integrations.
+**Purpose:** own source-language parsing and syntax understanding.
 
 **Owns**
-- LSP API/framework changes and protocol models.
-- JSON-RPC transport and request lifecycle.
-- Language server client/server lifecycle and capability negotiation.
-- Workspace/document lifecycle and text synchronization.
-- Request/notification routing, cancellation and error handling.
-- Diagnostics and adapters for completion, hover, definition, references, formatting, code actions and inlay hints.
-- Language-server integration/configuration for supported languages.
+- Language registration and language configuration.
+- Tree-sitter framework integration/refactoring.
+- Parser, syntax tree, node and query lifecycle.
+- Grammar/query resources and capture processing.
+- JNI/native bridge boundaries and native resource lifecycle.
+- Incremental parsing, scheduling, cancellation and stale-result handling.
+- Syntax-highlight data generation and style classification.
+- Parser caches, memory budgets and large-file degradation.
 
-**Does not own:** editor text storage, Compose UI or Tree-sitter parsing.
+**Does not own:** text editing transactions, editor View, LSP transport or IDE UI.
 
-**Tests:** protocol/model tests, transport, lifecycle, synchronization, capability negotiation, cancellation, feature adapters and integration tests.
+## 3. editor-lsp — language server framework
 
-## 5. editor-extensions — internal extensibility
-
-**Purpose:** provide controlled extension points for optional editor features.
+**Purpose:** own protocol communication and language-server integration.
 
 **Owns**
-- Feature/command registration and lifecycle.
-- Key-binding and editor action extension contracts.
-- Decoration and optional UI contribution contracts.
-- Capability discovery and enable/disable behavior.
-- Internal extension coordination.
+- LSP protocol models and framework APIs.
+- JSON-RPC messages, transport and request lifecycle.
+- Language-server client/server lifecycle, registry and configuration.
+- Capability negotiation and workspace management.
+- Document open/change/save/close synchronization.
+- Requests, notifications, cancellation, timeout and error handling.
+- Adapters for diagnostics, completion, hover, definition, references, formatting, code actions, rename, signature help and inlay hints.
 
-**Initial scope:** statically registered/internal extensions only. Defer dynamic class loading, sandboxing and marketplace infrastructure.
+**Does not own:** editor rendering, text storage implementation, Tree-sitter parsing or Activity UI.
 
-## Cross-module rules
+## 4. editor-analysis — code analysis framework
 
-- Keep modules coarse. Extract a new module only when a real dependency/runtime/build boundary appears.
-- Do not make the engine depend on Compose or IDE UI.
-- Tree-sitter and LSP are service/integration layers, not text-engine dependencies.
-- Tests stay with the module they exercise.
-- Prefer explicit public contracts; avoid exposing private engine implementation types across modules.
+**Purpose:** unify analysis execution and analysis results from multiple providers.
+
+**Owns**
+- Analysis provider/rule contracts and configuration.
+- Analysis task scheduling, prioritization and cancellation.
+- Unified diagnostic/result models and severity levels.
+- Aggregation and filtering of Tree-sitter, local analyzer and LSP-originated results.
+- Document range/position mapping and revision/version association.
+- Stale-result rejection, caching and result lifecycle.
+
+**Does not own:** parser implementation, LSP transport, editor diagnostic UI or project-wide build orchestration.
+
+## 5. editor-dual — dual-editor API framework
+
+**Purpose:** compose and coordinate two independent editor-core instances for side-by-side or stacked editing/comparison workflows.
+
+**Owns**
+- Two editor instance creation/attachment/release and pair lifecycle.
+- Independent document binding for each editor.
+- Split orientation, pane sizing and ratio state/API.
+- Active editor, focus transfer and command routing.
+- Optional scroll/viewport/cursor synchronization policies.
+- Comparison-data anchors and mapping hooks supplied by an external source.
+
+**Does not own:** Diff algorithms, Git repository/status/diff operations, file-version storage or IDE page UI. Git integration supplies comparison data; this module coordinates the two editor instances that display it.
+
+## Dependency and scope rules
+
+- No module is given speculative dependencies during bootstrap; each starts as an empty Android library.
+- `editor-dual` will depend on the public API of `editor-core` when its implementation begins.
+- Language and LSP services integrate with the editor through stable document/change/result contracts; avoid direct dependencies on private View internals.
+- Analysis consumes provider results and exposes normalized analysis data; it must not duplicate parser or protocol implementations.
+- Do not add separate `editor-ui`, `editor-text`, `editor-document`, `editor-completion`, `editor-format`, `editor-search`, `editor-snippets` or `editor-diff` modules.
+- Tests will be colocated with their owning modules.
