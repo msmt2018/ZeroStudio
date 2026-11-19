@@ -15,12 +15,16 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import com.android.build.api.dsl.LibraryExtension
+
 plugins {
   id("com.android.library")
   id("com.itsaky.androidide.build")
 }
 
-android { namespace = "com.google.googlejavaformat" }
+extensions.configure<LibraryExtension> {
+  namespace = "com.google.googlejavaformat"
+}
 
 dependencies {
   implementation(libs.google.guava)
