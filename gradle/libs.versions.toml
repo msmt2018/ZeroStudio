@@ -211,6 +211,7 @@ junit-jupiter = "5.10.2"
 [libraries]
 # Dependencies in composite build
 composite-appintro = { module = "com.itsaky.androidide.build:appintro" }
+composite-desugaringCore = { module = "com.itsaky.androidide.build:desugaring-core" }
 composite-fuzzysearch = { module = "com.itsaky.androidide.build:fuzzysearch" }
 composite-googleJavaFormat = { module = "com.itsaky.androidide.build:google-java-format" }
 composite-javaCompiler = { module = "com.itsaky.androidide.build:java-compiler" }

@@ -285,19 +285,12 @@
       <module name="ATS.tree-sitter-log" target="17" />
       <module name="ATS.tree-sitter-python" target="17" />
       <module name="ATS.tree-sitter-xml" target="17" />
-      <module name="build-deps.desugaring-core" target="11" />
-      <module name="build-deps.desugaring-core.main" target="11" />
-      <module name="build-deps.desugaring-core.test" target="11" />
       <module name="build-logic.ats" target="17" />
       <module name="build-logic.ats.main" target="17" />
       <module name="build-logic.ats.test" target="17" />
-      <module name="build-logic.desugaring-core.main" target="11" />
-      <module name="build-logic.desugaring-core.test" target="11" />
       <module name="build-logic.ide" target="17" />
       <module name="build-logic.ide.main" target="17" />
       <module name="build-logic.ide.test" target="17" />
-      <module name="composite-builds.build-logic.desugaring-core.main" target="11" />
-      <module name="composite-builds.build-logic.desugaring-core.test" target="11" />
       <module name="composite-builds.plugins" target="17" />
       <module name="composite-builds.plugins.main" target="17" />
       <module name="composite-builds.plugins.test" target="17" />

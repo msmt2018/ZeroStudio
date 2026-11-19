@@ -10,8 +10,6 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/common" />
-            <option value="$PROJECT_DIR$/desugaring" />
-            <option value="$PROJECT_DIR$/desugaring-core" />
             <option value="$PROJECT_DIR$/plugins" />
             <option value="$PROJECT_DIR$/properties-parser" />
           </set>
