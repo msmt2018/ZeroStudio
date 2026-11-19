@@ -19,6 +19,7 @@
  * questions
  * ****************************************************************************
  */
+import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -27,7 +28,7 @@ plugins {
   id("kotlin-android")
 }
 
-android {
+extensions.configure<LibraryExtension> {
   namespace = "io.github.rosemoe.sora"
 
   defaultConfig {
@@ -49,7 +50,9 @@ android {
 
 kotlin { jvmToolchain(17) }
 
-tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
+tasks.withType<KotlinCompile>().configureEach {
+  compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+}
 
 dependencies {
   api(libs.androidx.annotation)
