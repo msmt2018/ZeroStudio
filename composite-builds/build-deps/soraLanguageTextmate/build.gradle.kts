@@ -19,6 +19,7 @@
  * questions
  * ****************************************************************************
  */
+import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -27,7 +28,7 @@ plugins {
   kotlin("android")
 }
 
-android {
+extensions.configure<LibraryExtension> {
   namespace = "io.github.rosemoe.sora.langs.textmate"
 
   defaultConfig {
@@ -42,11 +43,6 @@ android {
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
-  }
-  compileOptions {
-    // Flag to enable support for the new language APIs
-    // It's only needed if your app targets old Android APIs.
-    // isCoreLibraryDesugaringEnabled = true
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -72,4 +68,6 @@ dependencies {
 
 kotlin { jvmToolchain(17) }
 
-tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
+tasks.withType<KotlinCompile>().configureEach {
+  compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+}
