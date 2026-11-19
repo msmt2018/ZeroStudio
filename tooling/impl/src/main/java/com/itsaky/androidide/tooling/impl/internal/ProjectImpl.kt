@@ -64,20 +64,17 @@ internal class ProjectImpl(
     // Gradle project paths are not blank for the root project (normally ":").
     // Use the explicit root path captured by RootModelBuilder instead of relying
     // on a blank-path convention or a duplicate root entry in the module list.
-    return if (path.isBlank() || path == rootProjectPath) {
-      rootProject
-    } else {
-      projects.find { it.getMetadata().get().projectPath == path }
-    }
+    if (path.isBlank()) return rootProject
+    // A root Java/Android module is represented in the module list as well as
+    // the Gradle workspace root. Prefer that module entry when explicitly
+    // selecting its Gradle path; keep the root Gradle model for blank selection.
+    return projects.find { it.getMetadata().get().projectPath == path }
+        ?: if (path == rootProjectPath) rootProject else null
   }
 
   override fun getProjects(): CompletableFuture<List<BasicProjectMetadata>> {
     return CompletableFuture.supplyAsync {
-      projects
-          .asSequence()
-          .map { it.getMetadata().get() }
-          .filter { it.projectPath != rootProjectPath }
-          .toList()
+      projects.map { it.getMetadata().get() }
     }
   }
 
