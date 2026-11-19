@@ -1,51 +1,33 @@
 # ZeroStudio Editor Core
 
-ZeroStudio is rebuilding its editor architecture around the Sora Editor core as a foundation. This is a **refactor and re-development of Sora-based editor internals**, not a from-scratch text engine and not a UI-only replacement.
+ZeroStudio 的代码编辑器核心采用一体化编辑器控件 + 少量独立能力框架的结构。编辑器主体由 `editor-core` 提供完整的 Android View；ZeroStudio Activity 负责 IDE 页面布局、工具栏、标签栏、侧栏、面板和其他应用层 UI。
 
-The long-term goal is to own the editor APIs, internal behavior, integration and maintenance, while removing the legacy `:editor:impl` module after the new implementation is migrated and verified.
+## Modules
 
-## Planned structure
+| Module | Responsibility |
+|---|---|
+| `editor-core` | 完整编辑器 View 与常规编辑能力，包括文本编辑、输入、布局、渲染、光标、选区、折叠、搜索替换、补全交互、格式化结果应用及代码片段。 |
+| `editor-language` | 语言注册、Tree-sitter、Parser/Tree/Query、Grammar、JNI/Native、增量解析和语法高亮。 |
+| `editor-lsp` | LSP、JSON-RPC、Transport、Language Server 生命周期、文档同步和语言服务适配。 |
+| `editor-analysis` | 分析提供者、分析任务调度、诊断统一模型、多来源诊断整合和结果版本管理。 |
+| `editor-dual` | 双编辑器实例组合、分屏布局、活动编辑器、焦点/命令协调和可选同步策略。 |
 
-```
-editor-core/
-├── README.md
-├── ARCHITECTURE.md
-├── MODULES.md
-├── ROADMAP.md
-├── editor-engine/       # Sora-based core refactor: text, edits, input, layout, rendering, history
-├── editor-ui/           # Compose editor UI and IDE-facing integration
-├── editor-language/      # Tree-sitter framework, parsing, language registration and highlighting
-├── editor-lsp/          # LSP framework, client/server lifecycle, JSON-RPC and language-server integration
-└── editor-extensions/   # Internal extension points and optional editor capabilities
-```
+## Architecture boundaries
 
-Tests live alongside their owners in `src/test` and `src/androidTest`; there is no separate testing Gradle module in this plan.
+- `editor-core` 是独立可用的编辑器主体。文本存储、Undo/Redo、输入/IME、布局、渲染、搜索、补全交互、格式化应用和 Snippets 均为其内部能力，不拆成独立 Gradle 模块。
+- Activity 负责 IDE 页面 UI；本项目不创建 `editor-ui` 模块。
+- `editor-language` 负责语法解析，不负责编辑器 View 或文本编辑事务。
+- `editor-lsp` 负责协议和服务器通信，不负责编辑器 UI 或 Tree-sitter 实现。
+- `editor-analysis` 负责分析任务与诊断数据整合，不重复实现解析器或 LSP 传输。
+- `editor-dual` 复用两个 `editor-core` 实例，不实现 Diff 算法，也不管理 Git 仓库或文件版本。
+- 不为每个内部子系统创建 Gradle 模块；只有出现真实独立职责和依赖边界时才考虑新增模块。
 
-## Module responsibilities
+## Current status
 
-- **editor-engine:** Sora-based editor core and core behavior. Consolidates text buffer, edits/transactions, undo-redo, cursor/selection, input/IME, layout, viewport, rendering, decorations, caches and performance/memory work.
-- **editor-ui:** Jetpack Compose surfaces, editor composition, theming, toolbars/context actions, focus/lifecycle, and IDE page integration. It delegates editing to editor-engine.
-- **editor-language:** Tree-sitter framework/JNI integration, parser/query lifecycle, incremental parsing, grammar and language registration, syntax-highlight data adapters.
-- **editor-lsp:** LSP framework/API changes, JSON-RPC, client/server lifecycle, capabilities, document synchronization, requests/notifications/cancellation, diagnostics and language-server integration.
-- **editor-extensions:** internal feature/command/key-binding/decorations registration and lifecycle. Start with controlled internal extension points; do not build a plugin marketplace or dynamic sandbox prematurely.
-
-## Architecture rules
-
-1. Keep modules coarse-grained; use packages and internal subcomponents for cohesive engine concerns.
-2. Do not make editor-engine depend on Compose or IDE UI.
-3. Tree-sitter and LSP remain separate services. Neither is embedded as a hard dependency of the text-editing core.
-4. Language analysis and LSP results must be adapted into editor-facing contracts rather than coupled to private engine internals.
-5. Reuse and refactor existing parser, JNI, grammar and language-server infrastructure only after auditing ownership and dependencies. Avoid rewriting useful infrastructure without evidence.
-6. The legacy `:editor:impl` is transitional. The new engine must progressively replace its responsibilities; the legacy module is removed only after references, functionality, tests and build configuration are migrated.
-7. Work bottom-up: core contracts and engine behavior first, then language/LSP integration, then UI and IDE integration.
-8. Tests belong to the module/component they validate, not a standalone production module.
+五个 Gradle library 模块已建立为空模块，仅包含构建配置、Android manifest 和职责说明。尚无业务实现、模块间依赖或已验证的集成能力。旧的 `:editor:impl` 及现有 Tree-sitter/LSP 模块保持不变，后续在源码审计和迁移计划明确后再逐步迁移。
 
 ## Documents
 
-- [Architecture](ARCHITECTURE.md): system boundaries and data flow.
-- [Modules](MODULES.md): concrete module responsibilities and ownership.
-- [Roadmap](ROADMAP.md): migration order and exit criteria.
-
-## Status
-
-The initial 11-module split has been superseded by this simpler 5-module design. The previous scaffold is being reconciled with these documents; modules are not yet considered implemented or build-verified.
+- [Architecture](ARCHITECTURE.md)
+- [Modules and responsibilities](MODULES.md)
+- [Roadmap](ROADMAP.md)
