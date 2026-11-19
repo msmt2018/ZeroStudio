@@ -33,70 +33,39 @@
 
 package com.itsaky.androidide.plugins.tasks;
 
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.LATEST;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.NIGHTLY;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.RELEASE_CANDIDATE;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.RELEASE_NIGHTLY;
-
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
-import java.util.Map;
+import java.util.Set;
 import org.gradle.api.GradleException;
-import org.gradle.api.resources.TextResource;
-import org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources;
 import org.gradle.util.GradleVersion;
 
+/**
+ * Resolves concrete Gradle versions for the IDE wrapper generator.
+ *
+ * Gradle 9.6 no longer exposes the internal wrapper version-resource
+ * implementation used by older AndroidIDE sources. Keep version handling
+ * on the public GradleVersion API and require concrete versions for aliases.
+ */
 class GradleVersionResolver {
 
-  private TextResource latest;
-  private TextResource releaseCandidate;
-  private TextResource nightly;
-  private TextResource releaseNightly;
+  private static final Set<String> PLACEHOLDERS =
+      Set.of("latest", "nightly", "release-nightly", "release-candidate");
 
   private GradleVersion gradleVersion;
   private String gradleVersionString = GradleVersion.current().getVersion();
-
-  void setTextResources(TextResource latest, TextResource releaseCandidate, TextResource nightly,
-      TextResource releaseNightly) {
-    this.latest = latest;
-    this.releaseCandidate = releaseCandidate;
-    this.nightly = nightly;
-    this.releaseNightly = releaseNightly;
-  }
 
   String resolve(String version) {
     if (version == null) {
       return GradleVersion.current().getVersion();
     }
-    switch (version) {
-      case LATEST:
-        return getVersion(latest.asString(), version);
-      case NIGHTLY:
-        return getVersion(nightly.asString(), version);
-      case RELEASE_NIGHTLY:
-        return getVersion(releaseNightly.asString(), version);
-      case RELEASE_CANDIDATE:
-        return getVersion(releaseCandidate.asString(), version);
-      default:
-        return version;
-    }
-  }
-
-  static String getVersion(String json, String placeHolder) {
-    Type type = new TypeToken<Map<String, String>>() {
-    }.getType();
-    Map<String, String> map = new Gson().fromJson(json, type);
-    String version = map.get("version");
-    if (version == null) {
+    if (isPlaceHolder(version)) {
       throw new GradleException(
-          "There is currently no version information available for '" + placeHolder + "'.");
+          "Gradle version alias '" + version
+              + "' cannot be resolved by this wrapper generator. Specify an explicit Gradle version.");
     }
     return version;
   }
 
   static boolean isPlaceHolder(String version) {
-    return DefaultWrapperVersionsResources.PLACE_HOLDERS.contains(version);
+    return PLACEHOLDERS.contains(version);
   }
 
   GradleVersion getGradleVersion() {
@@ -107,10 +76,7 @@ class GradleVersionResolver {
   }
 
   void setGradleVersionString(String gradleVersionString) {
-    if (!isPlaceHolder(gradleVersionString)) {
-      this.gradleVersion = GradleVersion.version(gradleVersionString);
-    }
-    if (this.gradleVersionString != gradleVersionString) {
+    if (!this.gradleVersionString.equals(gradleVersionString)) {
       this.gradleVersionString = gradleVersionString;
       this.gradleVersion = null;
     }
