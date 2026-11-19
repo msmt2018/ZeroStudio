@@ -19,14 +19,7 @@
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 dependencyResolutionManagement {
-  includeBuild("../build-deps-common") {
-    dependencySubstitution {
-      substitute(module("com.itsaky.androidide.build:desugaring-core"))
-          .using(project(":desugaring-core"))
-    }
-  }
-
-  repositories {
+repositories {
     google()
     mavenCentral()
   }
@@ -34,8 +27,6 @@ dependencyResolutionManagement {
   versionCatalogs { create("libs") { from(files("../../gradle/libs.versions.toml")) } }
 }
 
-// desugaring-core is owned by the build-deps-common composite build.
-// Do not include it as a project of build-logic: that directory no longer exists.
-include(":common", ":desugaring", ":plugins", ":properties-parser")
+include(":common", ":plugins", ":properties-parser")
 
 rootProject.name = "build-logic"
