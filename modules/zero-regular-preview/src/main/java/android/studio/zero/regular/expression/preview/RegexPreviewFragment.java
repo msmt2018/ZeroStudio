@@ -169,31 +169,48 @@ public class RegexPreviewFragment extends Fragment {
         return options;
     }
 
-    private void updateAll() {
-        if (!isAdded() || getContext() == null) return;
-        String pattern = etRegexInput.getText().toString();
-        
-        if (pattern.isEmpty()) return;
+    private void releaseCurrentRegex() {
+        final long handle = onigRegexPtr;
+        onigRegexPtr = 0L;
+        if (handle != 0L) {
+            OnigNative.releaseRegex(handle);
+        }
+    }
 
-        if (onigRegexPtr != 0) {
-            OnigNative.releaseRegex(onigRegexPtr);
-            onigRegexPtr = 0;
+    private void updateAll() {
+        if (!isAdded() || getContext() == null ||
+                etRegexInput == null || etTextInput == null ||
+                tvStatus == null || tvMatchResult == null) {
+            return;
         }
 
-        int options = getOnigOptions();
+        final String pattern = etRegexInput.getText().toString();
+        releaseCurrentRegex();
 
-        // 1. 高亮测试
+        if (pattern.isEmpty()) {
+            resetUI("Enter a regular expression");
+            return;
+        }
+
+        final int options = getOnigOptions();
+
+        // Compile a new independent native handle before using it.
         try {
-            onigRegexPtr = OnigNative.newRegex(pattern, flagI);
-            if (onigRegexPtr != 0) {
-                tvStatus.setText("Valid Regex");
-                tvStatus.setTextColor(0xFF008800);
-                highlightMatches(etTextInput.getText().toString(), options);
+            final long newHandle = OnigNative.newRegex(pattern, flagI);
+            if (newHandle == 0L) {
+                resetUI("Invalid Regex");
+                tvStatus.setTextColor(Color.RED);
+                return;
             }
-        } catch (Exception e) {
-            tvStatus.setText("Invalid Regex: " + e.getMessage());
+
+            onigRegexPtr = newHandle;
+            tvStatus.setText("Valid Regex");
+            tvStatus.setTextColor(0xFF008800);
+            highlightMatches(etTextInput.getText().toString(), options);
+        } catch (RuntimeException e) {
+            resetUI("Invalid Regex: " + e.getMessage());
             tvStatus.setTextColor(Color.RED);
-            if(railroadView != null) railroadView.setRootNode(null);
+            Log.e(TAG, "Unable to compile regular expression", e);
             return;
         }
 
@@ -302,9 +319,18 @@ public class RegexPreviewFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        // A delayed update must never outlive the view whose widgets it uses.
+        handler.removeCallbacks(updateRunnable);
+        releaseCurrentRegex();
+
+        etRegexInput = null;
+        etTextInput = null;
+        tvStatus = null;
+        tvMatchResult = null;
+        railroadView = null;
+        spEncoding = null;
+        btnModifiers = null;
+
         super.onDestroyView();
-        if (onigRegexPtr != 0) {
-            OnigNative.releaseRegex(onigRegexPtr);
-        }
     }
 }
