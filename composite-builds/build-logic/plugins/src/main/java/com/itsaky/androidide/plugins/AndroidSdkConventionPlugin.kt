@@ -1,15 +1,13 @@
 package com.itsaky.androidide.plugins
 
-import com.android.build.api.dsl.CommonExtension
+import com.android.build.gradle.BaseExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 
 /**
- * Applies the repository-wide Android SDK and NDK versions to standalone composite builds.
- *
- * The main ZeroStudio build configures its Android modules through AndroidModuleConf.
- * This convention plugin exposes the same BuildConfig values to independent included builds.
+ * Applies repository SDK/NDK configuration to independent composite-build Android modules.
+ * Uses the same BaseExtension configuration surface as AndroidModuleConf.
  */
 class AndroidSdkConventionPlugin : Plugin<Project> {
 
@@ -19,12 +17,8 @@ class AndroidSdkConventionPlugin : Plugin<Project> {
   }
 
   private fun configureAndroidSdk(project: Project) {
-    val extension =
-        project.extensions.findByType(CommonExtension::class.java)
-            ?: error("Android DSL extension is unavailable for ${project.path}")
-
-    extension.apply {
-      compileSdk = BuildConfig.compileSdk
+    project.extensions.getByType(BaseExtension::class.java).run {
+      compileSdkVersion(BuildConfig.compileSdk)
       ndkVersion = BuildConfig.ndkVersion
       defaultConfig {
         minSdk = BuildConfig.minSdk
