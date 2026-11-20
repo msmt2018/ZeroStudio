@@ -684,7 +684,7 @@ baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprof
 
 # google相关
 com-google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-protobuf = { id = "com.google.protobuf", version = "0.9.6" }
+protobuf = { id = "com.google.protobuf", version = "0.10.1" }
 google-services = { id = "com.google.gms.google-services", version.ref = "google-services" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebase-crashlytics" }
 
