@@ -111,7 +111,7 @@ jobs:
 
           # Included composite builds are independent Gradle builds and are not covered by
           # the root build's task graph; execute their verification tasks explicitly.
-          run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
+          run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test
           run_gradle ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue check test
 
           exit "$status"
