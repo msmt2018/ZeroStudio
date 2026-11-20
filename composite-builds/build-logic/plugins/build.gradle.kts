@@ -35,7 +35,8 @@ dependencies {
   implementation("com.android.tools.build:gradle:${libs.versions.agp.asProvider().get()}")
   implementation(libs.maven.publish)
 
-  implementation(kotlin("gradle-plugin"))
+  // Keep the Kotlin Gradle plugin aligned with the version catalog.
+  implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:" + libs.versions.kotlin.get())
 
   implementation(libs.common.jkotlin)
   implementation(libs.common.antlr4)
