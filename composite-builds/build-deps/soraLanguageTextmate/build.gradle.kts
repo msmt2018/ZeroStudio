@@ -50,7 +50,7 @@ extensions.configure<LibraryExtension> {
 }
 
 dependencies {
-  compileOnly(libs.common.editor)
+  compileOnly(project(":editor"))
   compileOnly(project(":soraOnigurumaNative"))
 
   implementation(libs.google.gson)
