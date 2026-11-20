@@ -133,7 +133,7 @@ fi
 mkdir -p "$ROOTFS_DIR/tmp" "$ROOTFS_DIR/root" "$ROOTFS_DIR/proc" "$ROOTFS_DIR/sys" "$ROOTFS_DIR/dev" "$PREFIX/tmp" 2>/dev/null || true
 # Shared ZeroStudio development toolchain; kept outside individual distro rootfs.
 DEV_ENV_DIR="$PREFIX/dev-environment"
-mkdir -p "$DEV_ENV_DIR/bin" "$DEV_ENV_DIR/jdk" "$DEV_ENV_DIR/android-sdk" "$DEV_ENV_DIR/rustup" "$DEV_ENV_DIR/cargo" "$DEV_ENV_DIR/env.d"
+mkdir -p "$DEV_ENV_DIR/bin" "$DEV_ENV_DIR/jdk" "$DEV_ENV_DIR/android-sdk" "$DEV_ENV_DIR/rustup" "$DEV_ENV_DIR/cargo" "$DEV_ENV_DIR/gradle" "$DEV_ENV_DIR/env.d"
 
 # Do not overwrite the user-managed activation file on subsequent launches.
 if [ ! -f "$DEV_ENV_DIR/activate.sh" ]; then
@@ -145,10 +145,12 @@ export ANDROID_HOME="${ANDROID_HOME:-/opt/zerostudio/android-sdk}"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
 export CARGO_HOME="${CARGO_HOME:-/opt/zerostudio/cargo}"
 export RUSTUP_HOME="${RUSTUP_HOME:-/opt/zerostudio/rustup}"
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-/opt/zerostudio/gradle}"
 [ -d "$JAVA_HOME/bin" ] && PATH="$JAVA_HOME/bin:$PATH"
 [ -d "$ANDROID_HOME/cmdline-tools/latest/bin" ] && PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 [ -d "$ANDROID_HOME/platform-tools" ] && PATH="$ANDROID_HOME/platform-tools:$PATH"
 [ -d "$CARGO_HOME/bin" ] && PATH="$CARGO_HOME/bin:$PATH"
+[ -d /opt/zerostudio/gradle/current/bin ] && PATH="/opt/zerostudio/gradle/current/bin:$PATH"
 [ -d /opt/zerostudio/bin ] && PATH="/opt/zerostudio/bin:$PATH"
 export PATH
 if [ -d /opt/zerostudio/env.d ]; then
