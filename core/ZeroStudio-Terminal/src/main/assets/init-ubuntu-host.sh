@@ -131,6 +131,33 @@ else
 fi
 
 mkdir -p "$ROOTFS_DIR/tmp" "$ROOTFS_DIR/root" "$ROOTFS_DIR/proc" "$ROOTFS_DIR/sys" "$ROOTFS_DIR/dev" "$PREFIX/tmp" 2>/dev/null || true
+# Shared ZeroStudio development toolchain; kept outside individual distro rootfs.
+DEV_ENV_DIR="$PREFIX/dev-environment"
+mkdir -p "$DEV_ENV_DIR/bin" "$DEV_ENV_DIR/jdk" "$DEV_ENV_DIR/android-sdk" "$DEV_ENV_DIR/rustup" "$DEV_ENV_DIR/cargo" "$DEV_ENV_DIR/env.d"
+
+# Do not overwrite the user-managed activation file on subsequent launches.
+if [ ! -f "$DEV_ENV_DIR/activate.sh" ]; then
+  cat > "$DEV_ENV_DIR/activate.sh" <<'DEVENV'
+# Shared development environment mounted by ZeroStudio at /opt/zerostudio.
+export ZEROSTUDIO_DEV_HOME=/opt/zerostudio
+export JAVA_HOME="${JAVA_HOME:-/opt/zerostudio/jdk/current}"
+export ANDROID_HOME="${ANDROID_HOME:-/opt/zerostudio/android-sdk}"
+export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+export CARGO_HOME="${CARGO_HOME:-/opt/zerostudio/cargo}"
+export RUSTUP_HOME="${RUSTUP_HOME:-/opt/zerostudio/rustup}"
+[ -d "$JAVA_HOME/bin" ] && PATH="$JAVA_HOME/bin:$PATH"
+[ -d "$ANDROID_HOME/cmdline-tools/latest/bin" ] && PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+[ -d "$ANDROID_HOME/platform-tools" ] && PATH="$ANDROID_HOME/platform-tools:$PATH"
+[ -d "$CARGO_HOME/bin" ] && PATH="$CARGO_HOME/bin:$PATH"
+[ -d /opt/zerostudio/bin ] && PATH="/opt/zerostudio/bin:$PATH"
+export PATH
+if [ -d /opt/zerostudio/env.d ]; then
+  for env_file in /opt/zerostudio/env.d/*.sh; do
+    [ -f "$env_file" ] && . "$env_file"
+  done
+fi
+DEVENV
+fi
 chmod 1777 "$ROOTFS_DIR/tmp" 2>/dev/null || true
 
 cat > "$ROOTFS_DIR/etc/resolv.conf" <<DNS
@@ -165,6 +192,7 @@ ARGS="$ARGS -b /dev/urandom:/dev/random"
 ARGS="$ARGS -b /proc"
 ARGS="$ARGS -b /sys"
 ARGS="$ARGS -b $PREFIX"
+ARGS="$ARGS -b $DEV_ENV_DIR:/opt/zerostudio"
 ARGS="$ARGS -b $ROOTFS_DIR/tmp:/dev/shm"
 
 if [ -e "/proc/self/fd" ]; then ARGS="$ARGS -b /proc/self/fd:/dev/fd"; fi
@@ -187,4 +215,4 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # Start through the guest shell instead of /usr/bin/env. Ubuntu 25.10+ may ship
 # coreutils as hardlinked multicall applets; after link2symlink extraction, env can
 # reject the .l2s.* backing name even though the rootfs is otherwise usable.
-exec "$LINKER" "$PROOT_BIN" $ARGS "$GUEST_SH" -lc 'export HOME=/root TERM="${TERM:-xterm-256color}" LANG="${LANG:-C.UTF-8}" PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; cd "$HOME" 2>/dev/null || cd /; if [ -x /bin/bash ]; then exec /bin/bash -l; elif [ -x /usr/bin/bash ]; then exec /usr/bin/bash -l; else exec /bin/sh -l; fi'
+exec "$LINKER" "$PROOT_BIN" $ARGS "$GUEST_SH" -lc 'export HOME=/root TERM="${TERM:-xterm-256color}" LANG="${LANG:-C.UTF-8}" PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; cd "$HOME" 2>/dev/null || cd /; if [ -f /opt/zerostudio/activate.sh ]; then . /opt/zerostudio/activate.sh; fi; if [ -x /bin/bash ]; then exec /bin/bash -l; elif [ -x /usr/bin/bash ]; then exec /usr/bin/bash -l; else exec /bin/sh -l; fi'
