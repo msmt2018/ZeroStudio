@@ -1,7 +1,7 @@
 package com.itsaky.androidide.plugins
 
 import com.android.build.api.dsl.CommonExtension
-import com.itsakyandroidide.build.config.BuildConfig
+import com.itsaky.androidide.build.config.BuildConfig
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 
