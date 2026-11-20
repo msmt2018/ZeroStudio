@@ -20,7 +20,6 @@ class AndroidSdkConventionPlugin : Plugin<Project> {
         ndkVersion = BuildConfig.ndkVersion
         defaultConfig {
           minSdk = BuildConfig.minSdk
-          targetSdk = BuildConfig.targetSdk
         }
       }
     }
