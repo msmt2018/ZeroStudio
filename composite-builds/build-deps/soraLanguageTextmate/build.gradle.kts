@@ -24,7 +24,6 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
   id("com.android.library")
-  kotlin("android")
 }
 
 android {
@@ -47,8 +46,6 @@ android {
     // Flag to enable support for the new language APIs
     // It's only needed if your app targets old Android APIs.
     // isCoreLibraryDesugaringEnabled = true
-  }
-  compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
   }
