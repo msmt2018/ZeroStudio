@@ -205,43 +205,28 @@ public class CharSequenceReader extends Reader implements Serializable {
    */
   @Override
   public int read(final char[] array, final int offset, final int length) {
-    if (idx >= end()) {
-      return -1;
-    }
     Objects.requireNonNull(array, "array");
-    if (length < 0 || offset < 0 || offset + length > array.length) {
+    if (offset < 0 || length < 0 || length > array.length - offset) {
       throw new IndexOutOfBoundsException(
           "Array Size=" + array.length + ", offset=" + offset + ", length=" + length);
     }
-
-    if (charSequence instanceof String) {
-      final int count = Math.min(length, end() - idx);
-      ((String) charSequence).getChars(idx, idx + count, array, offset);
-      idx += count;
-      return count;
+    if (length == 0) {
+      return 0;
     }
+    if (idx >= end()) {
+      return -1;
+    }
+
     final int count = Math.min(length, end() - idx);
     if (charSequence instanceof String) {
       ((String) charSequence).getChars(idx, idx + count, array, offset);
     } else {
-      // StringBuilder#getChars is only available on newer Android API levels.
-      // Use the CharSequence contract to preserve minSdk compatibility.
+      // Keep compatibility with Android API levels where StringBuilder#getChars is unavailable.
       for (int i = 0; i < count; i++) {
         array[offset + i] = charSequence.charAt(idx + i);
       }
     }
     idx += count;
-    return count;
-
-    int count = 0;
-    for (int i = 0; i < length; i++) {
-      final int c = read();
-      if (c == -1) {
-        return count;
-      }
-      array[offset + i] = (char) c;
-      count++;
-    }
     return count;
   }
 
