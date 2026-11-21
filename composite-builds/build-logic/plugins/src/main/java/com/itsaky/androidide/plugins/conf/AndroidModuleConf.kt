@@ -19,6 +19,7 @@ package com.itsaky.androidide.plugins.conf
 
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.dsl.CommonExtension
+import com.android.build.api.dsl.ApplicationExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import com.itsaky.androidide.build.config.FDroidConfig
 import com.itsaky.androidide.build.config.isFDroidBuild
@@ -95,15 +96,21 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
 
   android.defaultConfig.apply {
     minSdk = BuildConfig.minSdk
-    targetSdk = BuildConfig.targetSdk
-    // versionCode = YYYYMMDDC (C 为当天打包递增计数器, 不补 0; 例 202606131)
-    // versionName = vYYYYMMDD-NN-sha7 (NN 为 2 位 0 填充的当天打包递增计数器)
-    // 两者均来自 ProjectConfig, 由 -Pide.build.dailyCounter / -Pide.build.gitShortSha 注入.
-    versionCode = projectVersionCode
-    versionName = simpleVersionName
-
-    multiDexEnabled = true
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  }
+
+  // These properties belong to ApplicationDefaultConfig, not the shared library DSL.
+  // Keep library modules free of application-only SDK/version/multidex settings.
+  if (isAppModule) {
+    extensions.getByType(ApplicationExtension::class.java).defaultConfig.apply {
+      targetSdk = BuildConfig.targetSdk
+      // versionCode = YYYYMMDDC (C 为当天打包递增计数器, 不补 0; 例 202606131)
+      // versionName = vYYYYMMDD-NN-sha7 (NN 为 2 位 0 填充的当天打包递增计数器)
+      // 两者均来自 ProjectConfig, 由 -Pide.build.dailyCounter / -Pide.build.gitShortSha 注入.
+      versionCode = projectVersionCode
+      versionName = simpleVersionName
+      multiDexEnabled = true
+    }
   }
 
   android.compileOptions.apply {
