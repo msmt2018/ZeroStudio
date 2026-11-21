@@ -20,7 +20,6 @@ class AndroidSdkConventionPlugin : Plugin<Project> {
         compileSdk = BuildConfig.compileSdk
         ndkVersion = BuildConfig.ndkVersion
         defaultConfig.minSdk = BuildConfig.minSdk
-        defaultConfig.targetSdk = BuildConfig.targetSdk
       }
     }
     target.plugins.withId("com.android.application") {
