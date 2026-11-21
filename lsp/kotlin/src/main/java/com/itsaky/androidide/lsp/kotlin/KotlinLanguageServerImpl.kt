@@ -558,17 +558,16 @@ class KotlinLanguageServerImpl(
                     label = sig.label ?: "",
                     documentation = sig.documentation.toIdeMarkup(),
                     parameters = sig.parameters?.map { param ->
-                        // LSP4J 的 ParameterInformation.label 是 Either<String, List<Int>>，
-                        // 不能直接按 String/List 做类型判断；分别读取左右分支。
+                        // LSP4J 的参数标签右分支是 Tuple.Two<Int, Int>，表示签名字符串中的起止偏移。
                         val label = param.label?.let { pLabel ->
                             if (pLabel.isLeft) {
                                 pLabel.left.orEmpty()
                             } else {
                                 val offsets = pLabel.right
-                                if (offsets != null && offsets.size >= 2) {
+                                if (offsets != null) {
                                     val signatureLabel = sig.label.orEmpty()
-                                    val safeStart = offsets[0].coerceIn(0, signatureLabel.length)
-                                    val safeEnd = offsets[1].coerceIn(safeStart, signatureLabel.length)
+                                    val safeStart = offsets.first.coerceIn(0, signatureLabel.length)
+                                    val safeEnd = offsets.second.coerceIn(safeStart, signatureLabel.length)
                                     signatureLabel.substring(safeStart, safeEnd)
                                 } else {
                                     ""
