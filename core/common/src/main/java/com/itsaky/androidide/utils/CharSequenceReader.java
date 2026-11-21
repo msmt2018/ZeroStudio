@@ -220,18 +220,18 @@ public class CharSequenceReader extends Reader implements Serializable {
       idx += count;
       return count;
     }
-    if (charSequence instanceof StringBuilder) {
-      final int count = Math.min(length, end() - idx);
-      ((StringBuilder) charSequence).getChars(idx, idx + count, array, offset);
-      idx += count;
-      return count;
+    final int count = Math.min(length, end() - idx);
+    if (charSequence instanceof String) {
+      ((String) charSequence).getChars(idx, idx + count, array, offset);
+    } else {
+      // StringBuilder#getChars is only available on newer Android API levels.
+      // Use the CharSequence contract to preserve minSdk compatibility.
+      for (int i = 0; i < count; i++) {
+        array[offset + i] = charSequence.charAt(idx + i);
+      }
     }
-    if (charSequence instanceof StringBuffer) {
-      final int count = Math.min(length, end() - idx);
-      ((StringBuffer) charSequence).getChars(idx, idx + count, array, offset);
-      idx += count;
-      return count;
-    }
+    idx += count;
+    return count;
 
     int count = 0;
     for (int i = 0; i < length; i++) {
