@@ -240,8 +240,7 @@ class DefaultLspCompletionLayout : CompletionLayout {
       val isDeprecated =
           item.tags?.contains(CompletionItemTag.Deprecated) == true || item.deprecated == true
       // 注：此处 item.label 可能在外部（FuzzyScorer）被替换为 SpannableString 以显示匹配高亮
-      val labelText =
-          if (item.label is Spannable) item.label as Spannable else SpannableString(item.label)
+      val labelText = SpannableString(item.label)
       if (isDeprecated) {
         labelText.setSpan(
             StrikethroughSpan(),
