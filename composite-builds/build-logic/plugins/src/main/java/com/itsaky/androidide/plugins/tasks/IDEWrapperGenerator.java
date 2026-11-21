@@ -58,8 +58,6 @@ import org.gradle.api.tasks.options.Option;
 import org.gradle.api.tasks.options.OptionValues;
 import org.gradle.api.tasks.wrapper.Wrapper.DistributionType;
 import org.gradle.api.tasks.wrapper.Wrapper.PathBase;
-import org.gradle.api.tasks.wrapper.WrapperVersionsResources;
-import org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources;
 import org.gradle.util.GradleVersion;
 import org.gradle.util.internal.GUtil;
 import org.gradle.util.internal.WrapperDistributionUrlConverter;
@@ -97,6 +95,14 @@ public class IDEWrapperGenerator {
   private boolean distributionUrlConfigured = false;
 
   void generate(Project project) {
+    // Resolve dynamic version labels through Gradle's public TextResource API.
+    // Gradle 9.6 removed the old WrapperVersionsResources implementation classes.
+    gradleVersionResolver.setTextResources(
+        project.getResources().getText().fromUri("https://services.gradle.org/versions/current"),
+        project.getResources().getText().fromUri("https://services.gradle.org/versions/release-candidate"),
+        project.getResources().getText().fromUri("https://services.gradle.org/versions/nightly"),
+        project.getResources().getText().fromUri("https://services.gradle.org/versions/release-nightly"));
+
     final var isOffline = project.getGradle().getStartParameter().isOffline();
     File jarFileDestination = getJarFile();
     File unixScript = getScriptFile();
@@ -234,20 +240,6 @@ public class IDEWrapperGenerator {
    */
   public void setDistributionPath(String distributionPath) {
     this.distributionPath = distributionPath;
-  }
-
-  /**
-   * Set Wrapper versions resources.
-   *
-   * @since 8.1
-   */
-  @Incubating
-  public void setWrapperVersionsResources(WrapperVersionsResources wrapperVersionsResources) {
-    DefaultWrapperVersionsResources defaultWrapperVersionsResources = (DefaultWrapperVersionsResources) wrapperVersionsResources;
-    gradleVersionResolver.setTextResources(defaultWrapperVersionsResources.getLatest(),
-        defaultWrapperVersionsResources.getReleaseCandidate(),
-        defaultWrapperVersionsResources.getNightly(),
-        defaultWrapperVersionsResources.getReleaseNightly());
   }
 
   /**
