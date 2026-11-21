@@ -103,7 +103,6 @@ class ExampleUnitTest {
             server.close()
             serverThread.join(5_000)
         }
-        }
     }
 
     @Test
