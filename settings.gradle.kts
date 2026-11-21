@@ -8,6 +8,7 @@ pluginManagement {
   repositories {
     gradlePluginPortal()
     google()
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     mavenCentral()
     mavenLocal()
     maven("https://cache-redirector.jetbrains.com/kotlin.bintray.com/kotlin-plugin")
@@ -69,6 +70,7 @@ dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
     google()
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     mavenCentral()
     mavenLocal()
     maven("https://jitpack.io")
@@ -84,7 +86,8 @@ dependencyResolutionManagement {
 val skipNyx = System.getenv("ZEROSTUDIO_SKIP_NYX") == "true"
 
 buildscript {
-  repositories { mavenCentral() }
+  repositories { maven("https://maven-central.storage-download.googleapis.com/maven2/")
+    mavenCentral() }
   dependencies {
     if (System.getenv("ZEROSTUDIO_SKIP_NYX") != "true") classpath("com.mooltiverse.oss.nyx:gradle:2.5.2")
   }
