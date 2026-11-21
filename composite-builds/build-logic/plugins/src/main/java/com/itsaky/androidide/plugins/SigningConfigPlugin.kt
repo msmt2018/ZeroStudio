@@ -17,7 +17,7 @@
 
 package com.itsaky.androidide.plugins
 
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.CommonExtension
 import com.itsaky.androidide.build.config.KEY_ALIAS
 import com.itsaky.androidide.build.config.KEY_PASS
 import com.itsaky.androidide.build.config.KEY_STORE_PASS
@@ -51,7 +51,7 @@ class SigningConfigPlugin : Plugin<Project> {
       }
 
       // Create and apply the signing config
-      extensions.getByType(BaseExtension::class.java).let { extension ->
+      extensions.getByType(CommonExtension::class.java).let { extension ->
         // Keystore credentials
         val alias = getEnvOrProp(KEY_ALIAS)
         val storePass = getEnvOrProp(KEY_STORE_PASS)
