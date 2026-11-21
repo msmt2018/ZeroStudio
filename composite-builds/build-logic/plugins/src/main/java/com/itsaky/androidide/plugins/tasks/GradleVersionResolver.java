@@ -33,21 +33,25 @@
 
 package com.itsaky.androidide.plugins.tasks;
 
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.LATEST;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.NIGHTLY;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.RELEASE_CANDIDATE;
-import static org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources.RELEASE_NIGHTLY;
-
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.util.Map;
 import org.gradle.api.GradleException;
 import org.gradle.api.resources.TextResource;
-import org.gradle.api.tasks.wrapper.internal.DefaultWrapperVersionsResources;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import org.gradle.util.GradleVersion;
 
 class GradleVersionResolver {
+
+  private static final String LATEST = "latest";
+  private static final String NIGHTLY = "nightly";
+  private static final String RELEASE_CANDIDATE = "release-candidate";
+  private static final String RELEASE_NIGHTLY = "release-nightly";
+  private static final Set<String> PLACEHOLDERS = new HashSet<>(Arrays.asList(
+      LATEST, NIGHTLY, RELEASE_CANDIDATE, RELEASE_NIGHTLY));
 
   private TextResource latest;
   private TextResource releaseCandidate;
@@ -96,7 +100,7 @@ class GradleVersionResolver {
   }
 
   static boolean isPlaceHolder(String version) {
-    return DefaultWrapperVersionsResources.PLACE_HOLDERS.contains(version);
+    return PLACEHOLDERS.contains(version);
   }
 
   GradleVersion getGradleVersion() {
@@ -110,7 +114,7 @@ class GradleVersionResolver {
     if (!isPlaceHolder(gradleVersionString)) {
       this.gradleVersion = GradleVersion.version(gradleVersionString);
     }
-    if (this.gradleVersionString != gradleVersionString) {
+    if (!java.util.Objects.equals(this.gradleVersionString, gradleVersionString)) {
       this.gradleVersionString = gradleVersionString;
       this.gradleVersion = null;
     }
