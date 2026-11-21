@@ -558,7 +558,7 @@ class KotlinLanguageServerImpl(
                     label = sig.label ?: "",
                     documentation = sig.documentation.toIdeMarkup(),
                     parameters = sig.parameters?.map { param ->
-                        val label = param.label ?: ""
+                        val label = param.label?.left ?: param.label?.right?.joinToString(",") ?: ""
                         com.itsaky.androidide.lsp.models.ParameterInformation(
                             label = label,
                             documentation = param.documentation.toIdeMarkup(),
