@@ -558,19 +558,23 @@ class KotlinLanguageServerImpl(
                     label = sig.label ?: "",
                     documentation = sig.documentation.toIdeMarkup(),
                     parameters = sig.parameters?.map { param ->
-                        val label = when (val pLabel = param.label) {
-                            is String -> pLabel
-                            is List<*> -> {
-                                if (pLabel.size >= 2) {
-                                    val start = (pLabel[0] as? Number)?.toInt() ?: 0
-                                    val end = (pLabel[1] as? Number)?.toInt() ?: 0
-                                    val safeStart = start.coerceIn(0, (sig.label ?: "").length)
-                                    val safeEnd = end.coerceIn(safeStart, (sig.label ?: "").length)
-                                    (sig.label ?: "").substring(safeStart, safeEnd)
-                                } else ""
+                        // LSP4J 的 ParameterInformation.label 是 Either<String, List<Int>>，
+                        // 不能直接按 String/List 做类型判断；分别读取左右分支。
+                        val label = param.label?.let { pLabel ->
+                            if (pLabel.isLeft) {
+                                pLabel.left.orEmpty()
+                            } else {
+                                val offsets = pLabel.right
+                                if (offsets != null && offsets.size >= 2) {
+                                    val signatureLabel = sig.label.orEmpty()
+                                    val safeStart = offsets[0].coerceIn(0, signatureLabel.length)
+                                    val safeEnd = offsets[1].coerceIn(safeStart, signatureLabel.length)
+                                    signatureLabel.substring(safeStart, safeEnd)
+                                } else {
+                                    ""
+                                }
                             }
-                            else -> ""
-                        }
+                        }.orEmpty()
                         com.itsaky.androidide.lsp.models.ParameterInformation(
                             label = label,
                             documentation = param.documentation.toIdeMarkup(),
