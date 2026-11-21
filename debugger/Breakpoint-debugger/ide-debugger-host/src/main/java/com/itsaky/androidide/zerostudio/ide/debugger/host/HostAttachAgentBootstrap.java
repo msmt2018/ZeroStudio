@@ -211,7 +211,22 @@ public final class HostAttachAgentBootstrap extends ContentProvider {
                 //   process 字段让 IDE 端能识别 multi-process 并走 reject / 重新
                 //   scan 主进程 pid 路径 (Phase 13j 留 TODO 给 IDE 端处理, 当前
                 //   只 log warn 提示).
-                String processName = android.app.Application.getProcessName();
+                String processName = null;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    processName = Application.getProcessName();
+                } else {
+                    android.app.ActivityManager activityManager =
+                            (android.app.ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);
+                    if (activityManager != null && activityManager.getRunningAppProcesses() != null) {
+                        for (android.app.ActivityManager.RunningAppProcessInfo process
+                                : activityManager.getRunningAppProcesses()) {
+                            if (process.pid == android.os.Process.myPid()) {
+                                processName = process.processName;
+                                break;
+                            }
+                        }
+                    }
+                }
                 if (processName == null || processName.isEmpty()) {
                     // Fallback: ContentProvider 跑在 host app 包名进程, ContentProvider
                     // 进程名跟包名一致的概率最大, 但 multi-process 时不一致
