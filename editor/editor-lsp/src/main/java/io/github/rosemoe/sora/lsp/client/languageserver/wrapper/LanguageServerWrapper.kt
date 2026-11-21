@@ -21,6 +21,8 @@
  */
 package io.github.rosemoe.sora.lsp.client.languageserver.wrapper
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.annotation.WorkerThread
 import io.github.rosemoe.sora.lsp.client.DefaultLanguageClient
@@ -302,7 +304,7 @@ class LanguageServerWrapper(
         serverDefinition.stop(project.projectUri.path)
         for (ed in connectedEditors.toList()) {
           disconnect(ed)
-          ed.onWrapperStopped(this)
+          Handler(Looper.getMainLooper()).post { ed.onWrapperStopped(this) }
         }
         launcherFuture = null
         capabilitiesAlreadyRequested = false
