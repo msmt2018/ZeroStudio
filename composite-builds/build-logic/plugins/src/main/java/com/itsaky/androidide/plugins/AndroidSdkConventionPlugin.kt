@@ -20,7 +20,7 @@ class AndroidSdkConventionPlugin : Plugin<Project> {
   }
 
   private fun configureLibrary(project: Project) {
-    project.extensions.configure(LibraryExtension::class.java) { android ->
+    project.extensions.configure(LibraryExtension::class.java) {
       android.compileSdk = BuildConfig.compileSdk
       android.ndkVersion = BuildConfig.ndkVersion
       android.defaultConfig.minSdk = BuildConfig.minSdk
@@ -29,7 +29,7 @@ class AndroidSdkConventionPlugin : Plugin<Project> {
   }
 
   private fun configureApplication(project: Project) {
-    project.extensions.configure(ApplicationExtension::class.java) { android ->
+    project.extensions.configure(ApplicationExtension::class.java) {
       android.compileSdk = BuildConfig.compileSdk
       android.ndkVersion = BuildConfig.ndkVersion
       android.defaultConfig.minSdk = BuildConfig.minSdk
