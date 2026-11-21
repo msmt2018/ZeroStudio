@@ -8,6 +8,7 @@ import com.zerostudio.language.model.Reference;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -79,7 +80,13 @@ public final class SourceJarIndex {
                         ? n.substring(0, n.length() - 5).replace('/', '.')
                         : n.substring(0, n.length() - 3).replace('/', '.');
                 try (InputStream is = zf.getInputStream(e)) {
-                    String content = new String(is.readAllBytes());
+                    ByteArrayOutputStream output = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[8192];
+                    int read;
+                    while ((read = is.read(buffer)) != -1) {
+                        output.write(buffer, 0, read);
+                    }
+                    String content = new String(output.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
                     scanSource(className, n, content, sourceArchivePath);
                 }
             }
