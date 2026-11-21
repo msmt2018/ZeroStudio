@@ -62,7 +62,7 @@ public class LogReader extends Thread {
   @Override
   public void run() {
     Logger.info("Starting to read logs...");
-    try (final Socket socket = new Socket(InetAddress.getLoopbackAddress(), port)) {
+    try (final Socket socket = new Socket("127.0.0.1", port)) {
       process = processBuilder.start();
 
       try (final BufferedReader reader = new BufferedReader(
