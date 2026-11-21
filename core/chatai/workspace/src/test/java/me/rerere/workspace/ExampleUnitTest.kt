@@ -1,11 +1,12 @@
 package me.rerere.workspace
 
-import com.sun.net.httpserver.HttpServer
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.nio.file.Files
 import java.util.zip.GZIPOutputStream
 
@@ -67,22 +68,41 @@ class ExampleUnitTest {
             TarTestEntry("bin/hello", content = "echo hello\n".toByteArray(), mode = 493),
             TarTestEntry("usr/bin/hello-link", type = '2', linkName = "../../bin/hello"),
         )
-        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/rootfs.tar.gz") { exchange ->
-            exchange.sendResponseHeaders(200, archive.size.toLong())
-            exchange.responseBody.use { it.write(archive) }
+        val server = ServerSocket(0)
+        val serverThread = Thread {
+            server.accept().use { client ->
+                val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                while (reader.readLine()?.isNotEmpty() == true) {
+                    // Consume request headers before sending the archive response.
+                }
+                val headers = (
+                    "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: application/gzip\r\n" +
+                        "Content-Length: ${archive.size}\r\n" +
+                        "Connection: close\r\n\r\n"
+                ).toByteArray(Charsets.US_ASCII)
+                client.getOutputStream().apply {
+                    write(headers)
+                    write(archive)
+                    flush()
+                }
+            }
+        }.apply {
+            isDaemon = true
+            start()
         }
-        server.start()
         try {
             val root = "test-workspace"
-            installer.install(root, "http://127.0.0.1:${server.address.port}/rootfs.tar.gz")
+            installer.install(root, "http://127.0.0.1:${server.localPort}/rootfs.tar.gz")
 
             val linuxDir = manager.linuxDir(root)
-            assertEquals("echo hello\n", File(linuxDir, "bin/hello").readText())
+            assertEquals("echo hello\\n", File(linuxDir, "bin/hello").readText())
             assertTrue(File(linuxDir, "bin/hello").canExecute())
             assertTrue(Files.isSymbolicLink(File(linuxDir, "usr/bin/hello-link").toPath()))
         } finally {
-            server.stop(0)
+            server.close()
+            serverThread.join(5_000)
+        }
         }
     }
 
