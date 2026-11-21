@@ -27,7 +27,7 @@ extensions.configure<LibraryExtension> {
     }
     sourceSets {
         named("main") {
-            kotlin.directories.add(file("material-color-utilities"))
+            kotlin.directories.add("material-color-utilities")
         }
     }
 }
