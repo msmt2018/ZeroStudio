@@ -18,7 +18,7 @@
 package com.itsaky.androidide.plugins.conf
 
 import com.android.build.api.variant.AndroidComponentsExtension
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.CommonExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import com.itsaky.androidide.build.config.FDroidConfig
 import com.itsaky.androidide.build.config.isFDroidBuild
@@ -63,7 +63,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
-  extensions.getByType(BaseExtension::class.java).run {
+  extensions.getByType(CommonExtension::class.java).run {
 
     packagingOptions {
       resources {
