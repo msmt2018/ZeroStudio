@@ -280,13 +280,9 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     targetFile.parentFile.mkdirs()
     targetFile.writeText(content)
 
-    // 把 generatedDir 加到 Kotlin source set
-    // AGP 7.2 的 Sources 接口没有 kotlin 属性 (7.3+ 才有),
-    // 用 BaseExtension 旧 API 添加到 java source set,
-    // Kotlin 编译器会从 java source set 拾取 .kt 文件。
-    @Suppress("DEPRECATION")
-    project.extensions.findByType(com.android.build.gradle.BaseExtension::class.java)
-        ?.sourceSets?.getByName(variant.name)?.java?.srcDir(generatedDir)
+    // Register the generated Kotlin file through the public AGP Variant Sources API.
+    // Kotlin sources are also discovered from the variant's Java source directories.
+    variant.sources.java?.addStaticSourceDirectory(project.relativePath(generatedDir))
 
     logger.lifecycle(
         "Generated IdeDebuggerBootstrap.kt for variant '${variant.name}' " +
