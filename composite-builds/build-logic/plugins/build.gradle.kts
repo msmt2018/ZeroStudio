@@ -30,7 +30,6 @@ tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(Jv
 
 dependencies {
   implementation(projects.buildLogic.common)
-  implementation(projects.buildLogic.desugaring)
   implementation(projects.buildLogic.propertiesParser)
 
   implementation("com.android.tools.build:gradle:${libs.versions.agp.asProvider().get()}")
