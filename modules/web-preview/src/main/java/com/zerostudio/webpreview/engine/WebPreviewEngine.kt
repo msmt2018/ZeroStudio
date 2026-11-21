@@ -316,7 +316,7 @@ private fun WebView.injectJavascriptInterfaces(state: WebViewState) {
     injectJavascriptInterfaces(state, this)
 }
 
-private fun injectJavascriptInterfaces(state: WebViewState, webView: WebView) {
+// Objects supplied here are app-defined bridge implementations; their public methods must be\n// annotated with @JavascriptInterface. Lint cannot inspect dynamically supplied runtime objects.\n@SuppressLint("JavascriptInterface")\nprivate fun injectJavascriptInterfaces(state: WebViewState, webView: WebView) {
     // 先移除旧的
     state.javascriptInterfaces.keys.forEach { name ->
         webView.removeJavascriptInterface(name)
