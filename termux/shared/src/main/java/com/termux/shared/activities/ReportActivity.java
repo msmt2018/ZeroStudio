@@ -223,6 +223,7 @@ public class ReportActivity extends BaseIDEActivity {
     return true;
   }
 
+  @SuppressLint("MissingSuperCall")
   @Override
   public void onBackPressed() {
     // Remove activity from recents menu on back button press
