@@ -558,19 +558,7 @@ class KotlinLanguageServerImpl(
                     label = sig.label ?: "",
                     documentation = sig.documentation.toIdeMarkup(),
                     parameters = sig.parameters?.map { param ->
-                        val label = when (val pLabel = param.label) {
-                            is String -> pLabel
-                            is List<*> -> {
-                                if (pLabel.size >= 2) {
-                                    val start = (pLabel[0] as? Number)?.toInt() ?: 0
-                                    val end = (pLabel[1] as? Number)?.toInt() ?: 0
-                                    val safeStart = start.coerceIn(0, (sig.label ?: "").length)
-                                    val safeEnd = end.coerceIn(safeStart, (sig.label ?: "").length)
-                                    (sig.label ?: "").substring(safeStart, safeEnd)
-                                } else ""
-                            }
-                            else -> ""
-                        }
+                        val label = param.label ?: ""
                         com.itsaky.androidide.lsp.models.ParameterInformation(
                             label = label,
                             documentation = param.documentation.toIdeMarkup(),
