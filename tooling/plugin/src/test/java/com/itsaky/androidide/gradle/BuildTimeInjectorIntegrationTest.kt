@@ -32,11 +32,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import org.junit.runner.RunWith
-import org.junit.runners.JUnit4
 import java.io.File
 
-@RunWith(JUnit4::class)
+private fun computeLocalServerName(group: String?, name: String): String =
+    IdeDebuggerInitScriptPlugin.computeLocalServerName(group, name)
+
 class BuildTimeInjectorIntegrationTest {
 
     @get:Rule
