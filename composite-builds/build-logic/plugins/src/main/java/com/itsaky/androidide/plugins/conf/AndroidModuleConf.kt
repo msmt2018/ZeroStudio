@@ -17,7 +17,6 @@
 
 package com.itsaky.androidide.plugins.conf
 
-import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.gradle.BaseExtension
 import com.itsaky.androidide.build.config.BuildConfig
@@ -64,10 +63,9 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
-  extensions.getByType(CommonExtension::class.java).run {
-    lint { checkDependencies = true }
+  extensions.getByType(BaseExtension::class.java).run {
 
-    packaging {
+    packagingOptions {
       resources {
         excludes.addAll(
             arrayOf(
@@ -93,9 +91,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
         )
       }
     }
-  }
 
-  extensions.getByType(BaseExtension::class.java).run {
     compileSdkVersion(BuildConfig.compileSdk)
     ndkVersion = BuildConfig.ndkVersion
 
