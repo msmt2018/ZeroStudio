@@ -17,7 +17,7 @@
 
 package com.itsaky.androidide.plugins
 
-import com.android.build.api.dsl.CommonExtension
+import com.android.build.api.dsl.ApplicationExtension
 import com.itsaky.androidide.build.config.KEY_ALIAS
 import com.itsaky.androidide.build.config.KEY_PASS
 import com.itsaky.androidide.build.config.KEY_STORE_PASS
@@ -50,28 +50,26 @@ class SigningConfigPlugin : Plugin<Project> {
         return
       }
 
-      // Create and apply the signing config
-      extensions.getByType(CommonExtension::class.java).let { extension ->
-        // Keystore credentials
+      plugins.withId("com.android.application") {
+        val extension = extensions.getByType(ApplicationExtension::class.java)
         val alias = getEnvOrProp(KEY_ALIAS)
         val storePass = getEnvOrProp(KEY_STORE_PASS)
         val keyPass = getEnvOrProp(KEY_PASS)
 
-        if (alias != null && storePass != null && keyPass != null && signingKey.exists()) {
-          val config =
-              extension.signingConfigs.create("common") {
-                storeFile = signingKey
-                keyAlias = alias
-                storePassword = storePass
-                keyPassword = keyPass
-              }
-
-          extension.buildTypes.forEach { buildType -> buildType.signingConfig = config }
+        if (alias != null && storePass != null && keyPass != null) {
+          val config = extension.signingConfigs.create("common") {
+            storeFile = signingKey
+            keyAlias = alias
+            storePassword = storePass
+            keyPassword = keyPass
+          }
+          extension.buildTypes.configureEach {
+            signingConfig = config
+          }
         } else {
           logger.warn(
-              "Signing info not configured. keystoreFile=$signingKey[exists=${signingKey.exists()}]"
+            "Signing info not configured. keystoreFile=$signingKey[exists=${signingKey.exists()}]"
           )
-          null
         }
       }
     }
