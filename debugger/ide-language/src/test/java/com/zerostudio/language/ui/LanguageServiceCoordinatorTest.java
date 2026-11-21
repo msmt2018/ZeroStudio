@@ -29,7 +29,7 @@ public class LanguageServiceCoordinatorTest {
 
     @Before
     public void setup() {
-        ui = new LanguageServiceCoordinator(new com.zerostudio.language.index.ProjectIndex());
+        ui = new LanguageServiceCoordinator(new com.zerostudio.language.index.InMemoryProjectIndex());
     }
 
     @Test
