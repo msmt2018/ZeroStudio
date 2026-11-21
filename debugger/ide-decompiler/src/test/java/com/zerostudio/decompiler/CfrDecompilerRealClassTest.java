@@ -16,7 +16,10 @@ import static org.junit.Assert.*;
 
 public class CfrDecompilerRealClassTest {
 
-    private static final String JUNIT = "/root/.local/share/mise/installs/gradle/8.14.4/gradle-8.14.4/lib/junit-4.13.2.jar";
+    private static String junitJarPath() throws Exception {
+        return new File(org.junit.Assert.class.getProtectionDomain()
+                .getCodeSource().getLocation().toURI()).getAbsolutePath();
+    }
 
     @BeforeClass
     public static void setUp() {
@@ -41,7 +44,7 @@ public class CfrDecompilerRealClassTest {
     public void decompileJUnitAssertClass() throws Exception {
         Decompiler d = DecompilerRegistry.get("cfr");
         assertNotNull(d);
-        byte[] bytes = readClassBytes(JUNIT, "org/junit/Assert.class");
+        byte[] bytes = readClassBytes(junitJarPath(), "org/junit/Assert.class");
         DecompileRequest req = DecompileRequest.builder()
                 .className("org.junit.Assert")
                 .classBytes(bytes)
@@ -56,7 +59,7 @@ public class CfrDecompilerRealClassTest {
     @Test
     public void decompileLegacyTestCase() throws Exception {
         Decompiler d = DecompilerRegistry.get("cfr");
-        byte[] bytes = readClassBytes(JUNIT, "junit/framework/TestCase.class");
+        byte[] bytes = readClassBytes(junitJarPath(), "junit/framework/TestCase.class");
         DecompileRequest req = DecompileRequest.builder()
                 .className("junit.framework.TestCase")
                 .classBytes(bytes)
@@ -69,7 +72,7 @@ public class CfrDecompilerRealClassTest {
     @Test
     public void decompileTypeSafeMatcher() throws Exception {
         Decompiler d = DecompilerRegistry.get("cfr");
-        byte[] bytes = readClassBytes(JUNIT, "org/junit/internal/matchers/TypeSafeMatcher.class");
+        byte[] bytes = readClassBytes(junitJarPath(), "org/junit/internal/matchers/TypeSafeMatcher.class");
         DecompileRequest req = DecompileRequest.builder()
                 .className("org.junit.internal.matchers.TypeSafeMatcher")
                 .classBytes(bytes)
@@ -82,7 +85,7 @@ public class CfrDecompilerRealClassTest {
     @Test
     public void decompileResultHasLineMapping() throws Exception {
         Decompiler d = DecompilerRegistry.get("cfr");
-        byte[] bytes = readClassBytes(JUNIT, "org/junit/Assert.class");
+        byte[] bytes = readClassBytes(junitJarPath(), "org/junit/Assert.class");
         DecompileRequest req = DecompileRequest.builder()
                 .className("org.junit.Assert")
                 .classBytes(bytes)
