@@ -17,7 +17,7 @@
 
 package com.itsaky.androidide.plugins
 
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.ApplicationExtension
 import com.itsaky.androidide.build.config.isFDroidBuild
 import com.itsaky.androidide.plugins.util.isAndroidModule
 import org.gradle.api.GradleException
@@ -46,7 +46,7 @@ class AndroidIDEPlugin : Plugin<Project> {
     }
 
     if (isFDroidBuild && project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
-      val baseExtension = extensions.getByType(BaseExtension::class.java)
+      val baseExtension = extensions.getByType(ApplicationExtension::class.java)
       logger.warn("Building for F-Droid with configuration:")
       logger.warn("applicationId = ${baseExtension.defaultConfig.applicationId}")
       logger.warn("versionName = ${baseExtension.defaultConfig.versionName}")
