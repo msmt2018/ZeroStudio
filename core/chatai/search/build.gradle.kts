@@ -46,6 +46,7 @@ android {
 }
 
 dependencies {
+    testImplementation(libs.tests.junit)
     implementation(projects.core.chatai.ai)
     implementation(projects.core.chatai.common)
     implementation(libs.okhttp)
