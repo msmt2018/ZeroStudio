@@ -39,6 +39,7 @@ tasks.withType<KotlinCompile>().configureEach {
 }
 
 dependencies {
+    testImplementation(libs.tests.junit)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
 }
