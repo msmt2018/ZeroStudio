@@ -5,8 +5,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
   id("com.android.library")
-  kotlin("android")
-  id("org.jetbrains.kotlin.plugin.compose") version "2.2.0"
+  alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
 
 repositories {
@@ -21,7 +20,6 @@ android {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
   }
-  composeOptions { kotlinCompilerExtensionVersion = "2.2.0" }
 }
 
 dependencies {
