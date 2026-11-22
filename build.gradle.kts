@@ -27,6 +27,9 @@ import com.itsaky.androidide.plugins.conf.configureMavenPublish
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
+// Resolve the version-catalog accessor in the root script scope before entering subprojects.
+val kotlinCompilerVersion = libs.versions.kotlin.get()
+
 plugins {
   // 全局变量环境
   id("build-logic.root-project")
@@ -100,7 +103,7 @@ subprojects {
     }
 
     // Keep kotlin-metadata-jvm aligned with the active Kotlin compiler to avoid metadata parser skew.
-    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:${libs.versions.kotlin.get()}")
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:$kotlinCompilerVersion")
   }
 
   plugins.withId("com.android.application") { configureAndroidModule(libs.androidx.libDesugaring) }
