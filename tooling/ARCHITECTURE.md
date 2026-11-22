@@ -19,7 +19,7 @@
 
 ### 1.1 运行时主链路
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
   UI["core/app UI<br/>ProjectHandlerActivity / Build UI"]
   BS["core/app<br/>GradleBuildService : Android Service"]
@@ -50,11 +50,11 @@ flowchart LR
   BS -->|"Lookup.KEY_PROJECT_PROXY"| CORE
   CORE --> WS
   WS --> EDITOR
-\`\`\`
+```
 
 ### 1.2 三条不同但相互关联的链路
 
-\`\`\`mermaid
+```mermaid
 flowchart TB
   subgraph A["A. 工程同步 / AGP 模型链"]
     A1["ProjectHandlerActivity"]
@@ -84,7 +84,7 @@ flowchart TB
     C6["ProgressListener / JSON-RPC callback"]
     C1 --> C2 --> C3 --> C4 --> C5 --> C6
   end
-\`\`\`
+```
 
 > 注意：B 与 C 都由 BuildService 对外提供，但内部执行器不同。B 直接创建 gradlew 子进程；C 通过 Tooling API 的 ProjectConnection。服务端 IToolingApiServer.executeTasks(TaskExecutionMessage) 也存在，它同样走 Tooling API BuildLauncher；但 Android 端 BuildService.executeTasks(...) 当前实现并没有转发到该 RPC 方法。
 
@@ -92,7 +92,7 @@ flowchart TB
 
 ### 2.1 Gradle 模块依赖图
 
-\`\`\`mermaid
+```mermaid
 flowchart BT
   EV["tooling/events<br/>操作事件 / 进度事件 / 任务事件"]
   BM["tooling/builder-model-impl<br/>AGP Builder Model 的可传输实现"]
@@ -116,7 +116,7 @@ flowchart BT
   PLUGIN -. "注入用户工程；不是 RPC server" .-> APP
   IMPL -. "打包成独立 tooling-api-all.jar" .-> APP
   REAPI -. "未列入 settings.gradle.kts 的 Gradle 子项目" .-> IMPL
-\`\`\`
+```
 
 上图是职责与主要编译依赖的概念图，不代表所有传递依赖。更精确的模块依赖以各自 build.gradle.kts 为准。
 
@@ -159,7 +159,7 @@ flowchart BT
 
 ### 3.1 Tooling API JAR 如何进入 APK 并在设备上启动
 
-\`\`\`mermaid
+```mermaid
 flowchart TD
   A["tooling/impl"] --> B["jar / shadowJar"]
   B --> C["copyJar<br/>build/libs/tooling-api-all.jar"]
@@ -172,7 +172,7 @@ flowchart TD
   I --> J["GradleBuildService.startToolingServer()"]
   J --> K["ToolingServerRunner.startAsync()"]
   K --> L["Environment.JAVA -jar tooling-api-all.jar"]
-\`\`\`
+```
 
 关键事实：
 
@@ -198,7 +198,7 @@ flowchart TD
 
 ### 4.1 通道结构
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
   participant A as Android Process / GradleBuildService
   participant R as ToolingServerRunner
@@ -214,7 +214,7 @@ sequenceDiagram
   S->>A: clientProxy.prepareBuild / logOutput / progress / result notifications
   S->>A: clientProxy.getBuildArguments() [reverse request]
   A-->>S: List<String>
-\`\`\`
+```
 
 两端不是单向调用：
 
@@ -249,7 +249,7 @@ sequenceDiagram
 
 ### 5.1 Activity 到本地 Workspace 的完整同步时序
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
   participant UI as ProjectHandlerActivity
   participant PM as ProjectManagerImpl
@@ -292,7 +292,7 @@ sequenceDiagram
   PM->>PM: updateBuildVariants
   PM->>PM: indexSourcesAndClasspaths + AndroidModule.readResources
   PM-->>UI: ProjectInitializedEvent / workspace ready
-\`\`\`
+```
 
 ### 5.2 RootModelBuilder 的分流逻辑
 
@@ -408,7 +408,7 @@ TaskExecutionMessage 只有 tasks 列表，是旧的 task-only RPC 请求模型�
 
 当前 GradleBuildService.executeTasks(vararg tasks) 不会把 tasks 包装成 TaskExecutionMessage 发给 server。它本地构造：
 
-\`\`\`text
+```text
 command = [
   "sh",
   <projectDir>/gradlew,
@@ -417,7 +417,7 @@ command = [
   ...,
   <getBuildArguments() 返回的参数>
 ]
-\`\`\`
+```
 
 随后：
 
@@ -478,7 +478,7 @@ ToolingApiServerImpl 的 initialize / executeTasks / execute 会调用 Main.fina
 
 ### 7.1 入口一：BuildService.executeTasks() —— 当前 Android 端直接 gradlew
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
   participant Caller as UI / Feature / BuildService caller
   participant BS as GradleBuildService
@@ -496,7 +496,7 @@ sequenceDiagram
   GW-->>BS: exit code
   BS-->>UI: onBuildSuccessful / onBuildFailed
   BS-->>Caller: TaskExecutionResult
-\`\`\`
+```
 
 这是当前 Compose Preview、DebugProjectAction、QuickRun 等调用 BuildService.executeTasks() 时使用的入口。
 
@@ -504,7 +504,7 @@ sequenceDiagram
 
 ### 7.2 入口二：BuildService.execute(ExecutionRequest) —— Tooling API BuildLauncher
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
   participant Caller as Caller
   participant BS as GradleBuildService
@@ -524,7 +524,7 @@ sequenceDiagram
   TS-->>BS: logOutput / onProgressEvent / result notifications
   TS-->>BS: ExecutionResult
   BS-->>Caller: ExecutionResult
-\`\`\`
+```
 
 ### 7.3 入口三：IToolingApiServer.executeTasks(TaskExecutionMessage) —— 服务端兼容入口
 
@@ -549,7 +549,7 @@ sequenceDiagram
 
 ### 8.1 注入和执行方向图
 
-\`\`\`mermaid
+```mermaid
 flowchart TD
   APP["core/app 自身的 AGP 构建"]
   ASSET["AndroidIDEAssetsPlugin"]
@@ -584,7 +584,7 @@ flowchart TD
   IDELOG --> AGP
   DEBUGGER --> AGP
   AGP --> TARGET
-\`\`\`
+```
 
 ### 8.2 具体插件职责
 
@@ -611,7 +611,7 @@ flowchart TD
 
 ### 9.1 输出/进度回传
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
   GRADLE["Gradle BuildLauncher / gradlew"]
   OUT["stdout / stderr"]
@@ -629,7 +629,7 @@ flowchart LR
   LISTENER --> UI
   GRADLE -->|"Tooling API ProgressEvent"| CLIENT
   CLIENT -->|"onProgressEvent"| SERVICE
-\`\`\`
+```
 
 - Tooling API 服务端的 Gradle 输出通过 LoggingOutputStream 转成 logOutput(line) 通知。
 - Tooling API 的 OperationProgressListener 经 ForwardingProgressListener 转成 tooling/events 中的 ProgressEvent，再通过 onProgressEvent 通知 Android 端。
