@@ -193,7 +193,6 @@ include(
     ":editor:tree-sitter-ndk:yaml",
     ":editor:tree-sitter-ndk:aidl",
     ":editor:tree-sitter-ndk:cpp",
-    ":editor:tree-sitter-ndk:html",
 
     ":event:eventbus",
     ":event:eventbus-android",

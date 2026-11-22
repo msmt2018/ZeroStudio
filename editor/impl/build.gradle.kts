@@ -100,7 +100,6 @@ dependencies {
   // api(projects.editor.treeSitterNdk.php)
   // api(projects.editor.treeSitterNdk.typeScript)
   api(projects.editor.treeSitterNdk.cpp)
-  api(projects.editor.treeSitterNdk.html)
   // api(projects.editor.treeSitterNdk.css)
   // api(projects.editor.treeSitterNdk.go)
   // api(projects.editor.treeSitterNdk.javascript)
@@ -119,8 +118,6 @@ dependencies {
   // api(projects.editor.treeSitterNdk.assemblyLanguage.nasm)
 
   implementation(projects.editor.treeSitterNdk.treeSitterJnilibs)
-  // Do not package the legacy tree-sitter-xxx.jar: it embeds TSLanguageHtml,
-  // which is already provided by the local html module above.
 
   testImplementation(libs.tests.junit)
   testImplementation(libs.tests.google.truth)
