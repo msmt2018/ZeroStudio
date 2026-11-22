@@ -21,7 +21,14 @@ plugins {
 
 apply { plugin(AndroidIDEAssetsPlugin::class.java) }
 
-buildscript {\n  repositories {\n    // Prefer a mirror to reduce Maven Central throttling during CI classpath resolution.\n    maven("https://maven-central.storage-download.googleapis.com/maven2/")\n    mavenCentral()\n  }\n  dependencies { classpath(libs.logging.logback.core) }\n}
+buildscript {
+  repositories {
+    // Prefer a mirror to reduce Maven Central throttling during CI classpath resolution.
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
+    mavenCentral()
+  }
+  dependencies { classpath(libs.logging.logback.core) }
+}
 
 android {
   namespace = BuildConfig.packageName
