@@ -345,9 +345,9 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
     val capitalizedVariant = variantName.replaceFirstChar { it.uppercase() }
     val kotlinCompileTask = "compile${capitalizedVariant}Kotlin"
     val javaCompileTask = "compile${capitalizedVariant}JavaWithJavac"
-    project.tasks.configureEach {
-      if (name == kotlinCompileTask || name == javaCompileTask) {
-        dependsOn(taskProvider)
+    project.tasks.configureEach { compileTask ->
+      if (compileTask.name == kotlinCompileTask || compileTask.name == javaCompileTask) {
+        compileTask.dependsOn(taskProvider)
       }
     }
   }
