@@ -162,7 +162,7 @@ aboutlibraries = "15.3.0"  # AGP 9.5.1 + Android API 37.1
 securityCrypto = "1.1.0"
 
 # root/build.gradle.kts > plugins || Classpaths
-maven-publish-plugin = "0.37.0"
+maven-publish-plugin = "0.33.0"
 
 #github 相关
 github-jeziellago-markwon = "58aa5aba6a"
