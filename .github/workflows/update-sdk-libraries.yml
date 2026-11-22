@@ -1,6 +1,11 @@
 name: Update SDK Libraries
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - renovate.json
+      - gradle/libs.versions.toml
   schedule:
     # Weekly dependency discovery; Renovate opens reviewable PRs.
     - cron: "17 3 * * 1"
