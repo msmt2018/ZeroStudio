@@ -27,8 +27,6 @@ import com.itsaky.androidide.plugins.conf.configureMavenPublish
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-// Resolve the version-catalog accessor in the root script scope before entering subprojects.
-val kotlinCompilerVersion = libs.versions.kotlin.get()
 
 plugins {
   // 全局变量环境
@@ -61,6 +59,9 @@ plugins {
   alias(libs.plugins.benchmark) apply false
   alias(libs.plugins.baselineprofile) apply false
 }
+
+// Resolve the version-catalog accessor in the root script scope before entering subprojects.
+val kotlinCompilerVersion = libs.versions.kotlin.get()
 
 buildscript {
   dependencies {
