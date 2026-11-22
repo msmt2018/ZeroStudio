@@ -77,7 +77,7 @@ jobs:
           yes | "$SDKMANAGER" --licenses
 
           # Android 17 / API 37 is published as android-37.0, not android-37.
-          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          "$SDKMANAGER" --install "platforms;android-37.1" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
 
           # Fail immediately if the requested NDK revision was not installed exactly.
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
@@ -85,7 +85,7 @@ jobs:
 
           # AGP resolves compileSdk 37 using the canonical android-37 directory.
           # Keep the installed preview platform intact and provide the expected alias.
-          test -d "$ANDROID_HOME/platforms/android-37.0"
+          test -d "$ANDROID_HOME/platforms/android-37.1"
           if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
             ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
           fi
@@ -215,10 +215,10 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "platforms;android-35" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          "$SDKMANAGER" --install "platforms;android-37.1" "build-tools;37.0.0" "platforms;android-35" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
-          test -d "$ANDROID_HOME/platforms/android-37.0"
+          test -d "$ANDROID_HOME/platforms/android-37.1"
           if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
             ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
           fi

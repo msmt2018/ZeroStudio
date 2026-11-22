@@ -63,7 +63,7 @@ buildscript {
   dependencies {
     classpath(libs.kotlin.gradle.plugin)
     classpath(libs.nav.safe.args.gradle.plugin)
-    classpath("io.realm:realm-gradle-plugin:10.19.0")
+    classpath("io.realm:realm-gradle-plugin:${libs.versions.iorealm.get()}")
   }
 }
 

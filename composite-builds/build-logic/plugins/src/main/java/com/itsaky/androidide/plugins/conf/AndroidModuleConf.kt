@@ -92,6 +92,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
   )
 
   android.compileSdk = BuildConfig.compileSdk
+    android.compileSdkMinor = BuildConfig.compileSdkMinorApiLevel
   android.ndkVersion = BuildConfig.ndkVersion
 
   android.defaultConfig.apply {
