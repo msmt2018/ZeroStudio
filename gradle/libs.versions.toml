@@ -552,13 +552,12 @@ io-markwon = [
     "common-markwon-jeziellago"
 ]
 
+ktor-server = [
     "io-ktor-server-core",
-    "io-ktor-server-netty",
     "io-ktor-server-cio",
     "io-ktor-server-auth",
     "io-ktor-server-auth-jwt",
     "io-ktor-server-default-headers",
-    "io-ktor-server-caching-headers",
     "io-ktor-server-conditional-headers",
     "io-ktor-server-compression",
     "io-ktor-server-cors",
@@ -568,11 +567,10 @@ io-markwon = [
     "io-ktor-server-sse",
     "io-ktor-serialization-kotlinx-json"
 ]
-
-    "koin-bom",
+koin = [
     "koin-android",
     "koin-compose",
-    "koin-androidx-workmanager",
+    "koin-androidx-workmanager"
 ]
 
 [plugins]
