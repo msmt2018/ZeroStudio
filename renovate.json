@@ -1,22 +1,36 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:base"],
-  "labels": ["dependencies"],
+  "extends": ["config:recommended"],
+  "enabledManagers": ["gradle"],
+  "includePaths": ["gradle/libs.versions.toml"],
+  "labels": ["dependencies", "sdk-library"],
   "osvVulnerabilityAlerts": true,
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "separateMajorMinor": true,
+  "rangeStrategy": "replace",
   "packageRules": [
     {
       "groupName": "Kotlin & KSP",
-      "matchPackagePrefixes": [
-        "com.google.devtools.ksp"
-      ],
-      "matchPackagePatterns": [
-        "org.jetbrains.kotlin.*"
+      "matchPackageNames": [
+        "/^org\\.jetbrains\\.kotlin/",
+        "/^com\\.google\\.devtools\\.ksp/"
       ]
     },
     {
-      "groupName": "AndroidX Navigation",
-      "matchPackagePatterns": [
-        "androidx.navigation.*"
+      "groupName": "AndroidX",
+      "matchPackagePrefixes": ["androidx."]
+    },
+    {
+      "groupName": "Jetpack Compose",
+      "matchPackagePrefixes": ["androidx.compose.", "androidx.activity:", "androidx.navigation3:"]
+    },
+    {
+      "groupName": "Android Gradle Plugin",
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "com.android.tools.build:gradle-api",
+        "com.android.tools.build:builder"
       ]
     }
   ],
