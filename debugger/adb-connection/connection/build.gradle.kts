@@ -28,7 +28,8 @@ plugins {
 android {
     namespace = "android.zero.studio"
 
-    compileSdk = 36
+    compileSdk = 37
+    compileSdkMinor = 1
 
     defaultConfig {
         minSdk = 26  
@@ -101,8 +102,8 @@ tasks.withType<KotlinCompile>().configureEach {
 
 dependencies {
     constraints {
-        implementation("androidx.core:core-ktx:1.16.0")
-        implementation("androidx.core:core:1.16.0")
+        implementation("androidx.core:core-ktx:1.19.1")
+        implementation("androidx.core:core:1.19.1")
     }
     // 项目内 ADB 协议库
     implementation(projects.debugger.adbConnection.adblib)

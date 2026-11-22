@@ -519,6 +519,20 @@ io-ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "io-kto
 # Shizuku 系统级 API 桥接 (Local ADB 通道)
 
 
+androidide-ts-c = { module = "com.itsaky.androidide.treesitter:tree-sitter-c", version.ref = "tree-sitter" }
+androidide-ts-cpp = { module = "com.itsaky.androidide.treesitter:tree-sitter-cpp", version.ref = "tree-sitter" }
+common-termuxAmLib = { module = "com.termux:termux-am-library", version = "v2.0.0" }
+common-regex-re2j = { module = "io.github.dingyi222666.regex-lib:regex-lib-re2j", version = "1.0.2" }
+google-auto-value-ap = { module = "com.google.auto.value:auto-value", version = "1.11.1" }
+composite-googleJavaFormat = { module = "com.itsaky.androidide.build:google-java-format" }
+tooling-builder = { module = "com.android.tools.build:builder", version.ref = "agp-tooling" }
+io-ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "io-ktor" }
+io-ktor-server-content-negotiation = { group = "io.ktor", name = "ktor-server-content-negotiation", version.ref = "io-ktor" }
+io-ktor-server-auth = { group = "io.ktor", name = "ktor-server-auth", version.ref = "io-ktor" }
+io-ktor-server-auth-jwt = { group = "io.ktor", name = "ktor-server-auth-jwt", version.ref = "io-ktor" }
+io-ktor-server-host-common = { group = "io.ktor", name = "ktor-server-host-common", version.ref = "io-ktor" }
+io-ktor-server-status-pages = { group = "io.ktor", name = "ktor-server-status-pages", version.ref = "io-ktor" }
+tests-androidx-work-testing = { module = "androidx.work:work-testing", version.ref = "androidx-work" }
 [bundles]
 compose = [
     "androidx-compose-ui",
