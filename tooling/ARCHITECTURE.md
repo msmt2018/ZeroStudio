@@ -115,7 +115,7 @@ flowchart BT
   PC --> PLUGIN
   PLUGIN -. "注入用户工程；不是 RPC server" .-> APP
   IMPL -. "打包成独立 tooling-api-all.jar" .-> APP
-  REAPI -. "未列入 settings.gradle.kts 的 Gradle 子项目" .-> IMPL
+  REAPI["tooling/reapi<br/>独立 Go ReAPI 源码目录<br/>不在当前 Gradle runtime graph"]
 ```
 
 上图是职责与主要编译依赖的概念图，不代表所有传递依赖。更精确的模块依赖以各自 build.gradle.kts 为准。
