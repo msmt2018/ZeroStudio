@@ -27,7 +27,7 @@
       ]
     },
     {
-      "groupName": "AndroidX",
+      "groupName": "AndroidX (Google Maven)",
       "matchPackagePrefixes": [
         "androidx."
       ],
