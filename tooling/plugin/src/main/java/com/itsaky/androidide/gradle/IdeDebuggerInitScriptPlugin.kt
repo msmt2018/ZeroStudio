@@ -28,11 +28,17 @@ import com.android.build.api.variant.ApplicationVariant
 import com.android.build.api.variant.impl.ApplicationVariantImpl
 import com.itsaky.androidide.buildinfo.BuildInfo
 import java.io.File
+import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ExternalModuleDependency
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.logging.Logging
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
 
 /**
  * Init-script plugin that wires the JDWP bootstrap ContentProvider
@@ -273,19 +279,30 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
         preheatBreakpoints = preheatBps,
     )
 
-    val buildDir = project.layout.buildDirectory.asFile.get()
-    val generatedDir = File(buildDir, "generated/source/ide_debugger/${variant.name}/kotlin")
-    val pkgPath = "com/itsaky/androidide/zerostudio/ide/debugger/host/generated"
-    val targetFile = File(generatedDir, "$pkgPath/IdeDebuggerBootstrap.kt")
-    targetFile.parentFile.mkdirs()
-    targetFile.writeText(content)
+    val generatedDir = project.layout.buildDirectory.dir(
+        "generated/source/ide_debugger/${variant.name}/kotlin"
+    )
+    val taskName = "generate${variant.name.replaceFirstChar { it.uppercase() }}IdeDebuggerBootstrap"
+    val taskProvider = project.tasks.register(
+        taskName,
+        GenerateIdeDebuggerBootstrapSourceTask::class.java,
+    ) { task ->
+      task.sourceContent.set(content)
+      task.outputDirectory.set(generatedDir)
+    }
 
-    // Register the generated Kotlin file through the public AGP Variant Sources API.
-    // Kotlin sources are also discovered from the variant's Java source directories.
-    variant.sources.java?.addStaticSourceDirectory(project.relativePath(generatedDir))
+    // Generated sources must be attached to the variant through a task provider.
+    // addStaticSourceDirectory is not part of AGP's SourceDirectories API.
+    variant.sources.java?.addGeneratedSourceDirectory(
+        taskProvider,
+        GenerateIdeDebuggerBootstrapSourceTask::outputDirectory,
+    )
 
+    val targetFile = generatedDir.get().file(
+        "com/itsaky/androidide/zerostudio/ide/debugger/host/generated/IdeDebuggerBootstrap.kt"
+    ).asFile
     logger.lifecycle(
-        "Generated IdeDebuggerBootstrap.kt for variant '${variant.name}' " +
+        "Registered IdeDebuggerBootstrap.kt generation for variant '${variant.name}' " +
             "in ${project.path}: $targetFile (extras=sdk=$sdkInt, " +
             "preheatBpCount=${preheatBps.size})"
     )
@@ -367,5 +384,30 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
           .firstOrNull { it.name == "getManifestPlaceholders" && it.parameterCount == 0 }
           ?.invoke(defaultConfig) as? MutableMap<String, Any>
     }.getOrNull()
+  }
+}
+
+
+/**
+ * Generates the per-variant debugger bootstrap source as a tracked Gradle output.
+ *
+ * Registering it through AGP's generated-source API keeps task dependencies explicit
+ * and ensures Kotlin compilation waits for the generated file.
+ */
+abstract class GenerateIdeDebuggerBootstrapSourceTask : DefaultTask() {
+
+  @get:Input
+  abstract val sourceContent: Property<String>
+
+  @get:OutputDirectory
+  abstract val outputDirectory: DirectoryProperty
+
+  @TaskAction
+  fun generate() {
+    val targetFile = outputDirectory.get().file(
+        "com/itsaky/androidide/zerostudio/ide/debugger/host/generated/IdeDebuggerBootstrap.kt"
+    ).asFile
+    targetFile.parentFile.mkdirs()
+    targetFile.writeText(sourceContent.get())
   }
 }
