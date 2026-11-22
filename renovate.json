@@ -30,6 +30,9 @@
       "groupName": "AndroidX",
       "matchPackagePrefixes": [
         "androidx."
+      ],
+      "registryUrls": [
+        "https://dl.google.com/dl/android/maven2/"
       ]
     },
     {
@@ -46,6 +49,27 @@
         "com.android.tools.build:gradle",
         "com.android.tools.build:gradle-api",
         "com.android.tools.build:builder"
+      ]
+    },
+    {
+      "groupName": "Google Maven",
+      "matchPackageNames": [
+        "/^com\\.android\\.tools:/",
+        "/^com\\.google\\.android\\./",
+        "/^com\\.google\\.firebase:/",
+        "/^com\\.google\\.mlkit:/"
+      ],
+      "registryUrls": [
+        "https://dl.google.com/dl/android/maven2/"
+      ]
+    },
+    {
+      "groupName": "JitPack",
+      "matchPackagePrefixes": [
+        "com.github."
+      ],
+      "registryUrls": [
+        "https://jitpack.io"
       ]
     }
   ],
