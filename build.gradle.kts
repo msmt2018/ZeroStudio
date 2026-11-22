@@ -26,6 +26,7 @@ import com.itsaky.androidide.plugins.conf.configureJavaModule
 import com.itsaky.androidide.plugins.conf.configureMavenPublish
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.gradle.api.artifacts.VersionCatalogsExtension
 
 
 plugins {
@@ -61,7 +62,12 @@ plugins {
 }
 
 // Resolve the version-catalog accessor in the root script scope before entering subprojects.
-val kotlinCompilerVersion = libs.versions.kotlin.get()
+val kotlinCompilerVersion =
+    rootProject.extensions.getByType<VersionCatalogsExtension>()
+        .named("libs")
+        .findVersion("kotlin")
+        .get()
+        .requiredVersion
 
 buildscript {
   dependencies {
