@@ -291,12 +291,10 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
       task.outputDirectory.set(generatedDir)
     }
 
-    // Generated sources must be attached to the variant through a task provider.
-    // addStaticSourceDirectory is not part of AGP's SourceDirectories API.
-    variant.sources.java?.addGeneratedSourceDirectory(
-        taskProvider,
-        GenerateIdeDebuggerBootstrapSourceTask::outputDirectory,
-    )
+    // Register the generated Kotlin directory through the Android source set.
+    // This avoids relying on SourceDirectories methods that are absent from the
+    // AGP API version used to compile this Gradle plugin.
+    registerGeneratedSourceSet(project, variant.name, generatedDir.get().asFile, taskProvider)
 
     val targetFile = generatedDir.get().file(
         "com/itsaky/androidide/zerostudio/ide/debugger/host/generated/IdeDebuggerBootstrap.kt"
@@ -306,6 +304,52 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
             "in ${project.path}: $targetFile (extras=sdk=$sdkInt, " +
             "preheatBpCount=${preheatBps.size})"
     )
+  }
+
+  /**
+   * Adds the generated Kotlin directory to the matching Android source set and
+   * wires generation before both Kotlin and Java compilation for that variant.
+   *
+   * The Android extension is accessed reflectively because this plugin supports
+   * a range of AGP versions and is compiled against the minimum supported API.
+   */
+  private fun registerGeneratedSourceSet(
+      project: Project,
+      variantName: String,
+      generatedDir: File,
+      taskProvider: org.gradle.api.tasks.TaskProvider<GenerateIdeDebuggerBootstrapSourceTask>,
+  ) {
+    val androidExtension = project.extensions.findByName("android")
+        ?: throw GradleException("Android extension not found in ${project.path}")
+
+    val sourceSets = androidExtension.javaClass.methods
+        .firstOrNull { it.name == "getSourceSets" && it.parameterCount == 0 }
+        ?.invoke(androidExtension)
+        ?: throw GradleException("Android sourceSets API not found in ${project.path}")
+
+    val sourceSet = sourceSets.javaClass.methods
+        .firstOrNull { it.name == "getByName" && it.parameterCount == 1 }
+        ?.invoke(sourceSets, variantName)
+        ?: throw GradleException("Android sourceSet '$variantName' not found in ${project.path}")
+
+    val javaSources = sourceSet.javaClass.methods
+        .firstOrNull { it.name == "getJava" && it.parameterCount == 0 }
+        ?.invoke(sourceSet)
+        ?: throw GradleException("Java source directory set not found for '$variantName'")
+
+    val srcDirMethod = javaSources.javaClass.methods
+        .firstOrNull { it.name == "srcDir" && it.parameterCount == 1 }
+        ?: throw GradleException("Java sourceSet srcDir API not found for '$variantName'")
+    srcDirMethod.invoke(javaSources, generatedDir)
+
+    val capitalizedVariant = variantName.replaceFirstChar { it.uppercase() }
+    val kotlinCompileTask = "compile${capitalizedVariant}Kotlin"
+    val javaCompileTask = "compile${capitalizedVariant}JavaWithJavac"
+    project.tasks.configureEach {
+      if (name == kotlinCompileTask || name == javaCompileTask) {
+        dependsOn(taskProvider)
+      }
+    }
   }
 
   private fun ApplicationVariant.withRuntimeConfiguration(action: org.gradle.api.artifacts.Configuration.() -> Unit) {
