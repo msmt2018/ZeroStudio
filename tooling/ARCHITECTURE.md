@@ -737,3 +737,146 @@ flowchart LR
 ---
 
 本文描述的是当前源码中的实现关系和参数流，不代表所有执行路径已统一，也不代表未来重构目标。涉及执行器切换、RPC 协议变更、AGP API 兼容性或进程生命周期的修改，应先对照本文中的对应链路和源码入口同步更新架构图。
+
+## 13. 目标重构：移除独立 Tooling JVM Server 与 JSON-RPC
+
+本节记录目标架构和待验证事项，不代表当前代码已经完成迁移。当前实现仍以第 1～12 节描述为准。
+
+### 13.1 目标与非目标
+
+目标是移除 ZeroStudio 自己额外创建的 Tooling Server Java 进程，以及 Android app 与该进程之间的 LSP4J JSON-RPC / Gson 编解码层。
+
+目标不是移除 Gradle 自身的 Gradle Daemon，也不是把 Gradle、AGP 或用户工程的构建逻辑搬进 Activity。
+
+需要严格区分：
+
+1. **ZeroStudio Tooling Server 进程**：由 ToolingServerRunner 使用 `java -jar tooling-api-all.jar` 启动；这是 ZeroStudio 当前额外增加的服务进程。
+2. **Gradle Client / Tooling API Client**：调用 Gradle Tooling API 的客户端代码。它可以与 IDE 主程序处于同一个宿主进程，但必须验证该宿主运行时是否兼容。
+3. **Gradle Daemon**：Gradle 真正执行配置、任务和 AGP 插件的长生命周期 JVM 进程。Tooling API 官方文档明确说明 Tooling API 始终使用 Gradle Daemon。
+4. **AGP Tooling Models**：由目标工程的 Gradle/AGP 构建环境生成，再由 Tooling API 返回；它们不是 Android Activity，也不是独立 Android Service。
+
+因此，取消第 1 项不等于取消第 3 项。即使 Tooling API 客户端最终能够在 Android app 进程内运行，Gradle Daemon 仍然需要受支持的 JVM 运行环境。
+
+### 13.2 目标对象调用链
+
+期望的 ZeroStudio 内部调用关系：
+
+```mermaid
+flowchart TB
+  UI["Activity / Compose UI"]
+  FACADE["BuildService API / BuildFacade"]
+  CORE["BuildServiceCore 实例"]
+  ADAPTER["Gradle Tooling Adapter"]
+  CONNECTOR["GradleConnector / ProjectConnection"]
+  DAEMON["Gradle Daemon JVM"]
+  AGP["Google AGP Tooling Models / Tasks"]
+  WORKSPACE["WorkspaceModelBuilder / Workspace"]
+
+  UI -->|"绑定 Android Service 或注入接口"| FACADE
+  FACADE -->|"直接方法调用、共享状态"| CORE
+  CORE -->|"直接对象调用"| ADAPTER
+  ADAPTER --> CONNECTOR
+  CONNECTOR <-->|"Gradle 自身通信协议"| DAEMON
+  DAEMON --> AGP
+  CORE -->|"本地模型映射"| WORKSPACE
+```
+
+设计约束：
+
+- Activity 只依赖稳定的构建服务接口，不直接依赖 GradleConnector、ProjectConnection 或 AGP 内部实现。
+- Android Service 可以继续作为生命周期宿主/进程内服务入口；Service 到 BuildServiceCore 使用直接对象调用，不再通过 JSON-RPC。
+- BuildServiceCore、模型构建器、请求调度器和事件分发器优先作为同进程对象实例协作。
+- Gradle Tooling API Adapter 负责连接、模型查询、任务执行、进度监听和取消。
+- Gradle Daemon 仍由 Gradle 自己管理；不要尝试把 Gradle Daemon 当作普通 Activity 组件。
+- 如果 Tooling API Client 在 Android ART 上无法满足 Gradle/Tooling API 的运行时要求，则保留一个最小化的 JVM 执行宿主作为兼容后端；该后端不应再承载 ZeroStudio 自定义 JSON-RPC 服务和重复的业务对象模型。
+
+### 13.3 tooling.jar 是否直接打包进 APK
+
+当前构建已经把 `tooling/impl` 的 Shadow JAR 复制到 APK assets，运行时解压后再通过 `java -jar` 启动。它并不是普通 Android app classpath 中直接调用的实现。
+
+若改为源码/类直接集成 APK，需要先拆分模块职责，而不是简单把整个 Shadow JAR 当成 Android library：
+
+| 当前模块/职责 | 目标处理 |
+|---|---|
+| tooling/model | 保留稳定模型契约；逐步消除协议专用依赖 |
+| tooling/builder-model-impl | 保留 AGP 模型适配；区分 AGP 原始模型与 IDE 内部模型 |
+| tooling/api | 拆分为纯接口/请求契约；移除 LSP4J Launcher、Gson RPC adapter 等纯传输职责 |
+| tooling/impl | 拆分 BuildServiceCore、Gradle Tooling Adapter、进程/JVM 启动适配；逐项验证 Android runtime 兼容性 |
+| ToolingServerRunner | 目标路径移除；若 ART 不能运行 Tooling API Client，则由最小兼容后端替代，而不是继续保留完整 RPC Server |
+| ToolingApiLauncher / Main | 在无 RPC 的目标路径中删除；不得继续作为内部调用的必经入口 |
+
+不能仅凭“Tooling API 是 Java library”就认定其全部依赖可以直接运行在 Android ART。Gradle 官方文档描述的是 Tooling API Client 运行于 JVM，并允许 Client JVM 与 Daemon JVM 不同；它没有据此承诺 Android ART 是受支持的 Tooling API Client 运行环境。必须对当前仓库所用 Gradle Tooling API 版本、依赖树、文件系统、进程启动、类加载、网络和 JVM API 逐项做设备端验证。
+
+### 13.4 序列化、Protobuf 与直接对象引用的取舍
+
+不能把“File 路径需要转换”作为保留独立 JVM + JSON-RPC 的理由。
+
+| 场景 | 推荐机制 | 是否需要序列化 |
+|---|---|---|
+| 同一进程内 Service → BuildServiceCore | Kotlin/Java 接口、对象引用 | 否 |
+| 同一进程内模型构建器 → Workspace 映射 | 直接传递对象/内部模型 | 否 |
+| 同一进程内事件通知 | Flow、Channel、回调或共享状态 | 否 |
+| 必须跨进程传输结构化 DTO | Protobuf 可作为候选 | 是，仍需编码/解码 |
+| 持久化缓存/磁盘快照 | 明确版本化的持久化格式 | 是 |
+| Gradle Client ↔ Gradle Daemon | Gradle 自身通信机制 | 由 Gradle 管理 |
+
+Protobuf 相比 JSON 通常具有更紧凑的二进制表示、明确 schema 和较低的解析开销；但它仍然是序列化协议。它不能传递另一个进程中的 Java/Kotlin 对象实例，也不能消除 IPC、缓冲区复制和编解码成本。
+
+因此优先级应为：
+
+1. 能在同一进程内直接调用的地方，不使用 JSON、Protobuf 或其他序列化协议。
+2. 只有确实保留跨进程边界时，才比较 Protobuf、紧凑二进制 DTO 或其他协议。
+3. 不为单个 `File` 字段引入完整对象图序列化。跨进程时传规范化路径字符串或 URI 即可；接收端按明确的路径基准解析。
+4. 不将 `java.io.File` 当作文件内容传输。File 只是本地路径句柄对象；路径字符串往返创建 File 不会读取文件内容。
+5. 不允许相对路径在不同工作目录下产生歧义。跨进程路径必须约定为绝对路径，或同时携带明确的 base directory。
+
+### 13.5 File 与 AGP 模型边界
+
+AGP 官方模型接口或现有接口契约要求 `File` 的字段，应在 AGP 适配边界保留其要求，不能直接把接口实现的返回类型改成 String。
+
+ZeroStudio 自己的内部业务模型则不应无条件依赖 `File`：
+
+- 路径身份/位置描述可使用 Path DTO、规范化字符串或 URI。
+- 需要实际文件系统操作时，在文件系统适配层转换成 `File` / `Path`。
+- 仅为兼容 AGP Builder Model 接口而存在的 File，应限制在适配层，不继续扩散到 UI、Workspace 和跨层业务契约。
+- 目录、文件、生成产物、class path、source set 等应按语义定义类型，不要把所有路径混成无约束字符串。
+- 模型快照应只包含消费方真正需要的字段，避免把 AGP 原始对象图完整复制到 IDE 模型。
+
+### 13.6 迁移顺序与验证门槛
+
+必须从底层契约和运行时验证开始，不得先改 UI，再回头拆协议层。
+
+1. **盘点与基线**：统计 tooling/api 的 JSON-RPC 注解、Launcher、Gson TypeAdapter、多态注册、所有 File 字段、Serializable 标记和反向回调；记录当前同步、任务执行、取消、日志、进度、代理模型行为。
+2. **拆分接口契约**：将纯 Build API、模型契约、请求/结果/事件与 LSP4J/Gson 传输实现分离；暂时保留旧 RPC 适配器，确保现有功能不回归。
+3. **构建核心对象层**：将 ToolingApiServerImpl 中的业务逻辑拆到可直接实例化的 BuildServiceCore / GradleToolingAdapter；把 server callback 改为同进程事件接口。
+4. **验证 Tooling API Client 宿主**：先做最小 Android instrumentation/device spike，验证当前 Tooling API 版本能否在 ART 内加载、连接 Gradle、启动/复用 Daemon、取模型、执行任务、接收进度、取消任务。不可用时明确保留最小 JVM backend。
+5. **迁移模型**：将远端 IProject proxy 改为本地模型访问；由 WorkspaceModelBuilder 消费内部模型/只读接口；避免模型重复复制。
+6. **统一任务执行入口**：明确 executeTasks、execute(ExecutionRequest) 与 Tooling API BuildLauncher 的唯一后端和参数语义；保留 Gradle distribution、JVM args、环境变量、init script、输出、进度和取消能力。
+7. **删除旧协议层**：只有所有调用方迁移且回归验证通过后，才删除 ToolingApiLauncher、Main RPC 启动、ToolingServerRunner、FileTypeAdapter 和纯 RPC DTO/注解。
+8. **清理打包链**：移除仅为独立 tooling-api-all.jar 服务进程准备的 assets 复制、解压和校验流程；保留仍被用户工程插件注入使用的独立插件产物。
+9. **性能对比**：分别测量冷启动、重复同步、模型查询、任务执行、事件吞吐、内存峰值、进程数和取消延迟；不能仅以“少一次 JSON 编码”宣称整体构建更快。
+
+验收条件：
+
+- 正常项目同步、Android/Java/普通 Gradle 项目模型、variant 与依赖查询保持正确。
+- assemble、test、clean 等任务执行语义一致。
+- 输出、进度、取消、错误堆栈、网络代理、Gradle distribution 选择保持正确。
+- 不再启动 ZeroStudio 自定义 `java -jar tooling-api-all.jar` RPC Server。
+- 若 ART 不能承载 Tooling API Client，必须明确记录最小 JVM backend 的边界和原因，不能伪称完全无 JVM。
+- AGP 要求的 File 接口兼容性不被破坏，内部业务层不再无差别扩散 File。
+- 对旧 RPC 路径的删除以设备端测试和性能数据为依据。
+
+### 13.7 官方依据与结论边界
+
+Gradle 官方 Tooling API 文档说明：Tooling API 是供 IDE 等程序化集成 Gradle 的 API，支持模型查询、任务执行、输出/进度监听和取消；Tooling API 始终使用 Gradle Daemon。文档还区分 Tooling API Client JVM 与 Gradle Daemon JVM，并说明二者可以不同。
+
+Gradle 官方 Daemon 文档说明：Gradle Client 与 Gradle Daemon 是不同进程，通过本地 socket 通信；Daemon 承担构建执行并复用长期运行状态。
+
+这些官方说明支持“移除 ZeroStudio 自定义 RPC Server 不等于移除 Gradle Daemon”的结论；但不能单独证明 Android ART 一定兼容 Tooling API Client，后者必须通过实际设备验证。
+
+参考：
+- https://docs.gradle.org/current/userguide/tooling_api.html
+- https://docs.gradle.org/current/userguide/gradle_daemon.html
+- https://docs.gradle.org/current/userguide/compatibility.html
+- https://developer.android.com/build
+
