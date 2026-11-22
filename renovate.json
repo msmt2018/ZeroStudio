@@ -1,9 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "enabledManagers": ["gradle"],
-  "includePaths": ["gradle/libs.versions.toml"],
-  "labels": ["dependencies", "sdk-library"],
+  "extends": [
+    "config:recommended"
+  ],
+  "enabledManagers": [
+    "gradle"
+  ],
+  "includePaths": [
+    "gradle/libs.versions.toml"
+  ],
+  "labels": [
+    "dependencies",
+    "sdk-library"
+  ],
   "osvVulnerabilityAlerts": true,
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
@@ -19,11 +28,17 @@
     },
     {
       "groupName": "AndroidX",
-      "matchPackagePrefixes": ["androidx."]
+      "matchPackagePrefixes": [
+        "androidx."
+      ]
     },
     {
       "groupName": "Jetpack Compose",
-      "matchPackagePrefixes": ["androidx.compose.", "androidx.activity:", "androidx.navigation3:"]
+      "matchPackagePrefixes": [
+        "androidx.compose.",
+        "androidx.activity:",
+        "androidx.navigation3:"
+      ]
     },
     {
       "groupName": "Android Gradle Plugin",
@@ -37,5 +52,8 @@
   "ignorePaths": [
     "testing/resources/**",
     "gradle-plugin/src/test/resources/**"
+  ],
+  "ignoreDeps": [
+    "com.vanniktech:gradle-maven-publish-plugin"
   ]
 }
