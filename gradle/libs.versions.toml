@@ -10,6 +10,7 @@ aaptCompiler = "8.13.0"
 androidToolsCommon = "31.4.1"
 androidToolsCommonB = "31.2.2"
 jetbrainsAnnotations = "24.1.0"
+checkerFramework = "3.49.5"
 # proto 相关
 protobufVersion = "4.33.0"
 
@@ -397,6 +398,7 @@ google-gson = { module = "com.google.code.gson:gson", version.ref = "googleGson"
 google-guava = { module = "com.google.guava:guava", version.ref = "guava-android" }
 com-google-guava-guava = { module = "com.google.guava:guava", version.ref = "guava-jre" }
 google-auto-value-annotations = { module = "com.google.auto.value:auto-value-annotations", version = "1.10.4" }
+google-checker-qual = { module = "org.checkerframework:checker-qual", version.ref = "checkerFramework" }
 google-auto-value-ap = { module = "com.google.auto.value:auto-value", version = "1.10.4" }
 google-auto-service-annotations = { module = "com.google.auto.service:auto-service-annotations", version = "1.1.1" }
 google-auto-service = { module = "com.google.auto.service:auto-service", version = "1.1.1" }
