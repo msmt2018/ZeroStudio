@@ -17,6 +17,8 @@
 
 package com.itsaky.androidide.plugins.conf
 
+import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.dsl.LibraryExtension
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.gradle.BaseExtension
 import com.itsaky.androidide.build.config.BuildConfig
@@ -93,6 +95,17 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     }
 
     compileSdkVersion(BuildConfig.compileSdk)
+    // Preserve the minor API level as well as the major API level. Without this,
+    // the application is compiled against 37.0 even when its libraries require 37.1.
+    if (isAppModule) {
+      this@configureAndroidModule.extensions
+          .getByType(ApplicationExtension::class.java)
+          .compileSdkMinor = BuildConfig.compileSdkMinorApiLevel
+    } else {
+      this@configureAndroidModule.extensions
+          .getByType(LibraryExtension::class.java)
+          .compileSdkMinor = BuildConfig.compileSdkMinorApiLevel
+    }
     ndkVersion = BuildConfig.ndkVersion
 
     defaultConfig {
