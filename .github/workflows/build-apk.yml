@@ -76,8 +76,8 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
 
-          # Android API 37.0 is installed as android-37.0; expose it through AGP's canonical android-37 path.
-          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          # Install the canonical Android API 37 platform package.
+          "$SDKMANAGER" --install "platforms;android-37" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
 
           # Fail immediately if the requested NDK revision was not installed exactly.
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
@@ -85,10 +85,7 @@ jobs:
 
           # AGP resolves compileSdk 37 using the canonical android-37 directory, which points to API 37.0.
           # Keep the installed preview platform intact and provide the expected alias.
-          test -d "$ANDROID_HOME/platforms/android-37.0"
-          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
-            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
-          fi
+          test -d "$ANDROID_HOME/platforms/android-37"
 
           echo "=== Installed Android SDK platforms ==="
           ls -la "$ANDROID_HOME/platforms"
@@ -225,10 +222,10 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "platforms;android-35" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          "$SDKMANAGER" --install "platforms;android-37" "build-tools;37.0.0" "platforms;android-35" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
-          test -d "$ANDROID_HOME/platforms/android-37.0"
+          test -d "$ANDROID_HOME/platforms/android-37"
           if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
             ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
           fi
