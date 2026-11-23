@@ -6,7 +6,7 @@
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
  *
- *  AndroidIDE is distributed in the hope that it will be useful,
+ *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
@@ -26,11 +26,11 @@ import java.io.Serializable
 class DefaultTestInfo : TestInfo, Serializable {
     companion object {
         private const val serialVersionUID = 1L
-        
+
         /**
          * Create a DefaultTestInfo instance from a TestInfo model.
          *
-         * @param testInfo The TestInfo model from AGP
+         * @param testInfo The test model from AGP
          * @return A DefaultTestInfo instance
          */
         @JvmStatic
@@ -40,14 +40,12 @@ class DefaultTestInfo : TestInfo, Serializable {
                 this.animationsDisabled = testInfo.animationsDisabled
                 this.execution = testInfo.execution
                 this.instrumentedTestTaskName = testInfo.instrumentedTestTaskName
-                this.instrumentInPrivateComputeCore = testInfo.instrumentInPrivateComputeCore
             }
         }
     }
-    
+
     override var additionalRuntimeApks: Collection<File> = emptyList()
     override var animationsDisabled: Boolean = false
     override var execution: Execution? = null
     override var instrumentedTestTaskName: String = ""
-    override var instrumentInPrivateComputeCore: Boolean = false
 }
