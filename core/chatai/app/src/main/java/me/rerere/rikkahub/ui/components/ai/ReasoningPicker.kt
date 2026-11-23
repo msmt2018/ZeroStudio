@@ -21,9 +21,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberSliderState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -162,20 +160,13 @@ fun ReasoningPicker(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                val sliderState = rememberSliderState(
-                    value = sliderValue,
-                    steps = levelCount - 2,
-                    trackRange = 0f..(levelCount - 1).toFloat(),
-                )
-                LaunchedEffect(sliderValue) {
-                    sliderState.value = sliderValue
-                }
                 Slider(
-                    state = sliderState,
+                    value = sliderValue,
                     onValueChange = { sliderValue = it },
+                    steps = levelCount - 2,
+                    valueRange = 0f..(levelCount - 1).toFloat(),
                     onValueChangeFinished = {
-                        val snappedIndex = sliderState.value.roundToInt().coerceIn(0, levelCount - 1)
-                        sliderState.value = snappedIndex.toFloat()
+                        val snappedIndex = sliderValue.roundToInt().coerceIn(0, levelCount - 1)
                         sliderValue = snappedIndex.toFloat()
                         onUpdateReasoningLevel(levels[snappedIndex])
                     },
