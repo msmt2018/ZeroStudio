@@ -28,11 +28,17 @@ import com.android.build.api.variant.ApplicationVariant
 import com.android.build.api.variant.impl.ApplicationVariantImpl
 import com.itsaky.androidide.buildinfo.BuildInfo
 import java.io.File
+import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ExternalModuleDependency
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.logging.Logging
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
 
 /**
  * Init-script plugin that wires the JDWP bootstrap ContentProvider
@@ -273,26 +279,77 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
         preheatBreakpoints = preheatBps,
     )
 
-    val buildDir = project.layout.buildDirectory.asFile.get()
-    val generatedDir = File(buildDir, "generated/source/ide_debugger/${variant.name}/kotlin")
-    val pkgPath = "com/itsaky/androidide/zerostudio/ide/debugger/host/generated"
-    val targetFile = File(generatedDir, "$pkgPath/IdeDebuggerBootstrap.kt")
-    targetFile.parentFile.mkdirs()
-    targetFile.writeText(content)
+    val generatedDir = project.layout.buildDirectory.dir(
+        "generated/source/ide_debugger/${variant.name}/kotlin"
+    )
+    val taskName = "generate${variant.name.replaceFirstChar { it.uppercase() }}IdeDebuggerBootstrap"
+    val taskProvider = project.tasks.register(
+        taskName,
+        GenerateIdeDebuggerBootstrapSourceTask::class.java,
+    ) { task ->
+      task.sourceContent.set(content)
+      task.outputDirectory.set(generatedDir)
+    }
 
-    // 把 generatedDir 加到 Kotlin source set
-    // AGP 7.2 的 Sources 接口没有 kotlin 属性 (7.3+ 才有),
-    // 用 BaseExtension 旧 API 添加到 java source set,
-    // Kotlin 编译器会从 java source set 拾取 .kt 文件。
-    @Suppress("DEPRECATION")
-    project.extensions.findByType(com.android.build.gradle.BaseExtension::class.java)
-        ?.sourceSets?.getByName(variant.name)?.java?.srcDir(generatedDir)
+    // Register the generated Kotlin directory through the Android source set.
+    // This avoids relying on SourceDirectories methods that are absent from the
+    // AGP API version used to compile this Gradle plugin.
+    registerGeneratedSourceSet(project, variant.name, generatedDir.get().asFile, taskProvider)
 
+    val targetFile = generatedDir.get().file(
+        "com/itsaky/androidide/zerostudio/ide/debugger/host/generated/IdeDebuggerBootstrap.kt"
+    ).asFile
     logger.lifecycle(
-        "Generated IdeDebuggerBootstrap.kt for variant '${variant.name}' " +
+        "Registered IdeDebuggerBootstrap.kt generation for variant '${variant.name}' " +
             "in ${project.path}: $targetFile (extras=sdk=$sdkInt, " +
             "preheatBpCount=${preheatBps.size})"
     )
+  }
+
+  /**
+   * Adds the generated Kotlin directory to the matching Android source set and
+   * wires generation before both Kotlin and Java compilation for that variant.
+   *
+   * The Android extension is accessed reflectively because this plugin supports
+   * a range of AGP versions and is compiled against the minimum supported API.
+   */
+  private fun registerGeneratedSourceSet(
+      project: Project,
+      variantName: String,
+      generatedDir: File,
+      taskProvider: org.gradle.api.tasks.TaskProvider<GenerateIdeDebuggerBootstrapSourceTask>,
+  ) {
+    val androidExtension = project.extensions.findByName("android")
+        ?: throw GradleException("Android extension not found in ${project.path}")
+
+    val sourceSets = androidExtension.javaClass.methods
+        .firstOrNull { it.name == "getSourceSets" && it.parameterCount == 0 }
+        ?.invoke(androidExtension)
+        ?: throw GradleException("Android sourceSets API not found in ${project.path}")
+
+    val sourceSet = sourceSets.javaClass.methods
+        .firstOrNull { it.name == "getByName" && it.parameterCount == 1 }
+        ?.invoke(sourceSets, variantName)
+        ?: throw GradleException("Android sourceSet '$variantName' not found in ${project.path}")
+
+    val javaSources = sourceSet.javaClass.methods
+        .firstOrNull { it.name == "getJava" && it.parameterCount == 0 }
+        ?.invoke(sourceSet)
+        ?: throw GradleException("Java source directory set not found for '$variantName'")
+
+    val srcDirMethod = javaSources.javaClass.methods
+        .firstOrNull { it.name == "srcDir" && it.parameterCount == 1 }
+        ?: throw GradleException("Java sourceSet srcDir API not found for '$variantName'")
+    srcDirMethod.invoke(javaSources, generatedDir)
+
+    val capitalizedVariant = variantName.replaceFirstChar { it.uppercase() }
+    val kotlinCompileTask = "compile${capitalizedVariant}Kotlin"
+    val javaCompileTask = "compile${capitalizedVariant}JavaWithJavac"
+    project.tasks.configureEach { compileTask ->
+      if (compileTask.name == kotlinCompileTask || compileTask.name == javaCompileTask) {
+        compileTask.dependsOn(taskProvider)
+      }
+    }
   }
 
   private fun ApplicationVariant.withRuntimeConfiguration(action: org.gradle.api.artifacts.Configuration.() -> Unit) {
@@ -371,5 +428,30 @@ class IdeDebuggerInitScriptPlugin : Plugin<Project> {
           .firstOrNull { it.name == "getManifestPlaceholders" && it.parameterCount == 0 }
           ?.invoke(defaultConfig) as? MutableMap<String, Any>
     }.getOrNull()
+  }
+}
+
+
+/**
+ * Generates the per-variant debugger bootstrap source as a tracked Gradle output.
+ *
+ * Registering it through AGP's generated-source API keeps task dependencies explicit
+ * and ensures Kotlin compilation waits for the generated file.
+ */
+abstract class GenerateIdeDebuggerBootstrapSourceTask : DefaultTask() {
+
+  @get:Input
+  abstract val sourceContent: Property<String>
+
+  @get:OutputDirectory
+  abstract val outputDirectory: DirectoryProperty
+
+  @TaskAction
+  fun generate() {
+    val targetFile = outputDirectory.get().file(
+        "com/itsaky/androidide/zerostudio/ide/debugger/host/generated/IdeDebuggerBootstrap.kt"
+    ).asFile
+    targetFile.parentFile.mkdirs()
+    targetFile.writeText(sourceContent.get())
   }
 }

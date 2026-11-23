@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   push:
     branches:
-      - '**'
+      - main
   workflow_dispatch:
     inputs:
       build_type:
@@ -17,118 +17,7 @@ on:
           - assembleRelease
 
 jobs:
-  unit-tests:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    env:
-      NDK_VERSION: "29.0.14206865"
-      ZEROSTUDIO_SKIP_NYX: "true"
-      GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' -Dorg.gradle.daemon=false"
-    steps:
-      - name: Checkout repository code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install basic system dependency packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git zip unzip protobuf-compiler python3 python3-pip wget curl
-
-      - name: Configure JDK 21 (Zulu 21.0.9)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Configure Gradle 9.6.0
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.6.0'
-
-      - name: Setup Bun and Node.js
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install web-ui dependencies with Bun
-        working-directory: core/chatai/web-ui
-        run: bun install --frozen-lockfile
-
-      - name: Install Android SDK, NDK and CMake
-        run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
-          test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
-          grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
-          test -d "$ANDROID_HOME/platforms/android-37.0"
-          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
-            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
-          fi
-          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
-
-      - name: Install CMake 3.31.1 via pip
-        run: |
-          sudo pip3 install cmake==3.31.1 --break-system-packages
-          CMAKE_DATA_DIR=$(python3 -c "import cmake, os; print(os.path.join(os.path.dirname(cmake.__file__), 'data'))")
-          echo "cmake.dir=$CMAKE_DATA_DIR" >> local.properties
-          cmake --version
-          protoc --version
-          python3 --version
-
-      - name: Build puppygit native libs
-        run: bash core/git/lib_build_scripts/build_native_libs.sh
-
-      - name: Grant execution permissions to the Gradle wrapper
-        run: chmod +x ./gradlew
-
-      - name: Run JVM unit tests and Gradle verification (all modules)
-        env:
-          ZEROSTUDIO_SKIP_NYX: "true"
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' -Dorg.gradle.daemon=false"
-        run: |
-          set +e
-          status=0
-          run_gradle() {
-            echo "::group::Running: $*"
-            "$@"
-            result=$?
-            echo "::endgroup::"
-            if [ "$result" -ne 0 ]; then status=1; fi
-          }
-
-          # Root build: all project checks, JVM tests and Android local unit-test variants.
-          run_gradle ./gradlew --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
-
-          # Included composite builds are independent Gradle builds and are not covered by
-          # the root build's task graph; execute their verification tasks explicitly.
-          run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test
-          run_gradle ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue check test
-
-          exit "$status"
-
-      - name: Upload JVM unit-test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zerostudio-unit-test-reports
-          path: |
-            **/build/test-results/**
-            **/build/reports/tests/**
-          if-no-files-found: warn
-          retention-days: 14
-
   build:
-    needs: unit-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -161,7 +50,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -187,18 +76,18 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
 
-          # Android 17 / API 37 is published as android-37.0, not android-37.
-          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          # Android API 37.1 is installed as android-37.1; expose it through AGP's canonical android-37 path.
+          "$SDKMANAGER" --install "platforms;android-37.1" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
 
           # Fail immediately if the requested NDK revision was not installed exactly.
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
 
-          # AGP resolves compileSdk 37 using the canonical android-37 directory.
+          # AGP resolves compileSdk 37 using the canonical android-37 directory, which points to API 37.1.
           # Keep the installed preview platform intact and provide the expected alias.
-          test -d "$ANDROID_HOME/platforms/android-37.0"
+          test -d "$ANDROID_HOME/platforms/android-37.1"
           if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
-            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+            ln -s android-37.1 "$ANDROID_HOME/platforms/android-37"
           fi
 
           echo "=== Installed Android SDK platforms ==="
@@ -224,11 +113,152 @@ jobs:
       - name: Grant execution permissions to the Gradle wrapper
         run: chmod +x ./gradlew
 
-      - name: Run Android instrumentation tests (debug and release)
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Compile APK
         env:
+          # APK CI 不生成 Nyx 发布版本元数据；跳过 Nyx 插件，避免 Maven Central 限流导致构建中断
           ZEROSTUDIO_SKIP_NYX: "true"
+          # 限制 Gradle JVM 最大使用 5GB 内存，不开启守护进程以免内存驻留
           GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' -Dorg.gradle.daemon=false"
+          # 限制 CMake 底层的 Ninja 并发数为 2，防止 C++ 编译器吃光内存
+
+          # export CMAKE_BUILD_PARALLEL_LEVEL=2
+          CMAKE_BUILD_PARALLEL_LEVEL: "2"
+        run: |
+          # 使用 --max-workers=2 限制模块并发
+          BUILD_TYPE='${{ github.event.inputs.build_type || 'assemble' }}'
+          echo "Building APK variant: $BUILD_TYPE"
+          ./gradlew "$BUILD_TYPE" --build-cache --max-workers=2
+
+      - name: Upload app-arm64-v8a-release.apk
+        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-arm64-v8a-release.apk
+          path: core/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          compression-level: 0
+
+      - name: Upload app-armeabi-v7a-release.apk
+        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-armeabi-v7a-release.apk
+          path: core/app/build/outputs/apk/release/app-armeabi-v7a-release.apk
+          compression-level: 0
+
+      - name: Upload app-x86_64-release.apk
+        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-x86_64-release.apk
+          path: core/app/build/outputs/apk/release/app-x86_64-release.apk
+          compression-level: 0
+
+      - name: Upload app-arm64-v8a-debug.apk
+        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-arm64-v8a-debug.apk
+          path: core/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+          compression-level: 0
+
+      - name: Upload app-armeabi-v7a-debug.apk
+        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-armeabi-v7a-debug.apk
+          path: core/app/build/outputs/apk/debug/app-armeabi-v7a-debug.apk
+          compression-level: 0
+
+      - name: Upload app-x86_64-debug.apk
+        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-x86_64-debug.apk
+          path: core/app/build/outputs/apk/debug/app-x86_64-debug.apk
+          compression-level: 0
+
+  # Verification is a separate job node and starts only after the APK job succeeds.
+  tests:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      NDK_VERSION: "29.0.14206865"
+      ZEROSTUDIO_SKIP_NYX: "true"
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' -Dorg.gradle.daemon=false"
+      CMAKE_BUILD_PARALLEL_LEVEL: "2"
+    steps:
+      - name: Checkout the exact commit that produced the APK
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          submodules: recursive
+
+      - name: Install basic system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip protobuf-compiler python3 python3-pip wget curl
+
+      - name: Configure JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "21"
+          cache: gradle
+
+      - name: Configure Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Install Android SDK, NDK and CMake
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses
+          "$SDKMANAGER" --install "platforms;android-37.1" "build-tools;37.0.0" "platforms;android-35" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
+          grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
+          test -d "$ANDROID_HOME/platforms/android-37.1"
+          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s android-37.1 "$ANDROID_HOME/platforms/android-37"
+          fi
+          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
+
+      - name: Install CMake 3.31.1 via pip
+        run: |
+          sudo pip3 install cmake==3.31.1 --break-system-packages
+          CMAKE_DATA_DIR=$(python3 -c "import cmake, os; print(os.path.join(os.path.dirname(cmake.__file__), 'data'))")
+          echo "cmake.dir=$CMAKE_DATA_DIR" >> local.properties
+          cmake --version
+          protoc --version
+          python3 --version
+
+      - name: Build required native test dependencies
+        run: |
+          bash core/git/lib_build_scripts/build_native_libs.sh
+          find core/git/src/main/jniLibs -name "*.so" -type f | sort
+
+      - name: Grant wrapper execution permission
+        run: chmod +x ./gradlew
+
+      - name: Run JVM unit tests and Gradle verification
+        run: |
+          set +e
+          status=0
+          run_gradle() {
+            echo "::group::Running: $*"
+            "$@"
+            result=$?
+            echo "::endgroup::"
+            if [ "$result" -ne 0 ]; then status=1; fi
+          }
+          run_gradle ./gradlew --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
+          run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
+          run_gradle ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue check test
+          exit "$status"
+
+      - name: Run Android instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis
@@ -240,26 +270,21 @@ jobs:
             set +e
             status=0
             run_gradle() {
-              echo "::group::Running instrumentation tests: $*"
+              echo "::group::Instrumentation: $*"
               "$@"
               result=$?
               echo "::endgroup::"
               if [ "$result" -ne 0 ]; then status=1; fi
             }
-
-            # Run connected Android tests for every Android module in the main build.
             run_gradle ./gradlew --no-daemon --max-workers=2 --continue connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest
-
-            # Test Android modules inside the independently included dependency build as well.
             run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest
-
             exit "$status"
 
-      - name: Upload instrumentation test reports
+      - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zerostudio-instrumentation-reports
+          name: zerostudio-test-reports
           path: |
             **/build/test-results/**
             **/build/reports/tests/**
@@ -268,55 +293,3 @@ jobs:
             **/build/outputs/connected_android_test_additional_output/**
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Compile APK
-        env:
-          # APK CI 不生成 Nyx 发布版本元数据；跳过 Nyx 插件，避免 Maven Central 限流导致构建中断
-          ZEROSTUDIO_SKIP_NYX: "true"
-          # 限制 Gradle JVM 最大使用 5GB 内存，不开启守护进程以免内存驻留
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' -Dorg.gradle.daemon=false"
-          # 限制 CMake 底层的 Ninja 并发数为 2，防止 C++ 编译器吃光内存
-          CMAKE_BUILD_PARALLEL_LEVEL: "2"
-        run: |
-          # 使用 --max-workers=2 限制模块并发
-          ./gradlew ${{ github.event.inputs.build_type || 'assemble' }} --build-cache --max-workers=2
-
-      - name: Upload app-arm64-v8a-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-arm64-v8a-release.apk
-          path: core/app/build/outputs/apk/release/app-arm64-v8a-release.apk
-          compression-level: 0
-
-      - name: Upload app-armeabi-v7a-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-armeabi-v7a-release.apk
-          path: core/app/build/outputs/apk/release/app-armeabi-v7a-release.apk
-          compression-level: 0
-
-      - name: Upload app-x86_64-release.apk
-        if: github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-x86_64-release.apk
-          path: core/app/build/outputs/apk/release/app-x86_64-release.apk
-          compression-level: 0
-
-      - name: Upload app-arm64-v8a-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-arm64-v8a-debug.apk
-          path: core/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
-          compression-level: 0
-
-      - name: Upload app-armeabi-v7a-debug.apk
-        if: github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-x86_64-debug.apk
-          path: core/app/build/outputs/apk/debug/app-x86_64-debug.apk
-          compression-level: 0

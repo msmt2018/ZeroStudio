@@ -14,7 +14,7 @@ plugins {
 
 android {
     namespace = "me.rerere.rikkahub"
-    compileSdk = 37
+    // compileSdk is supplied by the root AndroidModuleConf (BuildConfig.compileSdk).
 
     defaultConfig {
         // applicationId = "me.rerere.rikkahub"

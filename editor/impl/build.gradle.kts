@@ -100,7 +100,6 @@ dependencies {
   // api(projects.editor.treeSitterNdk.php)
   // api(projects.editor.treeSitterNdk.typeScript)
   api(projects.editor.treeSitterNdk.cpp)
-  api(projects.editor.treeSitterNdk.html)
   // api(projects.editor.treeSitterNdk.css)
   // api(projects.editor.treeSitterNdk.go)
   // api(projects.editor.treeSitterNdk.javascript)
@@ -119,7 +118,6 @@ dependencies {
   // api(projects.editor.treeSitterNdk.assemblyLanguage.nasm)
 
   implementation(projects.editor.treeSitterNdk.treeSitterJnilibs)
-  implementation(files("libs/tree-sitter-xxx.jar"))
 
   testImplementation(libs.tests.junit)
   testImplementation(libs.tests.google.truth)

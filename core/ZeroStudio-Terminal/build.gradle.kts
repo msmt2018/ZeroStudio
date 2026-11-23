@@ -26,10 +26,6 @@ extensions.configure<LibraryExtension> {
         viewBinding = true
         compose = true
     }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
-    }
 }
 
 tasks.withType<KotlinCompile>().configureEach {

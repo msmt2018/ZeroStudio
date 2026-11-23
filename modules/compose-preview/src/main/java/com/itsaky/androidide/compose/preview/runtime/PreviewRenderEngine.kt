@@ -567,10 +567,9 @@ private fun RenderComposableScreen(
     functionName: String,
     args: Array<out Any?>,
 ) {
-    val composer: Any = runCatching { currentComposer }.getOrNull() ?: run {
-        ErrorScreen("currentComposer is null - not in a Composable scope?")
-        return
-    }
+    // currentComposer is a Compose compiler intrinsic and must be read directly
+    // from the active composable scope; wrapping it in runCatching is illegal.
+    val composer: Any = currentComposer
     val result = invoker.invoke(
         clazz = clazz,
         functionName = functionName,

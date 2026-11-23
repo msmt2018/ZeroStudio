@@ -21,7 +21,6 @@ plugins {
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
-    alias(libs.plugins.aboutlibraries)
     id("kotlin-kapt")
 }
 
@@ -29,6 +28,7 @@ android {
     namespace = "android.zero.studio"
 
     compileSdk = 37
+    compileSdkMinor = 1
 
     defaultConfig {
         minSdk = 26  
@@ -95,14 +95,15 @@ android {
 tasks.withType<KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_17
+        optIn.add("androidx.compose.foundation.layout.ExperimentalFlexBoxApi")
     }
 }
 
 
 dependencies {
     constraints {
-        implementation("androidx.core:core-ktx:1.16.0")
-        implementation("androidx.core:core:1.16.0")
+        implementation("androidx.core:core-ktx:1.19.1")
+        implementation("androidx.core:core:1.19.1")
     }
     // 项目内 ADB 协议库
     implementation(projects.debugger.adbConnection.adblib)

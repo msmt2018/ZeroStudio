@@ -26,6 +26,8 @@ import com.itsaky.androidide.plugins.conf.configureJavaModule
 import com.itsaky.androidide.plugins.conf.configureMavenPublish
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.gradle.api.artifacts.VersionCatalogsExtension
+
 
 plugins {
   // 全局变量环境
@@ -59,6 +61,14 @@ plugins {
   alias(libs.plugins.baselineprofile) apply false
 }
 
+// Resolve the version-catalog accessor in the root script scope before entering subprojects.
+val kotlinCompilerVersion =
+    rootProject.extensions.getByType<VersionCatalogsExtension>()
+        .named("libs")
+        .findVersion("kotlin")
+        .get()
+        .requiredVersion
+
 buildscript {
   repositories {
     google()
@@ -68,7 +78,7 @@ buildscript {
   dependencies {
     classpath(libs.kotlin.gradle.plugin)
     classpath(libs.nav.safe.args.gradle.plugin)
-    classpath("io.realm:realm-gradle-plugin:10.19.0")
+    classpath("io.realm:realm-gradle-plugin:${libs.versions.iorealm.get()}")
   }
 }
 
@@ -104,14 +114,8 @@ subprojects {
         .using(project(":editor:tree-sitter-ndk:annotations"))
     }
 
-    // 强制 kotlin-metadata-jvm 版本对齐项目 Kotlin 版本 (2.4.21)。
-    // Hilt 2.59 (兼容 AGP 8.x) 自带的 kotlinx-metadata-jvm 只支持到 Kotlin metadata 2.1.0,
-    // 与 Kotlin 2.4.21 生成的 metadata 2.2.0 不兼容, 会触发:
-    //   error: [Hilt] Provided Metadata instance has version 2.2.0, while maximum supported version is 2.1.0
-    // 利用 Dagger 2.57+ 已将 kotlin-metadata-jvm unshaded 的特性,
-    // 显式强制升级到 2.4.21 让 Hilt 编译器能读取 metadata 2.2.0。
-    // 必须放在 configurations.all 中以覆盖所有配置 (含 kapt / androidTest 等)。
-    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.21")
+    // Keep kotlin-metadata-jvm aligned with the active Kotlin compiler to avoid metadata parser skew.
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:$kotlinCompilerVersion")
   }
 
   plugins.withId("com.android.application") { configureAndroidModule(libs.androidx.libDesugaring) }

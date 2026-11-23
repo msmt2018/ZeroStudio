@@ -558,7 +558,22 @@ class KotlinLanguageServerImpl(
                     label = sig.label ?: "",
                     documentation = sig.documentation.toIdeMarkup(),
                     parameters = sig.parameters?.map { param ->
-                        val label = param.label?.left ?: param.label?.right?.joinToString(",") ?: ""
+                        // LSP4J 的参数标签右分支是 Tuple.Two<Int, Int>，表示签名字符串中的起止偏移。
+                        val label = param.label?.let { pLabel ->
+                            if (pLabel.isLeft) {
+                                pLabel.left.orEmpty()
+                            } else {
+                                val offsets = pLabel.right
+                                if (offsets != null) {
+                                    val signatureLabel = sig.label.orEmpty()
+                                    val safeStart = offsets.first.coerceIn(0, signatureLabel.length)
+                                    val safeEnd = offsets.second.coerceIn(safeStart, signatureLabel.length)
+                                    signatureLabel.substring(safeStart, safeEnd)
+                                } else {
+                                    ""
+                                }
+                            }
+                        }.orEmpty()
                         com.itsaky.androidide.lsp.models.ParameterInformation(
                             label = label,
                             documentation = param.documentation.toIdeMarkup(),

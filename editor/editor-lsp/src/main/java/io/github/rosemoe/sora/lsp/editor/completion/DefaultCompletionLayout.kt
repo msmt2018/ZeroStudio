@@ -239,7 +239,7 @@ class DefaultLspCompletionLayout : CompletionLayout {
       // 2. 标签与废弃(Deprecated)处理
       val isDeprecated =
           item.tags?.contains(CompletionItemTag.Deprecated) == true || item.deprecated == true
-      // 注：此处 item.label 可能在外部（FuzzyScorer）被替换为 SpannableString 以显示匹配高亮
+      // LSP4J CompletionItem.label 的类型为 String；匹配高亮应由适配器在展示层构造。
       val labelText = SpannableString(item.label)
       if (isDeprecated) {
         labelText.setSpan(

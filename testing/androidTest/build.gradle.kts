@@ -44,7 +44,7 @@ configurations.api {
 
 dependencies {
   implementation(libs.common.realm.android.library)
-  testImplementation("org.conscrypt:conscrypt-openjdk:2.5.2")
+  testImplementation(libs.tests.conscrypt.openjdk)
   api(libs.google.protobuf)
   api(libs.tests.androidx.espresso.core)
   api(libs.tests.androidx.espresso.contrib)

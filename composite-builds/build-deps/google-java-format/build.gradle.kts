@@ -30,6 +30,7 @@ dependencies {
   implementation(libs.google.guava)
 
   implementation(libs.google.auto.value.annotations)
+  compileOnly(libs.google.checker.qual)
   implementation(libs.google.auto.service.annotations)
 
   implementation(projects.buildDeps.javac)
