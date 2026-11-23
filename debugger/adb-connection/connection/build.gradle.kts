@@ -30,7 +30,6 @@ android {
     namespace = "android.zero.studio"
 
     compileSdk = 37
-    compileSdkMinor = 0
 
     defaultConfig {
         minSdk = 26  
