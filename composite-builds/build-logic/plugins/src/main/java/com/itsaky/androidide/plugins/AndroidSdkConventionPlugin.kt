@@ -17,7 +17,6 @@ class AndroidSdkConventionPlugin : Plugin<Project> {
     target.plugins.withId("com.android.library") {
       target.extensions.configure(LibraryExtension::class.java) {
         compileSdk = BuildConfig.compileSdk
-        compileSdkMinor = BuildConfig.compileSdkMinorApiLevel
         ndkVersion = BuildConfig.ndkVersion
         defaultConfig {
           minSdk = BuildConfig.minSdk
@@ -27,7 +26,6 @@ class AndroidSdkConventionPlugin : Plugin<Project> {
     target.plugins.withId("com.android.application") {
       target.extensions.configure(ApplicationExtension::class.java) {
         compileSdk = BuildConfig.compileSdk
-        compileSdkMinor = BuildConfig.compileSdkMinorApiLevel
         ndkVersion = BuildConfig.ndkVersion
         defaultConfig {
           minSdk = BuildConfig.minSdk
