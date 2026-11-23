@@ -30,6 +30,7 @@ object MkSession {
         context: Context, sessionClient: TerminalSessionClient, session_id: String,workingMode:Int
     ): TerminalSession {
         with(context) {
+            Rootfs.ensureDevelopmentEnvironment()
             val envVariables = mapOf(
                 "ANDROID_ART_ROOT" to System.getenv("ANDROID_ART_ROOT"),
                 "ANDROID_DATA" to System.getenv("ANDROID_DATA"),

@@ -7,27 +7,30 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 
 /**
- * Applies the repository-wide Android SDK and NDK versions to standalone composite builds.
+ * Applies repository SDK/NDK configuration to independent composite-build Android modules.
  *
- * AGP 9 exposes the new public DSL interfaces. Configure their properties directly rather
- * than relying on the removed legacy "android" receiver.
+ * AGP 9 exposes the public Android DSL extensions instead of the legacy BaseExtension.
  */
 class AndroidSdkConventionPlugin : Plugin<Project> {
 
   override fun apply(target: Project) {
     target.plugins.withId("com.android.library") {
-      target.extensions.getByType(LibraryExtension::class.java).apply {
+      target.extensions.configure(LibraryExtension::class.java) {
         compileSdk = BuildConfig.compileSdk
         ndkVersion = BuildConfig.ndkVersion
-        defaultConfig.minSdk = BuildConfig.minSdk
+        defaultConfig {
+          minSdk = BuildConfig.minSdk
+        }
       }
     }
     target.plugins.withId("com.android.application") {
-      target.extensions.getByType(ApplicationExtension::class.java).apply {
+      target.extensions.configure(ApplicationExtension::class.java) {
         compileSdk = BuildConfig.compileSdk
         ndkVersion = BuildConfig.ndkVersion
-        defaultConfig.minSdk = BuildConfig.minSdk
-        defaultConfig.targetSdk = BuildConfig.targetSdk
+        defaultConfig {
+          minSdk = BuildConfig.minSdk
+          targetSdk = BuildConfig.targetSdk
+        }
       }
     }
   }

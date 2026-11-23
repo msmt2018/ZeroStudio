@@ -4,7 +4,7 @@
   ~  Created by @author android_zero
   ~  Style: High Contrast Cyberpunk - 赛博霓虹 - 高对比度暗色，适合夜间编程
   -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
   <!-- Cyber Neon - Light (Cyberpunk usually doesn't have light, but mapped for compatibility) -->
   <color name="_cyber_neon_light_colorPrimary">#ff006c4c</color>
   <color name="_cyber_neon_light_colorPrimaryContainer">#ff89f8c7</color>
@@ -81,7 +81,7 @@
     <item name="android:statusBarColor">@color/_cyber_neon_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_cyber_neon_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
 
     <!-- Terminal Specific Attributes -->
     <item name="terminalTextColor">@color/_cyber_neon_light_colorOnBackground</item>
@@ -164,7 +164,7 @@
     <item name="android:statusBarColor">@color/_cyber_neon_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_cyber_neon_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
 
     <!-- Terminal Specific -->
     <item name="terminalTextColor">@color/_cyber_neon_dark_colorPrimary</item> <!-- Neon Text -->

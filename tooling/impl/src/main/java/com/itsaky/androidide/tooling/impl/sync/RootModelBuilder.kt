@@ -75,7 +75,7 @@ class RootModelBuilder(initializationParams: InitializeProjectParams) :
       
       // For AGP 9.x, the Versions model might not be available, so we also try
       // to fetch BasicAndroidProject as a fallback to detect Android projects
-      val isAndroidProject = rootProjectVersions != null || isBasicAndroidProject(controller, rootModule)
+      val isAndroidProject = rootProjectVersions != null || getBasicAndroidProject(rootModule, controller) != null
 
       val syncIssues = hashSetOf<DefaultSyncIssue>()
       val syncIssueReporter = ISyncIssueReporter {
@@ -90,7 +90,7 @@ class RootModelBuilder(initializationParams: InitializeProjectParams) :
 
       // Check AGP and Gradle version compatibility for Android projects
       if (isAndroidProject) {
-        val detectedAgpVersion = detectAgpVersion(rootModule.gradleProject)
+        val detectedAgpVersion = rootProjectVersions?.agp ?: detectAgpVersion(rootModule.gradleProject)
         val gradleVersion = buildEnvironment?.gradle?.gradleVersion
         
         if (detectedAgpVersion != null && gradleVersion != null) {
@@ -166,18 +166,6 @@ class RootModelBuilder(initializationParams: InitializeProjectParams) :
     addArguments(String.format("-P%s=%s", property, value))
   }
   
-  /**
-   * Checks if the given model represents a BasicAndroidProject.
-   * This is used as a fallback when the Versions model is not available (AGP 9.x).
-   */
-  private fun isBasicAndroidProject(controller: org.gradle.tooling.BuildController, model: Model): Boolean {
-    return try {
-      controller.findModel(model, BasicAndroidProject::class.java) != null
-    } catch (e: Exception) {
-      false
-    }
-  }
-
   /**
    * Detect the AGP version from the Gradle project's build file.
    */

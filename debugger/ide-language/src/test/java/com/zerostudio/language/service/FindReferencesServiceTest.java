@@ -92,7 +92,7 @@ public class FindReferencesServiceTest {
 
     @Test
     public void emptyIndexReturnsEmpty() {
-        FindReferencesService empty = new FindReferencesService(new ProjectIndex());
+        FindReferencesService empty = new FindReferencesService(new com.zerostudio.language.index.InMemoryProjectIndex());
         assertTrue(empty.findByName("Foo", true).isEmpty());
     }
 

@@ -18,8 +18,7 @@
 package com.itsaky.androidide.plugins.conf
 
 import com.android.build.api.variant.AndroidComponentsExtension
-import com.android.build.api.dsl.CommonExtension
-import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.gradle.BaseExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import com.itsaky.androidide.build.config.FDroidConfig
 import com.itsaky.androidide.build.config.isFDroidBuild
@@ -64,96 +63,112 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
-  val android = extensions.getByType(CommonExtension::class.java)
+  extensions.getByType(BaseExtension::class.java).run {
 
-  // AGP 9 moved DSL block methods from CommonExtension to concrete extension types.
-  // The common properties remain available directly on CommonExtension.
-  android.packaging.resources.excludes.addAll(
-      listOf(
-          "META-INF/CHANGES",
-          "META-INF/README.md",
-      )
-  )
-  android.packaging.resources.pickFirsts.addAll(
-      listOf(
-          "META-INF/eclipse.inf",
-          "META-INF/LICENSE.md",
-          "META-INF/AL2.0",
-          "META-INF/LGPL2.1",
-          "META-INF/INDEX.LIST",
-          "about_files/LICENSE-2.0.txt",
-          "plugin.xml",
-          "plugin.properties",
-          "about.mappings",
-          "about.properties",
-          "about.ini",
-          "modeling32.png",
-      )
-  )
+    packagingOptions {
+      resources {
+        excludes.addAll(
+            arrayOf(
+                "META-INF/CHANGES",
+                "META-INF/README.md",
+            )
+        )
+        pickFirsts.addAll(
+            arrayOf(
+                "META-INF/eclipse.inf",
+                "META-INF/LICENSE.md",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1",
+                "META-INF/INDEX.LIST",
+                "about_files/LICENSE-2.0.txt",
+                "plugin.xml",
+                "plugin.properties",
+                "about.mappings",
+                "about.properties",
+                "about.ini",
+                "modeling32.png",
+            )
+        )
+      }
+    }
 
-  android.compileSdk = BuildConfig.compileSdk
-    android.compileSdkMinor = BuildConfig.compileSdkMinorApiLevel
-  android.ndkVersion = BuildConfig.ndkVersion
+    compileSdkVersion(BuildConfig.compileSdk)
+    ndkVersion = BuildConfig.ndkVersion
 
-  android.defaultConfig.apply {
-    minSdk = BuildConfig.minSdk
-    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-  }
-
-  // These properties belong to ApplicationDefaultConfig, not the shared library DSL.
-  // Keep library modules free of application-only SDK/version/multidex settings.
-  if (isAppModule) {
-    extensions.getByType(ApplicationExtension::class.java).defaultConfig.apply {
+    defaultConfig {
+      minSdk = BuildConfig.minSdk
       targetSdk = BuildConfig.targetSdk
       // versionCode = YYYYMMDDC (C 为当天打包递增计数器, 不补 0; 例 202606131)
       // versionName = vYYYYMMDD-NN-sha7 (NN 为 2 位 0 填充的当天打包递增计数器)
       // 两者均来自 ProjectConfig, 由 -Pide.build.dailyCounter / -Pide.build.gitShortSha 注入.
       versionCode = projectVersionCode
       versionName = simpleVersionName
+
+      // required
       multiDexEnabled = true
+
+      testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-  }
 
-  android.compileOptions.apply {
-    sourceCompatibility = BuildConfig.javaVersion17
-    targetCompatibility = BuildConfig.javaVersion17
-  }
+    compileOptions {
+      sourceCompatibility = BuildConfig.javaVersion17
+      targetCompatibility = BuildConfig.javaVersion17
+    }
 
-  configureCoreLibDesugaring(coreLibDesugDep)
+    configureCoreLibDesugaring(coreLibDesugDep)
 
-  if (project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
-    android.packaging.jniLibs.useLegacyPackaging = true
-    android.splits.abi.apply {
-      reset()
-      isEnable = true
-      isUniversalApk = false
-      if (isFDroidBuild) {
-        include(FDroidConfig.fDroidBuildArch!!)
-      } else {
-        include(*flavorsAbis.keys.toTypedArray())
+    if (project.plugins.hasPlugin("com.itsaky.androidide.core-app")) {
+      packagingOptions { jniLibs { useLegacyPackaging = true } }
+
+      splits {
+        abi {
+          reset()
+          isEnable = true
+          isUniversalApk = false
+          if (isFDroidBuild) {
+            include(FDroidConfig.fDroidBuildArch!!)
+          } else {
+            include(*flavorsAbis.keys.toTypedArray())
+          }
+        }
+      }
+      // 注: 所有 ABI 共享同一 versionCode (YYYYMMDDC), 不做 per-ABI 偏移;
+      // 各 ABI 通过 APK 文件名区分, 避免在 10 位 versionCode (上限 2,100,000,000)
+      // 下做 100*N + ABI 编码导致溢出.
+    } else {
+      defaultConfig {
+        ndk {
+          abiFilters.clear()
+          abiFilters += flavorsAbis.keys
+        }
       }
     }
-    // All ABIs share the same versionCode; ABI is represented by the APK file name.
-  } else {
-    android.defaultConfig.ndk.abiFilters.apply {
-      clear()
-      addAll(flavorsAbis.keys)
+
+    buildTypes.getByName("debug") { isMinifyEnabled = false }
+    buildTypes.getByName("release") {
+
+      // from AGP 8.4.0 onwards, there are some behavioral changes in R8
+      // enabling R8 on library projects results in missing class errors
+      // see https://issuetracker.google.com/issues/338411137#comment11
+      isMinifyEnabled = isAppModule
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
-  }
 
-  android.buildTypes.getByName("debug").isMinifyEnabled = false
-  android.buildTypes.getByName("release").apply {
-    isMinifyEnabled = isAppModule
-    proguardFiles(
-        android.getDefaultProguardFile("proguard-android-optimize.txt"),
-        project.file("proguard-rules.pro"),
-    )
-  }
+    // development build type
+    // similar to 'release', but disables proguard/r8
+    // this build type can be used to gain release-like performance at runtime
+    // the build are faster for this build type as compared to 'release'
+    // buildTypes.register("dev") {
+    // initWith(buildTypes.getByName("release"))
+    // isMinifyEnabled = false
+    // }
 
-  android.testOptions.unitTests.isIncludeAndroidResources = true
-  android.buildFeatures.viewBinding = true
-  android.buildFeatures.buildConfig = true
-  // buildFeatures.compose = true
+    testOptions { unitTests.isIncludeAndroidResources = true }
+
+    buildFeatures.viewBinding = true
+    buildFeatures.buildConfig = true
+    // buildFeatures.compose = true
+  }
 }
 
 private fun Project.configureCoreLibDesugaring(

@@ -129,15 +129,20 @@ internal class AndroidProjectImpl(
       seen: HashMap<String, DefaultLibrary>,
   ): DefaultLibrary? {
 
+    // Insert the node before traversing its edges. This both avoids repeated
+    // copies in diamond-shaped graphs and prevents unbounded recursion if an
+    // unexpected/corrupt model contains a cycle.
+    seen[item.key]?.let { return it }
+
     val lib = libraries[item.key] ?: return null
     val library = copy(lib)
+    seen[item.key] = library
 
     for (dependency in item.dependencies) {
-      val dep = fillLibrary(dependency, libraries, seen)!!
-      library.dependencies.add(dep.key)
+      fillLibrary(dependency, libraries, seen)?.let { resolved ->
+        library.dependencies.add(resolved.key)
+      }
     }
-
-    seen[item.key] = library
 
     return library
   }

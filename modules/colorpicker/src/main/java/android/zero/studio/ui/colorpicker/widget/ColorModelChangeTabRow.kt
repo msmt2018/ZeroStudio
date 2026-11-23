@@ -39,10 +39,11 @@ fun ColorModelChangeTabRow(
 
   Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceEvenly) {
     modelList.forEachIndexed { index, s ->
+      val interactionSource = remember(index) { MutableInteractionSource() }
       Box(
           modifier =
               Modifier.clickable(
-                      interactionSource = MutableInteractionSource(),
+                      interactionSource = interactionSource,
                       indication = null,
                       onClick = {
                         selectedIndex = index
@@ -97,10 +98,11 @@ fun ColorGradientModeChangeTabRow(
       verticalAlignment = Alignment.CenterVertically,
   ) {
     modeList.forEachIndexed { index, s ->
+      val interactionSource = remember(index) { MutableInteractionSource() }
       Box(
           modifier =
               Modifier.clickable(
-                      interactionSource = MutableInteractionSource(),
+                      interactionSource = interactionSource,
                       indication = null,
                       onClick = {
                         selectedIndex = index

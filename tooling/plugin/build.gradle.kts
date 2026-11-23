@@ -28,6 +28,8 @@ plugins {
 description = "Gradle Plugin for projects that are built with AndroidCS"
 
 dependencies {
+  testImplementation(libs.tests.junit)
+
   implementation(projects.tooling.pluginConfig)
   implementation(projects.utilities.buildInfo)
 

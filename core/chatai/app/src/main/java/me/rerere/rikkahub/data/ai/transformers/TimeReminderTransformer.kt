@@ -29,26 +29,23 @@ object TimeReminderTransformer : InputMessageTransformer {
 }
 
 internal fun applyTimeReminder(messages: List<UIMessage>): List<UIMessage> {
+    if (messages.isEmpty()) return emptyList()
+
     val result = mutableListOf<UIMessage>()
     val tz = TimeZone.currentSystemDefault()
+    var previousUserInstant: Instant? = null
 
-    var firstUserFound = false
-    for (i in messages.indices) {
-        val current = messages[i]
+    for (current in messages) {
         if (current.role == MessageRole.USER) {
-            val currInstant = current.createdAt.toInstant(tz)
-            if (!firstUserFound) {
-                firstUserFound = true
-                result.add(buildTimeReminderMessage(null, currInstant))
-            } else {
-                val previous = messages[i - 1]
-                val prevInstant = previous.createdAt.toInstant(tz)
-                val gapSeconds = (currInstant - prevInstant).inWholeSeconds
-
+            val currentInstant = current.createdAt.toInstant(tz)
+            val previousInstant = previousUserInstant
+            if (previousInstant != null) {
+                val gapSeconds = (currentInstant - previousInstant).inWholeSeconds
                 if (gapSeconds > TIME_GAP_THRESHOLD_SECONDS) {
-                    result.add(buildTimeReminderMessage(gapSeconds, currInstant))
+                    result.add(buildTimeReminderMessage(gapSeconds, currentInstant))
                 }
             }
+            previousUserInstant = currentInstant
         }
         result.add(current)
     }

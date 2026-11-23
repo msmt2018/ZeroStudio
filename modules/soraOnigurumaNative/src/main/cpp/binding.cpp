@@ -1,29 +1,134 @@
 //
-// Created by Rosemoe on 2025/11/8.
+// Safe JNI bridge for Oniguruma.
+//
+// Native handles are registry IDs, never raw pointers. A search takes a
+// shared ownership reference before leaving the registry lock, so releasing
+// a handle cannot destroy a regex while an operation is using it.
 //
 
 #include "oniguruma.h"
 #include "jni.h"
-#include <string>
-#include <mutex>
 
-OnigErrorInfo lastOnigError;
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <unordered_map>
+#include <utility>
 
 struct OnigCachedResult {
-    jlong cacheKey{};
-    int lastSearchPosition{};
-    OnigRegion *region{};
+    jlong cacheKey{0};
+    int lastSearchPosition{0};
+    std::unique_ptr<OnigRegion, void (*)(OnigRegion*)> region{
+            nullptr, [](OnigRegion* value) {
+                if (value != nullptr) {
+                    onig_region_free(value, 1);
+                }
+            }};
 };
 
 struct OnigCachedRegex {
-    bool hasGAnchor{};
-    OnigRegex regex{};
-    OnigCachedResult lastResult{};
-    std::mutex cacheLock{};
+    explicit OnigCachedRegex(OnigRegex value, bool hasAnchor)
+            : hasGAnchor(hasAnchor), regex(value) {}
+
+    ~OnigCachedRegex() {
+        lastResult.region.reset();
+        if (regex != nullptr) {
+            onig_free(regex);
+            regex = nullptr;
+        }
+    }
+
+    OnigCachedRegex(const OnigCachedRegex&) = delete;
+    OnigCachedRegex& operator=(const OnigCachedRegex&) = delete;
+
+    const bool hasGAnchor;
+    OnigRegex regex{nullptr};
+
+    // Protects both OnigRegex use and the one-entry search cache. Oniguruma
+    // regex objects are not assumed to be concurrently searchable here.
+    std::mutex searchLock;
+    OnigCachedResult lastResult;
 };
 
-bool checkGAnchor(const unsigned char *data, jsize length) {
-    for (int i = 0; i < length - 1; i++) {
+namespace {
+
+using RegexHandle = jlong;
+using RegexPtr = std::shared_ptr<OnigCachedRegex>;
+
+std::mutex gRegistryLock;
+std::unordered_map<RegexHandle, RegexPtr> gRegexRegistry;
+std::atomic<RegexHandle> gNextHandle{1};
+
+using RegionPtr = std::unique_ptr<OnigRegion, void (*)(OnigRegion*)>;
+
+void freeRegion(OnigRegion* region) {
+    if (region != nullptr) {
+        onig_region_free(region, 1);
+    }
+}
+
+RegionPtr makeRegion() {
+    return RegionPtr(onig_region_new(), &freeRegion);
+}
+
+RegexHandle registerRegex(RegexPtr regex) {
+    if (!regex) {
+        return 0;
+    }
+
+    std::lock_guard<std::mutex> lock(gRegistryLock);
+    for (;;) {
+        const RegexHandle handle = gNextHandle.fetch_add(1, std::memory_order_relaxed);
+        // Zero is reserved for an invalid handle. Exhaustion is practically
+        // unreachable, but never publish a non-positive identifier.
+        if (handle <= 0) {
+            return 0;
+        }
+        const auto inserted = gRegexRegistry.emplace(handle, regex);
+        if (inserted.second) {
+            return handle;
+        }
+    }
+}
+
+RegexPtr acquireRegex(RegexHandle handle) {
+    if (handle <= 0) {
+        return {};
+    }
+    std::lock_guard<std::mutex> lock(gRegistryLock);
+    const auto found = gRegexRegistry.find(handle);
+    return found == gRegexRegistry.end() ? RegexPtr{} : found->second;
+}
+
+void unregisterRegex(RegexHandle handle) {
+    if (handle <= 0) {
+        return;
+    }
+
+    RegexPtr released;
+    {
+        std::lock_guard<std::mutex> lock(gRegistryLock);
+        const auto found = gRegexRegistry.find(handle);
+        if (found == gRegexRegistry.end()) {
+            return;
+        }
+        released = std::move(found->second);
+        gRegexRegistry.erase(found);
+    }
+    // Destruction happens outside the registry lock. Any in-flight operation
+    // retains its own shared_ptr and delays destruction until it completes.
+    released.reset();
+}
+
+bool checkGAnchor(const unsigned char* data, jsize length) {
+    if (data == nullptr || length < 2) {
+        return false;
+    }
+    for (jsize i = 0; i + 1 < length; ++i) {
         if (data[i] == '\\' && data[i + 1] == 'G') {
             return true;
         }
@@ -31,197 +136,309 @@ bool checkGAnchor(const unsigned char *data, jsize length) {
     return false;
 }
 
-void updateCache(OnigCachedRegex *regex, OnigCachedResult result) {
-    if (regex->hasGAnchor) {
+void updateCacheLocked(OnigCachedRegex& regex, jlong cacheKey, int start,
+                       const OnigRegion* resultRegion, bool cacheNoMatch) {
+    if (cacheKey == 0 || regex.hasGAnchor) {
         return;
     }
-    std::lock_guard<std::mutex> _{regex->cacheLock};
-    if (regex->lastResult.region != nullptr) {
-        onig_region_free(regex->lastResult.region, 1);
-        regex->lastResult.region = nullptr;
+
+    regex.lastResult.region.reset();
+    regex.lastResult.cacheKey = cacheKey;
+    regex.lastResult.lastSearchPosition = start;
+
+    if (resultRegion != nullptr) {
+        auto copy = makeRegion();
+        if (!copy) {
+            regex.lastResult.cacheKey = 0;
+            return;
+        }
+        onig_region_copy(copy.get(), const_cast<OnigRegion*>(resultRegion));
+        regex.lastResult.region = std::move(copy);
+    } else if (!cacheNoMatch) {
+        regex.lastResult.cacheKey = 0;
     }
-    regex->lastResult = result;
 }
 
-bool
-searchCached(OnigCachedRegex *regex, jlong cacheKey, const unsigned char *data, int start, int end,
-             OnigRegion *outRegion) {
-    // First check if the cache is suitable
-    if (cacheKey != 0 && !regex->hasGAnchor && regex->lastResult.cacheKey == cacheKey) {
-        std::lock_guard<std::mutex> _{regex->cacheLock};
-        auto &lastResult = regex->lastResult;
-        if (lastResult.cacheKey == cacheKey && lastResult.lastSearchPosition <= start) {
-            // Last search result is no match
-            if (lastResult.region == nullptr) {
-                return false;
-            }
-            // Suitable non-empty last match
-            if (lastResult.region->num_regs > 0 &&
-                    std::max(0, lastResult.region->beg[0]) >= start &&
-                    std::max(0, lastResult.region->end[0]) <= end) {
-                onig_region_copy(outRegion, lastResult.region);
-                return true;
-            }
-        }
-    }
-
-    // Do the search
-    OnigRegion *region = onig_region_new();
-    int status = onig_search(regex->regex, data, data + end, data + start, data + end, region,
-                             ONIG_OPTION_DEFAULT);
-
-    // no match or error
-    if (status == ONIG_MISMATCH || status < 0) {
-        onig_region_free(region, 1);
-        updateCache(regex, {cacheKey, start, nullptr});
+bool searchCached(const RegexPtr& regex, jlong cacheKey,
+                  const unsigned char* data, int start, int end,
+                  OnigRegion* outRegion) {
+    if (!regex || regex->regex == nullptr || outRegion == nullptr ||
+        data == nullptr || start < 0 || end < start) {
         return false;
     }
 
-    updateCache(regex, {cacheKey, start, region});
-    onig_region_copy(outRegion, region);
+    std::lock_guard<std::mutex> lock(regex->searchLock);
+
+    if (cacheKey != 0 && !regex->hasGAnchor &&
+        regex->lastResult.cacheKey == cacheKey &&
+        regex->lastResult.lastSearchPosition <= start) {
+        const auto* cached = regex->lastResult.region.get();
+
+        // A cached miss remains a miss for any later start position in the
+        // same immutable source string.
+        if (cached == nullptr) {
+            return false;
+        }
+
+        if (cached->num_regs > 0 &&
+            cached->beg != nullptr && cached->end != nullptr &&
+            cached->beg[0] >= start && cached->end[0] >= cached->beg[0] &&
+            cached->end[0] <= end) {
+            onig_region_copy(outRegion, const_cast<OnigRegion*>(cached));
+            return true;
+        }
+    }
+
+    auto resultRegion = makeRegion();
+    if (!resultRegion) {
+        return false;
+    }
+
+    const int status = onig_search(regex->regex, data, data + end,
+                                   data + start, data + end, resultRegion.get(),
+                                   ONIG_OPTION_DEFAULT);
+
+    if (status == ONIG_MISMATCH) {
+        updateCacheLocked(*regex, cacheKey, start, nullptr, true);
+        return false;
+    }
+    if (status < 0) {
+        // Do not cache operational errors as ordinary misses.
+        updateCacheLocked(*regex, cacheKey, start, nullptr, false);
+        return false;
+    }
+
+    updateCacheLocked(*regex, cacheKey, start, resultRegion.get(), true);
+    onig_region_copy(outRegion, resultRegion.get());
     return true;
 }
 
+bool isValidRange(jsize length, jint start, jint end) {
+    return start >= 0 && end >= start && end <= length;
+}
+
+jintArray makeResultArray(JNIEnv* env, const OnigRegion* region,
+                          int extraValue, bool appendExtra) {
+    if (region == nullptr || region->num_regs < 0 ||
+        region->num_regs > (std::numeric_limits<jsize>::max() - (appendExtra ? 1 : 0)) / 2) {
+        return nullptr;
+    }
+
+    const jsize count = static_cast<jsize>(region->num_regs * 2 +
+                                           (appendExtra ? 1 : 0));
+    jintArray result = env->NewIntArray(count);
+    if (result == nullptr) {
+        return nullptr; // JVM has raised OutOfMemoryError.
+    }
+
+    if (region->num_regs > 0 && (region->beg == nullptr || region->end == nullptr)) {
+        return nullptr;
+    }
+
+    std::unique_ptr<jint[]> values(
+            count > 0 ? new (std::nothrow) jint[static_cast<size_t>(count)] : nullptr);
+    if (count > 0 && !values) {
+        return nullptr;
+    }
+
+    for (int i = 0; i < region->num_regs; ++i) {
+        values[static_cast<size_t>(i) * 2] = region->beg[i];
+        values[static_cast<size_t>(i) * 2 + 1] = region->end[i];
+    }
+    if (appendExtra) {
+        values[static_cast<size_t>(count - 1)] = extraValue;
+    }
+
+    if (count > 0) {
+        env->SetIntArrayRegion(result, 0, count, values.get());
+        if (env->ExceptionCheck()) {
+            return nullptr;
+        }
+    }
+    return result;
+}
+
+} // namespace
+
 extern "C"
 JNIEXPORT jlong JNICALL
-Java_io_github_rosemoe_oniguruma_OnigNative_nCreateRegex(JNIEnv *env, jclass clazz,
-                                                         jbyteArray pattern,
-                                                     jboolean ignore_case) {
-    auto size = env->GetArrayLength(pattern);
-    auto content = env->GetByteArrayElements(pattern, nullptr);
-    if (content == nullptr) {
+Java_io_github_rosemoe_oniguruma_OnigNative_nCreateRegex(
+        JNIEnv* env, jclass, jbyteArray pattern, jboolean ignore_case) {
+    if (pattern == nullptr) {
         return 0;
     }
 
-    OnigRegex regex;
-    auto buffer = reinterpret_cast<unsigned char *>(content);
-    bool hasGAnchor = checkGAnchor(buffer, size);
-    OnigOptionType type = ignore_case ? ONIG_OPTION_IGNORECASE : 0;
-    type |= ONIG_OPTION_CAPTURE_GROUP;
-
-    auto result = onig_new(&regex, buffer, buffer + size, type, ONIG_ENCODING_UTF8,
-                           ONIG_SYNTAX_DEFAULT, &lastOnigError);
-    env->ReleaseByteArrayElements(pattern, content, JNI_ABORT);
-
-    if (result != ONIG_NORMAL) {
+    const jsize size = env->GetArrayLength(pattern);
+    jbyte emptyPattern = 0;
+    jbyte* content = size > 0 ? env->GetByteArrayElements(pattern, nullptr) : nullptr;
+    if (size > 0 && content == nullptr) {
         return 0;
     }
 
-    auto cachedRegex = new OnigCachedRegex{hasGAnchor, regex};
-    return reinterpret_cast<jlong>(cachedRegex);
+    auto* bytes = size > 0
+            ? reinterpret_cast<unsigned char*>(content)
+            : reinterpret_cast<unsigned char*>(&emptyPattern);
+    const bool hasGAnchor = checkGAnchor(bytes, size);
+    OnigOptionType options = ignore_case == JNI_TRUE ? ONIG_OPTION_IGNORECASE : ONIG_OPTION_NONE;
+    options |= ONIG_OPTION_CAPTURE_GROUP;
+
+    OnigRegex compiledRegex = nullptr;
+    OnigErrorInfo errorInfo{};
+    const int status = onig_new(&compiledRegex, bytes, bytes + size, options,
+                                ONIG_ENCODING_UTF8, ONIG_SYNTAX_DEFAULT, &errorInfo);
+
+    if (content != nullptr) {
+        env->ReleaseByteArrayElements(pattern, content, JNI_ABORT);
+    }
+
+    if (status != ONIG_NORMAL || compiledRegex == nullptr) {
+        return 0;
+    }
+
+    try {
+        auto state = std::make_shared<OnigCachedRegex>(compiledRegex, hasGAnchor);
+        // Ownership transfers to OnigCachedRegex as soon as construction succeeds.
+        compiledRegex = nullptr;
+        return registerRegex(std::move(state));
+    } catch (const std::bad_alloc&) {
+        if (compiledRegex != nullptr) {
+            onig_free(compiledRegex);
+        }
+        return 0;
+    }
 }
 
 extern "C"
 JNIEXPORT jintArray JNICALL
-Java_io_github_rosemoe_oniguruma_OnigNative_nRegexSearch(JNIEnv *env, jclass clazz,
-                                                         jlong native_ptr,
-                                                        jlong cache_key, jbyteArray str, jint start,
-                                                        jint end) {
-    auto regex = reinterpret_cast<OnigCachedRegex *>(native_ptr);
-
-    auto content = env->GetByteArrayElements(str, nullptr);
-    if (content == nullptr) {
+Java_io_github_rosemoe_oniguruma_OnigNative_nRegexSearch(
+        JNIEnv* env, jclass, jlong native_handle, jlong cache_key,
+        jbyteArray str, jint start, jint end) {
+    if (str == nullptr) {
         return nullptr;
     }
 
-    OnigRegion *region = onig_region_new();
-
-    auto buffer = reinterpret_cast<unsigned char *>(content);
-    bool success = searchCached(regex, cache_key, buffer, start, end, region);
-    env->ReleaseByteArrayElements(str, content, JNI_ABORT);
-
-    if (!success) {
-        onig_region_free(region, 1);
+    const jsize length = env->GetArrayLength(str);
+    if (!isValidRange(length, start, end)) {
         return nullptr;
     }
 
-    auto result = env->NewIntArray(region->num_regs * 2);
-    auto indices = env->GetIntArrayElements(result, nullptr);
-    for (int i = 0; i < region->num_regs; i++) {
-        indices[i * 2] = region->beg[i];
-        indices[i * 2 + 1] = region->end[i];
+    RegexPtr regex = acquireRegex(native_handle);
+    if (!regex) {
+        return nullptr;
     }
-    onig_region_free(region, 1);
-    env->ReleaseIntArrayElements(result, indices, JNI_COMMIT);
-    return result;
+
+    jbyte emptyText = 0;
+    jbyte* content = length > 0 ? env->GetByteArrayElements(str, nullptr) : nullptr;
+    if (length > 0 && content == nullptr) {
+        return nullptr;
+    }
+
+    auto* bytes = length > 0
+            ? reinterpret_cast<unsigned char*>(content)
+            : reinterpret_cast<unsigned char*>(&emptyText);
+    auto region = makeRegion();
+    const bool success = region &&
+            searchCached(regex, cache_key, bytes, start, end, region.get());
+
+    if (content != nullptr) {
+        env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+    }
+
+    if (!success || !region) {
+        return nullptr;
+    }
+    return makeResultArray(env, region.get(), 0, false);
 }
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_io_github_rosemoe_oniguruma_OnigNative_releaseRegex(JNIEnv *env, jclass clazz,
-                                                         jlong native_ptr) {
-    if (native_ptr != 0L) {
-        auto regex = reinterpret_cast<OnigCachedRegex *>(native_ptr);
-        // Delete any old search cache
-        updateCache(regex, {0, 0, nullptr});
-        onig_free(regex->regex);
-        delete regex;
-    }
+Java_io_github_rosemoe_oniguruma_OnigNative_releaseRegex(
+        JNIEnv*, jclass, jlong native_handle) {
+    unregisterRegex(native_handle);
 }
 
 extern "C"
 JNIEXPORT jintArray JNICALL
-Java_io_github_rosemoe_oniguruma_OnigNative_nRegexSearchBatch(JNIEnv *env, jclass clazz,
-                                                             jlongArray native_ptrs,
-                                                             jlong cache_key, jbyteArray str,
-                                                             jint start, jint end) {
-    auto nativePtrs = env->GetLongArrayElements(native_ptrs, nullptr);
-    if (nativePtrs == nullptr) {
+Java_io_github_rosemoe_oniguruma_OnigNative_nRegexSearchBatch(
+        JNIEnv* env, jclass, jlongArray native_handles,
+        jlong cache_key, jbyteArray str, jint start, jint end) {
+    if (native_handles == nullptr || str == nullptr) {
         return nullptr;
     }
 
-    auto strData = env->GetByteArrayElements(str, nullptr);
-    if (strData == nullptr) {
-        env->ReleaseLongArrayElements(native_ptrs, nativePtrs, JNI_ABORT);
+    const jsize regexCount = env->GetArrayLength(native_handles);
+    const jsize textLength = env->GetArrayLength(str);
+    if (!isValidRange(textLength, start, end) || regexCount <= 0) {
         return nullptr;
     }
-    auto buffer = reinterpret_cast<unsigned char *>(strData);
 
-    OnigRegion *region = onig_region_new();
-    OnigRegion *resultRegion = onig_region_new();
+    std::unique_ptr<jlong[]> handles(
+            new (std::nothrow) jlong[static_cast<size_t>(regexCount)]);
+    std::unique_ptr<RegexPtr[]> regexes(
+            new (std::nothrow) RegexPtr[static_cast<size_t>(regexCount)]);
+    if (!handles || !regexes) {
+        return nullptr;
+    }
 
-    auto regexCount = env->GetArrayLength(native_ptrs);
+    env->GetLongArrayRegion(native_handles, 0, regexCount, handles.get());
+    if (env->ExceptionCheck()) {
+        return nullptr;
+    }
+
+    for (jsize i = 0; i < regexCount; ++i) {
+        regexes[static_cast<size_t>(i)] = acquireRegex(handles[static_cast<size_t>(i)]);
+    }
+
+    jbyte emptyText = 0;
+    jbyte* content = textLength > 0 ? env->GetByteArrayElements(str, nullptr) : nullptr;
+    if (textLength > 0 && content == nullptr) {
+        return nullptr;
+    }
+
+    auto* bytes = textLength > 0
+            ? reinterpret_cast<unsigned char*>(content)
+            : reinterpret_cast<unsigned char*>(&emptyText);
+    auto currentRegion = makeRegion();
+    auto bestRegion = makeRegion();
+    if (!currentRegion || !bestRegion) {
+        if (content != nullptr) {
+            env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+        }
+        return nullptr;
+    }
+
     int bestIndex = -1;
-    int bestLocation = -1;
-    for (int i = 0; i < regexCount; i++) {
-        auto regex = reinterpret_cast<OnigCachedRegex *>(nativePtrs[i]);
+    int bestLocation = std::numeric_limits<int>::max();
+    for (int i = 0; i < regexCount; ++i) {
+        const auto& regex = regexes[static_cast<size_t>(i)];
+        if (!regex) {
+            continue;
+        }
 
-        onig_region_clear(region);
-        bool success = searchCached(regex, cache_key, buffer, start, end, region);
+        onig_region_clear(currentRegion.get());
+        if (!searchCached(regex, cache_key, bytes, start, end, currentRegion.get()) ||
+            currentRegion->num_regs <= 0 || currentRegion->beg == nullptr) {
+            continue;
+        }
 
-        if (success && region->num_regs > 0) {
-            // matched here
-            int location = std::max(0, region->beg[0]);
+        const int location = std::max(0, currentRegion->beg[0]);
+        if (bestIndex == -1 || location < bestLocation) {
+            bestIndex = i;
+            bestLocation = location;
+            onig_region_copy(bestRegion.get(), currentRegion.get());
+        }
 
-            if (bestIndex == -1 || location < bestLocation) {
-                bestIndex = i;
-                bestLocation = location;
-                std::swap(region, resultRegion);
-            }
-
-            if (location == start) {
-                break;
-            }
+        if (location == start) {
+            break;
         }
     }
 
-    env->ReleaseLongArrayElements(native_ptrs, nativePtrs, JNI_ABORT);
-    env->ReleaseByteArrayElements(str, strData, JNI_ABORT);
-    onig_region_free(region, 1);
+    if (content != nullptr) {
+        env->ReleaseByteArrayElements(str, content, JNI_ABORT);
+    }
 
-    if (bestIndex == -1) {
-        onig_region_free(resultRegion, 1);
+    if (bestIndex < 0) {
         return nullptr;
     }
-
-    auto result = env->NewIntArray(resultRegion->num_regs * 2 + 1);
-    auto indices = env->GetIntArrayElements(result, nullptr);
-    for (int i = 0; i < resultRegion->num_regs; i++) {
-        indices[i * 2] = resultRegion->beg[i];
-        indices[i * 2 + 1] = resultRegion->end[i];
-    }
-    indices[resultRegion->num_regs * 2] = bestIndex;
-    onig_region_free(resultRegion, 1);
-    env->ReleaseIntArrayElements(result, indices, JNI_COMMIT);
-    return result;
+    return makeResultArray(env, bestRegion.get(), bestIndex, true);
 }

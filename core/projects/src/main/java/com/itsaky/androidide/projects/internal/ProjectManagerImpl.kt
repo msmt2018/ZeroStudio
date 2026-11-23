@@ -106,10 +106,15 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
   }
 
   override fun openProject(directory: File) {
-    // IMP: Always use canonical path
+    // Always use the canonical path and invalidate the previous workspace before
+    // the new project's model is built. A failed sync must never expose project A
+    // while project B is the active directory.
+    this._workspace?.setVariantSelections(emptyMap())
+    this._workspace = null
     this._projectDir = directory.canonicalFile
-    // 清除上一个项目的缓存状态
     this.pluginProjectCached = null
+    this.projectInitialized = false
+    this.cachedInitResult = null
   }
 
   override suspend fun isGradleSyncNeeded(projectDir: File): Boolean {
@@ -125,14 +130,20 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
           projectDir?.let { File(it, Environment.PLUGIN_API_JAR_RELATIVE_PATH).exists() } ?: false
         }
 
+    val openedProjectDir = checkNotNull(projectDir) {
+      "Cannot create workspace because no project directory is currently open"
+    }
+
     this._workspace =
         withStopWatch("Transform project proxy") {
           withContext(Dispatchers.IO) {
-            projectDir?.let { WorkspaceModelBuilder.build(it, CachingProject(project)) }
+            WorkspaceModelBuilder.build(openedProjectDir, CachingProject(project))
           }
         }
 
-    val rootProject = this.getWorkspace() ?: return
+    val rootProject = checkNotNull(this.getWorkspace()) {
+      "WorkspaceModelBuilder completed without publishing a workspace"
+    }
 
     // build variants must be updated before the sources and classpaths are indexed
     updateBuildVariants { buildVariants -> _workspace!!.setVariantSelections(buildVariants) }

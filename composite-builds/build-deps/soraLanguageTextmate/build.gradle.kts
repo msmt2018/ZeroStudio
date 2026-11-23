@@ -19,6 +19,7 @@
  * questions
  * ****************************************************************************
  */
+import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -26,7 +27,7 @@ plugins {
   id("com.android.library")
 }
 
-android {
+extensions.configure<LibraryExtension> {
   namespace = "io.github.rosemoe.sora.langs.textmate"
 
   defaultConfig {
@@ -43,16 +44,13 @@ android {
     }
   }
   compileOptions {
-    // Flag to enable support for the new language APIs
-    // It's only needed if your app targets old Android APIs.
-    // isCoreLibraryDesugaringEnabled = true
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
   }
 }
 
 dependencies {
-  compileOnly(libs.common.editor)
+  compileOnly(project(":editor"))
   compileOnly(project(":soraOnigurumaNative"))
 
   implementation(libs.google.gson)
@@ -69,4 +67,6 @@ dependencies {
 
 kotlin { jvmToolchain(17) }
 
-tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
+tasks.withType<KotlinCompile>().configureEach {
+  compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+}

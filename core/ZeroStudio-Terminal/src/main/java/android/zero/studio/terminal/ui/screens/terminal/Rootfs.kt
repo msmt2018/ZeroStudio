@@ -13,6 +13,14 @@ import java.io.File
 
 object Rootfs {
     val reTerminal = application!!.filesDir
+    /** One app-private toolchain directory shared by every PRoot rootfs. */
+    val developmentEnvironmentDir: File = reTerminal.parentFile!!.resolve("dev-environment")
+
+    fun ensureDevelopmentEnvironment() {
+        listOf("bin", "jdk", "android-sdk", "rustup", "cargo", "env.d").forEach { name ->
+            developmentEnvironmentDir.resolve(name).mkdirs()
+        }
+    }
 
     init {
         if (reTerminal.exists().not()){

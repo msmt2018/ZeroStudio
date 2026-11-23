@@ -35,7 +35,8 @@ dependencies {
   implementation("com.android.tools.build:gradle:${libs.versions.agp.asProvider().get()}")
   implementation(libs.maven.publish)
 
-  implementation(kotlin("gradle-plugin"))
+  // Match Gradle 9.6.0 kotlin-dsl embedded Kotlin to avoid mixing Kotlin DSL runtimes.
+  implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21")
 
   implementation(libs.common.jkotlin)
   implementation(libs.common.antlr4)

@@ -1,3 +1,4 @@
+import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -6,7 +7,7 @@ plugins {
   id("com.itsaky.androidide.build")
 }
 
-android {
+extensions.configure<LibraryExtension> {
   namespace = "com.github.appintro"
 
   compileOptions {
@@ -15,14 +16,14 @@ android {
   }
 }
 
-kotlin { jvmToolchain(17) }
-
 tasks.withType<KotlinCompile>().configureEach {
   compilerOptions {
     jvmTarget.set(JvmTarget.JVM_17)
     freeCompilerArgs.add("-Xannotation-default-target=param-property")
   }
 }
+
+kotlin { jvmToolchain(17) }
 
 dependencies {
   implementation(libs.androidx.appcompat)

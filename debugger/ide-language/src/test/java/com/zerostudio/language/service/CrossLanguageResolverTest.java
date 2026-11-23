@@ -118,7 +118,7 @@ public class CrossLanguageResolverTest {
 
     @Test
     public void emptyIndex() {
-        ProjectIndex empty = new ProjectIndex();
+        ProjectIndex empty = new com.zerostudio.language.index.InMemoryProjectIndex();
         CrossLanguageResolver r = new CrossLanguageResolver(empty);
         ParsedFile pf = new ParsedFile("a.java", LanguageId.JAVA, "x",
                 Arrays.asList(mkRef("X", Reference.ReferenceKind.IMPORT, "x", "a.java", LanguageId.JAVA)), "");

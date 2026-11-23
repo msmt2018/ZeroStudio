@@ -12,7 +12,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with AndroidIDE. If not, see <https://www.gnu.org/licenses/>.
+ *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 import com.android.build.api.dsl.LibraryExtension
@@ -23,8 +23,6 @@ plugins {
   alias(libs.plugins.android.application) apply false
   alias(libs.plugins.android.library) apply false
   alias(libs.plugins.kotlin.android) apply false
-  // Resolve the convention plugin onto this build's classpath so subprojects can
-  // apply it dynamically from the com.android.library plugin callback below.
   id("com.itsaky.androidide.android-sdk") apply false
 }
 
@@ -32,7 +30,7 @@ subprojects {
   plugins.withId("com.android.library") {
     apply(plugin = "com.itsaky.androidide.android-sdk")
 
-    extensions.configure(LibraryExtension::class.java) {
+    extensions.configure<LibraryExtension> {
       compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -45,5 +43,7 @@ subprojects {
     }
   }
 
-  tasks.withType<KotlinCompile>().configureEach { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
+  tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+  }
 }

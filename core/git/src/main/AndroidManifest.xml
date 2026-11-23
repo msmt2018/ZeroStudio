@@ -5,6 +5,7 @@
 <!-- 注意：所有权限都已经迁移到：core：resources 模块AndroidManifest.xml -->
 
 <!--     use to start http service -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"

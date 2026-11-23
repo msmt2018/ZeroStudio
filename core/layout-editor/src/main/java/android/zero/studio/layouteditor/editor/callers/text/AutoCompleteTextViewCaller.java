@@ -2,6 +2,7 @@ package android.zero.studio.layouteditor.editor.callers.text;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.view.View;
 import android.widget.AutoCompleteTextView;
 
@@ -45,6 +46,6 @@ public class AutoCompleteTextViewCaller extends EditTextCaller {
     }
 
     public static void setDropDownBackgroundResource(View target, String value, Context context) {
-        ((AutoCompleteTextView) target).setDropDownBackgroundResource(Color.parseColor(value));
+        ((AutoCompleteTextView) target).setDropDownBackgroundDrawable(new ColorDrawable(Color.parseColor(value)));
     }
 }
