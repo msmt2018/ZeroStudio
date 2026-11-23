@@ -21,7 +21,6 @@ plugins {
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
-    alias(libs.plugins.aboutlibraries)
     id("kotlin-kapt")
 }
 
