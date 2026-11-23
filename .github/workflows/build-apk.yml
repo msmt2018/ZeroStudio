@@ -124,10 +124,20 @@ jobs:
           # export CMAKE_BUILD_PARALLEL_LEVEL=2
           CMAKE_BUILD_PARALLEL_LEVEL: "2"
         run: |
-          # 使用 --max-workers=2 限制模块并发
+          # 使用 --max-workers=2 限制模块并发；保留完整 Gradle 输出供失败诊断。
+          set -o pipefail
           BUILD_TYPE='${{ github.event.inputs.build_type || 'assemble' }}'
           echo "Building APK variant: $BUILD_TYPE"
-          ./gradlew "$BUILD_TYPE" --build-cache --max-workers=2
+          ./gradlew "$BUILD_TYPE" --build-cache --max-workers=2 --console=plain 2>&1 | tee build-apk-gradle.log
+
+      - name: Upload APK build diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-build-diagnostic-log
+          path: build-apk-gradle.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload app-arm64-v8a-release.apk
         if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
