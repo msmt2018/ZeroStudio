@@ -96,7 +96,7 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
 
     compileSdkVersion(BuildConfig.compileSdk)
     // Preserve the minor API level as well as the major API level. Without this,
-    // the application is compiled against 37.0 even when its libraries require 37.1.
+    // all Android modules use the same API 37.0 compile SDK.
     if (isAppModule) {
       this@configureAndroidModule.extensions
           .getByType(ApplicationExtension::class.java)
