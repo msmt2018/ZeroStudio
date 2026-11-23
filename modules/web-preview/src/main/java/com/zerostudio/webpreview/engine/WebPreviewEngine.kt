@@ -124,7 +124,7 @@ fun WebPreviewEngine(
 
     // javascriptInterfaces 变化 → 重新注入
     LaunchedEffect(state.javascriptInterfaces) {
-        webView?.let { injectJavascriptInterfaces(state, it) }
+        webView?.let { it.injectJavascriptInterfaces(state) }
     }
 
     // 销毁时释放 WebView
