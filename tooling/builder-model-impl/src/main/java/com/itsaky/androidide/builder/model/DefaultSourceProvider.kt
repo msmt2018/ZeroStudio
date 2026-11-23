@@ -39,14 +39,6 @@ class DefaultSourceProvider() : SourceProvider, Serializable {
   override var baselineProfileDirectories: Collection<File>? = null
   override var keepRulesDirectories: Collection<File>? = null
   override var aarKeepRulesDirectories: Collection<File>? = null
-  // AGP 9.x source-set dependency configuration names.
-  override var apiConfigurationName: String? = null
-  override var compileOnlyConfigurationName: String? = null
-  override var compileOnlyApiConfigurationName: String? = null
-  override var implementationConfigurationName: String? = null
-  override var runtimeOnlyConfigurationName: String? = null
-  override var annotationProcessorConfigurationName: String? = null
-  override var kaptConfigurationName: String? = null
 
   companion object {
     @JvmStatic val NoFile = File("<does-not-exist>")
@@ -69,13 +61,6 @@ class DefaultSourceProvider() : SourceProvider, Serializable {
         this.baselineProfileDirectories = sourceProvider.baselineProfileDirectories
         this.keepRulesDirectories = sourceProvider.keepRulesDirectories
         this.aarKeepRulesDirectories = sourceProvider.aarKeepRulesDirectories
-        this.apiConfigurationName = sourceProvider.apiConfigurationName
-        this.compileOnlyConfigurationName = sourceProvider.compileOnlyConfigurationName
-        this.compileOnlyApiConfigurationName = sourceProvider.compileOnlyApiConfigurationName
-        this.implementationConfigurationName = sourceProvider.implementationConfigurationName
-        this.runtimeOnlyConfigurationName = sourceProvider.runtimeOnlyConfigurationName
-        this.annotationProcessorConfigurationName = sourceProvider.annotationProcessorConfigurationName
-        this.kaptConfigurationName = sourceProvider.kaptConfigurationName
 
         this.customDirectories = sourceProvider.customDirectories?.map { customDir ->
           DefaultCustomSourceDirectory(customDir.directory, customDir.sourceTypeName)
