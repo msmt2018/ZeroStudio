@@ -95,13 +95,8 @@ public class IDEWrapperGenerator {
   private boolean distributionUrlConfigured = false;
 
   void generate(Project project) {
-    // Resolve dynamic version labels through Gradle's public TextResource API.
-    // Gradle 9.6 removed the old WrapperVersionsResources implementation classes.
-    gradleVersionResolver.setTextResources(
-        project.getResources().getText().fromUri("https://services.gradle.org/versions/current"),
-        project.getResources().getText().fromUri("https://services.gradle.org/versions/release-candidate"),
-        project.getResources().getText().fromUri("https://services.gradle.org/versions/nightly"),
-        project.getResources().getText().fromUri("https://services.gradle.org/versions/release-nightly"));
+    // GradleVersionResolver uses Gradle's public GradleVersion API.
+    // Dynamic aliases are rejected explicitly; callers must provide a concrete version.
 
     final var isOffline = project.getGradle().getStartParameter().isOffline();
     File jarFileDestination = getJarFile();
