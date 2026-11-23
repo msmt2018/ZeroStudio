@@ -165,7 +165,7 @@ fun ReasoningPicker(
                 val sliderState = rememberSliderState(
                     value = sliderValue,
                     steps = levelCount - 2,
-                    valueRange = 0f..(levelCount - 1).toFloat(),
+                    trackRange = 0f..(levelCount - 1).toFloat(),
                 )
                 LaunchedEffect(sliderValue) {
                     sliderState.value = sliderValue
