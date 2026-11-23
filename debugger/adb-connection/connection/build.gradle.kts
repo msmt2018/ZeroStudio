@@ -17,6 +17,8 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     alias(libs.plugins.android.library)
+    // Must be applied after the Android plugin so AboutLibraries registers its Android resource tasks.
+    alias(libs.plugins.aboutlibraries)
     id("kotlin-android")
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
     alias(libs.plugins.hilt)
