@@ -11,7 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -253,7 +253,7 @@ fun Downloader(
                                 singleLine = true,
                                 label = { Text("Linux 系统") },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = environmentExpanded) },
-                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                                modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                             )
                             ExposedDropdownMenu(
                                 expanded = environmentExpanded,
@@ -288,7 +288,7 @@ fun Downloader(
                                     singleLine = true,
                                     label = { Text("系统版本") },
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = versionExpanded) },
-                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                                 )
                                 ExposedDropdownMenu(
                                     expanded = versionExpanded,
