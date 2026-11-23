@@ -101,7 +101,7 @@ jobs:
       - name: Install NDK r29 and Android SDK CMake
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37" "build-tools;37.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "cmake;3.31.1"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "cmake;3.31.1"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |
