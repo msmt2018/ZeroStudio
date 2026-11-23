@@ -40,6 +40,7 @@ class DefaultTestInfo : TestInfo, Serializable {
                 this.animationsDisabled = testInfo.animationsDisabled
                 this.execution = testInfo.execution
                 this.instrumentedTestTaskName = testInfo.instrumentedTestTaskName
+                this.instrumentInPrivateComputeCore = testInfo.instrumentInPrivateComputeCore
             }
         }
     }
@@ -48,4 +49,5 @@ class DefaultTestInfo : TestInfo, Serializable {
     override var animationsDisabled: Boolean = false
     override var execution: Execution? = null
     override var instrumentedTestTaskName: String = ""
+    override var instrumentInPrivateComputeCore: Boolean = false
 }
