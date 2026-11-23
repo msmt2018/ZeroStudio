@@ -95,6 +95,7 @@ android {
 tasks.withType<KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_17
+        optIn.add("androidx.compose.foundation.layout.ExperimentalFlexBoxApi")
     }
 }
 

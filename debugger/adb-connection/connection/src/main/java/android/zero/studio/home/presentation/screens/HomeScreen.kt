@@ -1,6 +1,5 @@
 @file:OptIn(
     ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class,
-    ExperimentalFlexBoxApi::class
 )
 
 package android.zero.studio.home.presentation.screens
@@ -16,7 +15,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalFlexBoxApi
 import androidx.compose.foundation.layout.FlexAlignItems
 import androidx.compose.foundation.layout.FlexBox
 import androidx.compose.foundation.layout.FlexDirection
