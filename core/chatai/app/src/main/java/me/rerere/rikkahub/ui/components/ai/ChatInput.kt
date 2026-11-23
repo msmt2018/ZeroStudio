@@ -75,6 +75,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.dokar.sonner.ToastType
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
@@ -196,7 +197,11 @@ fun ChatInput(
                     .fillMaxWidth()
                     .clip(MaterialTheme.shapes.largeIncreased)
                     .then(
-                        if (settings.displaySetting.enableBlurEffect) Modifier.hazeEffect(state = hazeState, style = inputHazeStyle)
+                        if (settings.displaySetting.enableBlurEffect) Modifier.hazeEffect(state = hazeState) {
+                            blurEffect {
+                                style = inputHazeStyle
+                            }
+                        }
                         else Modifier
                     ),
                 shape = MaterialTheme.shapes.largeIncreased,
