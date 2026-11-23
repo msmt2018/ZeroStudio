@@ -312,18 +312,17 @@ private fun applyDarkMode(settings: WebSettings, darkMode: Boolean) {
 
 // ── 内部: JS 接口注入 ──────────────────────────────────────
 
+// Objects supplied here are app-defined bridge implementations; their public methods must be
+// annotated with @JavascriptInterface. Lint cannot inspect dynamically supplied runtime objects.
+@SuppressLint("JavascriptInterface")
 private fun WebView.injectJavascriptInterfaces(state: WebViewState) {
-    injectJavascriptInterfaces(state, this)
-}
-
-// Objects supplied here are app-defined bridge implementations; their public methods must be\n// annotated with @JavascriptInterface. Lint cannot inspect dynamically supplied runtime objects.\n@SuppressLint("JavascriptInterface")\nprivate fun injectJavascriptInterfaces(state: WebViewState, webView: WebView) {
     // 先移除旧的
     state.javascriptInterfaces.keys.forEach { name ->
-        webView.removeJavascriptInterface(name)
+        removeJavascriptInterface(name)
     }
     // 注入新的
     state.javascriptInterfaces.forEach { (name, obj) ->
-        webView.addJavascriptInterface(obj, name)
+        addJavascriptInterface(obj, name)
     }
 }
 
