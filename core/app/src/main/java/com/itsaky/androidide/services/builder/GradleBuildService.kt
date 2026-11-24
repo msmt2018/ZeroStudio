@@ -168,7 +168,17 @@ class GradleBuildService :
     val ticker = getString(R.string.title_gradle_service_notification_ticker)
     val title = getString(R.string.title_gradle_service_notification)
     val launch = packageManager.getLaunchIntentForPackage(BuildConfig.APPLICATION_ID)
-    val intent = PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_UPDATE_CURRENT)
+    // Android 12+ requires an explicit mutability flag. minSdk is 26, so
+    // FLAG_IMMUTABLE is available throughout the supported Android 8–17 range.
+    // This notification only launches the app and does not need a mutable Intent.
+    val intent = launch?.let {
+      PendingIntent.getActivity(
+          this,
+          0,
+          it,
+          PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
+    }
     val builder =
         Notification.Builder(this, BaseApplication.NOTIFICATION_GRADLE_BUILD_SERVICE)
             .setSmallIcon(R.drawable.ic_launcher_notification)
@@ -176,7 +186,7 @@ class GradleBuildService :
             .setWhen(System.currentTimeMillis())
             .setContentTitle(title)
             .setContentText(message)
-            .setContentIntent(intent)
+            .apply { intent?.let(::setContentIntent) }
 
     // Checking whether to add a ProgressBar to the notification
     if (isProgress) {
