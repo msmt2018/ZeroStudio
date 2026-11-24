@@ -75,7 +75,6 @@ class EditorPreferencesScreen(
   init {
     addPreference(KotlinLspPreferencesScreen())
     // addPreference(LspPreferencesEntry())
-    addPreference(KtfmtPreferencesScreen())
     addPreference(CommonConfigurations())
     addPreference(CodeIntelligencePreferences())
     addPreference(JavaCodeConfigurations())

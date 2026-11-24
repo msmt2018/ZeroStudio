@@ -34,10 +34,6 @@ import com.itsaky.androidide.editor.api.ILspEditor
 import com.itsaky.androidide.editor.language.IDELanguage
 import com.itsaky.androidide.editor.language.cpp.CppLanguage
 import com.itsaky.androidide.editor.language.groovy.GroovyLanguage
-import com.itsaky.androidide.editor.language.treesitter.TreeSitterLanguage
-import com.itsaky.androidide.editor.language.treesitter.TreeSitterLanguageProvider
-import com.itsaky.androidide.editor.schemes.IDEColorScheme
-import com.itsaky.androidide.editor.schemes.IDEColorSchemeProvider
 import com.itsaky.androidide.editor.snippets.AbstractSnippetVariableResolver
 import com.itsaky.androidide.editor.snippets.FileVariableResolver
 import com.itsaky.androidide.editor.snippets.WorkspaceVariableResolver
@@ -70,7 +66,6 @@ import com.itsaky.androidide.models.Position
 import com.itsaky.androidide.models.Range
 import com.itsaky.androidide.preferences.internal.EditorPreferences
 import com.itsaky.androidide.progress.ICancelChecker
-import com.itsaky.androidide.syntax.colorschemes.DynamicColorScheme
 import com.itsaky.androidide.syntax.colorschemes.SchemeAndroidIDE
 import com.itsaky.androidide.tasks.JobCancelChecker
 import com.itsaky.androidide.tasks.cancelIfActive
@@ -293,8 +288,6 @@ constructor(
   val editorScope = CoroutineScope(Dispatchers.Default + CoroutineName("IDEEditor"))
 
   protected val eventDispatcher = EditorEventDispatcher()
-
-  private var setupTsLanguageJob: Job? = null
   private var sigHelpCancelChecker: ICancelChecker? = null
 
   var languageServer: ILanguageServer? = null
@@ -617,8 +610,6 @@ constructor(
     selectionChangeJob?.cancel()
     selectionChangeJob = null
 
-    setupTsLanguageJob?.cancel(CancellationException("Editor is releasing resources."))
-
     if (editorScope.isActive) {
       editorScope.cancelIfActive("Editor is releasing resources.")
     }
@@ -783,117 +774,20 @@ constructor(
    * scheme to the editor.
    */
   open fun setupLanguage(file: File?) {
-    if (isReleased || file == null) {
-      return
-    }
-
-    createLanguage(file) { language ->
-      val extension = file.extension
-      if (language is TreeSitterLanguage) {
-        IDEColorSchemeProvider.readSchemeAsync(
-            context = context,
-            coroutineScope = editorScope,
-            type = extension,
-        ) { scheme ->
-          applyTreeSitterLang(language, extension, scheme)
-        }
-      } else {
-        setEditorLanguage(language)
-      }
-    }
-  }
-
-  /**
-   * Applies the given [TreeSitterLanguage] and the [color scheme][scheme] for the given
-   * [file type][type].
-   */
-  open fun applyTreeSitterLang(
-      language: TreeSitterLanguage,
-      type: String,
-      scheme: SchemeAndroidIDE?,
-  ) {
-    applyTreeSitterLangInternal(language, type, scheme)
-  }
-
-  private fun applyTreeSitterLangInternal(
-      language: TreeSitterLanguage,
-      type: String,
-      scheme: SchemeAndroidIDE?,
-  ) {
-    if (isReleased) {
-      return
-    }
-    var finalScheme = scheme
-    if (finalScheme == null) {
-      log.error("Failed to read current color scheme, falling back to default.")
-      finalScheme = SchemeAndroidIDE.newInstance(context)
-    }
-
-    if (finalScheme is IDEColorScheme) {
-      language.setupWith(finalScheme)
-
-      if (finalScheme.getLanguageScheme(type) == null) {
-        log.warn("Color scheme does not support file type '{}'", type)
-        // If specific language scheme not found, use default but keep the language instance
-        // We might want to fallback to a basic syntax highlighter if needed
-      }
-    }
-
-    if (finalScheme is DynamicColorScheme) {
-      finalScheme.apply(context)
-    }
-
-    colorScheme = finalScheme!!
-    setEditorLanguage(language)
+    if (isReleased || file == null) return
+    createLanguage(file) { language -> setEditorLanguage(language) }
   }
 
   private inline fun createLanguage(file: File, crossinline callback: (Language?) -> Unit) {
-    // 1. Basic check
-    if (!file.isFile) {
-      return callback(EmptyLanguage())
-    }
+    if (!file.isFile) return callback(EmptyLanguage())
 
-    // 2. TreeSitter Check
-    if (TreeSitterLanguageProvider.hasTsLanguage(file)) {
-      setupTsLanguageJob =
-          editorScope
-              .launch {
-                // 包一层 try-catch 防御: 即使 forFile 内部漏掉了某个 Error
-                // (如 ExceptionInInitializerError), 也要保证 callback 被调用,
-                // 否则 editor 永远不切换 language, 文件全黑字.
-                val lang = try {
-                  TreeSitterLanguageProvider.forFile(file, context)
-                } catch (t: Throwable) {
-                  log.error("Failed to create tree sitter language for file: {}", file, t)
-                  null
-                }
-                withContext(Dispatchers.Main) { callback(lang) }
-              }
-              .also { job ->
-                job.invokeOnCompletion { err ->
-                  if (err != null && err !is java.util.concurrent.CancellationException) {
-                    log.error("Failed to setup tree sitter language for file: {}", file, err)
-                  }
-                  setupTsLanguageJob = null
-                }
-              }
-      return
-    }
-
-    // 3. Fallback / Legacy Language Support
-    val lang =
+    val language =
         when (FileUtils.getFileExtension(file)) {
           "gradle" -> GroovyLanguage()
-          "c",
-          "h",
-          "cc",
-          "cpp",
-          "cxx",
-          "hpp" -> CppLanguage()
+          "c", "h", "cc", "cpp", "cxx", "hpp" -> CppLanguage()
           else -> EmptyLanguage()
         }
-
-    callback(lang)
+    callback(language)
   }
 
   /** Initialize the editor. */

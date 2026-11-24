@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.actions.*
-import com.itsaky.androidide.actions.code.jumpsymbol.GoToSymbolAction
 import com.itsaky.androidide.resources.R
 
 /**
@@ -27,15 +26,10 @@ class CodeActionsMenu(context: Context, override val order: Int) :
     var order = 0
 
     addAction(JumpToLineAction(context, order++))
-    addAction(KtfmtFormatAction(context, order++))
-    addAction(GoToSymbolAction(context, order++))
     addAction(OrganizeImportsAction(context, order++))
 
-    addAction(FormatCodeAction(context, order++))
     addAction(ToggleReadOnlyAction(context, order++))
     addAction(ShowSnippetsAction(context, order++))
-    addAction(SwitchToIfElseAction(context, order++))
-    addAction(IfElseToSwitchAction(context, order++))
   }
 
   override fun prepare(data: ActionData) {

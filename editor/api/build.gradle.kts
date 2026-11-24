@@ -25,8 +25,6 @@ plugins {
 android { namespace = "${BuildConfig.packageName}.editor.api" }
 
 dependencies {
-  api(projects.editor.treeSitterNdk.androidTreeSitter)
-
   api(projects.core.lspApi)
   api(projects.core.lspModels)
 

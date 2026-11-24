@@ -24,19 +24,13 @@ import android.view.View
 import com.blankj.utilcode.util.ThreadUtils
 import com.itsaky.androidide.R
 import com.itsaky.androidide.databinding.FragmentLogBinding
-import com.itsaky.androidide.editor.language.treesitter.LogLanguage
-import com.itsaky.androidide.editor.language.treesitter.TreeSitterLanguageProvider
-import com.itsaky.androidide.editor.schemes.IDEColorScheme
-import com.itsaky.androidide.editor.schemes.IDEColorSchemeProvider
 import com.itsaky.androidide.fragments.EmptyStateFragment
 import com.itsaky.androidide.models.LogLine
-import com.itsaky.androidide.treesitter.TreeSitter
 import com.itsaky.androidide.utils.ILogger.Level
 import com.itsaky.androidide.utils.jetbrainsMono
 import io.github.rosemoe.sora.widget.style.CursorAnimator
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.math.min
@@ -54,8 +48,6 @@ abstract class LogViewFragment :
   companion object {
 
     private val log = LoggerFactory.getLogger(LogViewFragment::class.java)
-    private val treeSitterLoaded = AtomicBoolean(false)
-    private val treeSitterLoadError = AtomicReference<Throwable?>(null)
 
     /** The maximum number of characters to append to the editor in case of huge log texts. */
     const val MAX_CHUNK_SIZE = 10000
@@ -224,8 +216,6 @@ abstract class LogViewFragment :
     editor.typefaceText = jetbrainsMono()
     editor.isEnsurePosAnimEnabled = false
 
-    ensureTreeSitterLoadedOnce()
-
     editor.cursorAnimator =
         object : CursorAnimator {
           override fun markStartPos() {}
@@ -257,36 +247,6 @@ abstract class LogViewFragment :
           }
         }
 
-    IDEColorSchemeProvider.readSchemeAsync(
-        context = requireContext(),
-        coroutineScope = editor.editorScope,
-        type = LogLanguage.TS_TYPE,
-    ) { scheme ->
-      val language = TreeSitterLanguageProvider.forType(LogLanguage.TS_TYPE, requireContext())
-      checkNotNull(language) { "No TreeSitterLanguage found for type ${LogLanguage.TS_TYPE}" }
-
-      if (scheme is IDEColorScheme) {
-        language.setupWith(scheme)
-      }
-
-      editor.applyTreeSitterLang(language, LogLanguage.TS_TYPE, scheme)
-    }
-  }
-
-  private fun ensureTreeSitterLoadedOnce() {
-    if (treeSitterLoaded.get()) return
-    synchronized(treeSitterLoaded) {
-      if (treeSitterLoaded.get()) return
-      try {
-        TreeSitter.loadLibrary()
-        treeSitterLoaded.set(true)
-        treeSitterLoadError.set(null)
-        log.debug("TreeSitter native library loaded successfully")
-      } catch (e: UnsatisfiedLinkError) {
-        treeSitterLoadError.set(e)
-        log.error("Failed to load TreeSitter native library", e)
-      }
-    }
   }
 
   override fun onDestroyView() {
