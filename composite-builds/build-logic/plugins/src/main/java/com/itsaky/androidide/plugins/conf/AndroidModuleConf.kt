@@ -18,6 +18,7 @@
 package com.itsaky.androidide.plugins.conf
 
 import com.android.build.api.variant.AndroidComponentsExtension
+import com.android.build.api.dsl.CommonExtension
 import com.android.build.gradle.BaseExtension
 import com.itsaky.androidide.build.config.BuildConfig
 import com.itsaky.androidide.build.config.FDroidConfig
@@ -63,6 +64,14 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
   }
 
+  // Keep every Android module on the same major and minor compile SDK API level.
+  // Use the typed DSL properties rather than the deprecated compileSdkVersion setter,
+  // which only expresses the major API level.
+  extensions.getByType(CommonExtension::class.java).apply {
+    compileSdk = BuildConfig.compileSdk
+    compileSdkMinor = BuildConfig.compileSdkMinor
+  }
+
   extensions.getByType(BaseExtension::class.java).run {
 
     packagingOptions {
@@ -92,8 +101,6 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
       }
     }
 
-    compileSdkVersion(BuildConfig.compileSdk)
-    // Preserve the minor API level as well as the major API level. Without this,
     ndkVersion = BuildConfig.ndkVersion
 
     defaultConfig {
