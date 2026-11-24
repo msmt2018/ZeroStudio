@@ -77,7 +77,7 @@ jobs:
           yes | "$SDKMANAGER" --licenses
 
           # Install the canonical Android API 37 platform package.
-          "$SDKMANAGER" --install "platforms;android-37.0" "platforms;android-37.1" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          "$SDKMANAGER" --install "platforms;android-37.1" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
 
           # Install API 37.1 for the app and colorpicker AAR metadata requirement; retain 37.0 for base API modules.
           # Keep android-37 as an alias to the installed 37.0 platform.
@@ -90,11 +90,9 @@ jobs:
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
 
-          test -d "$ANDROID_HOME/platforms/android-37"
 
           echo "=== Installed Android SDK platforms ==="
           ls -la "$ANDROID_HOME/platforms"
-          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
           test -f "$ANDROID_HOME/platforms/android-37.1/android.jar"
 
       - name: Install CMake 3.31.1 via pip
@@ -228,16 +226,9 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" --install "platforms;android-37.0" "platforms;android-37.1" "build-tools;37.0.0" "platforms;android-35" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
-          # Keep the AGP compileSdk 37 lookup path aligned with the published 37.0 package.
-          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
-            test -d "$ANDROID_HOME/platforms/android-37.0"
-            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
-          fi
+          "$SDKMANAGER" --install "platforms;android-37.1" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
-          test -d "$ANDROID_HOME/platforms/android-37"
-          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
           test -f "$ANDROID_HOME/platforms/android-37.1/android.jar"
 
       - name: Install CMake 3.31.1 via pip
