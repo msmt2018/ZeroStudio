@@ -205,15 +205,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git zip unzip protobuf-compiler python3 python3-pip wget curl
 
-      # The tooling API tests launch a legacy fixture using Gradle 7.3.3 / AGP 7.2.0.
-      # Gradle 7.3.3 supports running on JDK 17, not JDK 21. Keep this job on JDK 17;
-      # the APK build job above remains on JDK 21.
-      - name: Configure JDK 17 for compatibility tests
+      # Run the repository build and lint tasks on the same JDK as the APK job.
+      - name: Configure JDK 21 for project tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "21"
+          cache: gradle
+
+      # The Tooling API compatibility fixture launches Gradle 7.3.3 / AGP 7.2.0,
+      # which requires a separate JDK 17 process. Keep the main Gradle daemon on JDK 21.
+      - name: Configure JDK 17 for legacy Tooling API fixtures
         uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: "17"
-          cache: gradle
+
+      - name: Select JDK 21 for Gradle and JDK 17 for legacy fixtures
+        shell: bash
+        run: |
+          echo "ANDROIDIDE_TEST_JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          java -version
 
       - name: Configure Gradle 9.6.0
         uses: gradle/actions/setup-gradle@v4
@@ -257,8 +271,11 @@ jobs:
             echo "::endgroup::"
             if [ "$result" -ne 0 ]; then status=1; fi
           }
+          # The main build owns Android variants and their unit-test tasks.
           run_gradle ./gradlew --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
-          run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
+          # build-deps is a separate composite build of libraries; it has no
+          # aggregate testDebugUnitTest/testReleaseUnitTest tasks at its root.
+          run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test
           run_gradle ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue check test
           exit "$status"
 
@@ -281,8 +298,9 @@ jobs:
               echo "::endgroup::"
               if [ "$result" -ne 0 ]; then status=1; fi
             }
+            # Instrumentation tests belong to the main Android application build.
+            # build-deps is a dependency composite build, not a second app test target.
             run_gradle ./gradlew --no-daemon --max-workers=2 --continue connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest
-            run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest
             exit "$status"
 
       - name: Upload test reports
