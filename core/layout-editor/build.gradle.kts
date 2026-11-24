@@ -10,7 +10,6 @@ plugins {
 }
 
 android {
-  compileSdk = BuildConfig.compileSdk
   namespace = "android.zero.studio.layouteditor"
 
   defaultConfig { minSdk = BuildConfig.minSdk }
