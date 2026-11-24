@@ -10,7 +10,6 @@ plugins {
 
 extensions.configure<LibraryExtension> {
     namespace = "me.rerere.material3"
-    compileSdk = 37
 
     defaultConfig {
         minSdk = 26
