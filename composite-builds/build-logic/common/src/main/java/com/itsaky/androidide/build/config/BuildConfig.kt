@@ -31,6 +31,8 @@ object BuildConfig {
 
   /** The compile SDK version. */
   const val compileSdk = 37
+  /** The compile SDK minor API level. */
+  const val compileSdkMinor = 1
   /* Android Platform build tools*/
   const val BuildCompileSdk = "37.0.0"
 
