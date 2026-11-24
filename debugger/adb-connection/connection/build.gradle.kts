@@ -29,7 +29,6 @@ plugins {
 android {
     namespace = "android.zero.studio"
 
-    compileSdk = 37
 
     defaultConfig {
         minSdk = 26  
