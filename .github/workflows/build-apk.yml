@@ -80,11 +80,6 @@ jobs:
           "$SDKMANAGER" --install "platforms;android-37.1" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
 
           # Install API 37.1 for the app and colorpicker AAR metadata requirement; retain 37.0 for base API modules.
-          # Keep android-37 as an alias to the installed 37.0 platform.
-          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
-            test -d "$ANDROID_HOME/platforms/android-37.0"
-            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
-          fi
 
           # Fail immediately if the requested NDK revision was not installed exactly.
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
