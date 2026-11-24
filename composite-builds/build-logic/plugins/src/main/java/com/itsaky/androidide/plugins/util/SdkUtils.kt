@@ -27,7 +27,7 @@ object SdkUtils {
   fun AndroidComponentsExtension<*, *, *>.getAndroidJar(assertExists: Boolean = true): File {
     val sdkDirectory = sdkComponents.sdkDirectory
     val androidJar =
-        File(sdkDirectory.get().asFile, "platforms/android-${BuildConfig.compileSdk}/android.jar")
+        File(sdkDirectory.get().asFile, "platforms/android-${BuildConfig.compileSdk}.${BuildConfig.compileSdkMinor}/android.jar")
 
     if (assertExists) {
       check(androidJar.exists() && androidJar.isFile) {
