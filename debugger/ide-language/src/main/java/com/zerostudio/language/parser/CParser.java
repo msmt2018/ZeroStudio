@@ -1,8 +1,5 @@
 package com.zerostudio.language.parser;
 
-import com.zerostudio.language.jni.token-based parserAvailability;
-import com.zerostudio.language.jni.token-based parserCNativeParser;
-import com.zerostudio.language.lexer.CLexer;
 import com.zerostudio.language.lexer.Lexer;
 import com.zerostudio.language.lexer.LexerRegistry;
 import com.zerostudio.language.lexer.Token;
@@ -20,29 +17,16 @@ import java.util.List;
 /**
  * C language parser.
  *
- * <p>This parser prefers the token-based token-based parser path when the native
- * libraries are loadable, and falls back to the hand-written token-based
- * extractor otherwise. The fallback path is always safe to use.
+ * <p>Uses the in-module lexer and declaration extractor. This implementation
+ * does not depend on an optional JNI parser, so it remains available on every
+ * supported runtime and in builds where native parser libraries are absent.
  *
- * <p>The token-based path understands:
- * <ul>
- *   <li>typedefs, function pointers, complex initializers</li>
- *   <li>macros and preprocessor expansion</li>
- *   <li>the full C11/C17 grammar</li>
- * </ul>
- *
- * <p>The fallback path (hand-written) covers:
- * <ul>
- *   <li>top-level function definitions</li>
- *   <li>struct / union / enum declarations</li>
- *   <li>basic typedefs and call references</li>
- * </ul>
+ * <p>The extractor covers top-level function definitions, struct / union /
+ * enum declarations, basic typedefs, and call references.
  */
 public final class CParser implements Parser {
 
     private final Lexer lexer = LexerRegistry.get(LanguageId.C);
-    private final token-based parserCNativeParser nativeParser =
-            new token-based parserCNativeParser(LanguageId.C);
 
     @Override
     public ParsedFile parse(File file) throws IOException {
@@ -52,13 +36,6 @@ public final class CParser implements Parser {
 
     @Override
     public ParsedFile parse(String path, String text) {
-        // token-based path: try token-based parser first.
-        if (token-based parserAvailability.isAvailable()) {
-            ParsedFile nativeResult = nativeParser.parse(path, text);
-            if (nativeResult != null) return nativeResult;
-            // Fall through to token-based path below.
-        }
-        // Token-based fallback path.
         List<Token> tokens = lexer.tokenize(text);
         List<Symbol> symbols = new ArrayList<>();
         List<Reference> refs = new ArrayList<>();

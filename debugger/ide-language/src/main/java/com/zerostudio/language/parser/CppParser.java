@@ -1,8 +1,5 @@
 package com.zerostudio.language.parser;
 
-import com.zerostudio.language.jni.token-based parserAvailability;
-import com.zerostudio.language.jni.token-based parserCNativeParser;
-import com.zerostudio.language.lexer.CppLexer;
 import com.zerostudio.language.lexer.Lexer;
 import com.zerostudio.language.lexer.LexerRegistry;
 import com.zerostudio.language.lexer.Token;
@@ -20,15 +17,16 @@ import java.util.List;
 /**
  * C++ language parser.
  *
- * <p>Mirrors {@link CParser}: token-based parser first, token-based fallback always
- * available. The C++ token-based path additionally understands namespaces,
- * classes, templates, and the C++-specific declarator grammar.
+ * <p>Uses the in-module lexer and declaration extractor. This implementation
+ * does not depend on an optional JNI parser, so it remains available on every
+ * supported runtime and in builds where native parser libraries are absent.
+ *
+ * <p>The extractor covers C++ declarations and references supported by the
+ * current lightweight parser implementation.
  */
 public final class CppParser implements Parser {
 
     private final Lexer lexer = LexerRegistry.get(LanguageId.CPP);
-    private final token-based parserCNativeParser nativeParser =
-            new token-based parserCNativeParser(LanguageId.CPP);
 
     @Override
     public ParsedFile parse(File file) throws IOException {
@@ -38,13 +36,6 @@ public final class CppParser implements Parser {
 
     @Override
     public ParsedFile parse(String path, String text) {
-        // token-based path: try token-based parser first.
-        if (token-based parserAvailability.isAvailable()) {
-            ParsedFile nativeResult = nativeParser.parse(path, text);
-            if (nativeResult != null) return nativeResult;
-            // Fall through to token-based path below.
-        }
-        // Token-based fallback path.
         List<Token> tokens = lexer.tokenize(text);
         List<Symbol> symbols = new ArrayList<>();
         List<Reference> refs = new ArrayList<>();
