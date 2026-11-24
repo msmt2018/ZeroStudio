@@ -19,7 +19,7 @@ android {
 dependencies {
     // JavaParser is used directly by JavaParserFacade. Its types are an
     // implementation detail and are not exposed by this module's public API.
-    implementation(libs.common.javaparser)
+    implementation("com.github.javaparser:javaparser-core:3.27.1")
 
     // The language engine does not depend on the decompiler. The decompiler
     // is a consumer of language analysis, so this dependency must not point
