@@ -131,7 +131,6 @@ configurations.all {
   // force(libs.org.jetbrains.kotlin.jvm)
   // }
 
-  exclude(group = "com.google.googlejavaformat", module = "google-java-format")
   exclude(group = "org.jetbrains.kotlin", module = "kotlin-android-extensions-runtime")
   exclude(group = "org.jetbrains.kotlin", module = "kotlin-compiler")
   // exclude(group = "org.jetbrains.kotlin", module = "kotlin-compiler-embeddable")
@@ -249,12 +248,6 @@ dependencies {
   implementation(libs.composite.appintro)
   implementation(libs.composite.javapoet)
 
-  // java格式化
-  implementation(libs.composite.googleJavaFormat) {
-    exclude(group = "com.google.googlejavaformat", module = "google-java-format")
-    exclude(group = "com.google.guava", module = "guava")
-  }
-
   // Local projects here
   implementation(projects.core.actions)
   implementation(projects.core.common)
@@ -268,7 +261,6 @@ dependencies {
   implementation(projects.modules.zeroOnboardingGuide)
   implementation(projects.editor.impl)
   implementation(projects.editor.lexers)
-  implementation(projects.editor.editorLsp)
   implementation(projects.java.javacServices)
   implementation(projects.java.lsp)
   implementation(projects.lsp.kotlin)

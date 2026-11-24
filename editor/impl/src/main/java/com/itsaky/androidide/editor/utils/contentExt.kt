@@ -17,9 +17,6 @@
 
 package com.itsaky.androidide.editor.utils
 
-import com.itsaky.androidide.treesitter.TSNode
-import com.itsaky.androidide.treesitter.TSTree
-import com.itsaky.androidide.treesitter.getNodeAt
 import io.github.rosemoe.sora.text.Content
 import io.github.rosemoe.sora.text.TextUtils
 import io.github.rosemoe.sora.util.IntPair
@@ -64,54 +61,3 @@ fun Content.nextNonBlankLine(line: Int): Int {
   return -1
 }
 
-/** Returns the first [TSNode] at the given line number. The leading indentation is ignored. */
-fun Content.getFirstNodeAtLine(tree: TSTree, line: Int, col: Int = Int.MIN_VALUE): TSNode? {
-  return getFirstNodeAtLine(tree.rootNode, line, col)
-}
-
-/** Returns the last [TSNode] at the given line number. */
-fun Content.getLastNodeAtLine(tree: TSTree, line: Int, col: Int = Int.MIN_VALUE): TSNode? {
-  return getLastNodeAtLine(tree.rootNode, line, col)
-}
-
-/** Returns the first [TSNode] at the given line number. The leading indentation is ignored. */
-fun Content.getFirstNodeAtLine(node: TSNode, line: Int, col: Int = Int.MIN_VALUE): TSNode? {
-  if (line < 0 || line >= lineCount) {
-    return null
-  }
-
-  var column = col
-  if (column == Int.MIN_VALUE) {
-    val contentLine = getLine(line)
-    val (spaces, tabs) =
-        TextUtils.countLeadingSpacesAndTabs(contentLine).let {
-          IntPair.getFirst(it) to IntPair.getSecond(it)
-        }
-
-    column = (spaces + tabs) shl 1
-  }
-
-  // we need the byte offset in the line, so we need to multiply the char offset by 2 (shl 1)
-  // also, we need not to expand the tabs to spaces as that would result in incorrect offset
-  return node.getNodeAt(line, column)
-}
-
-/**
- * Returns the last [TSNode] at the given line number. This function also takes the leading
- * indentation into consideration.
- */
-fun Content.getLastNodeAtLine(node: TSNode, line: Int, col: Int = Int.MIN_VALUE): TSNode? {
-  if (line < 0 || line >= lineCount) {
-    return null
-  }
-
-  val contentLine = getLine(line)
-
-  var column = col
-  if (column == Int.MIN_VALUE) {
-    column = (contentLine.length - 1) shl 1
-  }
-
-  // we need the byte offset in the line, so we need to multiply the char offset by 2 (shl 1)
-  return node.getNodeAt(line, column)
-}

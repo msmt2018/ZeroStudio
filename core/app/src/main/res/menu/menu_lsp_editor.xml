@@ -75,12 +75,7 @@
         android:title="Code"
         app:showAsAction="never">
         <menu>
-            <item
-                android:id="@+id/action_format"
-                android:title="@string/format_document"
-                android:icon="@drawable/ic_format_code" />
-
-            <item
+<item
                 android:id="@+id/action_rename"
                 android:title="Rename Symbol"
                 android:icon="@drawable/ic_edit" />

@@ -52,7 +52,6 @@ import com.itsaky.androidide.actions.etc.web.WebPreviewAction
 import com.itsaky.androidide.actions.file.CloseAllFilesAction
 import com.itsaky.androidide.actions.file.CloseFileAction
 import com.itsaky.androidide.actions.file.CloseOtherFilesAction
-import com.itsaky.androidide.actions.file.FormatCodeAction
 import com.itsaky.androidide.actions.file.SaveFileAction
 import com.itsaky.androidide.actions.filetree.ConvertPathToAction
 import com.itsaky.androidide.actions.filetree.CopyPathAction
@@ -129,7 +128,6 @@ class EditorActivityActions {
       registry.registerAction(ColorQueryTextAction(context, order++))
       registry.registerAction(LongSelectAction(context, order++))
       registry.registerAction(ExpandSelectionAction(context, order++))
-      registry.registerAction(FormatCodeAction(context, order++))
       registry.registerAction(SystemTextMenuAction(context, order++))
       registry.registerAction(EditorEditLineMenuAction(context, order++))
 

@@ -1,7 +1,5 @@
 package com.itsaky.androidide.actions.menu.api
 
-import com.itsaky.androidide.models.Range
-
 /**
  * Represents a code snippet template.
  *
@@ -19,21 +17,3 @@ data class CodeSnippet(
     val requiresNameInput: Boolean = template.contains("%s"),
 )
 
-/**
- * Represents a symbol (class, method, field, etc.) extracted from the source code.
- *
- * @param name The name of the symbol.
- * @param detail Additional details, like method parameters or field type.
- * @param kind The kind of symbol (e.g., "Class", "Method").
- * @param range The full range of the symbol's declaration in the code.
- * @param selectionRange The range of just the symbol's name, for highlighting and renaming.
- * @param bodyRange The range of the symbol's body (e.g., inside the {} of a method), if applicable.
- */
-data class CodeSymbol(
-    val name: String,
-    val detail: String,
-    val kind: String,
-    val range: Range,
-    val selectionRange: Range,
-    val bodyRange: Range? = null,
-)

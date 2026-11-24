@@ -23,9 +23,13 @@ interface ScriptAnalyzer {
 object ScriptAnalyzerFactory {
   fun create(file: File): ScriptAnalyzer {
     return if (file.name.endsWith(".kts")) {
-      KotlinAstAnalyzer()
+      UnsupportedKotlinDslAnalyzer
     } else {
       GroovyAstAnalyzer()
     }
   }
+}
+
+private object UnsupportedKotlinDslAnalyzer : ScriptAnalyzer {
+  override fun analyze(file: File) = emptyList<ScopedRepositoryInfo>() to emptyList<ScopedDependencyInfo>()
 }

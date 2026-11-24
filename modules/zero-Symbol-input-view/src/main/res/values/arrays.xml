@@ -20,7 +20,6 @@
         <item>@string/action_copy</item>
         <item>@string/action_cut</item>
         <item>@string/action_paste</item>
-        <item>@string/action_format_code</item>
         <item>@string/action_copy_line</item>
         <item>@string/action_cut_line</item>
         <item>@string/action_duplicate_line</item>
@@ -68,7 +67,6 @@
         <item>28</item>
         <item>29</item>
         <item>30</item>
-        <item>32</item>
         <item>33</item>
         <item>34</item>
         <item>35</item>

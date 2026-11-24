@@ -23,7 +23,7 @@ object SymbolActionExecutor {
      * @param onOpenManager 打开管理器回调。
      */
     fun execute(editor: CodeEditor, actionId: Int, text: String?, onOpenManager: (() -> Unit)?) {
-        if (!editor.isEditable && actionId in listOf(0, 3, 4, 7, 8, 9, 11, 29, 30, 32)) return
+        if (!editor.isEditable && actionId in listOf(0, 3, 4, 7, 8, 9, 11, 29, 30)) return
 
         when (actionId) {
             0 -> insertTextWithMacro(editor, text ?: "")
@@ -46,7 +46,6 @@ object SymbolActionExecutor {
             28 -> editor.copyText()
             29 -> editor.cutText()
             30 -> editor.pasteText()
-            32 -> editor.formatCodeAsync()
             33 -> duplicateLine(editor)
             34 -> cutLine(editor)
             35 -> duplicateLine(editor)

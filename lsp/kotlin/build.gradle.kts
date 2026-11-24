@@ -43,8 +43,6 @@ dependencies {
   kapt(projects.annotation.processors)
   kapt(libs.google.auto.service)
 
-  implementation(projects.editor.treeSitterNdk.androidTreeSitter)
-  implementation(libs.androidide.ts.java)
   implementation(libs.androidx.annotation)
   implementation(libs.androidx.appcompat)
   api(libs.common.editor)

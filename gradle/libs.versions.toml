@@ -145,7 +145,6 @@ fernFlowerVersion = "243.22562.218"
 matrix = "2.1.0"
 
 #语法解析分析
-tree-sitter = "4.3.2"
 antlr4 = "4.13.1"
 
 # ANR watchdog
@@ -232,15 +231,6 @@ composite-jaxpb-jaxp-internal = { module = "com.itsaky.androidide.build:jaxpb-ja
 composite-jaxpb-xml = { module = "com.itsaky.androidide.build:jaxpb-xml" }
 
 # AndroidIDE
-androidide-ts = { module = "com.itsaky.androidide.treesitter:android-tree-sitter", version.ref = "tree-sitter" }
-androidide-ts-java = { module = "com.itsaky.androidide.treesitter:tree-sitter-java", version.ref = "tree-sitter" }
-androidide-ts-json = { module = "com.itsaky.androidide.treesitter:tree-sitter-json", version.ref = "tree-sitter" }
-androidide-ts-kotlin = { module = "com.itsaky.androidide.treesitter:tree-sitter-kotlin", version.ref = "tree-sitter" }
-androidide-ts-log = { module = "com.itsaky.androidide.treesitter:tree-sitter-log", version.ref = "tree-sitter" }
-androidide-ts-xml = { module = "com.itsaky.androidide.treesitter:tree-sitter-xml", version.ref = "tree-sitter" }
-androidide-ts-c = { module = "com.itsaky.androidide.treesitter:tree-sitter-c", version.ref = "tree-sitter" }
-androidide-ts-cpp = { module = "com.itsaky.androidide.treesitter:tree-sitter-cpp", version.ref = "tree-sitter" }
-androidide-ts-python = { module = "com.itsaky.androidide.treesitter:tree-sitter-python", version.ref = "tree-sitter" }
 
 # Common
 common-bcrypt = { group = "at.favre.lib", name = "bcrypt", version.ref = "bcrypt" }
@@ -582,7 +572,6 @@ sqlite-vector = { module = "ai.sqlite:vector", version.ref = "sqlite-vector" }
 floatingx = { module = "io.github.petterpx:floatingx", version.ref = "floatingx" }
 floatingx-compose = { module = "io.github.petterpx:floatingx-compose", version.ref = "floatingx" }
 huge-icons = { group = "com.github.rikkahub", name = "hugeicons-compose", version.ref = "huge-icons" }
-com-github-fwcd-ktfmt = { module = "com.github.fwcd.ktfmt:ktfmt", version = "b5d31d1" }
 anrwatchdog = { module = "com.github.anrwatchdog:anrwatchdog", version.ref = "anrwatchdog" }
 # libsu: com.topjohnwu 的 root shell 库, Java 包名 com.topjohnwu.superuser (历史遗留)
 # - Shell.setDefaultBuilder() 配置全局 Builder (FLAG_REDIRECT_STDERR / setCommands(suBin))

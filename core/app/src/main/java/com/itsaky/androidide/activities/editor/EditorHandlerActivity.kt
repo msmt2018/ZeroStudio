@@ -41,20 +41,6 @@ import com.itsaky.androidide.actions.ActionData
 import com.itsaky.androidide.actions.ActionItem.Location.EDITOR_TOOLBAR
 import com.itsaky.androidide.actions.ActionsRegistry.Companion.getInstance
 import com.itsaky.androidide.actions.FillMenuParams
-import com.itsaky.androidide.editor.language.treesitter.AidlLanguage
-import com.itsaky.androidide.editor.language.treesitter.CLang
-import com.itsaky.androidide.editor.language.treesitter.CmakeLanguage
-import com.itsaky.androidide.editor.language.treesitter.CppLang
-import com.itsaky.androidide.editor.language.treesitter.JavaLanguage
-import com.itsaky.androidide.editor.language.treesitter.JsonLanguage
-import com.itsaky.androidide.editor.language.treesitter.KotlinLanguage
-import com.itsaky.androidide.editor.language.treesitter.LogLanguage
-import com.itsaky.androidide.editor.language.treesitter.TSLanguageRegistry
-import com.itsaky.androidide.editor.language.treesitter.TreeSitterLanguage
-import com.itsaky.androidide.editor.language.treesitter.TomlLanguage
-import com.itsaky.androidide.editor.language.treesitter.XMLLanguage
-import com.itsaky.androidide.editor.language.treesitter.YamlLanguage
-import com.itsaky.androidide.editor.schemes.IDEColorSchemeProvider
 import com.itsaky.androidide.editor.ui.IDEEditor
 import com.itsaky.androidide.eventbus.events.editor.DocumentChangeEvent
 import com.itsaky.androidide.eventbus.events.editor.DocumentSaveEvent
@@ -155,7 +141,6 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
 
   override fun preDestroy() {
     super.preDestroy()
-    TSLanguageRegistry.instance.destroy()
     editorViewModel.removeAllFiles()
   }
 
@@ -208,66 +193,6 @@ open class EditorHandlerActivity : ProjectHandlerActivity(), IEditorHandler,
       }
     }
 
-    registerTreeSitterLanguages()
-    executeAsync {
-      CodeEditorView.ensureTreeSitterLoaded()
-      IDEColorSchemeProvider.initIfNeeded()
-    }
-  }
-
-  private fun registerTreeSitterLanguages() {
-    registerTreeSitterLanguage(JavaLanguage.TS_TYPE, JavaLanguage.FACTORY)
-    registerTreeSitterLanguage(KotlinLanguage.TS_TYPE_KT, KotlinLanguage.FACTORY)
-    registerTreeSitterLanguage(KotlinLanguage.TS_TYPE_KTS, KotlinLanguage.FACTORY)
-    registerTreeSitterLanguage(LogLanguage.TS_TYPE, LogLanguage.FACTORY)
-    registerTreeSitterLanguage(JsonLanguage.TS_TYPE, JsonLanguage.FACTORY)
-    registerTreeSitterLanguage(TomlLanguage.TOML_TYPE, TomlLanguage.FACTORY)
-    registerTreeSitterLanguage(AidlLanguage.TS_TYPE, AidlLanguage.FACTORY)
-    registerTreeSitterLanguage(YamlLanguage.TS_TYPE, YamlLanguage.FACTORY)
-    registerTreeSitterLanguage(YamlLanguage.TS_TYPE_YML, YamlLanguage.FACTORY)
-    registerTreeSitterLanguage(XMLLanguage.TS_TYPE, XMLLanguage.FACTORY)
-    registerTreeSitterLanguage(XMLLanguage.TS_TYPE_QRC, XMLLanguage.FACTORY)
-    registerTreeSitterLanguage(XMLLanguage.TS_TYPE_UI, XMLLanguage.FACTORY)
-    registerTreeSitterLanguage(XMLLanguage.TS_TYPE_POML, XMLLanguage.FACTORY)
-    registerTreeSitterLanguage(XMLLanguage.TS_TYPE_KML, XMLLanguage.FACTORY)
-    registerTreeSitterLanguage(XMLLanguage.TS_TYPE_SVG, XMLLanguage.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_CPP, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_C, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_H_small, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_H_CAPITAL_LETTERS, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_HPP, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_CP, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_CC, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_HH, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_CXX, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_CJJ, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_HXX, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_HJJ, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_CPPM, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_MPP, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_mm, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_HIN, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_HXXIN, CppLang.FACTORY)
-    registerTreeSitterLanguage(CppLang.TS_TYPE_CXXIN, CppLang.FACTORY)
-    registerTreeSitterLanguage(CLang.TS_TYPE_C, CLang.FACTORY)
-    registerTreeSitterLanguage(CLang.TS_TYPE_M_small, CLang.FACTORY)
-    registerTreeSitterLanguage(CLang.TS_TYPE_M_CAPITAL_LETTERS, CLang.FACTORY)
-    registerTreeSitterLanguage(CmakeLanguage.TS_TYPE, CmakeLanguage.FACTORY)
-    registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_IN, CmakeLanguage.FACTORY)
-    registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_CTEST, CmakeLanguage.FACTORY)
-    registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_CPACK, CmakeLanguage.FACTORY)
-    registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_CBPS, CmakeLanguage.FACTORY)
-    registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_CMLISTSTXT, CmakeLanguage.FACTORY)
-    registerTreeSitterLanguage(CmakeLanguage.TS_TYPE_CMAKE_CMCACHE, CmakeLanguage.FACTORY)
-  }
-
-  private fun <T : TreeSitterLanguage> registerTreeSitterLanguage(
-      type: String,
-      factory: TreeSitterLanguage.Factory<T>,
-  ) {
-    if (!TSLanguageRegistry.instance.hasLanguage(type)) {
-      TSLanguageRegistry.instance.register(type, factory)
-    }
   }
 
   override fun onPause() {

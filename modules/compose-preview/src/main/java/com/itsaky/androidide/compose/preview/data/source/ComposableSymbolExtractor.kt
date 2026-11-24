@@ -35,10 +35,10 @@ import org.slf4j.LoggerFactory
  * 1. 是否有 `@Composable` 标注 (modifier 列表中包含 `Composable`)
  * 2. 参数类型列表 (从 functionValueParameters 抽取)
  *
- * 不用 TreeSitterSymbolResolver 是因为:
- * - TreeSitterSymbolResolver 输出 SymbolInfo 表达 code outline, 没有
+ * 不用 ANTLR-based symbol resolver 是因为:
+ * - ANTLR-based symbol resolver 输出 SymbolInfo 表达 code outline, 没有
  *   "该函数是不是 @Composable" 的语义.
- * - ComposableSymbolExtractor 专做"找 @Composable", 跟 TreeSitterSymbolResolver
+ * - ComposableSymbolExtractor 专做"找 @Composable", 跟 ANTLR-based symbol resolver
  *   解耦, 单独可单元测试.
  *
  * @author android_zero
@@ -69,7 +69,7 @@ class ComposableSymbolExtractor {
 
     /**
      * 关闭 ANTLR Parser 默认的 console error listener, 避免把解析警告
-     * 打印到 stderr. 与 TreeSitterSymbolResolver 行为一致.
+     * 打印到 stderr. 与 ANTLR-based symbol resolver 行为一致.
      */
     private fun <T : Parser> T.withoutErrorListeners(): T {
         removeErrorListeners()
@@ -122,7 +122,7 @@ class ComposableSymbolExtractor {
 
         /**
          * 简化版 cleanedText: 拿这个 [ParserRuleContext] 跨越的原始 token 文本.
-         * 复用 TreeSitterSymbolResolver 同样的语义 (返回规则覆盖的源码 slice).
+         * 复用 ANTLR-based symbol resolver 同样的语义 (返回规则覆盖的源码 slice).
          *
          * 之前的实现依赖内部 helper, 这里用一个等价的 ANTLR 标准 API 重写 —
          * start.startIndex / stop.stopIndex 给出在 input stream 中的字符索引.
