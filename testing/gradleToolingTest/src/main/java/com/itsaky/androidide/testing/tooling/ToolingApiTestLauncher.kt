@@ -159,7 +159,13 @@ object ToolingApiTestLauncher {
       sysProps: Map<String, String> = emptyMap(),
   ): List<String> {
     val cmd = mutableListOf("java")
-    System.getenv("JAVA_HOME")?.let {
+    // The main test process uses the project's JDK 21, while legacy Gradle
+    // compatibility fixtures may require an older runtime such as JDK 17.
+    // Allow CI to select that runtime only for this forked Tooling API process.
+    val javaHome =
+        System.getenv("ANDROIDIDE_TEST_JAVA_HOME")?.takeIf { it.isNotBlank() }
+            ?: System.getenv("JAVA_HOME")
+    javaHome?.let {
       val java = File(it, "bin/java")
       if (java.exists() && java.isFile) {
         if (!java.canExecute()) {
