@@ -34,6 +34,9 @@ import java.io.File
  */
 object EditorLineOperations {
 
+  private const val PREFS_NAME = "EditorSettings"
+  private const val KEY_READ_ONLY = "read_only_mode"
+
   /** 中文注释: 用于管理光标导航历史的单例对象，以实现“上一个/下一个位置”功能。 */
   val navigationHistory = NavigationHistory()
 
