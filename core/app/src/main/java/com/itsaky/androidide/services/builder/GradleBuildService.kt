@@ -22,6 +22,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import android.text.TextUtils
 import androidx.core.app.NotificationManagerCompat
@@ -168,15 +169,23 @@ class GradleBuildService :
     val ticker = getString(R.string.title_gradle_service_notification_ticker)
     val title = getString(R.string.title_gradle_service_notification)
     val launch = packageManager.getLaunchIntentForPackage(BuildConfig.APPLICATION_ID)
-    // Android 12+ requires an explicit mutability flag. minSdk is 26, so
-    // FLAG_IMMUTABLE is available throughout the supported Android 8–17 range.
-    // This notification only launches the app and does not need a mutable Intent.
+    // FLAG_IMMUTABLE was added in API 23 (Android 6.0).
+    // Android 12 (API 31)+ requires an explicit mutability flag when targeting API 31+.
+    // This notification only opens the app, so it must never use FLAG_MUTABLE.
+    // minSdk is 26, but keep the API capability check explicit for lower-SDK reuse.
+    val pendingIntentFlags =
+        PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+              PendingIntent.FLAG_IMMUTABLE
+            } else {
+              0
+            }
     val intent = launch?.let {
       PendingIntent.getActivity(
           this,
           0,
           it,
-          PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+          pendingIntentFlags,
       )
     }
     val builder =
