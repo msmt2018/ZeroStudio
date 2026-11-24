@@ -251,10 +251,6 @@ class CodeEditorView(context: Context, file: File, selection: Range) :
 
     private val log = LoggerFactory.getLogger(CodeEditorView::class.java)
     private const val CURSOR_BOTTOM_VISIBLE_MARGIN_ROWS = 2
-          }
-        }
-      }
-    }
   }
 
   init {
