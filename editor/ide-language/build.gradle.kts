@@ -5,9 +5,11 @@ plugins {
 
 android {
     namespace = "com.zerostudio.language"
+
     defaultConfig {
         consumerProguardFiles("consumer-rules.pro")
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -16,8 +18,12 @@ android {
 
 dependencies {
     api(project(":debugger:ide-decompiler"))
-    compileOnly("com.github.javaparser:javaparser-core:3.17.0")
-    testImplementation("com.github.javaparser:javaparser-core:3.17.0")
+
+    // JavaParserFacade directly instantiates JavaParser at runtime.
+    // Keep the parser on the runtime classpath and align it with the
+    // repository's JavaParser 3.27.1 version.
+    implementation("com.github.javaparser:javaparser-core:3.27.1")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.hamcrest:hamcrest-core:1.3")
 }
