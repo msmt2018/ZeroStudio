@@ -32,6 +32,8 @@ import java.io.File
  * - Added validation for user input to ensure it's within the valid range of the document.
  * - Added a dynamic hint for the column input that updates based on the selected line's length.
  */
+object EditorLineOperations {
+
   /** 中文注释: 用于管理光标导航历史的单例对象，以实现“上一个/下一个位置”功能。 */
   val navigationHistory = NavigationHistory()
 
