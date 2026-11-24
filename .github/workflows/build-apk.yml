@@ -205,11 +205,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git zip unzip protobuf-compiler python3 python3-pip wget curl
 
-      - name: Configure JDK 21
+      # The tooling API tests launch a legacy fixture using Gradle 7.3.3 / AGP 7.2.0.
+      # Gradle 7.3.3 supports running on JDK 17, not JDK 21. Keep this job on JDK 17;
+      # the APK build job above remains on JDK 21.
+      - name: Configure JDK 17 for compatibility tests
         uses: actions/setup-java@v4
         with:
           distribution: zulu
-          java-version: "21"
+          java-version: "17"
           cache: gradle
 
       - name: Configure Gradle 9.6.0
