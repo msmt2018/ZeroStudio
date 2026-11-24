@@ -189,7 +189,7 @@ include(
     ":debugger:Breakpoint-debugger:ide-debugger",
     ":debugger:Breakpoint-debugger:ide-debugger-host",
     ":debugger:Breakpoint-debugger:ide-log-plugin",
-    ":debugger:ide-language",
+    ":editor:ide-language",
     ":debugger:Breakpoint-debugger:logwire",
     ":debugger:Breakpoint-debugger:library",
 
