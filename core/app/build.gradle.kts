@@ -248,11 +248,6 @@ dependencies {
   implementation(libs.composite.appintro)
   implementation(libs.composite.javapoet)
 
-  // java格式化
-  implementation(libs.composite.googleJavaFormat) {
-    exclude(group = "com.google.guava", module = "guava")
-  }
-
   // Local projects here
   implementation(projects.core.actions)
   implementation(projects.core.common)

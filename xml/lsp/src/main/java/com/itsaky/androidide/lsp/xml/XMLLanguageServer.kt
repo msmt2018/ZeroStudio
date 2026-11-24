@@ -17,7 +17,6 @@
 package com.itsaky.androidide.lsp.xml
 
 import androidx.annotation.RestrictTo
-import com.itsaky.androidide.eventbus.events.editor.DocumentChangeEvent
 import com.itsaky.androidide.lsp.api.ICompletionProvider
 import com.itsaky.androidide.lsp.api.ILanguageClient
 import com.itsaky.androidide.lsp.api.ILanguageServer
@@ -37,16 +36,11 @@ import com.itsaky.androidide.lsp.models.SignatureHelp
 import com.itsaky.androidide.lsp.models.SignatureHelpParams
 import com.itsaky.androidide.lsp.util.NoCompletionsProvider
 import com.itsaky.androidide.lsp.xml.models.XMLServerSettings
-import com.itsaky.androidide.lsp.xml.providers.AdvancedEditProvider.onContentChange
 import com.itsaky.androidide.lsp.xml.providers.CodeFormatProvider
 import com.itsaky.androidide.lsp.xml.providers.XmlCompletionProvider
 import com.itsaky.androidide.models.Range
 import com.itsaky.androidide.projects.IWorkspace
-import com.itsaky.androidide.utils.DocumentUtils
 import java.nio.file.Path
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
 
 /**
  * Language server implementation for XML files.
@@ -63,15 +57,7 @@ class XMLLanguageServer : ILanguageServer {
 
   override val serverId: String = SERVER_ID
 
-  init {
-    EventBus.getDefault().register(this)
-  }
-
-  override fun shutdown() {
-    if (EventBus.getDefault().isRegistered(this)) {
-      EventBus.getDefault().unregister(this)
-    }
-  }
+  override fun shutdown() {}
 
   override fun connectClient(client: ILanguageClient?) {
     this.client = client
@@ -122,14 +108,6 @@ class XMLLanguageServer : ILanguageServer {
 
   override fun formatCode(params: FormatCodeParams?): CodeFormatResult {
     return CodeFormatProvider().format(params)
-  }
-
-  @Subscribe(threadMode = ThreadMode.BACKGROUND)
-  fun onDocumentChange(event: DocumentChangeEvent) {
-    if (!DocumentUtils.isXmlFile(event.changedFile)) {
-      return
-    }
-    onContentChange(event)
   }
 
   override fun handleFailure(failure: LSPFailure?): Boolean {

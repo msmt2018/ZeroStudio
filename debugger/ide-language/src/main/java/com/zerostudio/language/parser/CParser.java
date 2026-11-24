@@ -1,5 +1,7 @@
 package com.zerostudio.language.parser;
 
+import com.zerostudio.language.jni.token-based parserAvailability;
+import com.zerostudio.language.jni.token-based parserCNativeParser;
 import com.zerostudio.language.lexer.CLexer;
 import com.zerostudio.language.lexer.Lexer;
 import com.zerostudio.language.lexer.LexerRegistry;
@@ -18,11 +20,11 @@ import java.util.List;
 /**
  * C language parser.
  *
- * <p>This parser prefers the high-fidelity Tree-Sitter path when the native
+ * <p>This parser prefers the token-based token-based parser path when the native
  * libraries are loadable, and falls back to the hand-written token-based
  * extractor otherwise. The fallback path is always safe to use.
  *
- * <p>The high-fidelity path understands:
+ * <p>The token-based path understands:
  * <ul>
  *   <li>typedefs, function pointers, complex initializers</li>
  *   <li>macros and preprocessor expansion</li>
@@ -39,6 +41,9 @@ import java.util.List;
 public final class CParser implements Parser {
 
     private final Lexer lexer = LexerRegistry.get(LanguageId.C);
+    private final token-based parserCNativeParser nativeParser =
+            new token-based parserCNativeParser(LanguageId.C);
+
     @Override
     public ParsedFile parse(File file) throws IOException {
         String text = new String(Files.readAllBytes(file.toPath()));
@@ -47,7 +52,13 @@ public final class CParser implements Parser {
 
     @Override
     public ParsedFile parse(String path, String text) {
-        // Token-based parser path.
+        // token-based path: try token-based parser first.
+        if (token-based parserAvailability.isAvailable()) {
+            ParsedFile nativeResult = nativeParser.parse(path, text);
+            if (nativeResult != null) return nativeResult;
+            // Fall through to token-based path below.
+        }
+        // Token-based fallback path.
         List<Token> tokens = lexer.tokenize(text);
         List<Symbol> symbols = new ArrayList<>();
         List<Reference> refs = new ArrayList<>();

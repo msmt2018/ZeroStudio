@@ -68,8 +68,6 @@ dependencies {
 
   implementation(projects.editor.api)
   implementation(projects.editor.impl)
-  implementation(projects.editor.editorLsp)
-
   implementation(projects.termux.shared)
   implementation(projects.termux.shell)
 
