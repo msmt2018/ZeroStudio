@@ -5,9 +5,11 @@ plugins {
 
 android {
     namespace = "com.zerostudio.language"
+
     defaultConfig {
         consumerProguardFiles("consumer-rules.pro")
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -15,9 +17,14 @@ android {
 }
 
 dependencies {
-    api(project(":debugger:ide-decompiler"))
-    compileOnly("com.github.javaparser:javaparser-core:3.17.0")
-    testImplementation("com.github.javaparser:javaparser-core:3.17.0")
-    testImplementation("junit:junit:4.13.2")
+    // JavaParser is used directly by JavaParserFacade. Its types are an
+    // implementation detail and are not exposed by this module's public API.
+    implementation(libs.common.javaparser)
+
+    // The language engine does not depend on the decompiler. The decompiler
+    // is a consumer of language analysis, so this dependency must not point
+    // in the opposite direction (which would create an architectural cycle).
+
+    testImplementation(libs.tests.junit)
     testImplementation("org.hamcrest:hamcrest-core:1.3")
 }
