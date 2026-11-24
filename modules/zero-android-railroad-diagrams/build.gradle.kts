@@ -6,7 +6,6 @@ plugins {
 
 android {
   namespace = "com.example.mybottom.navigation"
-  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.example.mybottom.navigation"
