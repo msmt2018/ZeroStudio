@@ -111,7 +111,6 @@ jobs:
           fi
           test -f "$ANDROID_HOME/platforms/android-37/android.jar"
           test -f "$ANDROID_HOME/platforms/android-37.1/android.jar"
-          test -f "$ANDROID_HOME/platforms/android-37.1/android.jar"
           test -f "$ANDROID_HOME/ndk/29.0.14206865/source.properties"
           grep -F "Pkg.Revision = 29.0.14206865" "$ANDROID_HOME/ndk/29.0.14206865/source.properties"
 
