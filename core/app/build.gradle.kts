@@ -33,9 +33,7 @@ buildscript {
 android {
   namespace = BuildConfig.packageName
 
-  // modules:colorpicker publishes AAR metadata with minCompileSdk 37.1.
-  // Match that minor API level in the consuming application module.
-  compileSdkMinor = 1
+  // compileSdk and compileSdkMinor are supplied by the shared AndroidModuleConf.
 
   defaultConfig {
     applicationId = BuildConfig.packageName
