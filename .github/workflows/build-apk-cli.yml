@@ -101,7 +101,17 @@ jobs:
       - name: Install NDK r29 and Android SDK CMake
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37" "build-tools;37.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "cmake;3.31.1"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "cmake;3.31.1"
+
+          # The repository publishes API 37 as android-37.0. AGP resolves compileSdk 37
+          # through the canonical android-37 directory, so provide that directory alias.
+          test -d "$ANDROID_HOME/platforms/android-37.0"
+          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          fi
+          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
+          test -f "$ANDROID_HOME/ndk/29.0.14206865/source.properties"
+          grep -F "Pkg.Revision = 29.0.14206865" "$ANDROID_HOME/ndk/29.0.14206865/source.properties"
 
       - name: Install higher CMake version (3.31.1) via pip
         run: |
