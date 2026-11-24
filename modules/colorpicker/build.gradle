@@ -5,8 +5,7 @@ plugins {
 }
 
 android {
-    compileSdk 37
-    compileSdkMinor 1
+    // compileSdk and compileSdkMinor are supplied by the shared AndroidModuleConf.
 
     defaultConfig {
         minSdk 21
