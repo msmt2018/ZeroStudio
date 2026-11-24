@@ -6,7 +6,6 @@ plugins {
 
 android {
     namespace = namespace = "${BuildConfig.packageName}.mtprovider"
-    compileSdk 35
 
     defaultConfig {
         minSdk 21
