@@ -238,6 +238,7 @@ jobs:
           grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           test -d "$ANDROID_HOME/platforms/android-37"
           test -f "$ANDROID_HOME/platforms/android-37/android.jar"
+          test -f "$ANDROID_HOME/platforms/android-37.1/android.jar"
 
       - name: Install CMake 3.31.1 via pip
         run: |
