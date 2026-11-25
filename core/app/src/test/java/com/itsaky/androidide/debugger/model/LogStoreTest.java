@@ -15,6 +15,7 @@
 package com.itsaky.androidide.debugger.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Before;
@@ -28,7 +29,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = [33])
+@Config(sdk = 33)
 public class LogStoreTest {
 
     private LogStore store;
