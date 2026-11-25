@@ -266,7 +266,13 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" --install "platforms;android-37.1" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          # The Tooling API test fixture still targets compileSdk 31 and
+          # explicitly requests Build Tools 31.0.0. Install both alongside
+          # the app's API 37.1 toolchain so Robolectric/LSP integration tests
+          # can build their isolated fixture project.
+          "$SDKMANAGER" --install "platforms;android-31" "build-tools;31.0.0" "platforms;android-37.1" "build-tools;37.0.0" "ndk;$NDK_VERSION" "cmake;3.22.1" "cmake;3.31.1"
+          test -f "$ANDROID_HOME/platforms/android-31/android.jar"
+          test -f "$ANDROID_HOME/build-tools/31.0.0/source.properties"
           test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           test -f "$ANDROID_HOME/platforms/android-37.1/android.jar"
