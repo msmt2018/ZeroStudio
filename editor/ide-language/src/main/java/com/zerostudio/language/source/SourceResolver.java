@@ -101,7 +101,7 @@ public final class SourceResolver {
                     }
                     if (e != null) {
                         try (InputStream is = jf.getInputStream(e)) {
-                            String text = new String(is.readAllBytes());
+                            String text = new String(readFully(is), java.nio.charset.StandardCharsets.UTF_8);
                             return new ResolvedSource(Kind.SOURCE_JAR, className,
                                     jarPath + "!/" + e.getName(), text, jarPath + "!/" + e.getName(), null);
                         }
@@ -134,7 +134,7 @@ public final class SourceResolver {
                 JarEntry e = jf.getJarEntry(entryName);
                 if (e != null) {
                     try (InputStream is = jf.getInputStream(e)) {
-                        bytes = is.readAllBytes();
+                        bytes = readFully(is);
                     }
                 }
             } catch (IOException e) { return null; }
@@ -150,6 +150,17 @@ public final class SourceResolver {
         }
         return new ResolvedSource(Kind.MISSING, className, null, null, jarPath,
                 "decompile failed: " + r.failure);
+    }
+
+    /** Reads archive entries on all supported Android API levels. */
+    private static byte[] readFully(InputStream input) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
     }
 
     private ResolvedSource builtin(String className) {
