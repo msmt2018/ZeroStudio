@@ -25,10 +25,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.Assert.*;
@@ -44,8 +42,6 @@ import static org.junit.Assert.*;
  */
 public class EndToEndIntegrationTest {
 
-    private static final String JUNIT_JAR = "/root/.local/share/mise/installs/gradle/8.14.4/gradle-8.14.4/lib/junit-4.13.2.jar";
-
     @BeforeClass
     public static void setup() {
         // 注册 CFR
@@ -56,7 +52,7 @@ public class EndToEndIntegrationTest {
     @Test
     public void decompileClassAndIndex() {
         // 从 junit jar 中读取一个 .class
-        byte[] classBytes = readClassBytes(JUNIT_JAR, "org/junit/Assert.class");
+        byte[] classBytes = readClassBytes("org/junit/Assert.class");
         assertNotNull("could not read Assert.class", classBytes);
         Decompiler cfr = DecompilerRegistry.get("cfr");
         assertNotNull(cfr);
@@ -86,7 +82,7 @@ public class EndToEndIntegrationTest {
     /** 2. 解析 + 反编译 + HoverService 集成 */
     @Test
     public void hoverOnDecompiledClass() {
-        byte[] classBytes = readClassBytes(JUNIT_JAR, "junit/framework/TestCase.class");
+        byte[] classBytes = readClassBytes("junit/framework/TestCase.class");
         assertNotNull(classBytes);
         Decompiler cfr = DecompilerRegistry.get("cfr");
         DecompileResult r = cfr.decompile(DecompileRequest.builder()
@@ -255,19 +251,15 @@ public class EndToEndIntegrationTest {
 
     // --- helpers ---
 
-    private byte[] readClassBytes(String jar, String entry) {
-        try (ZipFile zf = new ZipFile(new File(jar))) {
-            Enumeration<? extends ZipEntry> en = zf.entries();
-            while (en.hasMoreElements()) {
-                ZipEntry e = en.nextElement();
-                if (e.getName().equals(entry)) {
-                    try (InputStream is = zf.getInputStream(e)) {
-                        return is.readAllBytes();
-                    }
-                }
-            }
-        } catch (Exception ignored) { }
-        return null;
+    private byte[] readClassBytes(String entry) {
+        // Resolve JUnit classes from the test runtime classpath. Do not depend
+        // on a developer-specific Gradle installation path or Gradle version.
+        try (InputStream is =
+                EndToEndIntegrationTest.class.getClassLoader().getResourceAsStream(entry)) {
+            return is == null ? null : is.readAllBytes();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private void addToZip(ZipOutputStream zos, String name, String content) throws Exception {
