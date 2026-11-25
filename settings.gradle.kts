@@ -8,8 +8,11 @@ pluginManagement {
   repositories {
     gradlePluginPortal()
     google()
+    // Use Maven Central's canonical endpoint explicitly before mirror fallbacks.
+    maven("https://repo.maven.apache.org/maven2/") {
+      name = "MavenCentralDirect"
+    }
     maven("https://maven-central.storage-download.googleapis.com/maven2/")
-    mavenCentral()
     mavenLocal()
     maven("https://cache-redirector.jetbrains.com/kotlin.bintray.com/kotlin-plugin")
     maven("https://jitpack.io")
@@ -70,8 +73,12 @@ dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
     google()
+    // Resolve Maven Central artifacts from its canonical endpoint first;
+    // keep independent mirrors as fallbacks for transient CDN failures.
+    maven("https://repo.maven.apache.org/maven2/") {
+      name = "MavenCentralDirect"
+    }
     maven("https://maven-central.storage-download.googleapis.com/maven2/")
-    mavenCentral()
     mavenLocal()
     maven("https://jitpack.io")
     maven("https://repo1.maven.org/maven2/")
@@ -86,8 +93,12 @@ dependencyResolutionManagement {
 val skipNyx = System.getenv("ZEROSTUDIO_SKIP_NYX") == "true"
 
 buildscript {
-  repositories { maven("https://maven-central.storage-download.googleapis.com/maven2/")
-    mavenCentral() }
+  repositories {
+    maven("https://repo.maven.apache.org/maven2/") {
+      name = "MavenCentralDirect"
+    }
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
+  }
   dependencies {
     if (System.getenv("ZEROSTUDIO_SKIP_NYX") != "true") classpath("com.mooltiverse.oss.nyx:gradle:2.5.2")
   }
