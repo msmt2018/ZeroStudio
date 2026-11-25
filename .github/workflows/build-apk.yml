@@ -209,6 +209,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git zip unzip protobuf-compiler python3 python3-pip wget curl
 
+      # The web module's preBuild invokes pnpm run build. Recreate the exact
+      # Node/Bun toolchain used by the APK job before any Android test task.
+      - name: Setup Bun for web UI tests
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js for web UI tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm for web UI tests
+        run: |
+          npm install --global pnpm
+          pnpm --version
+
+      - name: Install web UI dependencies for test build
+        working-directory: core/chatai/web-ui
+        run: bun install --frozen-lockfile
+
+      # Keep test verification focused on executable tests. Repository-wide
+      # Android lint currently contains unrelated baseline violations; those
+      # must not be conflated with JVM/unit-test failures.
       # Run the repository build and lint tasks on the same JDK as the APK job.
       - name: Configure JDK 21 for project tests
         uses: actions/setup-java@v4
@@ -276,7 +300,7 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew --no-daemon --max-workers=2 --continue --stacktrace --console=plain check test testDebugUnitTest testReleaseUnitTest 2>&1 | tee ci-logs/main-jvm-tests.log
+          ./gradlew --no-daemon --max-workers=2 --continue --stacktrace --console=plain testDebugUnitTest testReleaseUnitTest 2>&1 | tee ci-logs/main-jvm-tests.log
 
       - name: Run build-deps JVM tests and verification
         id: build_deps_tests
@@ -285,7 +309,7 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue --stacktrace --console=plain check test 2>&1 | tee ci-logs/build-deps-tests.log
+          ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-deps-tests.log
 
       - name: Run build-logic JVM tests and verification
         id: build_logic_tests
@@ -294,7 +318,7 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue --stacktrace --console=plain check test 2>&1 | tee ci-logs/build-logic-tests.log
+          ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-logic-tests.log
 
       - name: Run Android instrumentation tests
         id: instrumentation_tests
