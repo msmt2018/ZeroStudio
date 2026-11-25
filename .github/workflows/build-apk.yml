@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - cleanup/remove-treesitter-format-provider-editor-lsp
   pull_request:
     branches:
       - main
