@@ -22,7 +22,13 @@ plugins {
 }
 
 dependencies {
-  api(libs.common.lsp4j.jsonrpc)
+  // LSP4J JSON-RPC declares Gson with the dynamic range [2.9.1,3.0).
+  // Exclude that range and use the repository's pinned version-catalog entry instead;
+  // this avoids a metadata/range lookup against Maven Central during CI resolution.
+  api(libs.common.lsp4j.jsonrpc) {
+    exclude(group = "com.google.code.gson", module = "gson")
+  }
+  api(libs.google.gson)
 
   api(projects.tooling.builderModelImpl)
   api(projects.xml.dom)
