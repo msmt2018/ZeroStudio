@@ -67,3 +67,20 @@
 - 迁移计划：
 - 验证方式：
 ```
+
+
+## ADR-008：断点调试器采用单一协议所有权与分层 transport
+
+- 状态：Accepted（目标架构约束）
+- 背景：当前实现包含 ADB、Root、Shizuku、多种 socket/stream 路径及自研 JDWP engine；若连接层、DDMLib 和 engine 同时读取或管理 JDWP，会产生重复 handshake、多个 packet reader 和多个 debugger client 竞争。
+- 决策：
+  1. 设备发现/ADB session、JDWP transport、JDWP engine、Native LLDB engine、Android Control Plane 分层。
+  2. 每个 JDWP session 仅允许一个 JDWP client 拥有 handshake、packet reader/writer、EventRequest 和 VM state。
+  3. transport 只提供 byte stream，不执行 JDWP handshake 或断点操作。
+  4. ADBLib 优先作为新 ADB host infrastructure 评估；DDMLib 仅在确有旧 API 兼容需求时采用。
+  5. UTP DDMLib device provider/proto 仅进入测试工具链，不进入生产 app runtime。
+  6. Java/Kotlin JDWP 与 Native LLDB 独立运行，由 session coordinator 关联；Activity/Intent/UI automation 使用独立 Android Control Plane。
+- 结果：避免多套 ADB session、JDWP reader 和 debugger client 争夺同一目标进程；允许逐步替换 ADB/LLDB adapter。
+- 迁移计划：先完成统一 Device/Process/Transport/Session contracts 和 ADB JDWP golden path，再接入 Root/Shizuku、DDMLib compatibility、LLDB/DAP 与 UTP。
+- 验证方式：设备发现、PID 选择、单次 handshake、断点命中、栈帧/变量、step/resume/detach；Native attach、符号匹配；双引擎 session；依赖树和 Android host ABI 验证。
+- 详细文档：[目标架构](../../debugger/DEBUGGER_TARGET_ARCHITECTURE.md)、[SDK 与上游源码总目录](../../debugger/DEBUGGER_SDK_AND_SOURCE_CATALOG.md)、[当前源码审计](../../debugger/DEBUGGER_ARCHITECTURE_AUDIT.md)。
