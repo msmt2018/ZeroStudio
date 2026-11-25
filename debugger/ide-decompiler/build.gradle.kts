@@ -15,8 +15,7 @@ android {
 }
 
 dependencies {
-    compileOnly(files("${rootDir}/decompile/cfr-0.152.jar"))
-    testImplementation(files("${rootDir}/decompile/cfr-0.152.jar"))
+    implementation(files("${rootDir}/decompile/cfr-0.152.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.hamcrest:hamcrest-core:1.3")
 }
