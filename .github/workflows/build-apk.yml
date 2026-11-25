@@ -271,12 +271,18 @@ jobs:
           grep -F "Pkg.Revision = $NDK_VERSION" "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
           test -f "$ANDROID_HOME/platforms/android-37.1/android.jar"
 
-      - name: Install CMake 3.31.1 via pip
+      - name: Configure SDK-managed CMake 3.31.1
+        shell: bash
         run: |
-          sudo pip3 install cmake==3.31.1 --break-system-packages
-          CMAKE_DATA_DIR=$(python3 -c "import cmake, os; print(os.path.join(os.path.dirname(cmake.__file__), 'data'))")
-          echo "cmake.dir=$CMAKE_DATA_DIR" >> local.properties
-          cmake --version
+          # CMake 3.31.1 was installed by sdkmanager in the preceding step.
+          # Reuse that verified SDK package instead of downloading a second
+          # 27 MB wheel from PyPI (which caused intermittent read timeouts).
+          CMAKE_DIR="$ANDROID_HOME/cmake/3.31.1"
+          test -x "$CMAKE_DIR/bin/cmake"
+          "$CMAKE_DIR/bin/cmake" --version | tee /tmp/zerostudio-cmake-version.txt
+          grep -F "cmake version 3.31.1" /tmp/zerostudio-cmake-version.txt
+          echo "cmake.dir=$CMAKE_DIR" >> local.properties
+          echo "$CMAKE_DIR/bin" >> "$GITHUB_PATH"
           protoc --version
           python3 --version
 
