@@ -89,6 +89,8 @@ AI 功能应将模型提供商、会话/消息模型、工具调用、网络访�
 
 ADB、Fastboot、调试器和日志能力应各自保持协议实现、连接会话、领域状态和 UI 分离。连接凭据和配对密钥不得暴露给展示层。
 
+调试器模块的目标边界、SDK 选型与上游项目清单见 [断点调试器目标架构](../../debugger/DEBUGGER_TARGET_ARCHITECTURE.md) 和 [SDK/依赖/源码总目录](../../debugger/DEBUGGER_SDK_AND_SOURCE_CATALOG.md)。特别注意：仓库内 `:debugger:adb-connection:adblib` 是当前项目已有模块名，不等同于 Google Maven 的 `com.android.tools.adblib`。
+
 ### XML、事件、日志与工具模块
 
 - `:xml:dom`、`:xml:lsp`、`:xml:resources-api`、`:xml:utils`、`:xml:vectormaster`：XML 与资源处理能力。
