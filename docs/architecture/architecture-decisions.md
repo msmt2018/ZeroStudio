@@ -1,0 +1,86 @@
+# 架构决策记录（ADR）
+
+本文档记录当前已采用的工程约束和目标方向。每项决策均区分“现状事实”与“目标约束”，避免把计划误写为已经落地。
+
+## ADR-001：以 Android 设备端本机构建为产品核心
+
+- 状态：Accepted
+- 决策：ZeroStudio 面向 Android 设备端真实 Android/Gradle 工程开发，工具链和项目执行能力是核心产品能力。
+- 结果：工程架构必须覆盖项目管理、编辑、构建、调试、终端和工具链，而不是只优化代码输入体验。
+- 约束：远程服务可作为可选能力，不得成为本地核心流程的唯一依赖。
+
+## ADR-002：采用按领域拆分的 Gradle 多模块工程
+
+- 状态：Accepted
+- 决策：按编辑器、语言服务、构建工具、终端、调试、AI、资源和扩展等领域拆分模块。
+- 结果：公开 API 与实现分离，模块可以独立验证。
+- 约束：禁止为了代码复用而建立无边界的 common/utils 模块。
+
+## ADR-003：中央管理 Android SDK/NDK 基线
+
+- 状态：Accepted
+- 决策：通过 build-logic 中的 BuildConfig 和 Android convention configuration 统一 Android 模块配置。
+- 当前核实值：compileSdk 37、minSdk 26、targetSdk 37、NDK 29.0.14206865。
+- 结果：新 Android Library 不应自行维护另一套 SDK/NDK 版本。
+- 例外：独立复合构建必须明确接入统一配置，或记录不可避免的隔离原因。
+
+## ADR-004：新 UI 采用 Compose 优先策略
+
+- 状态：Accepted（新开发方向）
+- 决策：新页面与新 UI 组件优先采用 Jetpack Compose Material 3。
+- 结果：UI 状态与业务逻辑分离，使用声明式组合、单向数据流和语义化测试。
+- 迁移策略：按底层 API、状态模型、组件适配、页面接入顺序迁移；不得先重写页面再补造底层 API。
+- 非目标：不要求一次性删除所有传统 View，也不宣称 Android 平台生命周期被取消。
+
+## ADR-005：Native 能力通过显式 FFI/JNI 边界接入
+
+- 状态：Accepted（架构约束）
+- 决策：性能敏感或平台底层能力可放在 C/C++/Rust；Kotlin 层通过明确接口调用。
+- 结果：Native 内部类型不泄漏到 UI 和领域 API。
+- 必须定义：内存、线程、错误、取消、ABI 和关闭语义。
+
+## ADR-006：以可验证证据作为完成标准
+
+- 状态：Accepted
+- 决策：代码提交、工作流触发、构建成功、测试通过和设备验证是不同状态。
+- 结果：每项工作必须标明已实现、已编译、已测试、已运行中的实际完成层级。
+- 禁止：没有重新运行的 CI 不得标记为通过；没有真机证据不得标记为真机验证完成。
+
+## ADR-007：外部项目集成必须保留来源与许可证追踪
+
+- 状态：Accepted
+- 决策：第三方源码、库和二次修改必须登记上游地址、版本/提交、许可证、改动范围和更新策略。
+- 结果：避免误认外部代码为 ZeroStudio 原生实现，也避免许可证信息丢失。
+
+## ADR 模板
+
+后续新增决策使用以下格式：
+
+```markdown
+## ADR-NNN：标题
+- 状态：Proposed / Accepted / Deprecated / Superseded
+- 日期：
+- 背景：
+- 决策：
+- 备选方案：
+- 影响：
+- 迁移计划：
+- 验证方式：
+```
+
+
+## ADR-008：断点调试器采用单一协议所有权与分层 transport
+
+- 状态：Accepted（目标架构约束）
+- 背景：当前实现包含 ADB、Root、Shizuku、多种 socket/stream 路径及自研 JDWP engine；若连接层、DDMLib 和 engine 同时读取或管理 JDWP，会产生重复 handshake、多个 packet reader 和多个 debugger client 竞争。
+- 决策：
+  1. 设备发现/ADB session、JDWP transport、JDWP engine、Native LLDB engine、Android Control Plane 分层。
+  2. 每个 JDWP session 仅允许一个 JDWP client 拥有 handshake、packet reader/writer、EventRequest 和 VM state。
+  3. transport 只提供 byte stream，不执行 JDWP handshake 或断点操作。
+  4. ADBLib 优先作为新 ADB host infrastructure 评估；DDMLib 仅在确有旧 API 兼容需求时采用。
+  5. UTP DDMLib device provider/proto 仅进入测试工具链，不进入生产 app runtime。
+  6. Java/Kotlin JDWP 与 Native LLDB 独立运行，由 session coordinator 关联；Activity/Intent/UI automation 使用独立 Android Control Plane。
+- 结果：避免多套 ADB session、JDWP reader 和 debugger client 争夺同一目标进程；允许逐步替换 ADB/LLDB adapter。
+- 迁移计划：先完成统一 Device/Process/Transport/Session contracts 和 ADB JDWP golden path，再接入 Root/Shizuku、DDMLib compatibility、LLDB/DAP 与 UTP。
+- 验证方式：设备发现、PID 选择、单次 handshake、断点命中、栈帧/变量、step/resume/detach；Native attach、符号匹配；双引擎 session；依赖树和 Android host ABI 验证。
+- 详细文档：[目标架构](../../debugger/DEBUGGER_TARGET_ARCHITECTURE.md)、[SDK 与上游源码总目录](../../debugger/DEBUGGER_SDK_AND_SOURCE_CATALOG.md)、[当前源码审计](../../debugger/DEBUGGER_ARCHITECTURE_AUDIT.md)。

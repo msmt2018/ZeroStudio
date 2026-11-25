@@ -24,7 +24,7 @@
 </p>
 
 
-![page preview](docs/About/pages.png)
+![page preview](docs/About/pages.png)\r\n\r\n## Developer documentation\r\n\r\nThe repository architecture, module boundaries, development roadmap, coding standards, Compose migration rules, and testing requirements are maintained in the [ZeroStudio documentation center](./docs/README.md).
 
 
 ## Features
