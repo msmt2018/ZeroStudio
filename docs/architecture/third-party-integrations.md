@@ -17,7 +17,24 @@
 
 上述列表来源于仓库 README、Gradle 模块命名及项目提供的来源登记。具体代码是否直接复制、作为依赖或仅参考，必须逐模块核实后补充，不能仅凭来源链接推断。
 
-## 3. 每项集成必须登记
+## 3. 调试器专用上游来源
+
+| 项目 | 上游仓库/规范 | 在 ZeroStudio 的目标用途 | 集成边界 |
+|---|---|---|---|
+| Android Tools ADBLib/DDMLib/UTP | https://android.googlesource.com/platform/tools/base | ADB host client、旧 DDMLib 兼容、测试设备 provider | ADBLib 优先评估；DDMLib 可选兼容；UTP 仅测试模块 |
+| AOSP ADB | https://android.googlesource.com/platform/packages/modules/adb | ADB host/device 协议行为参考 | 不把 adbd 当 app 内嵌 SDK |
+| AOSP ART | https://android.googlesource.com/platform/art | ART JDWP endpoint、VM 行为和扩展参考 | 不把 ART 源码整体作为应用依赖 |
+| IntelliJ Community | https://github.com/JetBrains/intellij-community/tree/master/java/debugger | JVM debugger 分层、JDI、requests/events/suspend/evaluation 参考 | 核对 IntelliJ Platform 运行时和许可证；不直接复制整套 IDE 平台 |
+| LLVM | https://github.com/llvm/llvm-project | LLDB、lldb-server、lldb-dap、Clang | 必须构建/验证 Android host 与 device 目标 ABI |
+| Debug Adapter Protocol | https://github.com/microsoft/debug-adapter-protocol | IDE 与 Native debugger adapter 的控制协议 | DAP 不等于 GDB Remote，也不直接连接 Android process |
+| Shizuku | https://github.com/RikkaApps/Shizuku | 用户授权的高权限执行、UserService | 不是 JDWP 引擎；权限与 FD 生命周期需单独管理 |
+| Shizuku API | https://github.com/RikkaApps/Shizuku-API | Android app 接入 Shizuku 的 API | 仅作为可选 adapter |
+| AndroidX Test | https://github.com/android/android-test | instrumentation、Espresso 等测试基础设施 | test-only |
+| Oracle JPDA/JDWP | https://docs.oracle.com/en/java/javase/24/docs/specs/jpda/jpda.html | JDI/JDWP/JVM TI 标准语义 | JDK JDI/JVMTI 不可假设能在 Android app runtime 使用 |
+
+具体依赖分级、四个用户候选 Maven artifacts 的用途与风险、版本核验步骤、模块建议和实施顺序统一维护在 [断点调试器 SDK、依赖与上游源码总目录](../../debugger/DEBUGGER_SDK_AND_SOURCE_CATALOG.md)。
+
+## 4. 每项集成必须登记
 
 - 上游仓库 URL。
 - 上游 release/tag/commit。
