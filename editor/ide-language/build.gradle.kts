@@ -24,6 +24,9 @@ dependencies {
     // repository's JavaParser 3.27.1 version.
     implementation("com.github.javaparser:javaparser-core:3.27.1")
 
+    // Source resolver tests instantiate CfrDecompiler directly; make CFR explicit
+    // on the test runtime classpath instead of relying on an AAR's embedded local JAR.
+    testImplementation(files("${rootDir}/decompile/cfr-0.152.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.hamcrest:hamcrest-core:1.3")
 }
