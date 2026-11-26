@@ -135,7 +135,7 @@ public class BreakpointStoreTest {
         store.setOneShot(1L, true);
         store.setOneShot(2L, true);
 
-        store.removeOneShots(new SuspendInfo());
+        store.removeOneShots(SuspendInfo.empty());
 
         // a 已验证 → 移除
         assertNull(store.get(1L));
