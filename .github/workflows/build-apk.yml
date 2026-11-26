@@ -377,7 +377,7 @@ jobs:
           script: |
             mkdir -p ci-logs
             set -o pipefail
-            ./gradlew --no-daemon --max-workers=2 --continue --stacktrace --console=plain connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest 2>&1 | tee ci-logs/android-instrumentation-tests.log
+            ./gradlew -I ci-gradle-init.gradle --no-daemon --max-workers=2 --continue --stacktrace --console=plain connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest 2>&1 | tee ci-logs/android-instrumentation-tests.log
 
       - name: Upload test reports and diagnostic logs
         id: upload_test_reports
