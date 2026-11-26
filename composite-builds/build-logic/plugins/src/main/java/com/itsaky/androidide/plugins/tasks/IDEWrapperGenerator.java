@@ -450,7 +450,10 @@ public class IDEWrapperGenerator {
 
   @Option(option = "validate-url", description = "Sets task to validate the configured distribution url.")
   public Boolean getValidateDistributionUrl() {
-    return true;
+    // This wrapper is packaged inside the IDE for later use on user projects.
+    // Do not make APK builds depend on a HEAD request to services.gradle.org:
+    // the distribution is downloaded by the generated wrapper when it is first used.
+    return false;
   }
 
   @Inject
