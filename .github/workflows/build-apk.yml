@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: 'Choose the compilation type (assembleDebug or assembleRelease)'
+        description: 'Default APK build when no custom Gradle command is supplied'
         required: true
         default: 'assemble'
         type: choice
@@ -15,6 +15,11 @@ on:
           - assemble
           - assembleDebug
           - assembleRelease
+      gradle_command:
+        description: 'Optional custom Gradle tasks and arguments (overrides build_type), e.g. :core:app:assembleDebug or :java:lsp:testDebugUnitTest --tests com.example.MyTest'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   build:
@@ -119,12 +124,27 @@ jobs:
 
           # export CMAKE_BUILD_PARALLEL_LEVEL=2
           CMAKE_BUILD_PARALLEL_LEVEL: "2"
+          # Read workflow_dispatch input through the environment, never interpolate
+          # user text directly into the shell script.
+          CUSTOM_GRADLE_COMMAND: ${{ inputs.gradle_command }}
+          BUILD_TYPE: ${{ inputs.build_type || 'assemble' }}
         run: |
-          # 使用 --max-workers=2 限制模块并发；保留完整 Gradle 输出供失败诊断。
+          # Keep the full Gradle output for post-failure diagnosis.
           set -o pipefail
-          BUILD_TYPE='${{ github.event.inputs.build_type || 'assemble' }}'
-          echo "Building APK variant: $BUILD_TYPE"
-          ./gradlew "$BUILD_TYPE" --build-cache --max-workers=2 --console=plain 2>&1 | tee build-apk-gradle.log
+          if [[ -n "${CUSTOM_GRADLE_COMMAND//[[:space:]]/}" ]]; then
+            # Accept a whitespace-separated Gradle task/argument list. This is
+            # intentionally a Gradle command field, not an arbitrary shell script.
+            read -r -a GRADLE_ARGS <<< "$CUSTOM_GRADLE_COMMAND"
+            if [[ ${#GRADLE_ARGS[@]} -eq 0 ]]; then
+              echo "Custom Gradle command contains no tasks or arguments." >&2
+              exit 2
+            fi
+            echo "Running custom Gradle command: ${GRADLE_ARGS[*]}"
+          else
+            GRADLE_ARGS=("$BUILD_TYPE")
+            echo "Running default APK build type: $BUILD_TYPE"
+          fi
+          ./gradlew "${GRADLE_ARGS[@]}" --build-cache --max-workers=2 --console=plain 2>&1 | tee build-apk-gradle.log
 
       - name: Upload APK build diagnostic log
         if: always()
