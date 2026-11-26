@@ -498,7 +498,7 @@ public class SourceLocatorTest {
         assertEquals("doIt", f.methodName);
         assertEquals("Lcom/example/Foo;", f.classSignature);
         assertEquals("Foo.java", f.sourceFile);
-        assertEquals(7, f.lineNumberNumber);
+        assertEquals(7, f.lineNumber);
         // readVariables 把 'this' 插到 index 0;int x 跟随其后
         assertTrue(f.variables.size() >= 1);
         // 至少能看到变量 'x'
