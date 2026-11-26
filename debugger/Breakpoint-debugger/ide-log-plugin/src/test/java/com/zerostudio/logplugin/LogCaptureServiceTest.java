@@ -17,7 +17,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import com.itsaky.androidide.logwire.LogPayload;
+import com.zerostudio.logplugin.api.LogPayload;
 import com.zerostudio.logplugin.api.LogLevel;
 import com.zerostudio.logplugin.api.LogTransportType;
 import com.zerostudio.logplugin.bootstrap.DebuggerBootstrapProvider;
@@ -146,7 +146,7 @@ public class LogCaptureServiceTest {
         assertEquals("hi", p.message);
         assertEquals("stacktrace", p.throwable);
 
-        LogPayload wire = p.toWire();
+        com.itsaky.androidide.logwire.LogPayload wire = p.toWire();
         assertEquals(LogLevel.INFO, wire.level);
         assertEquals("hi", wire.message);
     }
