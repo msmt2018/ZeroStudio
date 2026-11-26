@@ -95,7 +95,11 @@ abstract class LSPTest(
     mockkStatic(EditorPreferences::tabSize)
     every { EditorPreferences.tabSize } returns 4
 
-    val params = ToolingApiTestLauncherParams()
+    // Language-server completion tests require a fully resolvable Android fixture.
+    // The default tooling fixture deliberately injects an unresolved dependency
+    // for dependency-diagnostic tests; disable that fixture-only failure here.
+    val client = ToolingApiTestLauncher.MultiVersionTestClient(excludeUnresolvedDependency = true)
+    val params = ToolingApiTestLauncherParams(client = client)
     ToolingApiTestLauncher.launchServer(params) {
       assertThat(result?.isSuccessful).isTrue()
 
