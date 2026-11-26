@@ -338,6 +338,17 @@ jobs:
           }
           EOF
 
+          # ToolingApiTestLauncher forks a separate JVM and starts its own
+          # Gradle 7.3.3 process. A command-line -I init script on the parent
+          # Gradle invocation is NOT inherited by that process. Install the
+          # repository rewrite as a user-level init script so every Gradle
+          # process in this job (including the forked Tooling API fixture)
+          # uses the same Maven Central mirror and test-task policy.
+          GRADLE_INIT_DIR="${GRADLE_USER_HOME:-$HOME/.gradle}/init.d"
+          mkdir -p "$GRADLE_INIT_DIR"
+          cp ci-gradle-init.gradle "$GRADLE_INIT_DIR/zerostudio-ci-init.gradle"
+          test -s "$GRADLE_INIT_DIR/zerostudio-ci-init.gradle"
+
       # Keep each Gradle verification in its own step. This prevents a long
       # composite build from hiding the last completed task in one huge log.
       # continue-on-error lets the remaining suites run; the final gate below
@@ -349,7 +360,7 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew -I ci-gradle-init.gradle --no-daemon --max-workers=2 --continue --stacktrace --console=plain testDebugUnitTest testReleaseUnitTest 2>&1 | tee ci-logs/main-jvm-tests.log
+          ./gradlew --no-daemon --max-workers=2 --continue --stacktrace --console=plain testDebugUnitTest testReleaseUnitTest 2>&1 | tee ci-logs/main-jvm-tests.log
 
       - name: Run build-deps JVM tests and verification
         id: build_deps_tests
@@ -358,7 +369,7 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew -I "$GITHUB_WORKSPACE/ci-gradle-init.gradle" -p composite-builds/build-deps --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-deps-tests.log
+          ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-deps-tests.log
 
       - name: Run build-logic JVM tests and verification
         id: build_logic_tests
@@ -387,7 +398,7 @@ jobs:
           emulator-boot-timeout: 1800
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            bash -o pipefail -c 'mkdir -p ci-logs; ./gradlew -I ci-gradle-init.gradle --no-daemon --max-workers=2 --continue --stacktrace --console=plain connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest 2>&1 | tee ci-logs/android-instrumentation-tests.log'
+            bash -o pipefail -c 'mkdir -p ci-logs; ./gradlew --no-daemon --max-workers=2 --continue --stacktrace --console=plain connectedCheck connectedDebugAndroidTest connectedReleaseAndroidTest 2>&1 | tee ci-logs/android-instrumentation-tests.log'
 
       - name: Upload test reports and diagnostic logs
         id: upload_test_reports
