@@ -91,11 +91,11 @@ public final class Debugger
     }
 
     /**
-     * Package-private constructor used by the unit tests to inject a fake
+     * Public injectable constructor used by tests and connection adapters to inject a fake
      * {@link JdwpClient} (see {@code FakeJdwpClient} in src/test). The
      * production code path always goes through the no-arg constructor.
      */
-    Debugger(@NonNull JdwpClient client) {
+    public Debugger(@NonNull JdwpClient client) {
         this.client = client;
         this.session = new DebugSession();
         this.breakpoints = new BreakpointStore();
