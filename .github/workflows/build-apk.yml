@@ -156,7 +156,7 @@ jobs:
           retention-days: 7
 
       - name: Upload app-arm64-v8a-release.apk
-        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.gradle_command == '' && (inputs.build_type == 'assembleRelease' || inputs.build_type == 'assemble'))
         uses: actions/upload-artifact@v4
         with:
           name: app-arm64-v8a-release.apk
@@ -164,7 +164,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-armeabi-v7a-release.apk
-        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.gradle_command == '' && (inputs.build_type == 'assembleRelease' || inputs.build_type == 'assemble'))
         uses: actions/upload-artifact@v4
         with:
           name: app-armeabi-v7a-release.apk
@@ -172,7 +172,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-x86_64-release.apk
-        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleRelease' || github.event.inputs.build_type == 'assemble'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.gradle_command == '' && (inputs.build_type == 'assembleRelease' || inputs.build_type == 'assemble'))
         uses: actions/upload-artifact@v4
         with:
           name: app-x86_64-release.apk
@@ -180,7 +180,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-arm64-v8a-debug.apk
-        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.gradle_command == '' && (inputs.build_type == 'assembleDebug' || inputs.build_type == 'assemble'))
         uses: actions/upload-artifact@v4
         with:
           name: app-arm64-v8a-debug.apk
@@ -188,7 +188,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-armeabi-v7a-debug.apk
-        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.gradle_command == '' && (inputs.build_type == 'assembleDebug' || inputs.build_type == 'assemble'))
         uses: actions/upload-artifact@v4
         with:
           name: app-armeabi-v7a-debug.apk
@@ -196,7 +196,7 @@ jobs:
           compression-level: 0
 
       - name: Upload app-x86_64-debug.apk
-        if: github.event_name == 'push' || github.event.inputs.build_type == 'assembleDebug' || github.event.inputs.build_type == 'assemble'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.gradle_command == '' && (inputs.build_type == 'assembleDebug' || inputs.build_type == 'assemble'))
         uses: actions/upload-artifact@v4
         with:
           name: app-x86_64-debug.apk
@@ -204,7 +204,10 @@ jobs:
           compression-level: 0
 
   # Verification is a separate job node and starts only after the APK job succeeds.
+  # A custom workflow_dispatch Gradle command is a focused task run. Do not
+  # follow it with the repository-wide verification suite.
   tests:
+    if: github.event_name != 'workflow_dispatch' || inputs.gradle_command == ''
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -253,6 +256,23 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.6.0"
+
+      # :core:chatai:web:buildWebUi invokes pnpm from its Gradle Exec task.
+      # The tests job must provision the same Node toolchain and lockfile-based
+      # dependencies as the APK job before running project-wide Gradle checks.
+      - name: Setup Node.js for web-ui Gradle tasks
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm for web-ui Gradle tasks
+        run: |
+          npm install --global pnpm
+          pnpm --version
+
+      - name: Install web-ui dependencies for Gradle verification
+        working-directory: core/chatai/web-ui
+        run: pnpm install --frozen-lockfile
 
       - name: Install Android SDK, NDK and CMake
         run: |
