@@ -301,6 +301,31 @@ jobs:
         id: prepare_test_environment
         run: chmod +x ./gradlew
 
+      # Use Google's Maven Central mirror for CI test resolution. GitHub-hosted
+      # runners can receive HTTP 429 from repo.maven.apache.org; rewrite only
+      # Maven Central endpoints and keep every dependency/version unchanged.
+      # Also allow Gradle 9.6 test tasks with no discoverable tests in legacy
+      # modules to complete without treating that condition as a test failure.
+      - name: Prepare resilient Gradle test configuration
+        shell: bash
+        run: |
+          cat > ci-gradle-init.gradle <<'EOF'
+          gradle.projectsEvaluated {
+            allprojects {
+              repositories.withType(org.gradle.api.artifacts.repositories.MavenArtifactRepository).configureEach {
+                def repositoryUrl = url.toString()
+                if (repositoryUrl == 'https://repo.maven.apache.org/maven2/' ||
+                    repositoryUrl == 'https://repo1.maven.org/maven2/') {
+                  url = uri('https://maven-central.storage-download.googleapis.com/maven2/')
+                }
+              }
+              tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+                failOnNoDiscoveredTests = false
+              }
+            }
+          }
+          EOF
+
       # Keep each Gradle verification in its own step. This prevents a long
       # composite build from hiding the last completed task in one huge log.
       # continue-on-error lets the remaining suites run; the final gate below
@@ -312,7 +337,7 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew --no-daemon --max-workers=2 --continue --stacktrace --console=plain testDebugUnitTest testReleaseUnitTest 2>&1 | tee ci-logs/main-jvm-tests.log
+          ./gradlew -I ci-gradle-init.gradle --no-daemon --max-workers=2 --continue --stacktrace --console=plain testDebugUnitTest testReleaseUnitTest 2>&1 | tee ci-logs/main-jvm-tests.log
 
       - name: Run build-deps JVM tests and verification
         id: build_deps_tests
@@ -321,7 +346,7 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-deps-tests.log
+          ./gradlew -I ci-gradle-init.gradle -p composite-builds/build-deps --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-deps-tests.log
 
       - name: Run build-logic JVM tests and verification
         id: build_logic_tests
@@ -330,19 +355,24 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-logic-tests.log
+          ./gradlew -I ci-gradle-init.gradle -p composite-builds/build-logic --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-logic-tests.log
 
       - name: Run Android instrumentation tests
         id: instrumentation_tests
         if: ${{ always() && steps.prepare_test_environment.outcome == 'success' }}
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          # This runner image does not expose KVM to the emulator action.
+          # Explicitly opt in to the emulator's supported TCG software mode.
+          ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
           profile: pixel_6
           disable-animations: true
+          emulator-boot-timeout: 1800
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             mkdir -p ci-logs
