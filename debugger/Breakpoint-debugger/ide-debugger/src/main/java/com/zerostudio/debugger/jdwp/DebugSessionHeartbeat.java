@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public final class DebugSessionHeartbeat {
+public class DebugSessionHeartbeat {
 
     private static final String TAG = "DebugSessionHeartbeat";
 
