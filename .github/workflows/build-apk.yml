@@ -310,15 +310,27 @@ jobs:
         shell: bash
         run: |
           cat > ci-gradle-init.gradle <<'EOF'
+          def redirectMavenCentral = { repositories ->
+            repositories.withType(org.gradle.api.artifacts.repositories.MavenArtifactRepository).configureEach { repository ->
+              def repositoryUrl = repository.url.toString()
+              if (repositoryUrl == 'https://repo.maven.apache.org/maven2/' ||
+                  repositoryUrl == 'https://repo1.maven.org/maven2/') {
+                repository.url = uri('https://maven-central.storage-download.googleapis.com/maven2/')
+              }
+            }
+          }
+
+          // Settings-level repositories resolve most Android test dependencies;
+          // rewriting only Project.repositories leaves the central endpoint active.
+          gradle.settingsEvaluated { settings ->
+            redirectMavenCentral(settings.pluginManagement.repositories)
+            redirectMavenCentral(settings.dependencyResolutionManagement.repositories)
+          }
+
           gradle.projectsEvaluated {
             allprojects {
-              repositories.withType(org.gradle.api.artifacts.repositories.MavenArtifactRepository).configureEach { repository ->
-                def repositoryUrl = repository.url.toString()
-                if (repositoryUrl == 'https://repo.maven.apache.org/maven2/' ||
-                    repositoryUrl == 'https://repo1.maven.org/maven2/') {
-                  repository.url = uri('https://maven-central.storage-download.googleapis.com/maven2/')
-                }
-              }
+              redirectMavenCentral(repositories)
+              redirectMavenCentral(buildscript.repositories)
               tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
                 failOnNoDiscoveredTests = false
               }
