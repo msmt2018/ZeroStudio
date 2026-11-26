@@ -18,6 +18,10 @@ import com.zerostudio.debugger.model.ClassFileReader.ClassMethod;
 import com.zerostudio.debugger.model.ClassFileReader.LineEntry;
 import com.zerostudio.debugger.model.ClassFileReader.ParsedClass;
 
+import com.zerostudio.debugger.model.ClassFileReader.ClassMethod;
+import com.zerostudio.debugger.model.ClassFileReader.LineEntry;
+import com.zerostudio.debugger.model.ClassFileReader.ParsedClass;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
