@@ -378,7 +378,7 @@ jobs:
         run: |
           mkdir -p ci-logs
           set -o pipefail
-          ./gradlew -I "$GITHUB_WORKSPACE/ci-gradle-init.gradle" -p composite-builds/build-logic --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-logic-tests.log
+          ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue --stacktrace --console=plain test 2>&1 | tee ci-logs/build-logic-tests.log
 
       - name: Run Android instrumentation tests
         id: instrumentation_tests
