@@ -72,6 +72,8 @@ val kotlinCompilerVersion =
 buildscript {
   repositories {
     google()
+    // Prefer the Google-hosted Maven Central mirror to avoid CI rate limits.
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     mavenCentral()
     gradlePluginPortal()
   }
