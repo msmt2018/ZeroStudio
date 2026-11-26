@@ -14,6 +14,10 @@
 
 package com.zerostudio.debugger.model;
 
+import com.zerostudio.debugger.model.ClassFileReader.ClassMethod;
+import com.zerostudio.debugger.model.ClassFileReader.LineEntry;
+import com.zerostudio.debugger.model.ClassFileReader.ParsedClass;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -127,7 +131,7 @@ public class ClassFileReaderTest {
 
     @Test
     public void parseStream_invalidInput_returnsNull() throws Exception {
-        java.io.InputStream in = new java.io.ByteArrayInputStream(new byte[] { 0xCA, 0xFE, 0xBA, 0xBE });
+        java.io.InputStream in = new java.io.ByteArrayInputStream(new byte[] { (byte) 0xCA, (byte) 0xFE, (byte) 0xBA, (byte) 0xBE });
         ParsedClass result = reader.parseStream(in);
         // ClassFileReader should return null for invalid class data
         assertNull(result);
