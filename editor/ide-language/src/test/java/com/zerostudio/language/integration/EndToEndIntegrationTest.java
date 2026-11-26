@@ -121,7 +121,7 @@ public class EndToEndIntegrationTest {
     /** 3. 方法级缓存 - 第二次 decompile 不调用底层 */
     @Test
     public void methodLevelCacheWorks() {
-        byte[] classBytes = readClassBytes(JUNIT_JAR, "org/junit/Assert.class");
+        byte[] classBytes = readClassBytes("org/junit/Assert.class");
         assertNotNull(classBytes);
         Decompiler cfr = DecompilerRegistry.get("cfr");
         MethodLevelDecompiler mld = new MethodLevelDecompiler(cfr, 10);
@@ -154,7 +154,7 @@ public class EndToEndIntegrationTest {
                         "}\n");
         idx.index(source);
         // 反编译类
-        byte[] classBytes = readClassBytes(JUNIT_JAR, "junit/framework/TestCase.class");
+        byte[] classBytes = readClassBytes("junit/framework/TestCase.class");
         Decompiler cfr = DecompilerRegistry.get("cfr");
         DecompileResult r = cfr.decompile(DecompileRequest.builder()
                 .className("junit.framework.TestCase")
@@ -205,7 +205,7 @@ public class EndToEndIntegrationTest {
     /** 7. CachingDecompiler 集成 - 多次请求走缓存 */
     @Test
     public void cachingDecompilerIntegration() {
-        byte[] classBytes = readClassBytes(JUNIT_JAR, "org/junit/Assert.class");
+        byte[] classBytes = readClassBytes("org/junit/Assert.class");
         Decompiler cfr = DecompilerRegistry.get("cfr");
         CachingDecompiler cache = new CachingDecompiler(cfr, 32);
         DecompileRequest req = DecompileRequest.builder()
