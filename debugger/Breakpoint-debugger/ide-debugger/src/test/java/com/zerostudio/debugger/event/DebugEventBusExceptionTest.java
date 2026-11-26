@@ -65,7 +65,7 @@ public class DebugEventBusExceptionTest {
         b.writeInt(REQUEST_ID);
         b.writeLong(THREAD_ID);
         b.writeLong(EX_CLASS_ID);
-        b.writeByte('L');                    // exTag
+        b.writeByte((byte) 'L');                    // exTag
         b.writeLong(EX_OBJECT_ID);
         if (caught) {
             b.writeLong(CATCH_CLASS_ID);
