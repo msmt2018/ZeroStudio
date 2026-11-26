@@ -13,6 +13,10 @@
 
 package com.zerostudio.debugger.model;
 
+import com.zerostudio.debugger.model.JavaSourceParser.ParsedSource;
+import com.zerostudio.debugger.model.JavaSourceParser.SourceClass;
+import com.zerostudio.debugger.model.JavaSourceParser.SourceMethod;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
