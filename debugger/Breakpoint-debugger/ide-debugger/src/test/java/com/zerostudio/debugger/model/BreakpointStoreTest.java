@@ -149,7 +149,7 @@ public class BreakpointStoreTest {
     @Test
     public void removeOneShotsWithNoOneShotsIsNoop() {
         store.add(newBp(1L, "Foo.java", 1));
-        store.removeOneShots(new SuspendInfo());
+        store.removeOneShots(SuspendInfo.empty());
         assertNotNull(store.get(1L));
     }
 
