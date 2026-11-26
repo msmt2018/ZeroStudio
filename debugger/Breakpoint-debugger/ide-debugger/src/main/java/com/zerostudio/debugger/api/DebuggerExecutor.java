@@ -106,6 +106,11 @@ public final class DebuggerExecutor implements Executor {
         return delegate.isShutdown();
     }
 
+    /** Returns whether this executor has been shut down. */
+    public boolean isShutdown() {
+        return delegate.isShutdown();
+    }
+
     /**
      * The number of active threads in the pool.
      */
