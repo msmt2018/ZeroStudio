@@ -21,9 +21,10 @@ dependencies {
     // implementation detail and are not exposed by this module's public API.
     implementation("com.github.javaparser:javaparser-core:3.27.1")
 
-    // The language engine does not depend on the decompiler. The decompiler
-    // is a consumer of language analysis, so this dependency must not point
-    // in the opposite direction (which would create an architectural cycle).
+    // SourceLocator and SourceResolver consume the decompiler API to resolve
+    // class sources from bytecode. The decompiler module is independent of this
+    // language module, so this is a one-way dependency and does not form a cycle.
+    implementation(project(":debugger:ide-decompiler"))
 
     testImplementation(libs.tests.junit)
     testImplementation("org.hamcrest:hamcrest-core:1.3")
