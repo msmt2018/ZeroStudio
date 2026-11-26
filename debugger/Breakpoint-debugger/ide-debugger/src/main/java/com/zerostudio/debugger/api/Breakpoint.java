@@ -18,7 +18,7 @@ package com.zerostudio.debugger.api;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-public final class Breakpoint {
+public class Breakpoint {
 
     /** Lifecycle states of a breakpoint. */
     public enum State {
