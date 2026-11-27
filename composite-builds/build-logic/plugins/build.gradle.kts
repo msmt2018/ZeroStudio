@@ -35,6 +35,8 @@ dependencies {
 
   implementation("com.android.tools.build:gradle:${libs.versions.agp.asProvider().get()}")
   implementation(libs.maven.publish)
+
+  // Match Gradle 9.6.0 kotlin-dsl embedded Kotlin to avoid mixing Kotlin DSL runtimes.
   implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21")
 
   implementation(libs.common.jkotlin)
@@ -62,7 +64,8 @@ gradlePlugin {
       implementationClass = "com.itsaky.androidide.plugins.PropertiesParserPlugin"
     }
     create("com.itsaky.androidide.build.lexergenerator") {
-      id = "com.itsaky.androidide.plugins.AndroidIDEPlugin"
+      id = "com.itsaky.androidide.build.lexergenerator"
+      implementationClass = "com.itsaky.androidide.plugins.LexerGeneratorPlugin"
     }
   }
 }

@@ -54,16 +54,21 @@ include(
   ":layoutlib-api",
   ":logback-core",
   ":compose-pullrefresh",
-  "soraLanguageTextmate",
+    "soraLanguageTextmate",
   ":editor",
-  ":soraOnigurumaNative"
+  
+    ":soraOnigurumaNative" //来自  root/:modules:soraOnigurumaNative
 )
 
+// 注册项目主构建模块到复合构建内
 project(":soraOnigurumaNative").projectDir = file("../../modules/soraOnigurumaNative")
+// project(":kotlinc").projectDir = file("../../modules/kotlinc")
 
 rootProject.name = "build-deps"
 
 gradle.rootProject {
+
+  // required for setting SDK location for android modules
   project
       .file("../../local.properties")
       .takeIf { it.exists() }
