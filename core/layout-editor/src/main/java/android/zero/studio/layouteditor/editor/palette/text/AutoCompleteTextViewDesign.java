@@ -2,12 +2,12 @@ package android.zero.studio.layouteditor.editor.palette.text;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.widget.AutoCompleteTextView;
+import androidx.appcompat.widget.AppCompatAutoCompleteTextView;
 
 import android.zero.studio.layouteditor.utils.Constants;
 import android.zero.studio.layouteditor.utils.Utils;
 
-public class AutoCompleteTextViewDesign extends AutoCompleteTextView {
+public class AutoCompleteTextViewDesign extends AppCompatAutoCompleteTextView {
 
     private boolean drawStrokeEnabled;
     private boolean isBlueprint;
