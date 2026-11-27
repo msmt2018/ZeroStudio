@@ -287,7 +287,9 @@ class LspEditor(
   @WorkerThread
   @Throws(RuntimeException::class)
   fun disconnect() {
-    uiDelegate.detachEditor()
+    runBlocking {
+      withContext(Dispatchers.Main.immediate) { uiDelegate.detachEditor() }
+    }
     runCatching {
           coroutineScope.future { eventManager.emitAsync(EventType.documentClose) }.get()
           delegate.disconnectAll()
