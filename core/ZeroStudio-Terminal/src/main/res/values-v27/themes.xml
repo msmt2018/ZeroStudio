@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Base.Theme.Termix">
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+    <style name="Base.Theme.Termix.Monet">
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>
