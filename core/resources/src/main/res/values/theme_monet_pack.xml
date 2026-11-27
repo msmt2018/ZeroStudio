@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
   <color name="_monet_rose_light_colorPrimary">#8C3A5C</color>
   <color name="_monet_rose_light_colorOnPrimary">#FFFFFF</color>
   <color name="_monet_rose_light_colorPrimaryContainer">#FAD7E4</color>
@@ -26,6 +26,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_rose_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_rose_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_rose_dark_colorPrimary">#2C151F</color>
   <color name="_monet_rose_dark_colorOnPrimary">#F7F7F7</color>
@@ -53,6 +54,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_rose_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_rose_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_peach_light_colorPrimary">#9B4D2F</color>
   <color name="_monet_peach_light_colorOnPrimary">#FFFFFF</color>
@@ -80,6 +82,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_peach_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_peach_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_peach_dark_colorPrimary">#3A1F16</color>
   <color name="_monet_peach_dark_colorOnPrimary">#F7F7F7</color>
@@ -107,6 +110,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_peach_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_peach_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_amber_light_colorPrimary">#8A5600</color>
   <color name="_monet_amber_light_colorOnPrimary">#FFFFFF</color>
@@ -134,6 +138,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_amber_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_amber_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_amber_dark_colorPrimary">#36260C</color>
   <color name="_monet_amber_dark_colorOnPrimary">#F7F7F7</color>
@@ -161,6 +166,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_amber_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_amber_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_lime_light_colorPrimary">#5C6F00</color>
   <color name="_monet_lime_light_colorOnPrimary">#FFFFFF</color>
@@ -188,6 +194,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_lime_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_lime_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_lime_dark_colorPrimary">#2A3111</color>
   <color name="_monet_lime_dark_colorOnPrimary">#F7F7F7</color>
@@ -215,6 +222,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_lime_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_lime_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_sage_light_colorPrimary">#3F6650</color>
   <color name="_monet_sage_light_colorOnPrimary">#FFFFFF</color>
@@ -242,6 +250,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_sage_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_sage_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_sage_dark_colorPrimary">#1F3228</color>
   <color name="_monet_sage_dark_colorOnPrimary">#F7F7F7</color>
@@ -269,6 +278,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_sage_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_sage_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_teal_light_colorPrimary">#006A6A</color>
   <color name="_monet_teal_light_colorOnPrimary">#FFFFFF</color>
@@ -296,6 +306,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_teal_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_teal_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_teal_dark_colorPrimary">#003737</color>
   <color name="_monet_teal_dark_colorOnPrimary">#F7F7F7</color>
@@ -323,6 +334,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_teal_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_teal_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_sky_light_colorPrimary">#2D5F8B</color>
   <color name="_monet_sky_light_colorOnPrimary">#FFFFFF</color>
@@ -350,6 +362,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_sky_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_sky_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_sky_dark_colorPrimary">#15293A</color>
   <color name="_monet_sky_dark_colorOnPrimary">#F7F7F7</color>
@@ -377,6 +390,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_sky_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_sky_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_indigo_light_colorPrimary">#4255A4</color>
   <color name="_monet_indigo_light_colorOnPrimary">#FFFFFF</color>
@@ -404,6 +418,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_indigo_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_indigo_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_indigo_dark_colorPrimary">#1D2550</color>
   <color name="_monet_indigo_dark_colorOnPrimary">#F7F7F7</color>
@@ -431,6 +446,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_indigo_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_indigo_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_plum_light_colorPrimary">#6D4A8A</color>
   <color name="_monet_plum_light_colorOnPrimary">#FFFFFF</color>
@@ -458,6 +474,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_plum_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_plum_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_plum_dark_colorPrimary">#342145</color>
   <color name="_monet_plum_dark_colorOnPrimary">#F7F7F7</color>
@@ -485,6 +502,7 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_plum_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_plum_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
   <color name="_monet_fuchsia_light_colorPrimary">#8A3D7A</color>
   <color name="_monet_fuchsia_light_colorOnPrimary">#FFFFFF</color>
@@ -512,6 +530,7 @@
     <item name="android:windowLightStatusBar">true</item>
     <item name="terminalTextColor">@color/_monet_fuchsia_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_fuchsia_light_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
   </style>
   <color name="_monet_fuchsia_dark_colorPrimary">#431C3A</color>
   <color name="_monet_fuchsia_dark_colorOnPrimary">#F7F7F7</color>
@@ -539,5 +558,6 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="terminalTextColor">@color/_monet_fuchsia_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_fuchsia_dark_colorBackground</item>
+    <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
   </style>
 </resources>
