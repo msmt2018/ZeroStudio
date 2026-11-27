@@ -7,7 +7,7 @@ pluginManagement {
 
   repositories {
     google()
-    maven("${mirror}")
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     gradlePluginPortal()
     mavenCentral()
     mavenLocal()
@@ -66,7 +66,7 @@ dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
     google()
-    maven("${mirror}")
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     mavenCentral()
     mavenLocal()
     maven("https://jitpack.io")
@@ -82,7 +82,7 @@ val skipNyx = System.getenv("ZEROSTUDIO_SKIP_NYX") == "true"
 
 buildscript {
   repositories {
-    maven("${mirror}")
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     mavenCentral()
   }
   dependencies {

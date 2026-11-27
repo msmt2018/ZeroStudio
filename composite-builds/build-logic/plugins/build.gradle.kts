@@ -22,7 +22,7 @@ plugins { `kotlin-dsl` }
 
 repositories {
   google()
-  maven("${mirror}")
+  maven("https://maven-central.storage-download.googleapis.com/maven2/")
   gradlePluginPortal()
   mavenCentral()
 }

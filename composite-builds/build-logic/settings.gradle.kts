@@ -21,7 +21,7 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 pluginManagement {
   repositories {
     google()
-    maven("${mirror}")
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     gradlePluginPortal()
     mavenCentral()
   }
@@ -30,7 +30,7 @@ pluginManagement {
 dependencyResolutionManagement {
   repositories {
     google()
-    maven("${mirror}")
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     mavenCentral()
   }
 
