@@ -20,6 +20,11 @@ on:
         required: false
         default: ''
         type: string
+      verification_gradle_command:
+        description: 'Optional exact Gradle task(s) to run in the tests job instead of the full verification suite, e.g. :core:git:lintDebug'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   build:
@@ -301,23 +306,33 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run JVM unit tests and Gradle verification
+        env:
+          VERIFICATION_GRADLE_COMMAND: ${{ inputs.verification_gradle_command }}
         run: |
-          set +e
-          status=0
-          run_gradle() {
-            echo "::group::Running: $*"
-            "$@"
-            result=$?
-            echo "::endgroup::"
-            if [ "$result" -ne 0 ]; then status=1; fi
-          }
-          # The main build owns Android variants and their unit-test tasks.
-          run_gradle ./gradlew --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
-          # build-deps is a separate composite build of libraries; it has no
-          # aggregate testDebugUnitTest/testReleaseUnitTest tasks at its root.
-          run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test
-          run_gradle ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue check test
-          exit "$status"
+          set -o pipefail
+          if [[ -n "${VERIFICATION_GRADLE_COMMAND//[[:space:]]/}" ]]; then
+            read -r -a GRADLE_ARGS <<< "$VERIFICATION_GRADLE_COMMAND"
+            if [[ ${#GRADLE_ARGS[@]} -eq 0 ]]; then
+              echo "Custom verification Gradle command contains no tasks or arguments." >&2
+              exit 2
+            fi
+            echo "Running selected verification Gradle command: ${GRADLE_ARGS[*]}"
+            ./gradlew "${GRADLE_ARGS[@]}" --no-daemon --max-workers=2 --console=plain
+          else
+            set +e
+            status=0
+            run_gradle() {
+              echo "::group::Running: $*"
+              "$@"
+              result=$?
+              echo "::endgroup::"
+              if [ "$result" -ne 0 ]; then status=1; fi
+            }
+            run_gradle ./gradlew --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
+            run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test
+            run_gradle ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue check test
+            exit "$status"
+          fi
 
       - name: Run Android instrumentation tests
         uses: reactivecircus/android-emulator-runner@v2
