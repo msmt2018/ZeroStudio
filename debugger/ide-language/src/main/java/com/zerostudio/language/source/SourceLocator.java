@@ -5,6 +5,7 @@ import com.zerostudio.decompiler.api.DecompileResult;
 import com.zerostudio.decompiler.api.Decompiler;
 import com.zerostudio.decompiler.api.DecompilerRegistry;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -187,7 +188,7 @@ public final class SourceLocator {
                         try (InputStream is = zf.getInputStream(e)) {
                             return LocatedSource.of(Kind.SOURCE_JAR, className,
                                     archivePath + "!/" + n,
-                                    new String(is.readAllBytes()),
+                                    new String(readFully(is)),
                                     archivePath + "!/" + n);
                         }
                     }
@@ -216,7 +217,7 @@ public final class SourceLocator {
                 ZipEntry e = zf.getEntry(entryName);
                 if (e != null) {
                     try (InputStream is = zf.getInputStream(e)) {
-                        bytes = is.readAllBytes();
+                        bytes = readFully(is);
                     }
                 }
             } catch (IOException e) { return null; }
@@ -230,6 +231,16 @@ public final class SourceLocator {
                     r.source, archivePath);
         }
         return null;
+    }
+
+    private static byte[] readFully(InputStream input) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
     }
 
     private LocatedSource builtin(String className) {
