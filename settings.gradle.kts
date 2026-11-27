@@ -6,9 +6,9 @@ pluginManagement {
   includeBuild("composite-builds/build-logic") { name = "build-logic" }
 
   repositories {
-    gradlePluginPortal()
     google()
-    maven("https://maven-central.storage-download.googleapis.com/maven2/")
+    maven("${mirror}")
+    gradlePluginPortal()
     mavenCentral()
     mavenLocal()
     maven("https://cache-redirector.jetbrains.com/kotlin.bintray.com/kotlin-plugin")
@@ -47,14 +47,11 @@ dependencyResolutionManagement {
                   "logback-core",
                   "editor",
                   "compose-pullrefresh",
-                  
                   "soraLanguageTextmate",
-                  // "kotlinc",
-
               ),
       )
 
-    for ((build, modules) in dependencySubstitutions) {
+  for ((build, modules) in dependencySubstitutions) {
     includeBuild("composite-builds/${build}") {
       this.name = build
       dependencySubstitution {
@@ -62,7 +59,6 @@ dependencyResolutionManagement {
           substitute(module("com.itsaky.androidide.build:${module}"))
             .using(project(":${module}"))
         }
-        
       }
     }
   }
@@ -70,7 +66,7 @@ dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
     google()
-    maven("https://maven-central.storage-download.googleapis.com/maven2/")
+    maven("${mirror}")
     mavenCentral()
     mavenLocal()
     maven("https://jitpack.io")
@@ -80,21 +76,21 @@ dependencyResolutionManagement {
     maven(url = "https://www.jetbrains.com/intellij-repository/releases/")
     maven { url = uri("${rootProject.projectDir}/gradle/libs") }
   }
-  // versionCatalogs { create("ktlib") { from(files("gradle/kotlin.versions.toml")) } }
 }
 
 val skipNyx = System.getenv("ZEROSTUDIO_SKIP_NYX") == "true"
 
 buildscript {
-  repositories { maven("https://maven-central.storage-download.googleapis.com/maven2/")
-    mavenCentral() }
+  repositories {
+    maven("${mirror}")
+    mavenCentral()
+  }
   dependencies {
     if (System.getenv("ZEROSTUDIO_SKIP_NYX") != "true") classpath("com.mooltiverse.oss.nyx:gradle:2.5.2")
   }
 }
 
 val isGitRepo by lazy {
-  // 如果遇到"git",构建报错，就设置git的绝对路径，比如d：/git/git.exe
   cmdOutput("git", "rev-parse", "--is-inside-work-tree").trim() == "true"
 }
 
@@ -146,7 +142,6 @@ include(
     ":core:git",
     ":core:layout-editor",
     ":core:ZeroStudio-Terminal",
-    
     ":core:chatai:ai",
     ":core:chatai:app",
     ":core:chatai:common",
@@ -157,33 +152,17 @@ include(
     ":core:chatai:web",
     ":core:chatai:workspace",
     ":core:chatai:material3",
-
     ":debugger:Breakpoint-debugger:library",
-
-    // ADB 连接管理模块 (复刻自 debugger/android-adb-shell 参考工程的 adblib/libadb/fastbootlib)
-    // - adblib: Cameron Gutman 的 ADB 协议 Java 实现 (OTG/USB ADB 用)
-    // - libadb: Muntashirakon 的 ADB 库 (WiFi/TLS ADB 用, 含 mDNS + SPAKE2 配对)
-    // - fastbootlib: Fastboot 协议 Kotlin 实现
-    // - connection: 完整复刻 android-adb-shell/app 的 shell+core 源码, 包含
-    //   AdbConnectionManager/WifiAdbRepositoryImpl/OtgRepositoryImpl/FastbootRepositoryImpl
-    //   /ShellViewModel/WifiAdbViewModel/OtgViewModel/FastbootViewModel 等真正实现
-    //   Clean Architecture + Hilt + Room + JmDNS + Shizuku
-    // 设备连接管理 BottomSheet 通过这些模块实现 Local+WiFi+OTG+Fastboot 四种连接方式
     ":debugger:adb-connection:adblib",
     ":debugger:adb-connection:libadb",
     ":debugger:adb-connection:fastbootlib",
     ":debugger:adb-connection:connection",
-    // settings-dsl 模块 (复刻自 debugger/android-adb-shell 参考工程)
-    // 提供 Kotlin DSL 风格的设置页构建器 (switchItem/clickableItem/radioGroupItem/
-    // buttonGroupItem/settingsPage 等), 被 connection 模块的 SettingsProvider.kt 引用。
     ":debugger:adb-connection:settings-dsl",
-
     ":editor:api",
     ":editor:impl",
     ":editor:lexers",
     ":editor:treesitter",
     ":editor:editor-lsp",
-    
     ":editor:tree-sitter-ndk:android-tree-sitter",
     ":editor:tree-sitter-ndk:annotation-processors",
     ":editor:tree-sitter-ndk:annotations",
@@ -193,11 +172,9 @@ include(
     ":editor:tree-sitter-ndk:yaml",
     ":editor:tree-sitter-ndk:aidl",
     ":editor:tree-sitter-ndk:cpp",
-
     ":event:eventbus",
     ":event:eventbus-android",
     ":event:eventbus-events",
-
     ":debugger:ide-decompiler",
     ":debugger:Breakpoint-debugger:ide-debugger",
     ":debugger:Breakpoint-debugger:ide-debugger-host",
@@ -205,14 +182,11 @@ include(
     ":debugger:ide-language",
     ":debugger:Breakpoint-debugger:logwire",
     ":debugger:Breakpoint-debugger:library",
-
     ":java:javac-services",
     ":java:lsp",
     ":lsp:kotlin",
     ":lsp:toml",
     ":lsp:clangd",
-    // ":lsp:smali",
-    // ":lsp:groovy",
     ":logging:idestats",
     ":logging:logger",
     ":logging:logsender",
@@ -228,7 +202,6 @@ include(
     ":testing:gradleToolingTest",
     ":testing:lspTest",
     ":testing:unitTest",
-    
     ":tooling:api",
     ":tooling:builder-model-impl",
     ":tooling:events",
@@ -236,7 +209,6 @@ include(
     ":tooling:model",
     ":tooling:plugin",
     ":tooling:plugin-config",
-
     ":utilities:build-info",
     ":utilities:flashbar",
     ":utilities:framework-stubs",
@@ -247,8 +219,6 @@ include(
     ":utilities:templates-impl",
     ":utilities:treeview",
     ":utilities:FileTree",
-    // ":utilities:uidesigner",  //已经完全归档
-    // ":utilities:xml-inflater", //归档
     ":xml:aaptcompiler",
     ":xml:dom",
     ":xml:lsp",
@@ -258,7 +228,6 @@ include(
     ":modules:colorpicker",
     ":modules:compose-preview",
     ":modules:deviceCompat",
-  //  ":modules:image-preview",
     ":modules:kotlinc",
     ":modules:mt-data-files-provider",
     ":modules:soraLanguageMonarch",
@@ -271,36 +240,24 @@ include(
     ":modules:universal-preview",
     ":modules:web-preview",
     ":modules:zero-onboarding-guide",
-    // Shizuku 客户端 API: 子项目 3 断点调试连接层用
-    // (api 内部依赖 :modules:shizuku:aidl 和 :modules:shizuku:shared)
-    // provider: ShizukuProvider ContentProvider, 接收 Shizuku server 下发的 binder,
-    //   没有 provider 注册则 Shizuku.pingBinder() 永远 false (设备连接管理 BottomSheet 用)
     ":modules:shizuku:aidl",
     ":modules:shizuku:shared",
     ":modules:shizuku:api",
     ":modules:shizuku:provider",
-
 )
 
-
 object FDroidConfig {
-
   var hasRead: Boolean = false
     private set
-
   var isFDroidBuild: Boolean = false
     private set
-
   var fDroidVersionName: String? = null
     private set
-
   var fDroidVersionCode: Int? = null
     private set
-
   const val PROP_FDROID_BUILD = "ide.build.fdroid"
   const val PROP_FDROID_BUILD_VERSION = "ide.build.fdroid.version"
   const val PROP_FDROID_BUILD_VERCODE = "ide.build.fdroid.vercode"
-
   fun load(rootDir: File) {
     val propsFile = File(rootDir, "fdroid.properties")
     if (!propsFile.exists() || !propsFile.isFile) {
@@ -308,14 +265,11 @@ object FDroidConfig {
       isFDroidBuild = false
       return
     }
-
     val properties = propsFile.let { props ->
       java.util.Properties().also { it.load(props.reader()) }
     }
-
     hasRead = true
     isFDroidBuild = properties.getProperty(PROP_FDROID_BUILD, null).toBoolean()
-
     fDroidVersionName = properties.getProperty(PROP_FDROID_BUILD_VERSION, null)
     fDroidVersionCode = properties.getProperty(PROP_FDROID_BUILD_VERCODE, null)?.toInt()
   }

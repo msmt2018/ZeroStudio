@@ -18,13 +18,19 @@
 @file:Suppress("UnstableApiUsage")
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
+pluginManagement {
+  repositories {
+    google()
+    maven("${mirror}")
+    gradlePluginPortal()
+    mavenCentral()
+  }
+}
+
 dependencyResolutionManagement {
   repositories {
     google()
-    // Keep the composite build independent from the root build's repository
-    // configuration while avoiding a single Maven Central endpoint as a
-    // dependency-resolution bottleneck in CI.
-    maven("https://maven-central.storage-download.googleapis.com/maven2/")
+    maven("${mirror}")
     mavenCentral()
   }
 
