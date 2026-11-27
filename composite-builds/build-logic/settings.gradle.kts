@@ -19,8 +19,12 @@
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 dependencyResolutionManagement {
-repositories {
+  repositories {
     google()
+    // Keep the composite build independent from the root build's repository
+    // configuration while avoiding a single Maven Central endpoint as a
+    // dependency-resolution bottleneck in CI.
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
     mavenCentral()
   }
 
