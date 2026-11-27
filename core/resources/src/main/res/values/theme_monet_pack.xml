@@ -24,7 +24,6 @@
     <item name="android:statusBarColor">@color/_monet_rose_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_rose_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_rose_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_rose_light_colorBackground</item>
   </style>
@@ -52,7 +51,6 @@
     <item name="android:statusBarColor">@color/_monet_rose_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_rose_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_rose_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_rose_dark_colorBackground</item>
   </style>
@@ -80,7 +78,6 @@
     <item name="android:statusBarColor">@color/_monet_peach_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_peach_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_peach_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_peach_light_colorBackground</item>
   </style>
@@ -108,7 +105,6 @@
     <item name="android:statusBarColor">@color/_monet_peach_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_peach_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_peach_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_peach_dark_colorBackground</item>
   </style>
@@ -136,7 +132,6 @@
     <item name="android:statusBarColor">@color/_monet_amber_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_amber_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_amber_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_amber_light_colorBackground</item>
   </style>
@@ -164,7 +159,6 @@
     <item name="android:statusBarColor">@color/_monet_amber_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_amber_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_amber_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_amber_dark_colorBackground</item>
   </style>
@@ -192,7 +186,6 @@
     <item name="android:statusBarColor">@color/_monet_lime_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_lime_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_lime_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_lime_light_colorBackground</item>
   </style>
@@ -220,7 +213,6 @@
     <item name="android:statusBarColor">@color/_monet_lime_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_lime_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_lime_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_lime_dark_colorBackground</item>
   </style>
@@ -248,7 +240,6 @@
     <item name="android:statusBarColor">@color/_monet_sage_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_sage_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_sage_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_sage_light_colorBackground</item>
   </style>
@@ -276,7 +267,6 @@
     <item name="android:statusBarColor">@color/_monet_sage_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_sage_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_sage_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_sage_dark_colorBackground</item>
   </style>
@@ -304,7 +294,6 @@
     <item name="android:statusBarColor">@color/_monet_teal_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_teal_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_teal_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_teal_light_colorBackground</item>
   </style>
@@ -332,7 +321,6 @@
     <item name="android:statusBarColor">@color/_monet_teal_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_teal_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_teal_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_teal_dark_colorBackground</item>
   </style>
@@ -360,7 +348,6 @@
     <item name="android:statusBarColor">@color/_monet_sky_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_sky_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_sky_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_sky_light_colorBackground</item>
   </style>
@@ -388,7 +375,6 @@
     <item name="android:statusBarColor">@color/_monet_sky_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_sky_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_sky_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_sky_dark_colorBackground</item>
   </style>
@@ -416,7 +402,6 @@
     <item name="android:statusBarColor">@color/_monet_indigo_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_indigo_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_indigo_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_indigo_light_colorBackground</item>
   </style>
@@ -444,7 +429,6 @@
     <item name="android:statusBarColor">@color/_monet_indigo_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_indigo_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_indigo_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_indigo_dark_colorBackground</item>
   </style>
@@ -472,7 +456,6 @@
     <item name="android:statusBarColor">@color/_monet_plum_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_plum_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_plum_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_plum_light_colorBackground</item>
   </style>
@@ -500,7 +483,6 @@
     <item name="android:statusBarColor">@color/_monet_plum_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_plum_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_plum_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_plum_dark_colorBackground</item>
   </style>
@@ -528,7 +510,6 @@
     <item name="android:statusBarColor">@color/_monet_fuchsia_light_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_fuchsia_light_colorBackground</item>
     <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowLightNavigationBar">true</item>
     <item name="terminalTextColor">@color/_monet_fuchsia_light_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_fuchsia_light_colorBackground</item>
   </style>
@@ -556,7 +537,6 @@
     <item name="android:statusBarColor">@color/_monet_fuchsia_dark_colorBackground</item>
     <item name="android:navigationBarColor">@color/_monet_fuchsia_dark_colorBackground</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="terminalTextColor">@color/_monet_fuchsia_dark_colorOnBackground</item>
     <item name="terminalBackgroundColor">@color/_monet_fuchsia_dark_colorBackground</item>
   </style>
