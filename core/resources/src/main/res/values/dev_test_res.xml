@@ -5,7 +5,6 @@
      <!-- 在开发完成后迁移到对应文件内，这样就不会过于混乱 ，避免冗余-->
 
      <!-- <color name="test_tests">#FFBABAFF</color> -->
-     <string name="title_test">test</string>
 
 
 
