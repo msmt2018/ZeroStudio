@@ -82,10 +82,6 @@
           <activity android:name=".activities.AboutActivity" />
           <activity android:name=".activities.LottieAnimationSelectorActivity" />
           <activity android:name=".activities.ContributorsActivity" />
-          <activity
-               android:name=".activities.TerminalActivity"
-               android:windowSoftInputMode="adjustResize" />
-
           <provider
                android:authorities="${applicationId}.documents"
                android:exported="true"
