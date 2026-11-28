@@ -134,7 +134,7 @@ public final class SourceResolver {
                 JarEntry e = jf.getJarEntry(entryName);
                 if (e != null) {
                     try (InputStream is = jf.getInputStream(e)) {
-                        bytes = is.readAllBytes();
+                        bytes = readFully(is);
                     }
                 }
             } catch (IOException e) { return null; }
