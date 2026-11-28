@@ -57,7 +57,7 @@ import java.util.zip.ZipInputStream;
  */
 public final class TerminalBootstrapInstaller {
 
-    private static final String LOG_TAG = "TermuxInstaller";
+    private static final String LOG_TAG = "TerminalBootstrapInstaller";
 
     /** Performs bootstrap setup if necessary. */
    public static void setupBootstrapIfNeeded(final Activity activity, final Runnable whenDone) {
