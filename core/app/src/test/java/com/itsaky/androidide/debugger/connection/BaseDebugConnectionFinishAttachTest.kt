@@ -26,6 +26,19 @@ class BaseDebugConnectionFinishAttachTest {
         type: ConnectionType = ConnectionType.AidlSocket,
         target: DebugTarget = DebugTarget("com.test", null),
     ) : BaseDebugConnection(type, target) {
+        override val capabilities: Set<ConnectionCapability> = emptySet()
+
+        override suspend fun resolve(): Result<ResolveInfo> =
+            Result.failure(UnsupportedOperationException("Not used by finishAttach tests"))
+
+        override suspend fun connect(): Result<Unit> =
+            Result.failure(UnsupportedOperationException("Not used by finishAttach tests"))
+
+        override suspend fun attach(): Result<AttachInfo> =
+            Result.failure(UnsupportedOperationException("Not used by finishAttach tests"))
+
+        override suspend fun detach() = Unit
+
         var attachedCallbackInvoked = false
 
         fun callFinishAttach(
