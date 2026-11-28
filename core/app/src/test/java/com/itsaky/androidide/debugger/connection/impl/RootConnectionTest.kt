@@ -47,9 +47,9 @@ class RootConnectionTest {
     private val target = DebugTarget("com.example.app", "com.example.app.MainActivity")
     private val baseSettings = DebugConnectionSettings(
         root = RootConfig(
-            suBinary = "/system/bin/su",
+            suBinPath = "/system/bin/su",
             probeTimeoutMs = 1000L,
-            allowMagisk = true,
+            allowMagiskSu = true,
         ),
         retryMaxAttempts = 1,
         retryInitialDelayMs = 1L,
