@@ -42,7 +42,6 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.androidx.workmanager.koin.workManagerFactory
 import org.koin.core.context.startKoin
-import com.termux.app.TermuxApplication
 
 
 private const val TAG = "RikkaHubApp"
@@ -51,7 +50,7 @@ const val CHAT_COMPLETED_NOTIFICATION_CHANNEL_ID = "chat_completed"
 const val CHAT_LIVE_UPDATE_NOTIFICATION_CHANNEL_ID = "chat_live_update"
 const val WEB_SERVER_NOTIFICATION_CHANNEL_ID = "web_server"
 
-class RikkaHubApp : TermuxApplication() {
+class RikkaHubApp : Application() {
     override fun onCreate() {
         super.onCreate()
         startKoin {
