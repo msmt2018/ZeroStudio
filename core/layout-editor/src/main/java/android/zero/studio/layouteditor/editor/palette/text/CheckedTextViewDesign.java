@@ -2,12 +2,12 @@ package android.zero.studio.layouteditor.editor.palette.text;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.widget.CheckedTextView;
+import androidx.appcompat.widget.AppCompatCheckedTextView;
 
 import android.zero.studio.layouteditor.utils.Constants;
 import android.zero.studio.layouteditor.utils.Utils;
 
-public class CheckedTextViewDesign extends CheckedTextView {
+public class CheckedTextViewDesign extends AppCompatCheckedTextView {
 
     private boolean drawStrokeEnabled;
     private boolean isBlueprint;
