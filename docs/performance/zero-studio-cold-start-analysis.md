@@ -24,9 +24,9 @@
 ```mermaid
 flowchart TD
     A[Launcher Intent] --> B[Android process creation]
-    B --> C[AppComponentFactory / manifest ContentProviders]
+    B --> C[AppComponentFactory creates Application]
     C --> D[IDEApplication.attachBaseContext]
-    D --> E[IDEApplication constructor / Hilt generated wrapper]
+    D --> E[Install merged Manifest ContentProviders / App Startup Initializers]
     E --> F[IDEApplication.onCreate]
     F --> G[TermuxApplication.onCreate]
     G --> H[BaseApplication.onCreate]
@@ -54,7 +54,7 @@ flowchart TD
 ```
 
 说明：
-- Android 会在 Application.onCreate 前创建最终合并 Manifest 中注册的 ContentProvider。当前仅凭 `core/app/src/main/AndroidManifest.xml` 不能代表最终 APK 的完整 Provider 列表；必须对 release APK 执行 manifest merger report / `apkanalyzer manifest print`，并检查所有依赖 AAR 的 Provider 初始化代码。
+- Android 创建 Application 并调用 attachBaseContext 后、Application.onCreate 前，会安装最终合并 Manifest 中注册的 ContentProvider。当前仅凭 `core/app/src/main/AndroidManifest.xml` 不能代表最终 APK 的完整 Provider 列表；必须对 release APK 执行 manifest merger report / `apkanalyzer manifest print`，并检查所有依赖 AAR 的 Provider 初始化代码。
 - 图中 Hilt generated wrapper 是由 `@HiltAndroidApp` 触发的 Application 包装/注入机制；是否有昂贵的 eager singleton 构造，必须结合 Hilt module 和启动 trace 验证，不能只看注解断言。
 - 图中没有画出 Android Runtime、Zygote fork、类验证、资源加载、Dex/so linker、WindowManager、SurfaceFlinger 和首帧同步等系统步骤；它们也计入 TTID。
 
