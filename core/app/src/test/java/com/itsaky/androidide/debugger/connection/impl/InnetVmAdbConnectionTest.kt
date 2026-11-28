@@ -28,6 +28,7 @@ import org.junit.runners.JUnit4
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
+import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
 @RunWith(JUnit4::class)
