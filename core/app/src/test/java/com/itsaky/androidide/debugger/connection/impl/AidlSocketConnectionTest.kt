@@ -185,8 +185,8 @@ class AidlSocketConnectionTest {
         assertTrue("jdwpSessionId should be non-zero", attachedState.jdwpSessionId != 0L)
         assertTrue(
             "description should contain vmName or jdwp version",
-            attachedState.jdwpDescription.contains("OpenJDK") ||
-                attachedState.jdwpDescription.contains("11.2"),
+            attachR.getOrThrow().jdwpDescription.contains("OpenJDK") ||
+                attachR.getOrThrow().jdwpDescription.contains("11.2"),
         )
 
         hostThread.join(5_000L)
