@@ -44,7 +44,16 @@ import static org.junit.Assert.*;
  */
 public class EndToEndIntegrationTest {
 
-    private static final String JUNIT_JAR = "/root/.local/share/mise/installs/gradle/8.14.4/gradle-8.14.4/lib/junit-4.13.2.jar";
+    private static final String JUNIT_JAR = junitJarPath();
+
+    private static String junitJarPath() {
+        try {
+            return new File(org.junit.Assert.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI()).getAbsolutePath();
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to locate the JUnit runtime archive", e);
+        }
+    }
 
     @BeforeClass
     public static void setup() {
