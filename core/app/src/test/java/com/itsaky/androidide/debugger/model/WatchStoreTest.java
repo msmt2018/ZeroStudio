@@ -30,7 +30,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = [33], application = android.app.Application.class)
+@Config(sdk = {33}, application = android.app.Application.class)
 public class WatchStoreTest {
 
     private WatchStore store;
