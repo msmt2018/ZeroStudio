@@ -155,46 +155,19 @@ public final class CallHierarchyService {
         return null;
     }
 
-    /** 收集所有 ParsedFile（通过 ProjectIndex 的 filePathToFile 反射） */
+    /** Collect indexed files through the public ProjectIndex contract. */
     private List<ParsedFile> allFiles() {
         List<ParsedFile> out = new ArrayList<>();
-        try {
-            java.lang.reflect.Field f = ProjectIndex.class.getDeclaredField("filePathToFile");
-            f.setAccessible(true);
-            Object m = f.get(index);
-            if (m instanceof Map) {
-                for (Object v : ((Map<?, ?>) m).values()) {
-                    if (v instanceof ParsedFile) out.add((ParsedFile) v);
-                }
-            }
-        } catch (Throwable ignored) {
-            // fallback: 扫描 classNameToFile
-            try {
-                java.lang.reflect.Field f = ProjectIndex.class.getDeclaredField("classNameToFile");
-                f.setAccessible(true);
-                Object m = f.get(index);
-                if (m instanceof Map) {
-                    for (Object v : ((Map<?, ?>) m).values()) {
-                        if (v instanceof ParsedFile) out.add((ParsedFile) v);
-                    }
-                }
-            } catch (Throwable ignored2) {}
+        if (index == null) return out;
+        for (Map.Entry<String, ParsedFile> entry : index.allFiles()) {
+            ParsedFile file = entry.getValue();
+            if (file != null) out.add(file);
         }
         return out;
     }
 
     private ParsedFile resolveFile(String fqn) {
-        if (fqn == null) return null;
-        try {
-            java.lang.reflect.Field f = ProjectIndex.class.getDeclaredField("classNameToFile");
-            f.setAccessible(true);
-            Object m = f.get(index);
-            if (m instanceof Map) {
-                Object pf = ((Map<?, ?>) m).get(fqn);
-                if (pf instanceof ParsedFile) return (ParsedFile) pf;
-            }
-        } catch (Throwable ignored) {}
-        return null;
+        return fqn == null || index == null ? null : index.fileFor(fqn);
     }
 
     private static boolean isKeyword(String s) {
