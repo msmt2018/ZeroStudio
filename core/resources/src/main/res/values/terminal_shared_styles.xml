@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Shared toolbar typography consumed by termux:shared layouts. -->
+  <style name="TextAppearance.Widget.BaseToolbar.Title" parent="TextAppearance.Widget.AppCompat.Toolbar.Title">
+    <item name="android:textSize">14sp</item>
+  </style>
+
+  <style name="TextAppearance.Widget.BaseToolbar.Subtitle" parent="TextAppearance.Widget.AppCompat.Toolbar.Subtitle">
+    <item name="android:textSize">12sp</item>
+  </style>
+</resources>
