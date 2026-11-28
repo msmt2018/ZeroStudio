@@ -2,12 +2,12 @@ package android.zero.studio.layouteditor.editor.palette.buttons;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.widget.ImageButton;
+import androidx.appcompat.widget.AppCompatImageButton;
 
 import android.zero.studio.layouteditor.utils.Constants;
 import android.zero.studio.layouteditor.utils.Utils;
 
-public class ImageButtonDesign extends ImageButton {
+public class ImageButtonDesign extends AppCompatImageButton {
 
     private boolean drawStrokeEnabled;
     private boolean isBlueprint;
