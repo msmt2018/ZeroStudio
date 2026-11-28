@@ -27,5 +27,7 @@ dependencies {
     implementation(project(":debugger:ide-decompiler"))
 
     testImplementation(libs.tests.junit)
+    // CFR is compileOnly in ide-decompiler; source-resolution tests instantiate it directly.
+    testImplementation(files("${rootDir}/decompile/cfr-0.152.jar"))
     testImplementation("org.hamcrest:hamcrest-core:1.3")
 }
