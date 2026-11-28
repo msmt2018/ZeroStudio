@@ -1,4 +1,5 @@
 import com.android.build.api.dsl.LibraryExtension
+import com.itsaky.androidide.plugins.TerminalBootstrapPackagesPlugin
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -7,6 +8,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
 }
+
+apply { plugin(TerminalBootstrapPackagesPlugin::class.java) }
 
 extensions.configure<LibraryExtension> {
     namespace = "android.zero.studio.termux"
@@ -26,6 +29,12 @@ extensions.configure<LibraryExtension> {
         viewBinding = true
         compose = true
     }
+
+    externalNativeBuild {
+        ndkBuild { path = file("src/main/cpp/Android.mk") }
+    }
+
+    packaging.jniLibs.useLegacyPackaging = true
 }
 
 tasks.withType<KotlinCompile>().configureEach {
@@ -59,6 +68,7 @@ dependencies {
     // Project modules (termux)
     api(project(":termux:view"))
     api(project(":termux:emulator"))
+    api(project(":termux:shared"))
 
     // Other
     api(libs.common.utilcode)

@@ -303,7 +303,6 @@ dependencies {
 
     // modules
     implementation(projects.core.common)
-    implementation(projects.termux.application)
     implementation(projects.core.chatai.ai)
     implementation(projects.core.chatai.web)
     implementation(projects.core.chatai.document)

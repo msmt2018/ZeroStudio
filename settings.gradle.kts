@@ -216,7 +216,6 @@ include(
     ":logging:idestats",
     ":logging:logger",
     ":logging:logsender",
-    ":termux:application",
     ":termux:emulator",
     ":termux:shared",
     ":termux:view",

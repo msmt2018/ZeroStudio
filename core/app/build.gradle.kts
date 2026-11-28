@@ -276,7 +276,6 @@ dependencies {
   implementation(projects.lsp.clangd)
   implementation(projects.logging.idestats)
   implementation(projects.logging.logsender)
-  implementation(projects.termux.application)
   implementation(projects.termux.view)
   implementation(projects.termux.emulator)
   implementation(projects.termux.shared)

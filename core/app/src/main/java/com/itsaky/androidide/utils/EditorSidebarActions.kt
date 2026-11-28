@@ -20,7 +20,6 @@ package com.itsaky.androidide.utils
 import android.content.Context
 import android.os.Bundle
 import android.view.Menu
-import android.view.View
 import androidx.annotation.IdRes
 import androidx.core.view.forEach
 import androidx.navigation.NavController
@@ -32,7 +31,6 @@ import androidx.navigation.fragment.FragmentNavigatorDestinationBuilder
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.get
 import androidx.navigation.navOptions
-import com.google.android.material.navigation.NavigationBarMenuView
 import com.google.android.material.shape.CornerFamily
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.shape.ShapeAppearanceModel
@@ -50,7 +48,6 @@ import com.itsaky.androidide.actions.sidebar.FileTreeSidebarAction
 import com.itsaky.androidide.actions.sidebar.GitSidebarAction
 import com.itsaky.androidide.actions.sidebar.PreferencesSidebarAction
 import com.itsaky.androidide.actions.sidebar.TerminalSidebarAction
-import com.itsaky.androidide.actions.sidebar.TerminalHostSidebarAction
 import com.itsaky.androidide.fragments.sidebar.EditorSidebarFragment
 import java.lang.ref.WeakReference
 
@@ -78,7 +75,6 @@ internal object EditorSidebarActions {
     EditorToolboxActions.registerActions(context)
     registry.registerAction(EditorToolboxSidebarAction(context, ++order))
     registry.registerAction(TerminalSidebarAction(context, ++order))
-    registry.registerAction(TerminalHostSidebarAction(context, ++order))
     registry.registerAction(PreferencesSidebarAction(context, ++order))
     registry.registerAction(CloseProjectSidebarAction(context, ++order))
   }
@@ -200,19 +196,6 @@ internal object EditorSidebarActions {
       binding.title.text = it.title
     }
 
-    rail.viewTreeObserver.addOnPreDrawListener {
-      val railView = railRef.get()
-      if (railView != null) {
-
-        (railView.menuView as NavigationBarMenuView)
-            .findViewById<View>(TerminalSidebarAction.ID.hashCode())
-            ?.setOnLongClickListener {
-              TerminalSidebarAction.startTerminalActivity(data, true)
-              true
-            }
-      }
-      true
-    }
   }
 
 

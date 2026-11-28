@@ -57,7 +57,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.fragment.app.viewModels
 import com.itsaky.androidide.activities.MainActivity
 import com.itsaky.androidide.activities.PreferencesActivity
-import com.itsaky.androidide.activities.TerminalActivity
 import com.itsaky.androidide.fragments.git.function.ZeroCloneDialogBottomSheetFragment
 import com.itsaky.androidide.fragments.main.DeleteDialogState
 import com.itsaky.androidide.fragments.main.DeleteProjectConfirmDialog
@@ -475,7 +474,7 @@ class MainFragment : BaseFragment() {
               startActivity(Intent(requireActivity(), PreferencesActivity::class.java))
             },
             Triple(Icons.Default.Terminal, Color(0xFFC8E6C9)) {
-              startActivity(Intent(requireActivity(), TerminalActivity::class.java))
+              startActivity(Intent(requireActivity(), android.zero.studio.termux.ui.activities.terminal.MainActivity::class.java))
             },
             Triple(Icons.Default.Code, Color(0xFFE1BEE7)) {
               Toast.makeText(context, R.string.msg_unimplemented_feature, Toast.LENGTH_SHORT).show()

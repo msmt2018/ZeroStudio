@@ -10,7 +10,7 @@
 
 1. Launcher 当前指向 `SplashActivity`，它只负责启动 `OnboardingActivity`，随后立即 finish。它增加一次 Activity 创建/切换，不提供实际业务价值。
 2. `OnboardingActivity.onCreate()` 与 `onResume()` 都会调用 `tryNavigateToMainIfSetupIsCompleted()`。该路径调用 `isSetupCompleted()`，其中同步执行 `SdkChecker.isEnvironmentReadySync()` 和权限检查。首次启动/环境已准备好的用户仍可能先进入 Onboarding，再做同步环境判定。
-3. `IDEApplication` 继承 `TermuxApplication`，其 `super.onCreate()` 会继续执行 `BaseApplication.onCreate()` 和 Termux 初始化。Termux 路径包含 SharedPreferences、properties、shell manager、文件目录可访问性/创建、socket server、环境常量及环境文件写入；这些均发生在 Application 主线程生命周期内。
+3. 本次移除重构已将 `IDEApplication` 改为直接继承 `BaseApplication`，不再进入 `TermuxApplication.onCreate()`。因此旧 Termux Application 的 SharedPreferences/properties、ShellManager、目录创建、AM socket server 和环境文件写入链路已不再属于进程启动路径。终端 bootstrap 安装器已迁入 `:core:ZeroStudio-Terminal`，只在 SDK/运行环境安装操作触发时调用，不在 Application 启动时执行。
 4. `IDEApplication.onCreate()` 继续在主线程启动 Koin 四组 modules、初始化 QuickJS native loader、安装 EventBus 多个索引、设置 AppCompat 夜间模式、读取主题并可能应用 DynamicColors、创建默认 EditorColorScheme。
 5. `MainActivity` 继承链为 `MainActivity → EdgeToEdgeIDEActivity → IDEActivity → BaseIDEActivity → AppCompatActivity`。BaseIDEActivity 在 super.onCreate 前后重复调用 `IThemeManager.applyTheme(this)`，随后设置内容视图。MainActivity 又立即触发 ViewModel、Fragment transaction、Flow collector、last-project 检查及默认页面切换。
 6. 主工程目前没有把面向 `:core:app` 的 Baseline Profile 测试模块接入根 `settings.gradle.kts`。仓库中存在的 `:core:chatai:app:baselineprofile` 目录是聊天模块模板遗留：其测试目标写为 `:app`，生成脚本等待 `chat_input` 并执行聊天发送流程，不是 ZeroStudio 主应用的 Launcher → MainActivity 用户旅程。
@@ -28,15 +28,10 @@ flowchart TD
     C --> D[IDEApplication.attachBaseContext]
     D --> E[Install merged Manifest ContentProviders / App Startup Initializers]
     E --> F[IDEApplication.onCreate]
-    F --> G[TermuxApplication.onCreate]
-    G --> H[BaseApplication.onCreate]
-    H --> H1[Environment.init]
-    H1 --> H2[PreferenceManager construction]
-    G --> I[Termux SharedProperties / ShellManager]
-    I --> I1[Termux files dir checks and creation]
-    I1 --> I2[Termux AM socket setup]
-    I2 --> I3[Shell environment init and write]
-    I3 --> J[IDEApplication remaining onCreate]
+    F --> G[BaseApplication.onCreate]
+    G --> H[Environment.init]
+    H --> H1[PreferenceManager construction]
+    H1 --> J[IDEApplication onCreate]
     J --> J1[Koin startKoin + 4 modules]
     J1 --> J2[QuickJSLoader.init]
     J2 --> J3[EventBus indexes + registration]
@@ -65,8 +60,7 @@ flowchart TD
 | Launcher | Manifest 的 MAIN/LAUNCHER 指向 `.activities.SplashActivity` | 额外 Activity 中转 |
 | Splash | `installSplashScreen()` 后启动 OnboardingActivity | 不做路由决策或初始化，只增加切换 |
 | Onboarding | onCreate、onResume 均尝试环境判定 | 同步环境检查可能触发文件/权限/SDK 探测 |
-| BaseApplication | `Environment.init(this)`、创建 PreferenceManager | 需要拆分纯内存初始化与文件/目录初始化 |
-| TermuxApplication | ShellManager、文件目录、socket、环境文件 | 启动关键路径上包含文件系统和进程/IPC 初始化 |
+| BaseApplication | `Environment.init(this)`、创建 PreferenceManager | 保留基础 IDE 环境初始化；继续用 Trace 确认实际成本 |
 | IDEApplication | Koin、QuickJS、EventBus、Theme、EditorColorScheme | 主线程初始化面过宽 |
 | BaseIDEActivity | Theme apply 在 super.onCreate 前后各执行一次 | 重复主题应用；需确认调用副作用 |
 | MainActivity | ViewModel、Fragment、Flow、自动检查最近项目 | 首帧之前不应执行非首屏必需工作 |
@@ -78,7 +72,7 @@ flowchart TD
 
 - `IDEApplication.attachBaseContext`：Locale preference 读取和 LocaleProvider 查询。
 - `BaseApplication.onCreate`：Environment.init、PreferenceManager。
-- `TermuxApplication.onCreate`：按每个方法记录耗时，特别是目录创建、socket server、环境文件写入。
+- `BaseApplication.onCreate`：按 Environment.init、PreferenceManager 构造分别记录耗时。旧 TermuxApplication 阶段已从启动继承链移除。
 - `IDEApplication.onCreate`：Koin module 注册、QuickJSLoader、EventBus、AppCompat、DynamicColors、EditorColorScheme。
 - 所有合并 Manifest Provider 的 `onCreate()`：逐个统计耗时与线程。
 - Hilt eager singleton / ContentProvider initializer / WorkManager initializer：通过 Perfetto 和启动日志识别真实执行位置。
@@ -168,7 +162,7 @@ flowchart TD
 
 1. **移除 SplashActivity 中转。** 将 Launcher intent-filter 放在轻量 RouterActivity 或 MainActivity/OnboardingActivity 的明确路由上。推荐使用一个极轻量 RouterActivity 仅做一次本地 onboarding 标记读取后路由；若能通过 launcher activity alias/manifest 分渠道选择则更直接。不要在 RouterActivity 做 SDK 环境检查。
 2. **把 Onboarding 环境检测异步化。** `SdkChecker.isEnvironmentReadySync()` 不能在 onCreate/onResume 主线程执行。用 coroutine IO 执行并缓存结果；页面先画出稳定的 loading/状态页面，检测完成后路由。避免 onCreate 与 onResume 同时重复启动检查。
-3. **将 TermuxApplication 初始化拆分。** 区分纯内存常量/轻量 preference 与文件系统副作用。目录检查、环境文件写入、socket server 应按依赖延迟，且提供明确的 awaitReady API 给 Termux feature。
+3. **确保旧 TermuxApplication 不重新进入启动链路。** 终端 runtime/bootstrap 必须由 `:core:ZeroStudio-Terminal` 显式管理，并只在安装或打开终端功能时初始化；不得恢复 Application 继承或 Provider 自动初始化。
 4. **Application 分段计时。** 在每个同步初始化前后用 `Trace.beginSection/endSection`，并用 `android.os.Trace` section 名保持短且稳定；不要只用毫秒 wall clock 总计。
 5. **审核 App Startup / ContentProvider。** 导出 release merged manifest，逐个查 provider initializer 的线程和初始化行为。对无必要的自动初始化关闭 manifest initializer。
 
@@ -495,7 +489,7 @@ adb logcat -d -s ActivityTaskManager ActivityManager AndroidRuntime
 1. 增加分段 Trace 与冷启动 Macrobenchmark，先获得基线。
 2. 重构 Launcher 路由，消除 SplashActivity 无意义中转；保留首次引导行为。
 3. Onboarding 的 SDK/权限环境检查改成异步、单飞、缓存。
-4. 拆分 BaseApplication / TermuxApplication 初始化，明确哪些功能需要 shell 环境。
+4. 保持 `IDEApplication : BaseApplication` 的最小继承链；终端 bootstrap 由 `:core:ZeroStudio-Terminal` 按需提供。
 5. 拆分 IDEApplication：最小 bootstrap 与各 feature 的延迟初始化。
 6. 审查最终 merged manifest 的全部 Provider/Initializer。
 7. 精简 BaseIDEActivity 与 MainActivity 首帧路径，确保第一帧有实际内容。
@@ -531,3 +525,12 @@ adb logcat -d -s ActivityTaskManager ActivityManager AndroidRuntime
 ---
 
 **结论：** Baseline Profile + Startup Profile 应该做，但它们不是本次冷启动卡顿的第一修复项。当前最明显的结构性问题是 Application 继承链中同步初始化过多、Onboarding 同步检查、Splash Activity 中转，以及 MainActivity 首帧依赖 Fragment/主题/视图初始化。先消除这些真实阻塞，再用 Profile 优化剩余 CPU 执行路径，才能得到可测量、可复现的启动收益。
+
+
+## 13. 后续架构变更（2026-11-29）
+
+`:termux:application` 已从 settings include、主应用与 ChatAI Gradle 依赖中移除，整个 `termux/application/` 源码目录已删除。主应用 Application 现直接继承 `BaseApplication`；旧 Termux Activity/Fragment/Service 与旧侧边栏入口不再参与构建。终端 Activity、Fragment 宿主和会话服务由 `:core:ZeroStudio-Terminal` 接管。
+
+SDK onboarding 仍需要的 bootstrap package 安装能力已迁入终端模块，连同 JNI bridge、NDK build 配置及中英文资源。该安装器由用户触发，不会在冷启动 Application 阶段运行。
+
+因此，本报告第 2 节原先列出的 TermuxApplication 主线程初始化阶段应视为已移除的历史路径，不再作为当前启动耗时的候选根因。剩余启动分析应重点测量 `BaseApplication`、`IDEApplication` 的 Koin/QuickJS/EventBus/Theme、合并 Manifest Provider，以及 MainActivity 首帧。保留的 `:termux:shared`、`:termux:emulator`、`:termux:view` 是底层库，不等同于旧 `:termux:application`。

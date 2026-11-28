@@ -114,4 +114,12 @@
     <string name="permissions">Permissions</string>
     <string name="shortcut_switch_by_number">Quick Switch by Number</string>
     <string name="shortcut_switch_by_number_desc">Switch to session N with modifier + 1–9</string>
+  <!-- Terminal bootstrap installation -->
+  <string name="bootstrap_installer_body">Installing terminal runtime packages…</string>
+  <string name="bootstrap_error_title">Unable to install terminal runtime</string>
+  <string name="bootstrap_error_body">ZeroStudio could not install the terminal runtime packages.</string>
+  <string name="bootstrap_error_abort">Abort</string>
+  <string name="bootstrap_error_try_again">Try again</string>
+  <string name="bootstrap_error_not_primary_user_message">ZeroStudio terminal runtime requires the primary Android user. Runtime binaries use a fixed prefix path and cannot be installed elsewhere:\n%1$s.</string>
+  <string name="bootstrap_error_installed_on_portable_sd">ZeroStudio terminal runtime cannot be installed on portable, external, or removable storage. Runtime binaries use a fixed prefix path:\n%1$s.</string>
 </resources>

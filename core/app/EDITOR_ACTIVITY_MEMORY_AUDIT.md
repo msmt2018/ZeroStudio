@@ -28,7 +28,7 @@
 
 `onCreate()` 中可确认以下工作：
 
-- 继承 `TermuxApplication` 并执行 `super.onCreate()`，然后设置 Termux 的全局 Application 引用。
+- 当前 `IDEApplication` 直接继承共享 `BaseApplication`；旧 `:termux:application` 已移除。主应用只向 `:core:ZeroStudio-Terminal` 的上下文桥接注入 Application 引用，不再执行旧 TermuxApplication 生命周期初始化。
 - 通过 `startKoin { ... }` 装配 ChatAI 的 `appModule`、`viewModelModule`、`dataSourceModule`、`repositoryModule`。
 - 无条件调用 `QuickJSLoader.init()`，加载 ChatAI 使用的 QuickJS Native 库。
 - 安装多个 EventBus 索引并注册 Application 事件订阅者。
@@ -242,3 +242,8 @@ adb shell ps -A -o PID,PPID,RSS,NAME
 - 最近打开文件缓存内容（文件数量、大小；可脱敏路径）。
 
 拿到数据后，应按主 PID 的 Java Heap、Native Heap、Graphics、Other、Private Dirty 和子进程分别归因，再决定修改顺序。**当前最先验证的是文件恢复阶段的内存增量，其次是 Application 启动阶段 QuickJS/Koin 的增量。**
+
+
+## 2026-11-29 架构更新
+
+本审计早期记录的 `IDEApplication : TermuxApplication` 已不再适用于当前代码。旧 `:termux:application` 模块已整体移除，`IDEApplication` 现在继承 `BaseApplication`。因此，评估当前 Application 启动成本时，不应再把 TermuxApplication 的 ShellManager、AM socket、Termux files directory 或环境文件写入计入启动链路。终端 bootstrap 安装功能迁入 `:core:ZeroStudio-Terminal`，由 onboarding 操作显式触发。
