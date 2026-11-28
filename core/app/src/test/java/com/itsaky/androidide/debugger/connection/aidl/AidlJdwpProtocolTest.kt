@@ -44,7 +44,7 @@ class AidlJdwpProtocolTest {
 
     @Test
     fun `buildVmVersionCommand produces 11 byte header with length 11`() {
-        val cmd = AidlJdwpProtocol.buildVmVersionCommand(commandId = 1)
+        val cmd = AidlJdwpProtocol.buildVmVersionCommand(id = 1)
         assertEquals(11, cmd.size)
         // length = 11 (header-only, no data)
         val len = ((cmd[0].toInt() and 0xff) shl 24) or
