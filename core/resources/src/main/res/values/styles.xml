@@ -45,11 +45,6 @@
      <style
           name="Theme.AndroidIDE"
           parent="Theme.AndroidIDE.Styled">
-          <!-- Left drawer. -->
-          <item name="buttonBarButtonStyle">@style/TermuxActivity.Drawer.ButtonBarStyle.Light</item>
-          <item name="termuxActivityDrawerBackground">@android:color/white</item>
-          <item name="termuxActivityDrawerImageTint">@android:color/black</item>
-
           <!-- Extra keys colors. -->
           <item name="extraKeysButtonTextColor">@android:color/white</item>
           <item name="extraKeysButtonActiveTextColor">@color/red_400</item>
@@ -57,20 +52,7 @@
           <item name="extraKeysButtonActiveBackgroundColor">@color/grey_500</item>
      </style>
 
-     <style
-          name="Theme.AndroidIDE.Termux.white"
-          parent="Theme.AndroidIDE.Styled">
-          <!-- Left drawer. -->
-          <item name="buttonBarButtonStyle">@style/TermuxActivity.Drawer.ButtonBarStyle.Light</item>
-          <item name="termuxActivityDrawerBackground">@android:color/black</item>
-          <item name="termuxActivityDrawerImageTint">@android:color/white</item>
 
-          <!-- Extra keys colors. -->
-          <item name="extraKeysButtonTextColor">@android:color/black</item>
-          <item name="extraKeysButtonActiveTextColor">@color/red_400</item>
-          <item name="extraKeysButtonBackgroundColor">@android:color/white</item>
-          <item name="extraKeysButtonActiveBackgroundColor">@color/grey_500</item>
-     </style>
 
 
 
