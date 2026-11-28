@@ -36,7 +36,7 @@ class RemoteDeviceScannerTest {
         try {
             // 192.0.2.0/24 is reserved (TEST-NET-1 RFC 5737); should
             // never have adb open.
-            val port = scanner.probeAdbPort("192.0.2.1", 250L)
+            val port = scanner.probeAdbPort("192.0.2.1", 250)
             assertEquals(0, port)
         } finally {
             scanner.shutdown()
