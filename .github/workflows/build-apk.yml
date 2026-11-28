@@ -328,9 +328,12 @@ jobs:
               echo "::endgroup::"
               if [ "$result" -ne 0 ]; then status=1; fi
             }
-            run_gradle ./gradlew --no-daemon --max-workers=2 --continue check test testDebugUnitTest testReleaseUnitTest
-            run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue check test
-            run_gradle ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue check test
+            # The lifecycle 'check' task already includes the applicable unit-test and
+            # lint verification tasks. Do not list 'test' and variant-specific test
+            # tasks again: that schedules the same test suites multiple times.
+            run_gradle ./gradlew --no-daemon --max-workers=2 --continue --stacktrace check
+            run_gradle ./gradlew -p composite-builds/build-deps --no-daemon --max-workers=2 --continue --stacktrace check
+            run_gradle ./gradlew -p composite-builds/build-logic --no-daemon --max-workers=2 --continue --stacktrace check
             exit "$status"
           fi
 
