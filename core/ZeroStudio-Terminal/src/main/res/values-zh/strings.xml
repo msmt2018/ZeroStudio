@@ -111,4 +111,12 @@
     <string name="permissions">权限</string>
     <string name="shortcut_switch_by_number">数字键快速切换</string>
     <string name="shortcut_switch_by_number_desc">按修饰键 + 1–9 切换到对应会话</string>
+  <!-- 终端运行环境安装 -->
+  <string name="bootstrap_installer_body">正在安装终端运行环境…</string>
+  <string name="bootstrap_error_title">无法安装终端运行环境</string>
+  <string name="bootstrap_error_body">ZeroStudio 无法安装终端运行环境组件。</string>
+  <string name="bootstrap_error_abort">取消</string>
+  <string name="bootstrap_error_try_again">重试</string>
+  <string name="bootstrap_error_not_primary_user_message">终端运行环境只能安装在 Android 主用户下。运行时二进制文件使用固定前缀路径，无法安装到其他路径：\n%1$s。</string>
+  <string name="bootstrap_error_installed_on_portable_sd">终端运行环境不能安装到便携式、外部或可移动存储。运行时二进制文件使用固定前缀路径：\n%1$s。</string>
 </resources>
