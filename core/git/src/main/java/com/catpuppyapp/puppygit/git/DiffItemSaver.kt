@@ -8,7 +8,6 @@ import com.catpuppyapp.puppygit.msg.OneTimeToast
 import com.catpuppyapp.puppygit.settings.SettingsUtil
 import com.catpuppyapp.puppygit.style.MyStyleKt
 import com.catpuppyapp.puppygit.syntaxhighlight.base.PLScope
-import com.catpuppyapp.puppygit.syntaxhighlight.base.PLTheme
 import com.catpuppyapp.puppygit.syntaxhighlight.hunk.HunkSyntaxHighlighter
 import com.catpuppyapp.puppygit.syntaxhighlight.hunk.LineStylePart
 import com.catpuppyapp.puppygit.utils.compare.CmpUtil
@@ -161,8 +160,6 @@ data class DiffItemSaver (
             return
         }
 
-        // set theme first
-        PLTheme.updateThemeByAppTheme()
         // get language scope of file
         val languageScope = getAndUpdateScopeIfIsAuto(fileName())
 
