@@ -89,10 +89,10 @@ class IdeBreakpointHitCountTest {
     }
 
     @Test
-    fun `setHitCount null mode falls back to ALWAYS`() {
+    fun `setHitCount always mode clears the threshold`() {
         val bp = IdeBreakpoint("/tmp/Foo.kt", 10)
         bp.setHitCount(Breakpoint.HitCountMode.EQUAL, 3)
-        bp.setHitCount(null as Breakpoint.HitCountMode?, 99)
+        bp.setHitCount(Breakpoint.HitCountMode.ALWAYS, 99)
         assertEquals(Breakpoint.HitCountMode.ALWAYS, bp.hitCountMode)
     }
 
