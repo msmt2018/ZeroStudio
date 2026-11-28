@@ -115,7 +115,7 @@ import com.itsaky.androidide.utils.Environment
 import com.itsaky.androidide.utils.executioncommand.TermuxCommand
 import com.itsaky.androidide.utils.flashError
 import com.itsaky.androidide.utils.getConnectionInfo
-import com.termux.app.TermuxInstaller
+import android.zero.studio.termux.TerminalBootstrapInstaller
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -388,7 +388,7 @@ class OdSdkToolInstallFragment : Fragment(), SlidePolicy {
             installOffline = installOffline,
             onClick = {
               val activity = requireActivity()
-              TermuxInstaller.setupBootstrapIfNeeded(activity) {
+              TerminalBootstrapInstaller.setupBootstrapIfNeeded(activity) {
                 activity.runOnUiThread {
                   if (installOffline) showOfflineDialog = true else showActionDialog = true
                 }
