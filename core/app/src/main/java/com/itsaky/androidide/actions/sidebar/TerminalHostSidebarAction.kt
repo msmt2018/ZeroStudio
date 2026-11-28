@@ -26,10 +26,8 @@ import kotlin.reflect.KClass
 /**
  * 侧边栏操作 — 在 IDE sidebar 中嵌入 [TerminalHostFragment] (Compose 终端宿主)。
  *
- * 与 [TerminalSidebarAction] (termux 终端) 相互独立:
- *  - [TerminalSidebarAction] 打开 termux 终端 (基于 TermuxFragment)
- *  - [TerminalHostSidebarAction] 打开 ZeroStudio-Terminal Compose 终端
- *    (基于 [TerminalHostFragment], 拥有完整 Fragment 生命周期, 自持 SessionService 绑定)
+ * 该入口直接承载 ZeroStudio-Terminal Compose 终端，
+ * 基于 [TerminalHostFragment] 管理终端会话与服务绑定。
  *
  * @author android_zero
  */
