@@ -46,10 +46,9 @@ import com.itsaky.androidide.ui.themes.IDETheme
 import com.itsaky.androidide.ui.themes.IThemeManager
 import com.itsaky.androidide.utils.RecyclableObjectPool
 import com.itsaky.androidide.utils.flashError
-import com.termux.app.TermuxApplication
 import com.whl.quickjs.android.QuickJSLoader
-import android.zero.studio.termux.libcommons.application as termuxApplication
-import android.zero.studio.termux.resources.Res as TermuxRes
+import android.zero.studio.termux.libcommons.application as terminalApplication
+import android.zero.studio.termux.resources.Res as TerminalResources
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import java.lang.Thread.UncaughtExceptionHandler
 import kotlin.system.exitProcess
@@ -81,7 +80,7 @@ import org.slf4j.LoggerFactory
  * @author android_zero
  */
 @HiltAndroidApp
-class IDEApplication : TermuxApplication() {
+class IDEApplication : BaseApplication() {
 
   private var uncaughtExceptionHandler: UncaughtExceptionHandler? = null
   private var ideLogcatReader: IDELogcatReader? = null
@@ -107,7 +106,7 @@ class IDEApplication : TermuxApplication() {
 
     // 初始化 ZeroStudio-Terminal 模块的全局 Application 引用。
     // 该模块的 libcommons.application 和 resources.Res.application 两个全局变量
-    // 原本由 android.zero.studio.termux.App.onCreate() 赋值, 但 App 类未注册到
+    // 由主应用在进程启动时向 ZeroStudio-Terminal 注入应用上下文, 但 App 类未注册到
     // 任何 AndroidManifest (最终 manifest 用的是 IDEApplication), 所以从未被
     // 实例化, application 一直是 null。
     // 当系统通过 AppComponentFactory 反射实例化 SessionService 时, SessionService
@@ -115,8 +114,8 @@ class IDEApplication : TermuxApplication() {
     // 其中 `application!!.getSharedPreferences(...)` 会因 application 为 null 抛
     // NullPointerException -> ExceptionInInitializerError, 导致 SessionService
     // 创建失败。在 super.onCreate() 之后立即赋值, 保证后续所有代码路径都能拿到。
-    termuxApplication = this
-    TermuxRes.application = this
+    terminalApplication = this
+    TerminalResources.application = this
 
     applyPersistedLocale()
 
