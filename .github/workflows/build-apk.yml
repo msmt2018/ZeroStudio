@@ -370,6 +370,9 @@ jobs:
             **/build/test-results/**
             **/build/reports/tests/**
             **/build/reports/androidTests/**
+            **/build/reports/lint-results*.html
+            **/build/reports/lint-results*.sarif
+            **/build/intermediates/lint_intermediate_text_report/**
             **/build/outputs/androidTest-results/**
             **/build/outputs/connected_android_test_additional_output/**
           if-no-files-found: warn
