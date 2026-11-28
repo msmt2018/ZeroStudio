@@ -270,5 +270,5 @@
 
 
 
-    <string name="title_test">test</string>
+    <string name="title_test" translatable="false">test</string>
 </resources>
